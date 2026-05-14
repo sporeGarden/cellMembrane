@@ -1,0 +1,18 @@
+# Encrypted credential blobs
+*.age
+membrane-credentials.age
+
+# DO API tokens
+.doctl-token
+token
+
+# SSH keys (never commit)
+*.pem
+id_*
+*.key
+
+# Editor
+*.swp
+*.swo
+*~
+.DS_Store
