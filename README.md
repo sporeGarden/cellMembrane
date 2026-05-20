@@ -76,8 +76,8 @@ ssh root@157.230.3.183 "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 
 ```
 Phase 0:   Relay only
-Phase 0.5: Relay + RustDesk + multi-gate SSH ← CURRENT
-Phase 1:   Tower composition (BearDog + Songbird + SkunkBat + RustDesk)
+Phase 0.5: Relay + RustDesk + multi-gate SSH (completed May 14)
+Phase 1:   Tower composition (BearDog + Songbird + SkunkBat + RustDesk) ← CURRENT
 Phase 2:   Encrypted-at-rest (BearDog Vault)
 Phase 3:   BingoCube zero-knowledge access control
 Phase 4:   Full autonomy (BearDog auto-rotation)
