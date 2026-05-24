@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterShellExecution": [
+      {
+        "command": ".cursor/hooks/forgejo-mirror.sh",
+        "matcher": "git\\s+push\\s+(?!forgejo)"
+      }
+    ]
+  }
+}
