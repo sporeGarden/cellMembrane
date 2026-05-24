@@ -1,15 +1,33 @@
 # cellMembrane
 
-**Private operational repo for the cellMembrane fieldMouse deployment.**
+**Private operational repo for the cellMembrane fieldMouse deployment — the sovereign external surface of the ecoPrimals ecosystem.**
 
 | | |
 |-|-|
-| **Owner** | projectNUCLEUS / ironGate team |
+| **Owner** | cellMembrane team (ironGate) |
 | **Class** | fieldMouse — Tower atomic on external substrate |
-| **VPS** | `membrane-relay`, 157.230.3.183, Debian 12 x64, DigitalOcean nyc1 |
+| **Role** | Rendezvous broker, never data plane |
+| **VPS** | `membrane-relay`, 157.230.3.183, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | Tower (BearDog + Songbird + SkunkBat) + RustDesk (hbbs + hbbr) |
-| **Active Channels** | Channel 2: Relay (Songbird :3478), Channel 2b: RustDesk (:21116-21117) |
-| **Status** | Hardened — exim4+droplet-agent purged, fail2ban active, 22+3478+21115-21117 |
+| **Escalation** | Phase 1 (Tower) — **current** → Phase 1.5 (Nest + DNS + TLS) next |
+
+---
+
+## Active Membrane Channels
+
+| Channel | Function | Primal / Service | Port | Status |
+|---------|----------|-----------------|------|--------|
+| **2 Relay** | NAT traversal, TURN | Songbird | :3478 tcp/udp | **LIVE** |
+| **2b RustDesk** | Sovereign remote desktop | hbbs + hbbr | :21115-21117 | **LIVE** |
+| **3 Surface** | HTTPS, downloads, ACME | Caddy + NestGate | :80/:443 | **LIVE** — `membrane.primals.eco` (Let's Encrypt E8) |
+| **1 Signal** | DNS resolution for `primals.eco` | knot-dns | :53 | **PLANNED** — glacial shift blocker |
+
+### Channel 3 Surface Details
+
+- Caddy reverse proxy with automatic Let's Encrypt TLS
+- 19 MB sporePrint content cache synced from NestGate
+- Sovereignty proof: 68ms TTFB (vs GitHub Pages 89ms)
+- Domain: `membrane.primals.eco`
 
 ---
 
@@ -19,39 +37,42 @@ This is the **operational home** for the cellMembrane deployment. Unlike the
 public architecture docs in `wateringHole` and deployment tooling in
 `plasmidBin`, this repo holds:
 
-- Operational state and VPS-specific configuration
+- Operational state and VPS-specific configuration (`VPS_STATE.md`)
+- Glacial shift blocker tracking (`GLACIAL_SHIFT_TRACKER.md`)
 - Credential management procedures
-- Team-internal runbooks and status
+- Operational runbooks (`RUNBOOKS.md`)
 - Anything that references specific IPs, keys, or access patterns
 
-**This repo is private.** Sensitive operational details belong here, not in
-public repos.
+**This repo is private.** Classified as inner-membrane-only per `REPO_MEMBRANE_BOUNDARY.md` — Forgejo is the target remote; GitHub mirror is transitional.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Check cellMembrane status (relay + RustDesk + services)
-cd ../plasmidBin
+# Check cellMembrane status (all channels + services)
+cd ../../infra/plasmidBin
 ./deploy_membrane.sh status root@157.230.3.183
 
 # SSH to VPS
 ssh root@157.230.3.183
 
-# View relay logs
-ssh root@157.230.3.183 "journalctl -u songbird-relay -f"
+# View Tower logs (BearDog → Songbird → SkunkBat)
+ssh root@157.230.3.183 "journalctl -u beardog-membrane -u songbird-relay -u skunkbat-membrane -f"
 
 # View RustDesk logs
 ssh root@157.230.3.183 "journalctl -u hbbs-membrane -u hbbr-membrane -f"
+
+# View Caddy / TLS logs
+ssh root@157.230.3.183 "journalctl -u caddy -f"
 
 # Manage SSH keys for multi-gate access
 ./deploy_membrane.sh keys list root@157.230.3.183
 ./deploy_membrane.sh keys add root@157.230.3.183 --name "friend-gate" --pubkey "ssh-ed25519 AAAA..."
 ./deploy_membrane.sh keys revoke root@157.230.3.183 --name "friend-gate"
 
-# Deploy Tower composition (when ready)
-./deploy_membrane.sh deploy root@157.230.3.183 --composition tower
+# Deploy Nest expansion (next phase)
+./deploy_membrane.sh deploy root@157.230.3.183 --composition nest --validate
 ```
 
 ---
@@ -63,25 +84,62 @@ ssh root@157.230.3.183 "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | exim4 removed | DONE |
 | droplet-agent purged | DONE |
 | fail2ban active (systemd backend) | DONE |
-| Firewall: 22+3478+21115-21117 only | DONE |
+| UFW: 22+3478+21115-21117+80+443 | DONE |
 | SSH key-only auth (multi-gate managed) | DONE |
 | credentials.env redundant plaintext removed | DONE |
 | journald persistence | DONE |
 | TURN credentials at /etc/songbird/relay-credentials | DONE |
 | RustDesk hbbs+hbbr running (sovereign relay) | DONE |
+| Caddy TLS with Let's Encrypt | DONE |
+| Stripped static ELF binaries | DONE |
+| Dark Forest audit: 17 PASS, 0 FAIL | DONE |
+| Trio pipeline: 10/10 PASS on VPS | DONE |
+
+---
+
+## Sovereignty Shadow Status
+
+| Track | Sovereign Component | Commercial Shadow | Status | Cutover Gate |
+|-------|--------------------|--------------------|--------|--------------|
+| S1 TLS | BearDog :8443 | Cloudflare | Shadow live, not cut over | 7-day p95 ≤ 1.5× |
+| S2 NAT relay | Songbird TURN :3478 | cloudflared | **LIVE** | 7-day 100% reachable |
+| S3 Content | NestGate + petalTongue | GitHub Pages | **LIVE** (68ms TTFB) | 7-day TTFB parity |
+| S4 Auth | BearDog BTSP dual-auth | OAuth2/PAM | Ready, incomplete | 7-day p95 < 50ms |
 
 ---
 
 ## Escalation Ladder
 
-```
-Phase 0:   Relay only
-Phase 0.5: Relay + RustDesk + multi-gate SSH (completed May 14)
-Phase 1:   Tower composition (BearDog + Songbird + SkunkBat + RustDesk) ← CURRENT
-Phase 2:   Encrypted-at-rest (BearDog Vault)
-Phase 3:   BingoCube zero-knowledge access control
-Phase 4:   Full autonomy (BearDog auto-rotation)
-```
+| Phase | Deliverable | Status |
+|-------|-------------|--------|
+| 0 | Relay only | Superseded |
+| 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
+| **1** | **Tower composition** | **Current** |
+| **1.5** | **Nest expansion + Channel 1 DNS + Channel 3 TLS hardening** | **Next — glacial shift gate** |
+| 2 | Encrypted-at-rest (BearDog Vault) | Planned |
+| 3 | BingoCube zero-knowledge access | Future |
+| 3.5 | SoloKey hardware attestation | Future |
+| 4 | Full autonomy (BearDog auto-rotation) | Future |
+
+---
+
+## Ownership Boundaries
+
+**cellMembrane team owns:**
+- This repo — VPS state, runbooks, credentials, IP/key inventory
+- Membrane channel deployment — Signal/DNS, Relay, Surface/TLS
+- Caddy TLS certificate management and reverse proxy on VPS
+- Sovereign DNS (knot-dns on VPS, replacing commercial DNS)
+- RustDesk self-hosted remote access
+- Multi-gate expansion (westGate, northGate provisioning)
+
+**cellMembrane team does NOT own:**
+- sporePrint (primalSpring, transferred Wave 46)
+- Gate-level validation (projectNUCLEUS — Dark Forest + sovereignty checks)
+- Deployment pipeline software (projectNUCLEUS ships `deploy_membrane.sh`; we operate it)
+- biomeOS substrate
+
+**Signal flow:** `primalSpring → upstream primals → biomeOS → projectNUCLEUS → cellMembrane`
 
 ---
 
@@ -96,18 +154,22 @@ rendezvous and relay:
 | Relay Server | `157.230.3.183` |
 | Key | `YxLlA1Nb6mlH5FmcCQod6kDD6bIcXT5R3ex1CAFogMU=` |
 
-The server public key is generated by `hbbs` at first run and stored
-at `/opt/membrane/rustdesk/id_ed25519.pub` on the VPS.
+Server public key stored at `/opt/membrane/rustdesk/id_ed25519.pub` on the VPS.
 
 ---
 
-## Related Repos (public)
+## Related Resources
 
-| Repo | What |
-|------|------|
-| [`plasmidBin`](https://github.com/ecoPrimals/plasmidBin) | Deployment tooling: `deploy_membrane.sh`, systemd units, `share_credentials.sh` |
-| [`wateringHole`](https://github.com/ecoPrimals/wateringHole) | Architecture docs: `MEMBRANE_CHANNEL_ARCHITECTURE.md`, `CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` |
-| [`primalSpring`](https://github.com/syntheticChemistry/primalSpring) | Coordination: capability registry, validation, Primal enum |
+| Resource | Location | Relationship |
+|----------|----------|-------------|
+| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Primary operational tool (982 lines) |
+| Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
+| fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
+| Config SSOT | `gardens/projectNUCLEUS/deploy/nucleus_config.sh` | Port map, VPS config, shadow settings |
+| Dark Forest standard | `infra/wateringHole/DARK_FOREST_GLACIAL_GATE_STANDARD.md` | 5-pillar security audit |
+| Glacial readiness | `infra/wateringHole/GLACIAL_SHIFT_READINESS.md` | 6 stadial entry criteria |
+| Credential tooling | `infra/plasmidBin/membrane/share_credentials.sh` | Age-encrypted credential sharing |
+| Validation | `gardens/projectNUCLEUS/validation/darkforest_membrane.sh` | Dark Forest audit harness |
 
 ---
 
