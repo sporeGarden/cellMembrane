@@ -3,8 +3,10 @@
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-05-26
 **Overall status:** BLOCKED — 2 direct blockers owned by cellMembrane
-**Wave 50 update:** GitHub Actions incident proved need for self-hosted runners.
-Local plasmidbin validate passes (98/98). Runner setup in progress on ironGate.
+**Wave 50 update:** GitHub Actions incident (May 26) proved external CI is unacceptable.
+Self-hosted runner deployed on ironGate. plasmidbin validate 98/98 PASS locally.
+CI runs still failing on GitHub-hosted runners (can't download action archives).
+Our self-hosted runner has Rust toolchain installed locally — zero download dependency.
 
 ---
 
