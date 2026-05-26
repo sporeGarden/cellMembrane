@@ -62,6 +62,9 @@ pub struct MembraneService {
     pub is_primal: bool,
     /// Install path on the membrane host.
     pub install_path: &'static str,
+    /// Supplementary ports beyond the primary (e.g. hbbs ID server on 21115).
+    /// Each entry is `(port, protocol, comment)`.
+    pub extra_ports: &'static [(u16, Protocol, &'static str)],
 }
 
 const BEARDOG: MembraneService = MembraneService {
@@ -74,6 +77,7 @@ const BEARDOG: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/beardog",
+    extra_ports: &[],
 };
 
 const SONGBIRD: MembraneService = MembraneService {
@@ -86,6 +90,7 @@ const SONGBIRD: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/songbird",
+    extra_ports: &[],
 };
 
 const SKUNKBAT: MembraneService = MembraneService {
@@ -98,6 +103,7 @@ const SKUNKBAT: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/skunkbat",
+    extra_ports: &[],
 };
 
 const NESTGATE: MembraneService = MembraneService {
@@ -110,6 +116,7 @@ const NESTGATE: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/nestgate",
+    extra_ports: &[],
 };
 
 const RHIZOCRYPT: MembraneService = MembraneService {
@@ -122,6 +129,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/rhizocrypt",
+    extra_ports: &[],
 };
 
 const LOAMSPINE: MembraneService = MembraneService {
@@ -134,6 +142,7 @@ const LOAMSPINE: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/loamspine",
+    extra_ports: &[],
 };
 
 const SWEETGRASS: MembraneService = MembraneService {
@@ -146,6 +155,7 @@ const SWEETGRASS: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/sweetgrass",
+    extra_ports: &[],
 };
 
 const HBBS: MembraneService = MembraneService {
@@ -158,6 +168,7 @@ const HBBS: MembraneService = MembraneService {
     health_method: "tcp_connect",
     is_primal: false,
     install_path: "/opt/membrane/hbbs",
+    extra_ports: &[(21115, Protocol::Tcp, "hbbs-id")],
 };
 
 const HBBR: MembraneService = MembraneService {
@@ -170,6 +181,7 @@ const HBBR: MembraneService = MembraneService {
     health_method: "tcp_connect",
     is_primal: false,
     install_path: "/opt/membrane/hbbr",
+    extra_ports: &[],
 };
 
 const CADDY: MembraneService = MembraneService {
@@ -182,6 +194,7 @@ const CADDY: MembraneService = MembraneService {
     health_method: "https_probe",
     is_primal: false,
     install_path: "/usr/bin/caddy",
+    extra_ports: &[(80, Protocol::Tcp, "caddy-acme")],
 };
 
 /// All known membrane services. Runtime discovery starts here.
