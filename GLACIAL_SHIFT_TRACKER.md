@@ -3,6 +3,9 @@
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-05-26
 **Overall status:** BLOCKED — 2 direct blockers owned by cellMembrane
+**Wave 51 update:** Deep debt sprint across all 3 owned repos (cellMembrane, benchScale, agentReagents).
+benchScale + agentReagents converged from `sort-after/` into canonical `infra/` locations.
+K-Derm diderm topology wired into benchScale. postPrimordial compliance enforced.
 **Wave 50 update:** GitHub Actions incident (May 26) proved external CI is unacceptable.
 Self-hosted runner deployed on ironGate. plasmidbin validate 98/98 PASS locally.
 CI runs still failing on GitHub-hosted runners (can't download action archives).
@@ -143,6 +146,45 @@ warnings resolved, `default_true` deduplicated, tests smart-refactored by domain
 - [x] `membrane.toml` — reference config for live VPS deployment
 - [x] Gap closure: 5 Dark Forest audit gaps closed in types
 - [x] Debt resolution: static registry, typed ShadowMode, capability-based derivation, clippy-clean
+
+### benchScale + agentReagents Ownership Convergence (Wave 51)
+
+Mature Rust repos (benchScale ~22k LOC, agentReagents ~7.9k LOC) moved from
+`sort-after/` to canonical `infra/` locations. Slim bash scaffold predecessors
+archived to `infra/*-slim-archive/`. Both repos aligned on dependencies
+(`thiserror` 2.0, `serde_yaml` 0.10, `clap` 4.5), postPrimordial compliance
+enforced (binary resolution from `plasmidBin`, not local builds).
+
+K-Derm diderm topology wired as benchScale YAML (`topologies/nucleus/kderm_diderm_membrane.yaml`)
+with 5 nodes, boundary crossing validation, and a parsing test.
+
+**Deliverables:**
+- [x] benchScale + agentReagents converged to `infra/` (308 + 113 tests pass)
+- [x] Dependency alignment across both repos
+- [x] postPrimordial compliance: binary deploy paths, `PLASMID_BIN` env, `fetch.sh` fallback
+- [x] K-Derm diderm topology YAML + parsing test
+- [x] Archive cleanup: `archive/`, `scripts/legacy/`, `templates/archive/` removed from working tree (preserved in git history)
+
+### Deep Debt Sprint — All 3 Repos (Wave 51)
+
+Systematic deep debt resolution targeting modern idiomatic Rust across all
+owned repos. Audit identified and resolved:
+
+**cellMembrane:** `FirewallRule.comment` String → `&'static str` (zero allocation),
+supplementary ports in service registry (hbbs 21115, caddy 80), output-only types
+drop `Deserialize`, `push_port_rules()` helper eliminates repetition.
+
+**agentReagents:** 10 `println!` → structured `tracing::info!`, `PciAttachMode`
+enum replaces stringly-typed attach mode, unused imports cleaned, 26 `missing_docs`
+warnings resolved on verification types.
+
+**benchScale:** `constants::deploy` + `constants::libvirt_defaults` modules with
+env var discovery (`BENCHSCALE_DEPLOY_DIR`, `BENCHSCALE_LIBVIRT_NETWORK`), all
+hardcoded `/opt/biomeos/bin` and `"default"` network references centralized,
+9 `println!` → tracing, unsafe FFI `dhcp_leases.rs` evolved to safe `Option<&CStr>`
+API, call sites no longer touch raw pointers.
+
+**Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_DEEP_DEBT_WAVE51_MAY26_2026.md`
 
 ### S5 Forgejo Releases (Criteria #6 enabler)
 

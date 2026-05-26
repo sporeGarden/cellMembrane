@@ -55,9 +55,13 @@ Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
 cargo test                  # 80 tests — envelope, composition, channels, firewall, service, config, validation
-cargo clippy                # Zero warnings
+cargo clippy                # Zero warnings, #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation
 ```
+
+Wave 51 deep debt: `FirewallRule.comment` zero-allocation (`&'static str`),
+supplementary ports in service registry (hbbs 21115, caddy 80 — no more
+special cases), output-only types drop `Deserialize`.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
@@ -230,6 +234,22 @@ gardens/cellMembrane/
   forgejo_pull_mirror.sh      # Bulk Forgejo pull-mirror management
   .gitignore
 ```
+
+---
+
+## Testing Infrastructure
+
+cellMembrane K-Derm topology is validated by the ecosystem's testing infrastructure:
+
+| Repo | Location | Role |
+|------|----------|------|
+| benchScale | `infra/benchScale/` | Reproducible isolated test environments, K-Derm diderm topology in `topologies/nucleus/` |
+| agentReagents | `infra/agentReagents/` | Manifest-driven VM image building, `plasmidBin` integration |
+
+Both are mature Rust codebases converged into `infra/` as of Wave 51 (308 + 113 tests).
+Deep debt sprint: `println!`→tracing, deploy paths centralized via env vars,
+hardcoded `"default"` network deduplicated, unsafe FFI evolved to safe API,
+`PciAttachMode` enum, verification types documented.
 
 ---
 

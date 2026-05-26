@@ -107,6 +107,8 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Trio pipeline | 10/10 PASS | 2026-05 |
 | `deploy_membrane.sh status` | All services RUNNING | 2026-05 |
 | `cargo test` (cellmembrane-types) | 80 PASS, 0 FAIL, 0 clippy warnings | 2026-05-26 |
+| `cargo test` (benchScale) | 308 PASS, 0 FAIL | 2026-05-26 |
+| `cargo test` (agentReagents) | 113 PASS, 0 FAIL | 2026-05-26 |
 
 ---
 
