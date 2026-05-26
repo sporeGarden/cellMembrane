@@ -348,19 +348,21 @@ Then redeploy firewall rules via `deploy_membrane.sh`.
 
 ### Status check
 ```bash
-# Service status
-sudo systemctl status actions.runner.ecoPrimals-plasmidBin.irongate-runner.service
+# Service status (org-level runner)
+sudo systemctl status actions.runner.ecoPrimals.irongate-runner.service
 
-# GitHub-side status
-gh api repos/ecoPrimals/plasmidBin/actions/runners --jq '.runners[] | "\(.name) \(.status)"'
+# GitHub-side status (org-level)
+gh api orgs/ecoPrimals/actions/runners --jq '.runners[] | "\(.name) \(.status) [\(.labels | map(.name) | join(","))]"'
 ```
 
 ### Restart runner
 ```bash
-cd ~/actions-runner
-sudo ./svc.sh stop
-sudo ./svc.sh start
+sudo systemctl restart actions.runner.ecoPrimals.irongate-runner.service
 ```
+
+### Fall back to GitHub-hosted runners
+Set the org variable `USE_GITHUB_HOSTED=true` in GitHub org settings to route
+all workflows back to `ubuntu-latest`. Remove the variable to return to self-hosted.
 
 ### Local validation (GitHub-independent)
 ```bash
@@ -380,5 +382,19 @@ cargo build -p plasmidbin --release --target aarch64-unknown-linux-musl
 ### Runner agent location
 - Agent: `~/actions-runner/`
 - Work dir: `~/actions-runner/_work/`
-- Service: `actions.runner.ecoPrimals-plasmidBin.irongate-runner.service`
-- Labels: `self-hosted, Linux, X64, x86_64, irongate`
+- Service: `actions.runner.ecoPrimals.irongate-runner.service`
+- Labels: `self-hosted, Linux, X64, x86_64, irongate, lan`
+- Scope: **org-level** (serves all ecoPrimals repos)
+
+### Workflow sovereignty level
+| Workflow | Self-hosted ready | Raw git checkout | Marketplace-free |
+|----------|-------------------|------------------|------------------|
+| validate.yml | Yes | Yes | **Yes** |
+| auto-harvest.yml | Yes | No | No |
+| smoke.yml | Yes | No | No |
+| check-updates.yml | Yes | No | No |
+| tier23-harvest.yml | Yes | No | No |
+
+Only `validate.yml` can run during a full GitHub codeload outage. Other workflows
+still need `actions/checkout@v4` and `actions/upload-artifact@v4` downloaded from
+GitHub. Evolving these to raw git + direct upload is future work.

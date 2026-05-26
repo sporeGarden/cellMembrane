@@ -85,24 +85,29 @@ cd ../../infra/plasmidBin
 
 ## Supporting Work (Not Direct Blockers)
 
-### Self-Hosted GitHub Actions Runners (new — Wave 50)
+### Self-Hosted GitHub Actions Runners (Wave 50)
 
 GitHub Actions incident on May 26 proved external CI dependency is unacceptable.
-Self-hosted runners on LAN gates eliminate this: free minutes, zero cloud dependency,
-and the path to Forgejo CI sovereignty.
+Self-hosted runners on LAN gates provide free minutes and local toolchains. However,
+the same incident revealed a deeper issue: GitHub's job dispatch plane is also
+degraded during outages — self-hosted runners can't receive jobs even when online.
+True CI sovereignty requires Forgejo Actions to own the dispatch plane.
 
-**Status:** ironGate runner **ONLINE** (v2.334.0). Registered to ecoPrimals/plasmidBin.
-Rust 1.95, musl x86_64 + aarch64 cross-compilation verified. systemd service enabled.
+**Status:** ironGate runner **ONLINE** at org level (v2.334.0). Serves all ecoPrimals repos.
+All 5 plasmidBin workflows evolved to sovereign-first `runs-on` strategy. `validate.yml`
+uses raw git checkout — zero marketplace action dependency, survives codeload outages.
 
 **Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_SELF_HOSTED_RUNNERS_WAVE50_MAY26_2026.md`
 
 **Acceptance:**
-- [x] ironGate runner online: `irongate-runner online self-hosted,Linux,X64,x86_64,irongate`
+- [x] ironGate runner online (org-level): `irongate-runner online self-hosted,Linux,X64,x86_64,irongate,lan`
 - [x] `plasmidbin validate .` passes on ironGate: **98/98 PASS**
-- [x] Static musl binary builds: x86_64 (2.8MB) + aarch64 cross-compile verified
-- [ ] 2nd runner online (eastGate or southGate — needs their gate)
-- [ ] Manual workflow dispatch runs on self-hosted runner
-- [ ] Failover: one runner offline, other picks up jobs
+- [x] Static musl binary builds: x86_64 + aarch64 cross-compile verified
+- [x] All 5 workflows sovereign-first (self-hosted default, `USE_GITHUB_HOSTED` override)
+- [x] validate.yml raw git checkout (no `uses: actions/checkout@v4` dependency)
+- [ ] Dispatch completes on self-hosted runner (blocked by GitHub incident — dispatch plane degraded)
+- [ ] 2nd runner online (eastGate or southGate)
+- [ ] Forgejo Actions evaluated as dispatch plane replacement
 
 ### S5 Forgejo Releases (Criteria #6 enabler)
 
