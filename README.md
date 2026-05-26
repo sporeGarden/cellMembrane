@@ -47,13 +47,15 @@ Formal architecture for deployable membrane infrastructure:
 | `MEMBRANE_COMPOSITION_MODEL.md` | Composition ladder (relay → rustdesk → tower → nest) |
 | `FIELDMOUSE_CONTRACT.md` | Deployment contract for third-party membrane operators |
 | `MULTI_MEMBRANE_DEPLOYMENT.md` | Multi-provider, multi-region parameterization model |
+| `K_DERM_TOPOLOGY.md` | K-Derm cell envelope model — monoderm/diderm, periplasm, bonding per layer |
 
 ### Rust Types (`crates/cellmembrane-types/`)
 
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 46 tests — config parsing, composition, firewall, Dark Forest audit alignment
+cargo test                  # 80 tests — envelope, composition, channels, firewall, service, config, validation
+cargo clippy                # Zero warnings
 cargo doc --open            # Full API documentation
 ```
 
@@ -198,28 +200,34 @@ gardens/cellMembrane/
   Cargo.toml                  # Rust workspace root
   membrane.toml               # Reference config (live deployment)
   crates/
-    cellmembrane-types/       # Typed domain models
+    cellmembrane-types/       # Typed domain models (#![forbid(unsafe_code)])
       src/
-        lib.rs                # Crate root, re-exports
+        lib.rs                # Crate root, re-exports, shared helpers
         channels.rs           # Signal / Relay / Surface
         composition.rs        # Relay → RustDesk → Tower → Nest
-        config.rs             # membrane.toml parser + validator
+        config.rs             # membrane.toml parser + validator + ShadowMode
         credentials.rs        # age / BTSP vault / manual
+        envelope.rs           # K-Derm topology — monoderm/diderm, bonding, channel proteins
         firewall.rs           # UFW rules from composition
         identity.rs           # Family ID, gate ID
         provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
-        service.rs            # Binary, port, systemd, health
+        service.rs            # Static service registry — zero allocation, no Box::leak
         validation.rs         # Report pattern (pass/fail/warn)
       tests/
-        integration.rs        # 31 integration tests
-  specs/                      # Formal architecture specs
+        channels.rs           # Channel trust, ports, crypto, serde (4 tests)
+        composition.rs        # Ladder ordering, specs, serde (6 tests)
+        envelope.rs           # K-Derm topology, layers, bonding, policies (27 tests)
+        firewall.rs           # UFW derivation per composition (5 tests)
+        service.rs            # Registry, binary integrity, credentials (15 tests)
+        integration.rs        # Cross-module: config parsing, validation, topology (23 tests)
+  specs/                      # Formal architecture specs (5 documents)
   README.md
   RUNBOOKS.md
   GLACIAL_SHIFT_TRACKER.md
   VPS_STATE.md
   IRONGATE_VERIFICATION.md
-  forgejo_sync.sh
-  forgejo_pull_mirror.sh
+  forgejo_sync.sh             # Sync non-mirror repos GitHub → Forgejo
+  forgejo_pull_mirror.sh      # Bulk Forgejo pull-mirror management
   .gitignore
 ```
 
@@ -232,6 +240,7 @@ gardens/cellMembrane/
 | Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Primary operational tool (982 lines) |
 | Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
 | fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
+| K-NOME programming | `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md` | K-Derm topology parallels K-NOME methodology |
 | Config SSOT | `gardens/projectNUCLEUS/deploy/nucleus_config.sh` | Port map, VPS config, shadow settings |
 | Dark Forest standard | `infra/wateringHole/DARK_FOREST_GLACIAL_GATE_STANDARD.md` | 5-pillar security audit |
 | Glacial readiness | `infra/wateringHole/GLACIAL_SHIFT_READINESS.md` | 6 stadial entry criteria |

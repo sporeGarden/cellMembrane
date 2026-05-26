@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// Cross-module integration tests: config parsing, validation, provider
+// inference, and topology integration. Domain-specific tests live in
+// their own modules (channels.rs, composition.rs, envelope.rs, etc.).
 
-use cellmembrane_types::channels::{CryptoLayer, MembraneChannel};
 use cellmembrane_types::composition::MembraneComposition;
 use cellmembrane_types::config::MembraneConfig;
 use cellmembrane_types::credentials::CredentialModel;
-use cellmembrane_types::firewall::FirewallRuleset;
+use cellmembrane_types::envelope::EnvelopeTopology;
 use cellmembrane_types::provider::{ProviderType, SubstrateProfile};
-use cellmembrane_types::service::MembraneService;
 use cellmembrane_types::validation::Severity;
 use std::path::Path;
 
@@ -66,178 +68,6 @@ fn parse_minimal_membrane_toml() {
     assert!(file.membrane.provider.is_none());
 }
 
-// --- Composition model ---
-
-#[test]
-fn composition_ladder_ordering() {
-    assert!(MembraneComposition::Relay < MembraneComposition::RustDesk);
-    assert!(MembraneComposition::RustDesk < MembraneComposition::Tower);
-    assert!(MembraneComposition::Tower < MembraneComposition::Nest);
-}
-
-#[test]
-fn composition_btsp_requirements() {
-    assert!(!MembraneComposition::Relay.has_btsp());
-    assert!(!MembraneComposition::RustDesk.has_btsp());
-    assert!(MembraneComposition::Tower.has_btsp());
-    assert!(MembraneComposition::Nest.has_btsp());
-}
-
-#[test]
-fn tower_composition_spec() {
-    let spec = MembraneComposition::Tower.spec();
-    assert_eq!(spec.primals, vec!["beardog", "songbird", "skunkbat"]);
-    assert_eq!(spec.symbiotic, vec!["hbbs", "hbbr"]);
-    assert!(spec.boot_order[0] == "beardog");
-}
-
-#[test]
-fn nest_composition_includes_all_tower_primals() {
-    let tower = MembraneComposition::Tower.spec();
-    let nest = MembraneComposition::Nest.spec();
-    for primal in &tower.primals {
-        assert!(
-            nest.primals.contains(primal),
-            "Nest should include Tower primal: {primal}"
-        );
-    }
-}
-
-#[test]
-fn nest_composition_adds_storage_primals() {
-    let spec = MembraneComposition::Nest.spec();
-    assert!(spec.primals.contains(&"nestgate"));
-    assert!(spec.primals.contains(&"rhizocrypt"));
-    assert!(spec.primals.contains(&"loamspine"));
-    assert!(spec.primals.contains(&"sweetgrass"));
-    assert!(spec.symbiotic.contains(&"caddy"));
-}
-
-// --- Channel types ---
-
-#[test]
-fn channel_trust_ordering() {
-    assert!(MembraneChannel::Signal.trust_level() < MembraneChannel::Relay.trust_level());
-    assert!(MembraneChannel::Relay.trust_level() < MembraneChannel::Surface.trust_level());
-}
-
-#[test]
-fn channel_default_ports() {
-    assert_eq!(MembraneChannel::Signal.default_ports(), &[53]);
-    assert_eq!(MembraneChannel::Relay.default_ports(), &[3478]);
-    assert_eq!(MembraneChannel::Surface.default_ports(), &[80, 443]);
-}
-
-#[test]
-fn channel_crypto_layers() {
-    assert_eq!(MembraneChannel::Signal.default_crypto(), CryptoLayer::None);
-    assert_eq!(
-        MembraneChannel::Relay.default_crypto(),
-        CryptoLayer::TurnHmac
-    );
-    assert_eq!(MembraneChannel::Surface.default_crypto(), CryptoLayer::Tls);
-}
-
-// --- Service definitions ---
-
-#[test]
-fn service_lookup_all_primals() {
-    for name in ["beardog", "songbird", "skunkbat", "nestgate", "rhizocrypt", "loamspine", "sweetgrass"] {
-        assert!(
-            MembraneService::for_binary(name).is_some(),
-            "Service not found for primal: {name}"
-        );
-    }
-}
-
-#[test]
-fn service_lookup_symbiotic() {
-    for name in ["hbbs", "hbbr", "caddy"] {
-        let svc = MembraneService::for_binary(name).expect(&format!("Service not found: {name}"));
-        assert!(!svc.is_primal, "{name} should not be marked as primal");
-    }
-}
-
-#[test]
-fn beardog_is_uds_only() {
-    let svc = MembraneService::for_binary("beardog").unwrap();
-    assert!(svc.socket_path.is_some());
-    assert!(svc.port.is_none());
-    assert!(!svc.is_externally_reachable());
-}
-
-#[test]
-fn skunkbat_is_loopback_only() {
-    let svc = MembraneService::for_binary("skunkbat").unwrap();
-    assert_eq!(svc.bind, "127.0.0.1");
-    assert!(!svc.is_externally_reachable());
-}
-
-#[test]
-fn songbird_is_externally_reachable() {
-    let svc = MembraneService::for_binary("songbird").unwrap();
-    assert!(svc.is_externally_reachable());
-    assert_eq!(svc.port, Some(3478));
-}
-
-// --- Firewall derivation ---
-
-#[test]
-fn relay_firewall_minimal() {
-    let fw = FirewallRuleset::for_composition(MembraneComposition::Relay);
-    let ports = fw.ports();
-    assert!(ports.contains(&22), "SSH must always be open");
-    assert!(ports.contains(&3478), "TURN must be open");
-    assert!(!ports.contains(&21115), "RustDesk should not be open");
-    assert!(!ports.contains(&443), "TLS should not be open");
-}
-
-#[test]
-fn tower_firewall_includes_rustdesk() {
-    let fw = FirewallRuleset::for_composition(MembraneComposition::Tower);
-    let ports = fw.ports();
-    assert!(ports.contains(&3478));
-    assert!(ports.contains(&21115));
-    assert!(ports.contains(&21116));
-    assert!(ports.contains(&21117));
-}
-
-#[test]
-fn nest_firewall_includes_surface() {
-    let fw = FirewallRuleset::for_composition(MembraneComposition::Nest);
-    let ports = fw.ports();
-    assert!(ports.contains(&80), "ACME port should be open");
-    assert!(ports.contains(&443), "TLS port should be open");
-    assert!(ports.contains(&9500), "NestGate should be open");
-}
-
-#[test]
-fn firewall_ufw_script_format() {
-    let fw = FirewallRuleset::for_composition(MembraneComposition::Relay);
-    let script = fw.to_ufw_script();
-    assert!(script.contains("ufw --force reset"));
-    assert!(script.contains("ufw default deny incoming"));
-    assert!(script.contains("ufw allow 22/tcp"));
-    assert!(script.contains("ufw allow 3478/tcp"));
-    assert!(script.contains("ufw --force enable"));
-}
-
-#[test]
-fn firewall_rules_are_sorted() {
-    for comp in MembraneComposition::all() {
-        let fw = FirewallRuleset::for_composition(*comp);
-        let ports: Vec<u16> = fw.rules.iter().map(|r| r.port).collect();
-        for window in ports.windows(2) {
-            assert!(
-                window[0] <= window[1],
-                "Firewall rules not sorted for {comp}: {} > {}",
-                window[0],
-                window[1]
-            );
-        }
-    }
-}
-
 // --- Provider types ---
 
 #[test]
@@ -252,7 +82,100 @@ fn provider_substrate_profiles() {
     assert!(!p.requires_ssh());
 }
 
-// --- Validation ---
+// --- Credential model ---
+
+#[test]
+fn credential_model_defaults_to_age() {
+    assert_eq!(CredentialModel::default(), CredentialModel::Age);
+}
+
+// --- Hardening config ---
+
+#[test]
+fn hardening_defaults_include_journald() {
+    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(r#"
+        [membrane]
+        name = "test"
+        composition = "relay"
+    "#).unwrap();
+    assert!(config.membrane.hardening.journald_persistent);
+}
+
+#[test]
+fn hardening_prohibited_services() {
+    let prohibited = cellmembrane_types::config::HardeningConfig::prohibited_services();
+    assert!(prohibited.contains(&"exim4"));
+    assert!(prohibited.contains(&"droplet-agent"));
+    assert!(prohibited.contains(&"snapd"));
+}
+
+// --- Telemetry config ---
+
+#[test]
+fn telemetry_defaults_match_glacial_standard() {
+    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(r#"
+        [membrane]
+        name = "test"
+        composition = "relay"
+    "#).unwrap();
+    let t = &config.membrane.telemetry;
+    assert!(t.enabled);
+    assert_eq!(t.shadow_mode, cellmembrane_types::config::ShadowMode::Permanent);
+    assert!(t.cutover_gate_days >= 7);
+}
+
+#[test]
+fn telemetry_parsed_from_reference_toml() {
+    let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
+    assert!(config.telemetry.enabled);
+    assert_eq!(config.telemetry.shadow_mode, cellmembrane_types::config::ShadowMode::Permanent);
+    assert_eq!(config.telemetry.cutover_gate_days, 7);
+    assert!(config.telemetry.skunkbat_correlation);
+}
+
+// --- Topology integration ---
+
+#[test]
+fn reference_toml_has_diderm_topology() {
+    let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
+    assert_eq!(config.topology, Some(EnvelopeTopology::Diderm));
+    assert_eq!(config.effective_topology(), EnvelopeTopology::Diderm);
+}
+
+#[test]
+fn topology_defaults_to_diderm_for_vps() {
+    let toml = r#"
+    [membrane]
+    name = "test"
+    composition = "relay"
+
+    [membrane.provider]
+    type = "digitalocean"
+    "#;
+    let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
+    assert!(file.membrane.topology.is_none());
+    assert_eq!(file.membrane.effective_topology(), EnvelopeTopology::Diderm);
+}
+
+#[test]
+fn topology_defaults_to_monoderm_for_gate_local() {
+    let toml = r#"
+    [membrane]
+    name = "gate"
+    composition = "tower"
+
+    [membrane.identity]
+    family_id = "test"
+
+    [membrane.provider]
+    type = "gate_local"
+    "#;
+    let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
+    assert!(file.membrane.topology.is_none());
+    assert_eq!(file.membrane.effective_topology(), EnvelopeTopology::Monoderm);
+}
+
+// --- Cross-module validation ---
 
 #[test]
 fn validate_reference_config() {
@@ -306,150 +229,6 @@ fn validate_empty_name_fails() {
     assert!(!report.is_ok());
 }
 
-// --- Credential model ---
-
-#[test]
-fn credential_model_defaults_to_age() {
-    assert_eq!(CredentialModel::default(), CredentialModel::Age);
-}
-
-// --- Gap closure: journald persistence (MEM-07) ---
-
-#[test]
-fn hardening_defaults_include_journald() {
-    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(r#"
-        [membrane]
-        name = "test"
-        composition = "relay"
-    "#).unwrap();
-    assert!(config.membrane.hardening.journald_persistent);
-}
-
-#[test]
-fn hardening_prohibited_services() {
-    let prohibited = cellmembrane_types::config::HardeningConfig::prohibited_services();
-    assert!(prohibited.contains(&"exim4"));
-    assert!(prohibited.contains(&"droplet-agent"));
-    assert!(prohibited.contains(&"snapd"));
-}
-
-// --- Gap closure: credential file paths (MEM-08, MEM-12) ---
-
-#[test]
-fn relay_credential_files_include_turn() {
-    let files = cellmembrane_types::credentials::credential_files_for(MembraneComposition::Relay);
-    assert!(
-        files.iter().any(|f| f.path.contains("songbird") || f.path.contains("relay-credentials")),
-        "Relay must have TURN credential files"
-    );
-    for f in &files {
-        assert_eq!(f.expected_owner, "root");
-    }
-}
-
-#[test]
-fn rustdesk_credential_files_include_key() {
-    let files = cellmembrane_types::credentials::credential_files_for(MembraneComposition::RustDesk);
-    assert!(
-        files.iter().any(|f| f.path.contains("id_ed25519.pub")),
-        "RustDesk must have public key file"
-    );
-    assert!(
-        files.iter().any(|f| f.path.contains("id_ed25519") && !f.path.contains(".pub")),
-        "RustDesk must have private key file"
-    );
-}
-
-#[test]
-fn tower_credential_files_include_tower_env() {
-    let files = cellmembrane_types::credentials::credential_files_for(MembraneComposition::Tower);
-    let tower_env = files.iter().find(|f| f.path.contains("tower.env"));
-    assert!(tower_env.is_some(), "Tower must have tower.env");
-    assert_eq!(tower_env.unwrap().expected_mode, "600");
-}
-
-#[test]
-fn credential_files_grow_with_composition() {
-    let relay = cellmembrane_types::credentials::credential_files_for(MembraneComposition::Relay);
-    let rustdesk = cellmembrane_types::credentials::credential_files_for(MembraneComposition::RustDesk);
-    let tower = cellmembrane_types::credentials::credential_files_for(MembraneComposition::Tower);
-    assert!(rustdesk.len() > relay.len(), "RustDesk should have more credential files than Relay");
-    assert!(tower.len() > rustdesk.len(), "Tower should have more credential files than RustDesk");
-}
-
-// --- Gap closure: binary integrity (MEM-09) ---
-
-#[test]
-fn binary_integrity_relay_has_songbird() {
-    let bins = cellmembrane_types::service::binary_integrity_for(MembraneComposition::Relay);
-    assert!(
-        bins.iter().any(|b| b.binary == "songbird"),
-        "Relay must verify songbird binary"
-    );
-    let songbird = bins.iter().find(|b| b.binary == "songbird").unwrap();
-    assert_eq!(songbird.hash_algorithm, cellmembrane_types::service::HashAlgorithm::Blake3);
-    assert!(songbird.require_static_musl);
-}
-
-#[test]
-fn binary_integrity_tower_has_all_primals() {
-    let bins = cellmembrane_types::service::binary_integrity_for(MembraneComposition::Tower);
-    for primal in ["beardog", "songbird", "skunkbat"] {
-        assert!(
-            bins.iter().any(|b| b.binary == primal),
-            "Tower must verify {primal}"
-        );
-    }
-}
-
-#[test]
-fn binary_integrity_symbiotic_use_sha256() {
-    let bins = cellmembrane_types::service::binary_integrity_for(MembraneComposition::Tower);
-    for sym in ["hbbs", "hbbr"] {
-        let entry = bins.iter().find(|b| b.binary == sym);
-        assert!(entry.is_some(), "Tower must verify {sym}");
-        assert_eq!(
-            entry.unwrap().hash_algorithm,
-            cellmembrane_types::service::HashAlgorithm::Sha256,
-            "Symbiotic {sym} should use SHA-256"
-        );
-        assert!(!entry.unwrap().require_static_musl);
-    }
-}
-
-#[test]
-fn binary_integrity_grows_with_composition() {
-    let relay = cellmembrane_types::service::binary_integrity_for(MembraneComposition::Relay);
-    let tower = cellmembrane_types::service::binary_integrity_for(MembraneComposition::Tower);
-    let nest = cellmembrane_types::service::binary_integrity_for(MembraneComposition::Nest);
-    assert!(tower.len() > relay.len());
-    assert!(nest.len() > tower.len());
-}
-
-// --- Gap closure: telemetry config (s_membrane_composition Pillar 4) ---
-
-#[test]
-fn telemetry_defaults_match_glacial_standard() {
-    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(r#"
-        [membrane]
-        name = "test"
-        composition = "relay"
-    "#).unwrap();
-    let t = &config.membrane.telemetry;
-    assert!(t.enabled);
-    assert_eq!(t.shadow_mode, "permanent");
-    assert!(t.cutover_gate_days >= 7);
-}
-
-#[test]
-fn telemetry_parsed_from_reference_toml() {
-    let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
-    assert!(config.telemetry.enabled);
-    assert_eq!(config.telemetry.shadow_mode, "permanent");
-    assert_eq!(config.telemetry.cutover_gate_days, 7);
-    assert!(config.telemetry.skunkbat_correlation);
-}
-
 #[test]
 fn validate_low_cutover_days_fails() {
     let toml = r#"
@@ -488,8 +267,6 @@ fn validate_tower_without_skunkbat_correlation_warns() {
     );
 }
 
-// --- Gap closure: validation report includes new audit categories ---
-
 #[test]
 fn validate_reference_includes_credential_and_integrity_info() {
     let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
@@ -501,32 +278,30 @@ fn validate_reference_includes_credential_and_integrity_info() {
     assert!(checks.contains(&"telemetry.cutover_days"), "Should report cutover gate");
 }
 
-// --- Round-trip serde ---
-
 #[test]
-fn composition_serde_roundtrip() {
-    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-    struct Wrapper {
-        c: MembraneComposition,
-    }
-    for comp in MembraneComposition::all() {
-        let w = Wrapper { c: *comp };
-        let serialized = toml::to_string(&w).unwrap();
-        let deserialized: Wrapper = toml::from_str(&serialized).unwrap();
-        assert_eq!(w, deserialized);
-    }
+fn validate_reference_includes_topology_info() {
+    let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
+    let report = config.validate();
+    let checks: Vec<&str> = report.entries.iter().map(|e| e.check.as_str()).collect();
+    assert!(checks.contains(&"topology.effective"), "Should report topology");
+    assert!(checks.contains(&"topology.boundaries"), "Should report boundary count for diderm");
 }
 
 #[test]
-fn channel_serde_roundtrip() {
-    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-    struct Wrapper {
-        c: MembraneChannel,
-    }
-    for ch in MembraneChannel::all() {
-        let w = Wrapper { c: *ch };
-        let serialized = toml::to_string(&w).unwrap();
-        let deserialized: Wrapper = toml::from_str(&serialized).unwrap();
-        assert_eq!(w, deserialized);
-    }
+fn validate_monoderm_vps_warns() {
+    let toml = r#"
+    [membrane]
+    name = "odd-setup"
+    composition = "relay"
+    topology = "monoderm"
+
+    [membrane.provider]
+    type = "digitalocean"
+    "#;
+    let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
+    let report = file.membrane.validate();
+    assert!(
+        report.entries.iter().any(|e| e.check == "topology.monoderm_vps"),
+        "Monoderm with VPS should warn"
+    );
 }

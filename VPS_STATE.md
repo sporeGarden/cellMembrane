@@ -1,7 +1,8 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-05-23
+**Last updated:** 2026-05-26
 **Deployed composition:** Tower (Phase 1)
+**K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = outer membrane, periplasm between)
 
 ---
 
@@ -85,12 +86,16 @@
 
 ---
 
-## Bonding / Trust
+## Bonding / Trust (K-Derm Envelope Model)
 
-| Type | Description |
-|------|-------------|
-| Covalent | SSH key access from gates → VPS |
-| Ionic | BTSP tokens for external services |
+| Bond Type | Channel Protein | Layer | Description |
+|-----------|----------------|-------|-------------|
+| Covalent | Aquaporin | Plasma membrane | SSH key access from gates → VPS (always-open, shared family seed) |
+| Metallic | Aquaporin | Plasma membrane | Fleet compute coordination between gates |
+| Ionic | Gated Ion | Outer membrane | BTSP scoped tokens for external services |
+| Weak | Passive Diffusion | Extracellular | Read-only public API (no active transport) |
+
+See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 
 ---
 
@@ -101,6 +106,7 @@
 | Dark Forest audit | 17 PASS, 0 FAIL | 2026-05 |
 | Trio pipeline | 10/10 PASS | 2026-05 |
 | `deploy_membrane.sh status` | All services RUNNING | 2026-05 |
+| `cargo test` (cellmembrane-types) | 80 PASS, 0 FAIL, 0 clippy warnings | 2026-05-26 |
 
 ---
 

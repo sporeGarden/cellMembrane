@@ -5,7 +5,7 @@
 **Status**: Active
 **Authority**: cellMembrane team
 **License**: AGPL-3.0-or-later
-**Related**: `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md`, `MEMBRANE_COMPOSITION_MODEL.md`, `FIELDMOUSE_CONTRACT.md`
+**Related**: `K_DERM_TOPOLOGY.md`, `MEMBRANE_COMPOSITION_MODEL.md`, `FIELDMOUSE_CONTRACT.md`, `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md`
 
 ---
 
@@ -35,6 +35,41 @@ A cell membrane is selectively permeable. It does not process information
 The membrane exposes specific receptors (channels) to the extracellular
 environment (the public internet) while maintaining intracellular integrity
 (BTSP, family seed, UDS IPC).
+
+### K-Derm Topology (Cell Envelope Model)
+
+The single-membrane biological analogy above describes a monoderm — one
+boundary between cytoplasm and environment. Production deployments use a
+**diderm** topology: two membrane boundaries with a periplasmic space
+between them. See `specs/K_DERM_TOPOLOGY.md` for the full specification.
+
+Absolute layer naming (inside out):
+
+```
+cytoplasm (gate NUCLEUS, UDS IPC)
+  → plasma membrane (gate firewall)
+    → periplasm (VPS relay, routing, telemetry, attribution)
+      → outer membrane (VPS channels: Signal, Relay, Surface)
+        → extracellular (public internet)
+```
+
+The VPS is always in the periplasm + outer membrane position. Gates own
+the plasma membrane. This replaces the ambiguous "inner/outer membrane"
+terminology that conflicted across documents (see K-Derm spec §5:
+Terminology Reconciliation).
+
+| Topology | Structure | Example |
+|----------|-----------|---------|
+| Monoderm | Gate → environment (no VPS) | ironGate on home LAN |
+| Diderm | Gate → VPS periplasm → environment | Production `membrane-relay` |
+| Nested diderm | One system's outer membrane = another's periplasm | University lab inside campus |
+
+The K-Derm topology field in `membrane.toml` selects the envelope:
+
+```toml
+[membrane]
+topology = "diderm"  # or "monoderm"
+```
 
 ### Architectural Invariants
 
@@ -241,6 +276,10 @@ This architecture is encoded in the `cellmembrane-types` Rust crate:
 | `ChannelConfig`       | `channels.rs`    | Port, trust, crypto, primal      |
 | `MembraneComposition` | `composition.rs` | Relay / RustDesk / Tower / Nest  |
 | `CompositionSpec`     | `composition.rs` | Required primals per composition |
+| `EnvelopeTopology`    | `envelope.rs`    | Monoderm / Diderm (K-Derm)       |
+| `EnvelopeLayer`       | `envelope.rs`    | Cytoplasm → Plasma → Periplasm → Outer → Extra |
+| `ChannelProtein`      | `envelope.rs`    | Aquaporin / GatedIon / VoltageGated / Passive  |
+| `BoundaryPolicy`      | `envelope.rs`    | Per-layer bond + braid policy    |
 | `MembraneService`     | `service.rs`     | Binary, port, systemd unit       |
 | `FirewallRuleset`     | `firewall.rs`    | UFW rules from composition       |
 | `MembraneIdentity`    | `identity.rs`    | Host, domain, family ID, certs   |
@@ -255,6 +294,8 @@ and feeds it to a deployer.
 
 ## Cross-References
 
+- K-Derm topology: `specs/K_DERM_TOPOLOGY.md`
+- K-NOME methodology: `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md`
 - Channel architecture prose: `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md`
 - fieldMouse deployment class: `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md`
 - Dark Forest standard: `springs/primalSpring/specs/DARK_FOREST_GLACIAL_GATE.md`

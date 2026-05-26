@@ -4,6 +4,11 @@
 //!
 //! Each running process on a membrane host is described by a [`MembraneService`].
 //! Services map to systemd units and are derived from the composition.
+//!
+//! The service registry is static data — no allocations, no `Box::leak`.
+//! Each service declares its own capabilities; the registry is the only
+//! central knowledge. Binary integrity expectations are derived from the
+//! registry rather than re-hardcoded.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -34,144 +39,167 @@ impl fmt::Display for Protocol {
 }
 
 /// A single membrane service (one running process).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// All fields are `&'static str` — service definitions are compile-time
+/// constants, not runtime-allocated data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MembraneService {
     /// Binary name (e.g. "songbird", "hbbs").
-    pub binary: String,
+    pub binary: &'static str,
     /// Systemd unit name.
-    pub systemd_unit: String,
+    pub systemd_unit: &'static str,
     /// Network port, if any (UDS-only services have `None`).
     pub port: Option<u16>,
     /// Protocol for the port.
     pub protocol: Protocol,
     /// Socket path for UDS-based services.
-    pub socket_path: Option<String>,
-    /// Bind address (empty = all interfaces, "127.0.0.1" = loopback only).
-    pub bind: String,
+    pub socket_path: Option<&'static str>,
+    /// Bind address ("" = all interfaces, "127.0.0.1" = loopback only).
+    pub bind: &'static str,
     /// JSON-RPC health check method name.
-    pub health_method: String,
+    pub health_method: &'static str,
     /// Whether this is an ecoPrimals primal (vs symbiotic partner).
     pub is_primal: bool,
     /// Install path on the membrane host.
-    pub install_path: String,
+    pub install_path: &'static str,
 }
+
+const BEARDOG: MembraneService = MembraneService {
+    binary: "beardog",
+    systemd_unit: "beardog-membrane.service",
+    port: None,
+    protocol: Protocol::Uds,
+    socket_path: Some("/run/membrane/beardog.sock"),
+    bind: "",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/beardog",
+};
+
+const SONGBIRD: MembraneService = MembraneService {
+    binary: "songbird",
+    systemd_unit: "songbird-relay.service",
+    port: Some(3478),
+    protocol: Protocol::TcpAndUdp,
+    socket_path: None,
+    bind: "0.0.0.0",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/songbird",
+};
+
+const SKUNKBAT: MembraneService = MembraneService {
+    binary: "skunkbat",
+    systemd_unit: "skunkbat-membrane.service",
+    port: Some(9140),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "127.0.0.1",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/skunkbat",
+};
+
+const NESTGATE: MembraneService = MembraneService {
+    binary: "nestgate",
+    systemd_unit: "nestgate-membrane.service",
+    port: Some(9500),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "0.0.0.0",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/nestgate",
+};
+
+const RHIZOCRYPT: MembraneService = MembraneService {
+    binary: "rhizocrypt",
+    systemd_unit: "rhizocrypt-membrane.service",
+    port: Some(9601),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "127.0.0.1",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/rhizocrypt",
+};
+
+const LOAMSPINE: MembraneService = MembraneService {
+    binary: "loamspine",
+    systemd_unit: "loamspine-membrane.service",
+    port: Some(9700),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "127.0.0.1",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/loamspine",
+};
+
+const SWEETGRASS: MembraneService = MembraneService {
+    binary: "sweetgrass",
+    systemd_unit: "sweetgrass-membrane.service",
+    port: Some(9850),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "127.0.0.1",
+    health_method: "health.liveness",
+    is_primal: true,
+    install_path: "/opt/membrane/sweetgrass",
+};
+
+const HBBS: MembraneService = MembraneService {
+    binary: "hbbs",
+    systemd_unit: "hbbs-membrane.service",
+    port: Some(21116),
+    protocol: Protocol::TcpAndUdp,
+    socket_path: None,
+    bind: "0.0.0.0",
+    health_method: "tcp_connect",
+    is_primal: false,
+    install_path: "/opt/membrane/hbbs",
+};
+
+const HBBR: MembraneService = MembraneService {
+    binary: "hbbr",
+    systemd_unit: "hbbr-membrane.service",
+    port: Some(21117),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "0.0.0.0",
+    health_method: "tcp_connect",
+    is_primal: false,
+    install_path: "/opt/membrane/hbbr",
+};
+
+const CADDY: MembraneService = MembraneService {
+    binary: "caddy",
+    systemd_unit: "caddy-tls.service",
+    port: Some(443),
+    protocol: Protocol::Tcp,
+    socket_path: None,
+    bind: "0.0.0.0",
+    health_method: "https_probe",
+    is_primal: false,
+    install_path: "/usr/bin/caddy",
+};
+
+/// All known membrane services. Runtime discovery starts here.
+const ALL_SERVICES: &[MembraneService] = &[
+    BEARDOG, SONGBIRD, SKUNKBAT, NESTGATE, RHIZOCRYPT,
+    LOAMSPINE, SWEETGRASS, HBBS, HBBR, CADDY,
+];
 
 impl MembraneService {
     /// Look up the canonical service definition for a binary name.
-    pub fn for_binary(name: &str) -> Option<Self> {
-        match name {
-            "beardog" => Some(Self {
-                binary: "beardog".into(),
-                systemd_unit: "beardog-membrane.service".into(),
-                port: None,
-                protocol: Protocol::Uds,
-                socket_path: Some("/run/membrane/beardog.sock".into()),
-                bind: String::new(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/beardog".into(),
-            }),
-            "songbird" => Some(Self {
-                binary: "songbird".into(),
-                systemd_unit: "songbird-relay.service".into(),
-                port: Some(3478),
-                protocol: Protocol::TcpAndUdp,
-                socket_path: None,
-                bind: "0.0.0.0".into(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/songbird".into(),
-            }),
-            "skunkbat" => Some(Self {
-                binary: "skunkbat".into(),
-                systemd_unit: "skunkbat-membrane.service".into(),
-                port: Some(9140),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "127.0.0.1".into(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/skunkbat".into(),
-            }),
-            "nestgate" => Some(Self {
-                binary: "nestgate".into(),
-                systemd_unit: "nestgate-membrane.service".into(),
-                port: Some(9500),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "0.0.0.0".into(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/nestgate".into(),
-            }),
-            "rhizocrypt" => Some(Self {
-                binary: "rhizocrypt".into(),
-                systemd_unit: "rhizocrypt-membrane.service".into(),
-                port: Some(9601),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "127.0.0.1".into(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/rhizocrypt".into(),
-            }),
-            "loamspine" => Some(Self {
-                binary: "loamspine".into(),
-                systemd_unit: "loamspine-membrane.service".into(),
-                port: Some(9700),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "127.0.0.1".into(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/loamspine".into(),
-            }),
-            "sweetgrass" => Some(Self {
-                binary: "sweetgrass".into(),
-                systemd_unit: "sweetgrass-membrane.service".into(),
-                port: Some(9850),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "127.0.0.1".into(),
-                health_method: "health.liveness".into(),
-                is_primal: true,
-                install_path: "/opt/membrane/sweetgrass".into(),
-            }),
-            "hbbs" => Some(Self {
-                binary: "hbbs".into(),
-                systemd_unit: "hbbs-membrane.service".into(),
-                port: Some(21116),
-                protocol: Protocol::TcpAndUdp,
-                socket_path: None,
-                bind: "0.0.0.0".into(),
-                health_method: "tcp_connect".into(),
-                is_primal: false,
-                install_path: "/opt/membrane/hbbs".into(),
-            }),
-            "hbbr" => Some(Self {
-                binary: "hbbr".into(),
-                systemd_unit: "hbbr-membrane.service".into(),
-                port: Some(21117),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "0.0.0.0".into(),
-                health_method: "tcp_connect".into(),
-                is_primal: false,
-                install_path: "/opt/membrane/hbbr".into(),
-            }),
-            "caddy" => Some(Self {
-                binary: "caddy".into(),
-                systemd_unit: "caddy-tls.service".into(),
-                port: Some(443),
-                protocol: Protocol::Tcp,
-                socket_path: None,
-                bind: "0.0.0.0".into(),
-                health_method: "https_probe".into(),
-                is_primal: false,
-                install_path: "/usr/bin/caddy".into(),
-            }),
-            _ => None,
-        }
+    /// Returns a static reference — zero allocation.
+    pub fn for_binary(name: &str) -> Option<&'static Self> {
+        ALL_SERVICES.iter().find(|s| s.binary == name)
+    }
+
+    /// All known services in the registry.
+    pub fn all() -> &'static [Self] {
+        ALL_SERVICES
     }
 
     /// Whether this service is externally reachable (bind != loopback, not UDS).
@@ -184,11 +212,11 @@ impl MembraneService {
 ///
 /// Maps to MEM-09 (Songbird binary integrity) in `darkforest_membrane.sh`.
 /// The BLAKE3 hash is verified against plasmidBin's `checksums.toml`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BinaryIntegrity {
     /// Binary name.
     pub binary: &'static str,
-    /// Absolute path on the membrane host.
+    /// Absolute path on the membrane host — derived from service registry.
     pub install_path: &'static str,
     /// Hash algorithm used for verification.
     pub hash_algorithm: HashAlgorithm,
@@ -207,8 +235,11 @@ pub enum HashAlgorithm {
 
 /// Returns the binary integrity expectations for a given composition.
 ///
-/// All ecoPrimals binaries must be static musl ELFs with BLAKE3 checksums.
-/// Symbiotic binaries (hbbs/hbbr, caddy) use SHA-256 from upstream releases.
+/// ecoPrimals binaries: static musl ELFs, BLAKE3 checksums.
+/// Symbiotic binaries: SHA-256 from upstream releases.
+///
+/// Install paths are derived from the service registry — no duplication,
+/// no `Box::leak`.
 pub fn binary_integrity_for(
     composition: crate::composition::MembraneComposition,
 ) -> Vec<BinaryIntegrity> {
@@ -218,17 +249,8 @@ pub fn binary_integrity_for(
     for primal in &spec.primals {
         if let Some(svc) = MembraneService::for_binary(primal) {
             entries.push(BinaryIntegrity {
-                binary: primal,
-                install_path: match *primal {
-                    "beardog" => "/opt/membrane/beardog",
-                    "songbird" => "/opt/membrane/songbird",
-                    "skunkbat" => "/opt/membrane/skunkbat",
-                    "nestgate" => "/opt/membrane/nestgate",
-                    "rhizocrypt" => "/opt/membrane/rhizocrypt",
-                    "loamspine" => "/opt/membrane/loamspine",
-                    "sweetgrass" => "/opt/membrane/sweetgrass",
-                    _ => Box::leak(svc.install_path.into_boxed_str()),
-                },
+                binary: svc.binary,
+                install_path: svc.install_path,
                 hash_algorithm: HashAlgorithm::Blake3,
                 require_static_musl: true,
             });
@@ -238,13 +260,8 @@ pub fn binary_integrity_for(
     for sym in &spec.symbiotic {
         if let Some(svc) = MembraneService::for_binary(sym) {
             entries.push(BinaryIntegrity {
-                binary: sym,
-                install_path: match *sym {
-                    "hbbs" => "/opt/membrane/hbbs",
-                    "hbbr" => "/opt/membrane/hbbr",
-                    "caddy" => "/usr/bin/caddy",
-                    _ => Box::leak(svc.install_path.into_boxed_str()),
-                },
+                binary: svc.binary,
+                install_path: svc.install_path,
                 hash_algorithm: HashAlgorithm::Sha256,
                 require_static_musl: false,
             });

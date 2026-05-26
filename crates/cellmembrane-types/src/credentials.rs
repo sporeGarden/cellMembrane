@@ -35,11 +35,12 @@ impl Default for CredentialConfig {
 }
 
 /// How credentials are stored and shared between operators and membranes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CredentialModel {
     /// Credentials encrypted with `age` using SSH ed25519 recipient keys.
     /// Current production model via `share_credentials.sh`.
+    #[default]
     Age,
 
     /// Credentials stored in BearDog's BTSP-encrypted secrets store.
@@ -49,12 +50,6 @@ pub enum CredentialModel {
     /// Credentials managed manually by the operator.
     /// Fallback for minimal deployments.
     Manual,
-}
-
-impl Default for CredentialModel {
-    fn default() -> Self {
-        Self::Age
-    }
 }
 
 impl std::fmt::Display for CredentialModel {

@@ -196,8 +196,8 @@ impl CompositionSpec {
 
     /// All binaries required (primals + symbiotic).
     pub fn all_binaries(&self) -> Vec<&str> {
-        let mut bins: Vec<&str> = self.primals.iter().copied().collect();
-        bins.extend(self.symbiotic.iter().copied());
+        let mut bins = self.primals.to_vec();
+        bins.extend_from_slice(&self.symbiotic);
         bins
     }
 
@@ -214,7 +214,7 @@ impl CompositionSpec {
     }
 
     /// Lookup a service definition by binary name.
-    pub fn service_for(&self, binary: &str) -> Option<MembraneService> {
+    pub fn service_for(&self, binary: &str) -> Option<&'static MembraneService> {
         MembraneService::for_binary(binary)
     }
 }

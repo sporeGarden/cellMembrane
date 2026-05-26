@@ -16,6 +16,7 @@ pub mod channels;
 pub mod composition;
 pub mod config;
 pub mod credentials;
+pub mod envelope;
 pub mod firewall;
 pub mod identity;
 pub mod provider;
@@ -24,10 +25,18 @@ pub mod validation;
 
 pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TrustLevel};
 pub use composition::{CompositionSpec, MembraneComposition};
-pub use config::MembraneConfig;
+pub use config::{MembraneConfig, ShadowMode};
 pub use credentials::{CredentialFile, CredentialModel, credential_files_for};
+pub use envelope::{
+    BondType, BoundaryPolicy, BraidPolicy, ChannelProtein, EnvelopeLayer, EnvelopeTopology,
+};
 pub use firewall::{FirewallRule, FirewallRuleset};
 pub use identity::MembraneIdentity;
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{BinaryIntegrity, HashAlgorithm, MembraneService, binary_integrity_for};
 pub use validation::{Report, ReportEntry, Severity};
+
+/// Shared serde default for boolean fields that should be `true` when omitted.
+pub(crate) fn default_true() -> bool {
+    true
+}

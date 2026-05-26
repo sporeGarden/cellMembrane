@@ -9,12 +9,14 @@
 use crate::channels::ChannelConfig;
 use crate::composition::MembraneComposition;
 use crate::credentials::CredentialConfig;
+use crate::envelope::EnvelopeTopology;
 use crate::firewall::FirewallRuleset;
 use crate::identity::MembraneIdentity;
 use crate::provider::ProviderConfig;
 use crate::validation::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::Path;
 
 /// Root of a `membrane.toml` file.
@@ -36,6 +38,11 @@ pub struct MembraneConfig {
 
     /// Composition tier: relay, rustdesk, tower, nest.
     pub composition: MembraneComposition,
+
+    /// K-Derm envelope topology: monoderm (gate-only) or diderm (gate + VPS).
+    /// Defaults to diderm for VPS providers, monoderm for gate-local.
+    #[serde(default)]
+    pub topology: Option<EnvelopeTopology>,
 
     /// Membrane identity (family ID, gate ID).
     #[serde(default)]
@@ -122,6 +129,30 @@ impl HardeningConfig {
     }
 }
 
+/// Shadow validation mode — whether telemetry runs in permanent shadow,
+/// counts down to cutover, or is disabled.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShadowMode {
+    /// Always shadow — never cut over to sovereign telemetry automatically.
+    #[default]
+    Permanent,
+    /// Time-gated — shadow until `cutover_gate_days` of clean data, then cut over.
+    Cutover,
+    /// No shadow validation. Telemetry may still collect but won't gate transitions.
+    Disabled,
+}
+
+impl fmt::Display for ShadowMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Permanent => write!(f, "permanent"),
+            Self::Cutover => write!(f, "cutover"),
+            Self::Disabled => write!(f, "disabled"),
+        }
+    }
+}
+
 /// Telemetry and shadow validation from `[membrane.telemetry]`.
 ///
 /// Aligns with Pillar 4 of `s_membrane_composition.rs`: shadow mode,
@@ -132,10 +163,9 @@ pub struct TelemetryConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Shadow mode: "permanent" (always shadow), "cutover" (time-gated), "disabled".
-    /// Matches `graph.telemetry.shadow_mode` in deploy graphs.
-    #[serde(default = "default_shadow_mode")]
-    pub shadow_mode: String,
+    /// Shadow validation mode. Matches `graph.telemetry.shadow_mode` in deploy graphs.
+    #[serde(default)]
+    pub shadow_mode: ShadowMode,
 
     /// Minimum days of clean shadow data before sovereign cutover is allowed.
     /// Must be >= 7 per glacial readiness standard.
@@ -156,7 +186,7 @@ impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            shadow_mode: "permanent".into(),
+            shadow_mode: ShadowMode::Permanent,
             cutover_gate_days: 7,
             skunkbat_correlation: false,
             extra: BTreeMap::new(),
@@ -164,17 +194,11 @@ impl Default for TelemetryConfig {
     }
 }
 
-fn default_shadow_mode() -> String {
-    "permanent".into()
-}
-
 fn default_cutover_days() -> u32 {
     7
 }
 
-fn default_true() -> bool {
-    true
-}
+use crate::default_true;
 
 impl MembraneConfig {
     /// Load a membrane configuration from a TOML file.
@@ -184,6 +208,21 @@ impl MembraneConfig {
         let file: MembraneConfigFile =
             toml::from_str(&contents).map_err(|e| format!("Failed to parse {path:?}: {e}"))?;
         Ok(file.membrane)
+    }
+
+    /// Resolve the effective K-Derm envelope topology.
+    ///
+    /// If `topology` is explicitly set, use it. Otherwise, infer from the
+    /// provider: gate-local providers default to monoderm, everything else
+    /// defaults to diderm.
+    pub fn effective_topology(&self) -> EnvelopeTopology {
+        if let Some(topo) = self.topology {
+            return topo;
+        }
+        match &self.provider {
+            Some(p) if !p.requires_ssh() => EnvelopeTopology::Monoderm,
+            _ => EnvelopeTopology::Diderm,
+        }
     }
 
     /// Derive the firewall ruleset for this configuration.
@@ -208,6 +247,37 @@ impl MembraneConfig {
             "config.composition",
             format!("Composition: {}", self.composition),
         );
+
+        // K-Derm topology
+        let topo = self.effective_topology();
+        report.pass(
+            "topology.effective",
+            format!("Envelope topology: {topo}"),
+        );
+
+        if topo.has_periplasm() {
+            let boundaries = topo.default_boundaries();
+            report.info(
+                "topology.boundaries",
+                format!(
+                    "{} boundary layers, {} periplasmic space(s)",
+                    boundaries.len(),
+                    topo.periplasm_count(),
+                ),
+            );
+        }
+
+        // Monoderm with VPS provider is unusual — warn
+        if topo == EnvelopeTopology::Monoderm {
+            if let Some(ref p) = self.provider {
+                if p.requires_ssh() {
+                    report.warn(
+                        "topology.monoderm_vps",
+                        "Monoderm topology with remote provider — VPS acts as periplasm in diderm model",
+                    );
+                }
+            }
+        }
 
         // Identity required for Tower+
         if self.composition.requires_tower_env() {
@@ -249,13 +319,14 @@ impl MembraneConfig {
                 format!("Provider: {}", provider.provider_type),
             );
 
-            if provider.requires_ssh() && provider.host.is_none() {
-                if !provider.supports_provisioning() {
-                    report.fail(
-                        "provider.host",
-                        "Bare metal provider requires host address",
-                    );
-                }
+            if provider.requires_ssh()
+                && provider.host.is_none()
+                && !provider.supports_provisioning()
+            {
+                report.fail(
+                    "provider.host",
+                    "Bare metal provider requires host address",
+                );
             }
         } else {
             report.warn(

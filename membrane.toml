@@ -5,6 +5,7 @@
 name = "membrane-relay"
 domain = "membrane.primals.eco"
 composition = "tower"
+topology = "diderm"
 
 [membrane.identity]
 family_id = "membrane-alpha"

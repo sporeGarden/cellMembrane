@@ -85,31 +85,32 @@ impl FirewallRuleset {
                     continue;
                 }
                 if let Some(port) = svc.port {
+                    let name = svc.binary.to_owned();
                     match svc.protocol {
                         Protocol::Tcp => {
                             rules.push(FirewallRule {
                                 port,
                                 protocol: FirewallProtocol::Tcp,
-                                comment: svc.binary.clone(),
+                                comment: name,
                             });
                         }
                         Protocol::Udp => {
                             rules.push(FirewallRule {
                                 port,
                                 protocol: FirewallProtocol::Udp,
-                                comment: svc.binary.clone(),
+                                comment: name,
                             });
                         }
                         Protocol::TcpAndUdp => {
                             rules.push(FirewallRule {
                                 port,
                                 protocol: FirewallProtocol::Tcp,
-                                comment: svc.binary.clone(),
+                                comment: name.clone(),
                             });
                             rules.push(FirewallRule {
                                 port,
                                 protocol: FirewallProtocol::Udp,
-                                comment: svc.binary.clone(),
+                                comment: name,
                             });
                         }
                         Protocol::Uds => {}
@@ -120,25 +121,24 @@ impl FirewallRuleset {
 
         // hbbs also listens on 21115 (TCP) and 21116 (TCP+UDP), hbbr on 21117.
         // The service registry covers 21116/21117 but 21115 is the ID server port.
-        if spec.symbiotic.contains(&"hbbs") {
-            if !rules.iter().any(|r| r.port == 21115) {
-                rules.push(FirewallRule {
-                    port: 21115,
-                    protocol: FirewallProtocol::Tcp,
-                    comment: "hbbs-id".into(),
-                });
-            }
+        if spec.symbiotic.contains(&"hbbs")
+            && !rules.iter().any(|r| r.port == 21115)
+        {
+            rules.push(FirewallRule {
+                port: 21115,
+                protocol: FirewallProtocol::Tcp,
+                comment: "hbbs-id".into(),
+            });
         }
 
-        // ACME HTTP challenge port for Caddy
-        if spec.symbiotic.contains(&"caddy") {
-            if !rules.iter().any(|r| r.port == 80) {
-                rules.push(FirewallRule {
-                    port: 80,
-                    protocol: FirewallProtocol::Tcp,
-                    comment: "caddy-acme".into(),
-                });
-            }
+        if spec.symbiotic.contains(&"caddy")
+            && !rules.iter().any(|r| r.port == 80)
+        {
+            rules.push(FirewallRule {
+                port: 80,
+                protocol: FirewallProtocol::Tcp,
+                comment: "caddy-acme".into(),
+            });
         }
 
         // Sort for deterministic output

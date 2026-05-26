@@ -167,6 +167,4 @@ impl Default for ChannelConfig {
     }
 }
 
-fn default_true() -> bool {
-    true
-}
+use crate::default_true;

@@ -109,27 +109,40 @@ uses raw git checkout — zero marketplace action dependency, survives codeload 
 - [ ] 2nd runner online (eastGate or southGate)
 - [ ] Forgejo Actions evaluated as dispatch plane replacement
 
-### cellMembrane Formalization (Wave 50)
+### cellMembrane Formalization + K-Derm Topology (Wave 50)
 
 cellMembrane formalized from operational docs + bash into a typed Rust system.
-4 spec documents define the architecture, composition model, fieldMouse contract,
-and multi-membrane deployment. `cellmembrane-types` crate provides typed config
-parsing, firewall derivation, and validation — 46 tests passing.
+5 spec documents define the architecture, composition model, fieldMouse contract,
+multi-membrane deployment, and K-Derm cell envelope topology. `cellmembrane-types`
+crate provides typed config parsing, firewall derivation, envelope topology, and
+validation — **80 tests** across 6 domain test modules, **zero clippy warnings**.
 
 Gap analysis against `darkforest_membrane.sh` (MEM-01..17) and `s_membrane_composition.rs`
 (Pillar 4 telemetry) closed 5 gaps: journald persistence, credential file inventory,
 binary integrity, RustDesk key paths, telemetry/shadow config.
 
+K-Derm topology models inner/outer membrane sync as monoderm/diderm cell envelopes
+with absolute layer naming (cytoplasm → plasma membrane → periplasm → outer membrane
+→ extracellular), bonding per layer (organo-metallo-salt model), and channel protein
+specificity. Parallels K-NOME methodology.
+
+Quality evolution: static service registry (zero allocation, no `Box::leak`),
+typed `ShadowMode` enum (replaced stringly-typed), capability-derived boundary
+policies (layers declare bonds, policies assemble from capabilities), all clippy
+warnings resolved, `default_true` deduplicated, tests smart-refactored by domain.
+
 **Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_FORMALIZATION_WAVE50_MAY26_2026.md`
 
 **Deliverables:**
-- [x] `specs/CELLMEMBRANE_ARCHITECTURE.md` — 3-channel model, crypto layers, firewall policy
+- [x] `specs/CELLMEMBRANE_ARCHITECTURE.md` — 3-channel model, crypto layers, firewall policy, K-Derm section
 - [x] `specs/MEMBRANE_COMPOSITION_MODEL.md` — relay → rustdesk → tower → nest ladder
 - [x] `specs/FIELDMOUSE_CONTRACT.md` — third-party deployment contract
 - [x] `specs/MULTI_MEMBRANE_DEPLOYMENT.md` — provider abstraction, multi-region
-- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (46 tests)
+- [x] `specs/K_DERM_TOPOLOGY.md` — monoderm/diderm, periplasm, bonding, channel proteins, vesicle transport
+- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (80 tests, 6 modules)
 - [x] `membrane.toml` — reference config for live VPS deployment
 - [x] Gap closure: 5 Dark Forest audit gaps closed in types
+- [x] Debt resolution: static registry, typed ShadowMode, capability-based derivation, clippy-clean
 
 ### S5 Forgejo Releases (Criteria #6 enabler)
 
