@@ -341,3 +341,44 @@ ufw enable
 ```
 
 Then redeploy firewall rules via `deploy_membrane.sh`.
+
+---
+
+## 10. Self-Hosted GitHub Actions Runner
+
+### Status check
+```bash
+# Service status
+sudo systemctl status actions.runner.ecoPrimals-plasmidBin.irongate-runner.service
+
+# GitHub-side status
+gh api repos/ecoPrimals/plasmidBin/actions/runners --jq '.runners[] | "\(.name) \(.status)"'
+```
+
+### Restart runner
+```bash
+cd ~/actions-runner
+sudo ./svc.sh stop
+sudo ./svc.sh start
+```
+
+### Local validation (GitHub-independent)
+```bash
+cd ~/Development/ecoPrimals/infra/plasmidBin
+cargo run -p plasmidbin -- validate .
+```
+
+### Cross-compilation targets
+```bash
+# x86_64 static binary
+cargo build -p plasmidbin --release --target x86_64-unknown-linux-musl
+
+# aarch64 cross-compile
+cargo build -p plasmidbin --release --target aarch64-unknown-linux-musl
+```
+
+### Runner agent location
+- Agent: `~/actions-runner/`
+- Work dir: `~/actions-runner/_work/`
+- Service: `actions.runner.ecoPrimals-plasmidBin.irongate-runner.service`
+- Labels: `self-hosted, Linux, X64, x86_64, irongate`

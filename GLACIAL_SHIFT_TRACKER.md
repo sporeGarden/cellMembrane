@@ -1,8 +1,10 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-05-23
+**Last updated:** 2026-05-26
 **Overall status:** BLOCKED — 2 direct blockers owned by cellMembrane
+**Wave 50 update:** GitHub Actions incident proved need for self-hosted runners.
+Local plasmidbin validate passes (98/98). Runner setup in progress on ironGate.
 
 ---
 
@@ -13,7 +15,7 @@ All six criteria must be satisfied before glacial shift.
 | # | Criterion | Status | cellMembrane Role | Blocker Owner |
 |---|-----------|--------|-------------------|---------------|
 | 1 | All 4 sovereignty shadows cut over (7-day gates) | S2 LIVE, S3 LIVE, S1/S4 incomplete | Operate shadow infrastructure | Shared |
-| 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | Gates deploying | Provide TURN rendezvous | Gate teams |
+| 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **4 gates running** (Wave 50), mesh seeded | Provide TURN rendezvous | Gate teams |
 | 3 | **Nest expansion deployed on VPS** | **NOT DEPLOYED** | **Direct blocker — we deploy** | **cellMembrane** |
 | 4 | Remote covalent node (flockGate) validated over WAN | flockGate not deployed | Provide WAN rendezvous | Shared |
 | 5 | **DNS pointed to sovereign infrastructure** | **Channel 1 NOT deployed** | **Direct blocker — we deploy knot-dns** | **cellMembrane** |
@@ -81,17 +83,37 @@ cd ../../infra/plasmidBin
 
 ## Supporting Work (Not Direct Blockers)
 
+### Self-Hosted GitHub Actions Runners (new — Wave 50)
+
+GitHub Actions incident on May 26 proved external CI dependency is unacceptable.
+Self-hosted runners on LAN gates eliminate this: free minutes, zero cloud dependency,
+and the path to Forgejo CI sovereignty.
+
+**Status:** ironGate runner **ONLINE** (v2.334.0). Registered to ecoPrimals/plasmidBin.
+Rust 1.95, musl x86_64 + aarch64 cross-compilation verified. systemd service enabled.
+
+**Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_SELF_HOSTED_RUNNERS_WAVE50_MAY26_2026.md`
+
+**Acceptance:**
+- [x] ironGate runner online: `irongate-runner online self-hosted,Linux,X64,x86_64,irongate`
+- [x] `plasmidbin validate .` passes on ironGate: **98/98 PASS**
+- [x] Static musl binary builds: x86_64 (2.8MB) + aarch64 cross-compile verified
+- [ ] 2nd runner online (eastGate or southGate — needs their gate)
+- [ ] Manual workflow dispatch runs on self-hosted runner
+- [ ] Failover: one runner offline, other picks up jobs
+
 ### S5 Forgejo Releases (Criteria #6 enabler)
 
 Sovereign binary distribution channel replacing GitHub Releases. Currently `deploy_membrane.sh` fetches from `https://github.com/ecoPrimals/plasmidBin/releases/`. Coordinate with projectNUCLEUS on Forgejo `auto-harvest.yml` integration.
 
-**Status:** Not started — depends on Forgejo operational stability
+**Status:** Not started — depends on Forgejo operational stability + self-hosted runners
 
 ### Multi-Gate LAN Mesh (Criteria #2, #4)
 
 Gate teams deploying NUCLEUS compositions on LAN. cellMembrane provides TURN rendezvous via Songbird :3478. At least one remote covalent node (flockGate) must validate over WAN for criterion #4.
 
-**cellMembrane readiness:** TURN relay operational, no action required until gates are bootstrapped.
+**cellMembrane readiness:** TURN relay operational. 4 gates running as of Wave 50.
+Forgejo inner membrane mirror healthy (25 native pull mirrors + 6 timer-synced, all current).
 
 ---
 
