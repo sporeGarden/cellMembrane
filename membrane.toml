@@ -1,0 +1,48 @@
+# cellMembrane reference configuration
+# This describes the live membrane-relay VPS at membrane.primals.eco
+
+[membrane]
+name = "membrane-relay"
+domain = "membrane.primals.eco"
+composition = "tower"
+
+[membrane.identity]
+family_id = "membrane-alpha"
+gate_id = "nyc-01"
+
+[membrane.provider]
+type = "digitalocean"
+region = "nyc1"
+size = "s-1vcpu-2gb"
+image = "debian-12-x64"
+tags = ["membrane", "production"]
+
+[membrane.channels.signal]
+enabled = false
+
+[membrane.channels.relay]
+enabled = true
+port = 3478
+primal = "songbird"
+
+[membrane.channels.surface]
+enabled = true
+port = 443
+primal = "caddy"
+tls_domain = "membrane.primals.eco"
+acme_email = "ops@primals.eco"
+
+[membrane.credentials]
+model = "age"
+
+[membrane.telemetry]
+enabled = true
+shadow_mode = "permanent"
+cutover_gate_days = 7
+skunkbat_correlation = true
+
+[membrane.hardening]
+fail2ban = true
+unattended_upgrades = true
+remove_mail_agent = true
+remove_provider_agent = true

@@ -33,15 +33,48 @@
 
 ## What This Repo Is For
 
-This is the **operational home** for the cellMembrane deployment. Unlike the
-public architecture docs in `wateringHole` and deployment tooling in
-`plasmidBin`, this repo holds:
+cellMembrane is both the **operational home** for the live membrane deployment
+and the **typed specification** for sovereign membrane infrastructure that
+others can deploy independently.
 
-- Operational state and VPS-specific configuration (`VPS_STATE.md`)
-- Glacial shift blocker tracking (`GLACIAL_SHIFT_TRACKER.md`)
-- Credential management procedures
-- Operational runbooks (`RUNBOOKS.md`)
-- Anything that references specific IPs, keys, or access patterns
+### Specifications (`specs/`)
+
+Formal architecture for deployable membrane infrastructure:
+
+| Spec | Purpose |
+|------|---------|
+| `CELLMEMBRANE_ARCHITECTURE.md` | 3-channel model, process isolation, crypto layers, firewall policy |
+| `MEMBRANE_COMPOSITION_MODEL.md` | Composition ladder (relay → rustdesk → tower → nest) |
+| `FIELDMOUSE_CONTRACT.md` | Deployment contract for third-party membrane operators |
+| `MULTI_MEMBRANE_DEPLOYMENT.md` | Multi-provider, multi-region parameterization model |
+
+### Rust Types (`crates/cellmembrane-types/`)
+
+Typed domain models for membrane configuration, validation, and deployment:
+
+```bash
+cargo test                  # 46 tests — config parsing, composition, firewall, Dark Forest audit alignment
+cargo doc --open            # Full API documentation
+```
+
+The `membrane.toml` config file is the user-facing interface. Write one,
+validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
+
+### Operational Docs
+
+| File | Purpose |
+|------|---------|
+| `VPS_STATE.md` | Live VPS state snapshot |
+| `GLACIAL_SHIFT_TRACKER.md` | Stadial entry blocker tracking |
+| `RUNBOOKS.md` | Operational procedures for all channels |
+| `IRONGATE_VERIFICATION.md` | ironGate acceptance checklist |
+
+### Sync Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `forgejo_sync.sh` | Sync non-mirror repos GitHub → Forgejo |
+| `forgejo_pull_mirror.sh` | Bulk Forgejo pull-mirror management |
 
 **This repo is private.** Classified as inner-membrane-only per `REPO_MEMBRANE_BOUNDARY.md` — Forgejo is the target remote; GitHub mirror is transitional.
 
@@ -155,6 +188,40 @@ rendezvous and relay:
 | Key | `YxLlA1Nb6mlH5FmcCQod6kDD6bIcXT5R3ex1CAFogMU=` |
 
 Server public key stored at `/opt/membrane/rustdesk/id_ed25519.pub` on the VPS.
+
+---
+
+## Repository Structure
+
+```
+gardens/cellMembrane/
+  Cargo.toml                  # Rust workspace root
+  membrane.toml               # Reference config (live deployment)
+  crates/
+    cellmembrane-types/       # Typed domain models
+      src/
+        lib.rs                # Crate root, re-exports
+        channels.rs           # Signal / Relay / Surface
+        composition.rs        # Relay → RustDesk → Tower → Nest
+        config.rs             # membrane.toml parser + validator
+        credentials.rs        # age / BTSP vault / manual
+        firewall.rs           # UFW rules from composition
+        identity.rs           # Family ID, gate ID
+        provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
+        service.rs            # Binary, port, systemd, health
+        validation.rs         # Report pattern (pass/fail/warn)
+      tests/
+        integration.rs        # 31 integration tests
+  specs/                      # Formal architecture specs
+  README.md
+  RUNBOOKS.md
+  GLACIAL_SHIFT_TRACKER.md
+  VPS_STATE.md
+  IRONGATE_VERIFICATION.md
+  forgejo_sync.sh
+  forgejo_pull_mirror.sh
+  .gitignore
+```
 
 ---
 

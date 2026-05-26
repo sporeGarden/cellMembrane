@@ -109,6 +109,28 @@ uses raw git checkout — zero marketplace action dependency, survives codeload 
 - [ ] 2nd runner online (eastGate or southGate)
 - [ ] Forgejo Actions evaluated as dispatch plane replacement
 
+### cellMembrane Formalization (Wave 50)
+
+cellMembrane formalized from operational docs + bash into a typed Rust system.
+4 spec documents define the architecture, composition model, fieldMouse contract,
+and multi-membrane deployment. `cellmembrane-types` crate provides typed config
+parsing, firewall derivation, and validation — 46 tests passing.
+
+Gap analysis against `darkforest_membrane.sh` (MEM-01..17) and `s_membrane_composition.rs`
+(Pillar 4 telemetry) closed 5 gaps: journald persistence, credential file inventory,
+binary integrity, RustDesk key paths, telemetry/shadow config.
+
+**Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_FORMALIZATION_WAVE50_MAY26_2026.md`
+
+**Deliverables:**
+- [x] `specs/CELLMEMBRANE_ARCHITECTURE.md` — 3-channel model, crypto layers, firewall policy
+- [x] `specs/MEMBRANE_COMPOSITION_MODEL.md` — relay → rustdesk → tower → nest ladder
+- [x] `specs/FIELDMOUSE_CONTRACT.md` — third-party deployment contract
+- [x] `specs/MULTI_MEMBRANE_DEPLOYMENT.md` — provider abstraction, multi-region
+- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (46 tests)
+- [x] `membrane.toml` — reference config for live VPS deployment
+- [x] Gap closure: 5 Dark Forest audit gaps closed in types
+
 ### S5 Forgejo Releases (Criteria #6 enabler)
 
 Sovereign binary distribution channel replacing GitHub Releases. Currently `deploy_membrane.sh` fetches from `https://github.com/ecoPrimals/plasmidBin/releases/`. Coordinate with projectNUCLEUS on Forgejo `auto-harvest.yml` integration.

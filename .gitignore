@@ -11,6 +11,10 @@ token
 id_*
 *.key
 
+# Rust build artifacts (library-only workspace)
+/target/
+Cargo.lock
+
 # Editor
 *.swp
 *.swo
