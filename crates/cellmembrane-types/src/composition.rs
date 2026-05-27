@@ -65,14 +65,11 @@ impl MembraneComposition {
         }
     }
 
-    /// Returns the full specification for this composition.
+    /// Returns the full specification for this composition, derived from the
+    /// service registry. No duplication — the registry is the single source
+    /// of truth for binaries, ports, units, and tier membership.
     pub fn spec(&self) -> CompositionSpec {
-        match self {
-            Self::Relay => CompositionSpec::relay(),
-            Self::RustDesk => CompositionSpec::rustdesk(),
-            Self::Tower => CompositionSpec::tower(),
-            Self::Nest => CompositionSpec::nest(),
-        }
+        CompositionSpec::from_registry(*self)
     }
 }
 
@@ -87,8 +84,15 @@ impl fmt::Display for MembraneComposition {
     }
 }
 
+/// SSH port — always open regardless of composition.
+pub const SSH_PORT: u16 = 22;
+
 /// Full specification for a composition tier: which primals, symbiotic
 /// partners, ports, and systemd units are required.
+///
+/// Derived entirely from the [`MembraneService`] registry — no duplication.
+/// Each service declares its `min_composition`; the spec collects services
+/// whose tier is at or below the requested composition.
 #[derive(Debug, Clone)]
 pub struct CompositionSpec {
     /// Composition this spec describes.
@@ -103,101 +107,68 @@ pub struct CompositionSpec {
     pub udp_ports: Vec<u16>,
     /// Systemd unit names.
     pub systemd_units: Vec<&'static str>,
-    /// Boot order: earlier entries must start before later ones.
+    /// Boot order: primals first, then symbiotic, in registry order.
     pub boot_order: Vec<&'static str>,
 }
 
 impl CompositionSpec {
-    fn relay() -> Self {
-        Self {
-            composition: MembraneComposition::Relay,
-            primals: vec!["songbird"],
-            symbiotic: vec![],
-            tcp_ports: vec![22, 3478],
-            udp_ports: vec![3478],
-            systemd_units: vec!["songbird-relay.service"],
-            boot_order: vec!["songbird"],
-        }
-    }
+    /// Build the spec for `composition` by querying the service registry.
+    fn from_registry(composition: MembraneComposition) -> Self {
+        let services = MembraneService::for_composition(composition);
 
-    fn rustdesk() -> Self {
-        Self {
-            composition: MembraneComposition::RustDesk,
-            primals: vec!["songbird"],
-            symbiotic: vec!["hbbs", "hbbr"],
-            tcp_ports: vec![22, 3478, 21115, 21116, 21117],
-            udp_ports: vec![3478, 21116],
-            systemd_units: vec![
-                "songbird-relay.service",
-                "hbbs-membrane.service",
-                "hbbr-membrane.service",
-            ],
-            boot_order: vec!["songbird", "hbbs", "hbbr"],
-        }
-    }
+        let mut primals = Vec::new();
+        let mut symbiotic = Vec::new();
+        let mut tcp_ports = vec![SSH_PORT];
+        let mut udp_ports: Vec<u16> = Vec::new();
+        let mut systemd_units = Vec::new();
+        let mut boot_order = Vec::new();
 
-    fn tower() -> Self {
-        Self {
-            composition: MembraneComposition::Tower,
-            primals: vec!["beardog", "songbird", "skunkbat"],
-            symbiotic: vec!["hbbs", "hbbr"],
-            tcp_ports: vec![22, 3478, 21115, 21116, 21117],
-            udp_ports: vec![3478, 21116],
-            systemd_units: vec![
-                "beardog-membrane.service",
-                "songbird-relay.service",
-                "skunkbat-membrane.service",
-                "hbbs-membrane.service",
-                "hbbr-membrane.service",
-            ],
-            boot_order: vec!["beardog", "songbird", "skunkbat", "hbbs", "hbbr"],
-        }
-    }
+        for svc in &services {
+            if svc.is_primal {
+                primals.push(svc.binary);
+            } else {
+                symbiotic.push(svc.binary);
+            }
+            systemd_units.push(svc.systemd_unit);
+            boot_order.push(svc.binary);
 
-    fn nest() -> Self {
+            if let Some(port) = svc.port {
+                match svc.protocol {
+                    crate::service::Protocol::Tcp => tcp_ports.push(port),
+                    crate::service::Protocol::Udp => udp_ports.push(port),
+                    crate::service::Protocol::TcpAndUdp => {
+                        tcp_ports.push(port);
+                        udp_ports.push(port);
+                    }
+                    crate::service::Protocol::Uds => {}
+                }
+            }
+            for &(port, proto, _) in svc.extra_ports {
+                match proto {
+                    crate::service::Protocol::Tcp => tcp_ports.push(port),
+                    crate::service::Protocol::Udp => udp_ports.push(port),
+                    crate::service::Protocol::TcpAndUdp => {
+                        tcp_ports.push(port);
+                        udp_ports.push(port);
+                    }
+                    crate::service::Protocol::Uds => {}
+                }
+            }
+        }
+
+        tcp_ports.sort();
+        tcp_ports.dedup();
+        udp_ports.sort();
+        udp_ports.dedup();
+
         Self {
-            composition: MembraneComposition::Nest,
-            primals: vec![
-                "beardog",
-                "songbird",
-                "skunkbat",
-                "nestgate",
-                "rhizocrypt",
-                "loamspine",
-                "sweetgrass",
-            ],
-            symbiotic: vec!["hbbs", "hbbr", "caddy", "knot-dns"],
-            tcp_ports: vec![
-                22, 53, 80, 443, 3478, 8443, 9500, 9602, 9700, 9850, 21115, 21116,
-                21117,
-            ],
-            udp_ports: vec![53, 3478, 21116],
-            systemd_units: vec![
-                "beardog-membrane.service",
-                "songbird-relay.service",
-                "skunkbat-membrane.service",
-                "nestgate-membrane.service",
-                "rhizocrypt-membrane.service",
-                "loamspine-membrane.service",
-                "sweetgrass-membrane.service",
-                "hbbs-membrane.service",
-                "hbbr-membrane.service",
-                "caddy-tls.service",
-                "knot.service",
-            ],
-            boot_order: vec![
-                "beardog",
-                "songbird",
-                "skunkbat",
-                "nestgate",
-                "rhizocrypt",
-                "loamspine",
-                "sweetgrass",
-                "hbbs",
-                "hbbr",
-                "caddy",
-                "knot-dns",
-            ],
+            composition,
+            primals,
+            symbiotic,
+            tcp_ports,
+            udp_ports,
+            systemd_units,
+            boot_order,
         }
     }
 
@@ -208,7 +179,7 @@ impl CompositionSpec {
         bins
     }
 
-    /// All ports (TCP + UDP deduplicated).
+    /// All listening ports (TCP + UDP deduplicated).
     pub fn all_ports(&self) -> Vec<u16> {
         let mut ports = self.tcp_ports.clone();
         for p in &self.udp_ports {

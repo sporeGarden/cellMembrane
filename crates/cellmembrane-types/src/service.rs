@@ -10,6 +10,7 @@
 //! central knowledge. Binary integrity expectations are derived from the
 //! registry rather than re-hardcoded.
 
+use crate::composition::MembraneComposition;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -38,6 +39,35 @@ impl fmt::Display for Protocol {
     }
 }
 
+/// Health check strategy for a service.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthCheckMethod {
+    /// JSON-RPC `health.liveness` probe.
+    Liveness,
+    /// Raw TCP connection probe.
+    TcpConnect,
+    /// HTTPS GET probe (200 OK).
+    HttpsProbe,
+    /// DNS query probe.
+    DnsProbe,
+}
+
+impl fmt::Display for HealthCheckMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Liveness => write!(f, "health.liveness"),
+            Self::TcpConnect => write!(f, "tcp_connect"),
+            Self::HttpsProbe => write!(f, "https_probe"),
+            Self::DnsProbe => write!(f, "dns_probe"),
+        }
+    }
+}
+
+/// Bind to all interfaces (externally reachable).
+pub const BIND_ALL: &str = "0.0.0.0";
+/// Bind to loopback only (not externally reachable).
+pub const BIND_LOOPBACK: &str = "127.0.0.1";
+
 /// A single membrane service (one running process).
 ///
 /// All fields are `&'static str` — service definitions are compile-time
@@ -54,10 +84,10 @@ pub struct MembraneService {
     pub protocol: Protocol,
     /// Socket path for UDS-based services.
     pub socket_path: Option<&'static str>,
-    /// Bind address ("" = all interfaces, "127.0.0.1" = loopback only).
+    /// Bind address.
     pub bind: &'static str,
-    /// JSON-RPC health check method name.
-    pub health_method: &'static str,
+    /// Health check strategy for this service.
+    pub health_method: HealthCheckMethod,
     /// Whether this is an ecoPrimals primal (vs symbiotic partner).
     pub is_primal: bool,
     /// Install path on the membrane host.
@@ -65,6 +95,8 @@ pub struct MembraneService {
     /// Supplementary ports beyond the primary (e.g. hbbs ID server on 21115).
     /// Each entry is `(port, protocol, comment)`.
     pub extra_ports: &'static [(u16, Protocol, &'static str)],
+    /// Minimum composition tier that includes this service.
+    pub min_composition: MembraneComposition,
 }
 
 const BEARDOG: MembraneService = MembraneService {
@@ -74,10 +106,11 @@ const BEARDOG: MembraneService = MembraneService {
     protocol: Protocol::Uds,
     socket_path: Some("/run/membrane/beardog.sock"),
     bind: "",
-    health_method: "health.liveness",
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/beardog",
     extra_ports: &[(8443, Protocol::Tcp, "beardog-tls-shadow")],
+    min_composition: MembraneComposition::Tower,
 };
 
 const SONGBIRD: MembraneService = MembraneService {
@@ -86,11 +119,12 @@ const SONGBIRD: MembraneService = MembraneService {
     port: Some(3478),
     protocol: Protocol::TcpAndUdp,
     socket_path: None,
-    bind: "0.0.0.0",
-    health_method: "health.liveness",
+    bind: BIND_ALL,
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/songbird",
     extra_ports: &[],
+    min_composition: MembraneComposition::Relay,
 };
 
 const SKUNKBAT: MembraneService = MembraneService {
@@ -99,11 +133,12 @@ const SKUNKBAT: MembraneService = MembraneService {
     port: Some(9140),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "127.0.0.1",
-    health_method: "health.liveness",
+    bind: BIND_LOOPBACK,
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/skunkbat",
     extra_ports: &[],
+    min_composition: MembraneComposition::Tower,
 };
 
 const NESTGATE: MembraneService = MembraneService {
@@ -112,11 +147,12 @@ const NESTGATE: MembraneService = MembraneService {
     port: Some(9500),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "0.0.0.0",
-    health_method: "health.liveness",
+    bind: BIND_ALL,
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/nestgate",
     extra_ports: &[],
+    min_composition: MembraneComposition::Nest,
 };
 
 const RHIZOCRYPT: MembraneService = MembraneService {
@@ -125,11 +161,12 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     port: Some(9601),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "127.0.0.1",
-    health_method: "health.liveness",
+    bind: BIND_LOOPBACK,
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/rhizocrypt",
     extra_ports: &[(9602, Protocol::Tcp, "rhizocrypt-jsonrpc")],
+    min_composition: MembraneComposition::Nest,
 };
 
 const LOAMSPINE: MembraneService = MembraneService {
@@ -138,11 +175,12 @@ const LOAMSPINE: MembraneService = MembraneService {
     port: Some(9700),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "127.0.0.1",
-    health_method: "health.liveness",
+    bind: BIND_LOOPBACK,
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/loamspine",
     extra_ports: &[],
+    min_composition: MembraneComposition::Nest,
 };
 
 const SWEETGRASS: MembraneService = MembraneService {
@@ -151,11 +189,12 @@ const SWEETGRASS: MembraneService = MembraneService {
     port: Some(9850),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "127.0.0.1",
-    health_method: "health.liveness",
+    bind: BIND_LOOPBACK,
+    health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/sweetgrass",
     extra_ports: &[],
+    min_composition: MembraneComposition::Nest,
 };
 
 const HBBS: MembraneService = MembraneService {
@@ -164,11 +203,12 @@ const HBBS: MembraneService = MembraneService {
     port: Some(21116),
     protocol: Protocol::TcpAndUdp,
     socket_path: None,
-    bind: "0.0.0.0",
-    health_method: "tcp_connect",
+    bind: BIND_ALL,
+    health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
     install_path: "/opt/membrane/hbbs",
     extra_ports: &[(21115, Protocol::Tcp, "hbbs-id")],
+    min_composition: MembraneComposition::RustDesk,
 };
 
 const HBBR: MembraneService = MembraneService {
@@ -177,11 +217,12 @@ const HBBR: MembraneService = MembraneService {
     port: Some(21117),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "0.0.0.0",
-    health_method: "tcp_connect",
+    bind: BIND_ALL,
+    health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
     install_path: "/opt/membrane/hbbr",
     extra_ports: &[],
+    min_composition: MembraneComposition::RustDesk,
 };
 
 const CADDY: MembraneService = MembraneService {
@@ -190,11 +231,12 @@ const CADDY: MembraneService = MembraneService {
     port: Some(443),
     protocol: Protocol::Tcp,
     socket_path: None,
-    bind: "0.0.0.0",
-    health_method: "https_probe",
+    bind: BIND_ALL,
+    health_method: HealthCheckMethod::HttpsProbe,
     is_primal: false,
     install_path: "/usr/bin/caddy",
     extra_ports: &[(80, Protocol::Tcp, "caddy-acme")],
+    min_composition: MembraneComposition::Nest,
 };
 
 const KNOTDNS: MembraneService = MembraneService {
@@ -203,11 +245,12 @@ const KNOTDNS: MembraneService = MembraneService {
     port: Some(53),
     protocol: Protocol::TcpAndUdp,
     socket_path: None,
-    bind: "0.0.0.0",
-    health_method: "dns_probe",
+    bind: BIND_ALL,
+    health_method: HealthCheckMethod::DnsProbe,
     is_primal: false,
     install_path: "/usr/sbin/knotd",
     extra_ports: &[],
+    min_composition: MembraneComposition::Nest,
 };
 
 /// All known membrane services. Runtime discovery starts here.
@@ -228,9 +271,17 @@ impl MembraneService {
         ALL_SERVICES
     }
 
+    /// Services included in the given composition tier.
+    pub fn for_composition(composition: MembraneComposition) -> Vec<&'static Self> {
+        ALL_SERVICES
+            .iter()
+            .filter(|s| s.min_composition <= composition)
+            .collect()
+    }
+
     /// Whether this service is externally reachable (bind != loopback, not UDS).
     pub fn is_externally_reachable(&self) -> bool {
-        self.bind != "127.0.0.1" && self.protocol != Protocol::Uds
+        self.bind != BIND_LOOPBACK && self.protocol != Protocol::Uds
     }
 }
 

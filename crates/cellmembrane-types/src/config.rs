@@ -194,8 +194,11 @@ impl Default for TelemetryConfig {
     }
 }
 
+/// Minimum days of clean shadow data before cutover (glacial readiness standard).
+pub const MIN_CUTOVER_GATE_DAYS: u32 = 7;
+
 fn default_cutover_days() -> u32 {
-    7
+    MIN_CUTOVER_GATE_DAYS
 }
 
 use crate::default_true;
@@ -231,24 +234,64 @@ impl MembraneConfig {
     }
 
     /// Validate the configuration against the membrane spec.
+    ///
+    /// Delegates to focused sub-validators for each concern area.
     pub fn validate(&self) -> Report {
         let mut report = Report::new();
-        let spec = self.composition.spec();
+        self.validate_core(&mut report);
+        self.validate_topology(&mut report);
+        self.validate_identity(&mut report);
+        self.validate_provider(&mut report);
+        self.validate_channels(&mut report);
+        self.validate_telemetry(&mut report);
+        self.validate_hardening(&mut report);
+        self.validate_inventory(&mut report);
+        report
+    }
 
-        // Name must be non-empty
+    fn validate_core(&self, report: &mut Report) {
         if self.name.is_empty() {
             report.fail("config.name", "Membrane name must not be empty");
         } else {
             report.pass("config.name", format!("Name: {}", self.name));
         }
-
-        // Composition is valid (already parsed, so always valid here)
         report.pass(
             "config.composition",
             format!("Composition: {}", self.composition),
         );
 
-        // K-Derm topology
+        if self.composition.dark_forest_compliant() {
+            report.pass(
+                "dark_forest.composition",
+                "Composition supports full Dark Forest compliance",
+            );
+        } else {
+            report.info(
+                "dark_forest.composition",
+                format!(
+                    "{} composition does not enforce BTSP — Dark Forest partial only",
+                    self.composition,
+                ),
+            );
+        }
+
+        report.pass(
+            "credentials.model",
+            format!("Credential model: {}", self.credentials.model),
+        );
+
+        let spec = self.composition.spec();
+        report.info(
+            "composition.primals",
+            format!(
+                "{} primals + {} symbiotic required",
+                spec.primals.len(),
+                spec.symbiotic.len(),
+            ),
+        );
+    }
+
+    fn validate_topology(&self, report: &mut Report) {
         let topo = self.effective_topology();
         report.pass(
             "topology.effective",
@@ -267,7 +310,6 @@ impl MembraneConfig {
             );
         }
 
-        // Monoderm with VPS provider is unusual — warn
         if topo == EnvelopeTopology::Monoderm {
             if let Some(ref p) = self.provider {
                 if p.requires_ssh() {
@@ -278,8 +320,9 @@ impl MembraneConfig {
                 }
             }
         }
+    }
 
-        // Identity required for Tower+
+    fn validate_identity(&self, report: &mut Report) {
         if self.composition.requires_tower_env() {
             if let Some(ref id) = self.identity {
                 if id.family_id.is_empty() {
@@ -311,14 +354,14 @@ impl MembraneConfig {
                 ),
             );
         }
+    }
 
-        // Provider should be present for deployment
+    fn validate_provider(&self, report: &mut Report) {
         if let Some(ref provider) = self.provider {
             report.pass(
                 "provider.present",
                 format!("Provider: {}", provider.provider_type),
             );
-
             if provider.requires_ssh()
                 && provider.host.is_none()
                 && !provider.supports_provisioning()
@@ -334,14 +377,12 @@ impl MembraneConfig {
                 "No provider configured — deployment will require manual host specification",
             );
         }
+    }
 
-        // Domain required for Surface channel
+    fn validate_channels(&self, report: &mut Report) {
         if self.composition >= MembraneComposition::Nest {
-            if self.domain.is_some() {
-                report.pass(
-                    "surface.domain",
-                    format!("Domain: {}", self.domain.as_deref().unwrap_or("")),
-                );
+            if let Some(ref domain) = self.domain {
+                report.pass("surface.domain", format!("Domain: {domain}"));
             } else {
                 report.warn(
                     "surface.domain",
@@ -350,66 +391,55 @@ impl MembraneConfig {
             }
         }
 
-        // Channel overrides validation
         if let Some(ref signal) = self.channels.signal {
             if signal.enabled {
-                report.warn(
-                    "channel.signal",
-                    "Signal channel (knot-dns) enabled — ensure DNS zone is configured",
-                );
+                if signal.dnssec == Some(true) {
+                    report.pass(
+                        "channel.signal",
+                        "Signal channel enabled with DNSSEC zone signing",
+                    );
+                } else {
+                    report.warn(
+                        "channel.signal",
+                        "Signal channel enabled without DNSSEC — consider enabling zone signing",
+                    );
+                }
             }
         }
 
-        // Dark Forest compliance
-        if self.composition.dark_forest_compliant() {
-            report.pass(
-                "dark_forest.composition",
-                "Composition supports full Dark Forest compliance",
-            );
-        } else {
-            report.info(
-                "dark_forest.composition",
-                format!(
-                    "{} composition does not enforce BTSP — Dark Forest partial only",
-                    self.composition,
-                ),
-            );
+        if let Some(ref relay) = self.channels.relay {
+            if relay.enabled {
+                if let Some(port) = relay.port {
+                    report.info(
+                        "channel.relay",
+                        format!("Relay channel override: port {port}"),
+                    );
+                }
+            }
         }
+    }
 
-        // Credential model
-        report.pass(
-            "credentials.model",
-            format!("Credential model: {}", self.credentials.model),
-        );
-
-        // Primal count
-        report.info(
-            "composition.primals",
-            format!(
-                "{} primals + {} symbiotic required",
-                spec.primals.len(),
-                spec.symbiotic.len(),
-            ),
-        );
-
-        // Telemetry contract (aligns with s_membrane_composition.rs Pillar 4)
+    fn validate_telemetry(&self, report: &mut Report) {
         if self.telemetry.enabled {
             report.pass("telemetry.enabled", "Telemetry collection active");
         } else {
             report.warn("telemetry.enabled", "Telemetry disabled — shadow validation will not run");
         }
 
-        if self.telemetry.cutover_gate_days >= 7 {
+        if self.telemetry.cutover_gate_days >= MIN_CUTOVER_GATE_DAYS {
             report.pass(
                 "telemetry.cutover_days",
-                format!("Cutover gate: {} days (>= 7 required)", self.telemetry.cutover_gate_days),
+                format!(
+                    "Cutover gate: {} days (>= {} required)",
+                    self.telemetry.cutover_gate_days, MIN_CUTOVER_GATE_DAYS,
+                ),
             );
         } else {
             report.fail(
                 "telemetry.cutover_days",
                 format!(
-                    "Cutover gate: {} days — glacial readiness requires >= 7",
-                    self.telemetry.cutover_gate_days,
+                    "Cutover gate: {} days — glacial readiness requires >= {}",
+                    self.telemetry.cutover_gate_days, MIN_CUTOVER_GATE_DAYS,
                 ),
             );
         }
@@ -420,23 +450,24 @@ impl MembraneConfig {
                 "Tower+ composition should enable skunkbat_correlation for audit",
             );
         }
+    }
 
-        // Hardening: journald persistence
+    fn validate_hardening(&self, report: &mut Report) {
         if !self.hardening.journald_persistent {
             report.warn(
                 "hardening.journald",
                 "journald_persistent is false — volatile logging, no post-mortem forensics",
             );
         }
+    }
 
-        // Credential file inventory
+    fn validate_inventory(&self, report: &mut Report) {
         let cred_files = crate::credentials::credential_files_for(self.composition);
         report.info(
             "credentials.files",
             format!("{} credential files expected for {} composition", cred_files.len(), self.composition),
         );
 
-        // Binary integrity inventory
         let binaries = crate::service::binary_integrity_for(self.composition);
         report.info(
             "integrity.binaries",
@@ -447,13 +478,10 @@ impl MembraneConfig {
             ),
         );
 
-        // Firewall summary
         let fw = self.firewall();
         report.info(
             "firewall.ports",
             format!("{} firewall rules derived", fw.rules.len()),
         );
-
-        report
     }
 }

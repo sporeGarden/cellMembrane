@@ -141,6 +141,10 @@ pub struct ChannelConfig {
     #[serde(default)]
     pub primal: Option<String>,
 
+    /// Whether DNSSEC zone signing is enabled (Signal channel only).
+    #[serde(default)]
+    pub dnssec: Option<bool>,
+
     /// TLS domain (Surface channel only).
     #[serde(default)]
     pub tls_domain: Option<String>,
@@ -160,6 +164,7 @@ impl Default for ChannelConfig {
             enabled: true,
             port: None,
             primal: None,
+            dnssec: None,
             tls_domain: None,
             acme_email: None,
             extra: std::collections::BTreeMap::new(),
