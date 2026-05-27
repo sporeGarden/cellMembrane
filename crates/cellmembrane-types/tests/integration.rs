@@ -21,7 +21,7 @@ fn parse_reference_membrane_toml() {
 
     assert_eq!(config.name, "membrane-relay");
     assert_eq!(config.domain.as_deref(), Some("membrane.primals.eco"));
-    assert_eq!(config.composition, MembraneComposition::Tower);
+    assert_eq!(config.composition, MembraneComposition::Nest);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn parse_provider_from_toml() {
 fn parse_channel_overrides() {
     let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
     let signal = config.channels.signal.as_ref().expect("signal should exist");
-    assert!(!signal.enabled);
+    assert!(signal.enabled);
 
     let relay = config.channels.relay.as_ref().expect("relay should exist");
     assert!(relay.enabled);

@@ -1,15 +1,16 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-05-26
-**Overall status:** BLOCKED — 2 direct blockers owned by cellMembrane
+**Last updated:** 2026-05-27
+**Overall status:** PROGRESSING — Nest Atomic LIVE, knot-dns running, NS cutover remaining
+**Wave 55 update:** primalSpring audit (NC-3) identified stale docs — ops docs now synced to
+Nest Atomic reality. `membrane.toml` → `composition = "nest"`, signal channel enabled.
+K-Derm boundary published. knot-dns running with DNSSEC — registrar NS cutover remaining.
 **Wave 51 update:** Deep debt sprint across all 3 owned repos (cellMembrane, benchScale, agentReagents).
 benchScale + agentReagents converged from `sort-after/` into canonical `infra/` locations.
 K-Derm diderm topology wired into benchScale. postPrimordial compliance enforced.
 **Wave 50 update:** GitHub Actions incident (May 26) proved external CI is unacceptable.
 Self-hosted runner deployed on ironGate. plasmidbin validate 98/98 PASS locally.
-CI runs still failing on GitHub-hosted runners (can't download action archives).
-Our self-hosted runner has Rust toolchain installed locally — zero download dependency.
 
 ---
 
@@ -21,64 +22,47 @@ All six criteria must be satisfied before glacial shift.
 |---|-----------|--------|-------------------|---------------|
 | 1 | All 4 sovereignty shadows cut over (7-day gates) | S2 LIVE, S3 LIVE, S1/S4 incomplete | Operate shadow infrastructure | Shared |
 | 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **4 gates running** (Wave 50), mesh seeded | Provide TURN rendezvous | Gate teams |
-| 3 | **Nest expansion deployed on VPS** | **NOT DEPLOYED** | **Direct blocker — we deploy** | **cellMembrane** |
+| 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38, 2026-05-22) — 21/0/1 darkforest, 10/10 trio | Operate Nest Atomic | **RESOLVED** |
 | 4 | Remote covalent node (flockGate) validated over WAN | flockGate not deployed | Provide WAN rendezvous | Shared |
-| 5 | **DNS pointed to sovereign infrastructure** | **Channel 1 NOT deployed** | **Direct blocker — we deploy knot-dns** | **cellMembrane** |
+| 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** with DNSSEC — NS cutover to primary pending (registrar) | Complete registrar NS record change | **cellMembrane** |
 | 6 | Cloudflare/cloudflared removed from production path | S1 not cut over | Caddy → BearDog ACME cutover | Shared |
 
 ---
 
-## Direct Blockers — cellMembrane Action Items
+## Resolved Blockers
 
-### Blocker 1: Nest Expansion on VPS (Criterion #3)
+### ~~Blocker 1: Nest Expansion on VPS (Criterion #3)~~ — RESOLVED
 
-**What:** Deploy `--composition nest` on the live VPS, adding NestGate, rhizoCrypt, loamSpine, sweetGrass alongside existing Tower.
+**Deployed:** Wave 38 (2026-05-22) via `deploy_membrane.sh deploy --composition nest --validate`
 
-**Command:**
-```bash
-cd ../../infra/plasmidBin
-./deploy_membrane.sh deploy root@157.230.3.183 --composition nest --validate
-```
+| Service | Port | Version | Status |
+|---------|------|---------|--------|
+| nestgate-membrane | :9500 | v2.1.0 | RUNNING |
+| rhizocrypt-membrane | :9602 | v0.14.0 | RUNNING |
+| loamspine-membrane | :9700 | v0.9.16 | RUNNING |
+| sweetgrass-membrane | :9850 | v0.7.34 | RUNNING |
 
-**New services:**
-| Service | Port | Data Directory |
-|---------|------|----------------|
-| nestgate-membrane | :9500 | /var/lib/membrane/nestgate |
-| rhizocrypt-membrane | :9601 | — |
-| loamspine-membrane | :9700 | /var/lib/membrane/loamspine |
-| sweetgrass-membrane | :9850 | — |
-
-**New UFW rules needed:** 9500/tcp, 9601/tcp, 9700/tcp, 9850/tcp
-
-**Pre-flight checklist:**
-- [ ] Confirm Tower services healthy (`deploy_membrane.sh status`)
-- [ ] Verify primal binaries available on GitHub Releases
-- [ ] Ensure VPS has sufficient disk/memory (2GB VM, nest adds 4 more services)
-- [ ] Review `deploy_membrane.sh` nest validation gap (UFW check doesn't cover nest ports)
-
-**Post-deploy validation:**
-- [ ] All 4 nest services `systemctl is-active`
-- [ ] UFW shows nest ports open
-- [ ] NestGate reachable on :9500
-- [ ] `deploy_membrane.sh status` reports nest composition
+**Validation:** darkforest 21/0/1, provenance trio 10/10, shadow orchestrator 6/6.
 
 ---
 
-### Blocker 2: Sovereign DNS — Channel 1 Signal (Criterion #5)
+## Remaining Blockers — cellMembrane Action Items
 
-**What:** Stand up knot-dns as secondary DNS on VPS for `primals.eco`, then primary cutover.
+### Blocker: Sovereign DNS — NS Cutover to Primary (Criterion #5)
 
-**Status:** No deployment logic exists in `deploy_membrane.sh` for Channel 1. This requires:
-1. knot-dns package installation on VPS
-2. Zone configuration for `primals.eco`
-3. UFW port :53 tcp/udp open
-4. Registrar NS record update (secondary → primary cutover)
+**What:** Complete the registrar NS record change to make knot-dns primary for `primals.eco`.
 
-**Pre-flight checklist:**
-- [ ] Design knot-dns zone file for `primals.eco`
-- [ ] Coordinate with registrar for NS delegation
-- [ ] Test as secondary before primary cutover
-- [ ] Validate with `dig @157.230.3.183 primals.eco`
+**Current state:** knot-dns is **running** on the VPS with DNSSEC (H2-17 complete). Zone file
+configured, UFW :53 open. Remaining step is the registrar NS delegation update.
+
+**Checklist:**
+- [x] knot-dns installed and running on VPS
+- [x] Zone file configured for `primals.eco`
+- [x] DNSSEC enabled
+- [x] UFW port :53 tcp/udp open
+- [ ] Registrar NS record update (secondary → primary cutover)
+- [ ] Validate resolution: `dig @157.230.3.183 primals.eco`
+- [ ] 7-day monitoring period before declaring S2 closed
 
 **Dependencies:**
 - ICANN registrar cooperation (permanently external)
@@ -186,11 +170,31 @@ API, call sites no longer touch raw pointers.
 
 **Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_DEEP_DEBT_WAVE51_MAY26_2026.md`
 
-### S5 Forgejo Releases (Criteria #6 enabler)
+### NC-3.2: K-Derm Boundary Publication (Wave 55)
 
-Sovereign binary distribution channel replacing GitHub Releases. Currently `deploy_membrane.sh` fetches from `https://github.com/ecoPrimals/plasmidBin/releases/`. Coordinate with projectNUCLEUS on Forgejo `auto-harvest.yml` integration.
+`membrane.toml` updated from `composition = "tower"` to `composition = "nest"`, signal
+channel enabled (knot-dns :53 with DNSSEC). K-Derm diderm boundary now published.
+primalSpring `s_kderm_boundary` live validation can activate against this config.
 
-**Status:** Not started — depends on Forgejo operational stability + self-hosted runners
+**Deliverables:**
+- [x] `membrane.toml` → `composition = "nest"`, `topology = "diderm"`
+- [x] Signal channel enabled: `knot-dns` :53, `dnssec = true`
+- [x] Integration tests updated: `parse_reference_membrane_toml` expects `Nest`, signal `enabled = true`
+- [x] 80/80 tests pass, 0 clippy warnings
+
+### NC-3.4: Forgejo Releases (Criteria #6 enabler)
+
+Sovereign binary distribution channel alongside GitHub Releases. plasmidBin `auto-harvest.yml`
+updated with Forgejo support (Wave 55). `provenance.toml` Layer 2 records forge identity.
+
+**Status:** plasmidBin shipped Forgejo hooks — coordination with cellMembrane Forgejo instance for first sovereign release pending.
+
+### NC-3.5: sporePrint Living Content
+
+Sovereign content hosting via NestGate `content.put`. Blocked on BearDog `auth.issue_session`
+scope expansion for `content.*`. When unblocked: `publish_sporeprint.sh` → NestGate → sovereign content.
+
+**Status:** BLOCKED on BearDog scope expansion.
 
 ### Multi-Gate LAN Mesh (Criteria #2, #4)
 
@@ -224,4 +228,4 @@ All deployments must satisfy five pillars before stadial entry.
 | 2. Zero port exposure | UDS default, TCP opt-in, composition-aware UFW | PASS |
 | 3. Songbird sole network surface | All external traffic through Songbird | PASS |
 | 4. BTSP crypto integrity | 13/13 primals, ChaCha20-Poly1305 | PASS |
-| 5. Enclave computing | Dual-tower ionic pattern | PASS (Tower), pending (Nest) |
+| 5. Enclave computing | Dual-tower ionic pattern | PASS (Tower + Nest Atomic) |

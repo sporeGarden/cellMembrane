@@ -1,10 +1,12 @@
 # cellMembrane reference configuration
 # This describes the live membrane-relay VPS at membrane.primals.eco
+# Composition: Nest Atomic (Wave 38) — Tower + provenance trio
+# K-Derm: Diderm envelope — gate plasma membrane + VPS periplasm/outer membrane
 
 [membrane]
 name = "membrane-relay"
 domain = "membrane.primals.eco"
-composition = "tower"
+composition = "nest"
 topology = "diderm"
 
 [membrane.identity]
@@ -19,7 +21,10 @@ image = "debian-12-x64"
 tags = ["membrane", "production"]
 
 [membrane.channels.signal]
-enabled = false
+enabled = true
+primal = "knot-dns"
+port = 53
+dnssec = true
 
 [membrane.channels.relay]
 enabled = true

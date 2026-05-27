@@ -8,8 +8,8 @@
 | **Class** | fieldMouse — Tower atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, 157.230.3.183, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
-| **Composition** | Tower (BearDog + Songbird + SkunkBat) + RustDesk (hbbs + hbbr) |
-| **Escalation** | Phase 1 (Tower) — **current** → Phase 1.5 (Nest + DNS + TLS) next |
+| **Composition** | Nest Atomic (Tower + NestGate + rhizoCrypt + loamSpine + sweetGrass) + RustDesk |
+| **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 38, 2026-05-22) |
 
 ---
 
@@ -19,8 +19,8 @@
 |---------|----------|-----------------|------|--------|
 | **2 Relay** | NAT traversal, TURN | Songbird | :3478 tcp/udp | **LIVE** |
 | **2b RustDesk** | Sovereign remote desktop | hbbs + hbbr | :21115-21117 | **LIVE** |
-| **3 Surface** | HTTPS, downloads, ACME | Caddy + NestGate | :80/:443 | **LIVE** — `membrane.primals.eco` (Let's Encrypt E8) |
-| **1 Signal** | DNS resolution for `primals.eco` | knot-dns | :53 | **PLANNED** — glacial shift blocker |
+| **3 Surface** | HTTPS, downloads, ACME, NestGate content | Caddy + NestGate | :80/:443/:9500 | **LIVE** — `membrane.primals.eco` (Let's Encrypt E8) |
+| **1 Signal** | DNS resolution for `primals.eco` | knot-dns | :53 | **LIVE** — DNSSEC, NS cutover to primary pending |
 
 ### Channel 3 Surface Details
 
@@ -99,19 +99,16 @@ ssh root@157.230.3.183
 # View Tower logs (BearDog → Songbird → SkunkBat)
 ssh root@157.230.3.183 "journalctl -u beardog-membrane -u songbird-relay -u skunkbat-membrane -f"
 
+# View Nest Atomic logs (provenance trio)
+ssh root@157.230.3.183 "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loamspine-membrane -u sweetgrass-membrane -f"
+
 # View RustDesk logs
 ssh root@157.230.3.183 "journalctl -u hbbs-membrane -u hbbr-membrane -f"
-
-# View Caddy / TLS logs
-ssh root@157.230.3.183 "journalctl -u caddy -f"
 
 # Manage SSH keys for multi-gate access
 ./deploy_membrane.sh keys list root@157.230.3.183
 ./deploy_membrane.sh keys add root@157.230.3.183 --name "friend-gate" --pubkey "ssh-ed25519 AAAA..."
 ./deploy_membrane.sh keys revoke root@157.230.3.183 --name "friend-gate"
-
-# Deploy Nest expansion (next phase)
-./deploy_membrane.sh deploy root@157.230.3.183 --composition nest --validate
 ```
 
 ---
@@ -123,7 +120,7 @@ ssh root@157.230.3.183 "journalctl -u caddy -f"
 | exim4 removed | DONE |
 | droplet-agent purged | DONE |
 | fail2ban active (systemd backend) | DONE |
-| UFW: 22+3478+21115-21117+80+443 | DONE |
+| UFW: 22+53+3478+8443+9500+9602+9700+9850+21115-21117+80+443 | DONE |
 | SSH key-only auth (multi-gate managed) | DONE |
 | credentials.env redundant plaintext removed | DONE |
 | journald persistence | DONE |
@@ -131,8 +128,10 @@ ssh root@157.230.3.183 "journalctl -u caddy -f"
 | RustDesk hbbs+hbbr running (sovereign relay) | DONE |
 | Caddy TLS with Let's Encrypt | DONE |
 | Stripped static ELF binaries | DONE |
-| Dark Forest audit: 17 PASS, 0 FAIL | DONE |
-| Trio pipeline: 10/10 PASS on VPS | DONE |
+| Dark Forest audit: 21 PASS, 0 FAIL, 1 SKIP | DONE (Wave 38, Nest Atomic) |
+| Provenance trio pipeline: 10/10 PASS on VPS | DONE |
+| Shadow orchestrator: 6/6 PASS | DONE |
+| NestGate :9500, rhizoCrypt :9602, loamSpine :9700, sweetGrass :9850 | DONE |
 
 ---
 
@@ -153,8 +152,8 @@ ssh root@157.230.3.183 "journalctl -u caddy -f"
 |-------|-------------|--------|
 | 0 | Relay only | Superseded |
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
-| **1** | **Tower composition** | **Current** |
-| **1.5** | **Nest expansion + Channel 1 DNS + Channel 3 TLS hardening** | **Next — glacial shift gate** |
+| 1 | Tower composition | Completed May 18 |
+| **1.5** | **Nest Atomic + Channel 1 DNS + TLS** | **Current** (Wave 38, 2026-05-22) |
 | 2 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
@@ -257,7 +256,7 @@ hardcoded `"default"` network deduplicated, unsafe FFI evolved to safe API,
 
 | Resource | Location | Relationship |
 |----------|----------|-------------|
-| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Primary operational tool (982 lines) |
+| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Primary operational tool (1199 lines) |
 | Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
 | fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
 | K-NOME programming | `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md` | K-Derm topology parallels K-NOME methodology |

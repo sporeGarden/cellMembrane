@@ -56,7 +56,11 @@ impl MembraneComposition {
                 vec![MembraneChannel::Relay]
             }
             Self::Nest => {
-                vec![MembraneChannel::Relay, MembraneChannel::Surface]
+                vec![
+                    MembraneChannel::Signal,
+                    MembraneChannel::Relay,
+                    MembraneChannel::Surface,
+                ]
             }
         }
     }
@@ -162,11 +166,12 @@ impl CompositionSpec {
                 "loamspine",
                 "sweetgrass",
             ],
-            symbiotic: vec!["hbbs", "hbbr", "caddy"],
+            symbiotic: vec!["hbbs", "hbbr", "caddy", "knot-dns"],
             tcp_ports: vec![
-                22, 80, 443, 3478, 9500, 9601, 9700, 9850, 21115, 21116, 21117,
+                22, 53, 80, 443, 3478, 8443, 9500, 9602, 9700, 9850, 21115, 21116,
+                21117,
             ],
-            udp_ports: vec![3478, 21116],
+            udp_ports: vec![53, 3478, 21116],
             systemd_units: vec![
                 "beardog-membrane.service",
                 "songbird-relay.service",
@@ -178,6 +183,7 @@ impl CompositionSpec {
                 "hbbs-membrane.service",
                 "hbbr-membrane.service",
                 "caddy-tls.service",
+                "knot.service",
             ],
             boot_order: vec![
                 "beardog",
@@ -190,6 +196,7 @@ impl CompositionSpec {
                 "hbbs",
                 "hbbr",
                 "caddy",
+                "knot-dns",
             ],
         }
     }

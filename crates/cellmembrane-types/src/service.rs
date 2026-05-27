@@ -77,7 +77,7 @@ const BEARDOG: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/beardog",
-    extra_ports: &[],
+    extra_ports: &[(8443, Protocol::Tcp, "beardog-tls-shadow")],
 };
 
 const SONGBIRD: MembraneService = MembraneService {
@@ -129,7 +129,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     health_method: "health.liveness",
     is_primal: true,
     install_path: "/opt/membrane/rhizocrypt",
-    extra_ports: &[],
+    extra_ports: &[(9602, Protocol::Tcp, "rhizocrypt-jsonrpc")],
 };
 
 const LOAMSPINE: MembraneService = MembraneService {
@@ -197,10 +197,23 @@ const CADDY: MembraneService = MembraneService {
     extra_ports: &[(80, Protocol::Tcp, "caddy-acme")],
 };
 
+const KNOTDNS: MembraneService = MembraneService {
+    binary: "knot-dns",
+    systemd_unit: "knot.service",
+    port: Some(53),
+    protocol: Protocol::TcpAndUdp,
+    socket_path: None,
+    bind: "0.0.0.0",
+    health_method: "dns_probe",
+    is_primal: false,
+    install_path: "/usr/sbin/knotd",
+    extra_ports: &[],
+};
+
 /// All known membrane services. Runtime discovery starts here.
 const ALL_SERVICES: &[MembraneService] = &[
     BEARDOG, SONGBIRD, SKUNKBAT, NESTGATE, RHIZOCRYPT,
-    LOAMSPINE, SWEETGRASS, HBBS, HBBR, CADDY,
+    LOAMSPINE, SWEETGRASS, HBBS, HBBR, CADDY, KNOTDNS,
 ];
 
 impl MembraneService {
