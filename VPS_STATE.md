@@ -2,6 +2,7 @@
 
 **Last updated:** 2026-05-27
 **Deployed composition:** Nest Atomic (Wave 38, deployed 2026-05-22)
+**VPS transport:** UDS-only (Wave 56 standard) — NUCLEUS primals on Unix domain sockets, zero TCP ports
 **VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 
@@ -141,6 +142,39 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Zone | `primals.eco` |
 | DNSSEC | Enabled |
 | Status | Running on VPS, NS cutover to primary pending (registrar action) |
+
+---
+
+## VPS Deployment Standard (Wave 56)
+
+Three-step deployment model from primalSpring coordination:
+
+```
+Step 1: deploy_membrane.sh deploy root@$VPS_IP --composition nucleus --uds-only
+        → NUCLEUS base (13 primals, UDS-only, zero TCP ports for primals)
+        → Binaries from plasmidBin GitHub Releases
+        → nucleus_launcher start --uds-only manages all 13 primals
+
+Step 2: deploy_membrane.sh spring-overlay root@$VPS_IP --cell <spring>
+        → Spring overlay via biomeos deploy (spawn=false on all nodes)
+        → Only for VPS-standard springs (6 of 9 in manifest)
+
+Step 3: Spring runtime discovers NUCLEUS via UDS
+        → CompositionContext::from_live_discovery()
+        → UDS tiers 2-4, no harness, no shell scripts
+```
+
+**VPS-ready springs:** hotspring, wetspring, neuralspring, airspring, groundspring, healthspring
+**Desktop-only:** nucleus_desktop, ludospring, esotericwebb
+
+### Artifacts consumed from primalSpring
+
+| Artifact | Location | Purpose |
+|----------|----------|---------|
+| Spring cell graphs | `graphs/cells/{spring}_cell.toml` | Deploy topologies (6 VPS-ready, all `spawn=false`) |
+| Cell manifest | `graphs/cells/cells_manifest.toml` | Index with `vps_standard` field |
+| Launch profiles | `config/primal_launch_profiles.toml` | Per-primal CLI/env wiring |
+| Seed fingerprints | `validation/seed_fingerprints.toml` | Crypto tier 0 bootstrap |
 
 ---
 

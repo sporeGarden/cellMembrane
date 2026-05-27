@@ -2,7 +2,11 @@
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-05-27
-**Overall status:** PROGRESSING — Nest Atomic LIVE, knot-dns running, NS cutover remaining
+**Overall status:** PROGRESSING — Nest Atomic LIVE, VPS deployment standard absorbed, NS cutover remaining
+**Wave 56 update:** primalSpring Wave 56 VPS deployment standard consumed. `TransportMode::UdsOnly`
+typed into service registry. `deploy_membrane.sh` evolved with `--uds-only` flag for `nucleus_launcher`
+integration and `spring-overlay` mode for cell graph deployment. Three-step VPS deploy flow documented.
+`membrane.toml` → `transport = "uds_only"`. Zero clippy warnings, all tests pass.
 **Wave 55 update:** primalSpring audit (NC-3) identified stale docs — ops docs now synced to
 Nest Atomic reality. `membrane.toml` → `composition = "nest"`, signal channel enabled.
 K-Derm boundary published. knot-dns running with DNSSEC — registrar NS cutover remaining.
@@ -169,6 +173,24 @@ hardcoded `/opt/biomeos/bin` and `"default"` network references centralized,
 API, call sites no longer touch raw pointers.
 
 **Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_DEEP_DEBT_WAVE51_MAY26_2026.md`
+
+### Wave 56: VPS Deployment Standard Absorption
+
+primalSpring shipped the VPS deployment standard (Waves 55b–56): `nucleus_launcher --uds-only`,
+cell graph `vps_standard` tagging, env var centralization, 12 primordial script archival.
+
+**cellMembrane response:**
+- [x] `TransportMode` enum (`UdsOnly`, `TcpDefault`, `TcpOptIn`) added to service registry
+- [x] All NUCLEUS primals marked `vps_transport: TransportMode::UdsOnly`
+- [x] `HealthCheckMethod::SocketExists` added for UDS socket file existence checks
+- [x] `deploy_membrane.sh` → `--uds-only` flag for nucleus composition
+- [x] `deploy_membrane.sh` → `spring-overlay` mode for cell graph deployment
+- [x] `membrane.toml` → `transport = "uds_only"`
+- [x] `CompositionSpec::uds_socket_paths()` and `tcp_ports_uds_mode()` helpers
+- [x] Stale Channel 1/3 `[future]` comments fixed to `[ACTIVE]` in deploy script
+- [x] VPS deployment standard documented in RUNBOOKS, VPS_STATE
+- [ ] `nucleus_launcher` binary available in plasmidBin releases (upstream dependency)
+- [ ] Test `biomeos deploy` with live cell graph against VPS NUCLEUS (operational)
 
 ### NC-3.2: K-Derm Boundary Publication (Wave 55)
 

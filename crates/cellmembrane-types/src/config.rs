@@ -13,6 +13,7 @@ use crate::envelope::EnvelopeTopology;
 use crate::firewall::FirewallRuleset;
 use crate::identity::MembraneIdentity;
 use crate::provider::ProviderConfig;
+use crate::service::TransportMode;
 use crate::validation::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -43,6 +44,11 @@ pub struct MembraneConfig {
     /// Defaults to diderm for VPS providers, monoderm for gate-local.
     #[serde(default)]
     pub topology: Option<EnvelopeTopology>,
+
+    /// VPS transport mode: uds_only (Wave 56 standard), tcp_default, or tcp_opt_in.
+    /// Defaults to uds_only for VPS deployments.
+    #[serde(default = "default_transport")]
+    pub transport: TransportMode,
 
     /// Membrane identity (family ID, gate ID).
     #[serde(default)]
@@ -201,6 +207,10 @@ fn default_cutover_days() -> u32 {
     MIN_CUTOVER_GATE_DAYS
 }
 
+fn default_transport() -> TransportMode {
+    TransportMode::UdsOnly
+}
+
 use crate::default_true;
 
 impl MembraneConfig {
@@ -289,6 +299,23 @@ impl MembraneConfig {
                 spec.symbiotic.len(),
             ),
         );
+
+        report.pass(
+            "transport.mode",
+            format!("Transport mode: {}", self.transport),
+        );
+        if self.transport == TransportMode::UdsOnly {
+            let uds_paths = spec.uds_socket_paths();
+            let tcp_remain = spec.tcp_ports_uds_mode();
+            report.info(
+                "transport.uds_sockets",
+                format!(
+                    "{} primals on UDS, {} TCP ports still required (symbiotic/relay)",
+                    uds_paths.len(),
+                    tcp_remain.len(),
+                ),
+            );
+        }
     }
 
     fn validate_topology(&self, report: &mut Report) {

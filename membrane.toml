@@ -8,6 +8,7 @@ name = "membrane-relay"
 domain = "membrane.primals.eco"
 composition = "nest"
 topology = "diderm"
+transport = "uds_only"
 
 [membrane.identity]
 family_id = "membrane-alpha"

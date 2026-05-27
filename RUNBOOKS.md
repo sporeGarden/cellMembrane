@@ -13,10 +13,12 @@ All `$VPS_IP` references below are the membrane relay host.
 3. [Channel 2b — RustDesk](#3-channel-2b--rustdesk)
 4. [Channel 3 Surface — Caddy TLS](#4-channel-3-surface--caddy-tls)
 5. [Channel 1 Signal — Sovereign DNS (knot-dns)](#5-channel-1-signal--sovereign-dns-knot-dns)
-6. [Nest Expansion Deployment](#6-nest-expansion-deployment)
-7. [Credential Management](#7-credential-management)
-8. [SSH Key Management (Multi-Gate)](#8-ssh-key-management-multi-gate)
-9. [Emergency Procedures](#9-emergency-procedures)
+6. [VPS Deployment Standard (Wave 56)](#6-vps-deployment-standard-wave-56)
+7. [Nest Atomic Operations](#7-nest-atomic-operations-current-composition)
+8. [Credential Management](#8-credential-management)
+9. [SSH Key Management (Multi-Gate)](#9-ssh-key-management-multi-gate)
+10. [Emergency Procedures](#10-emergency-procedures)
+11. [Self-Hosted GitHub Actions Runner](#11-self-hosted-github-actions-runner)
 
 ---
 
@@ -176,7 +178,47 @@ dig @$VPS_IP primals.eco NS
 
 ---
 
-## 6. Nest Atomic Operations (Current Composition)
+## 6. VPS Deployment Standard (Wave 56)
+
+> **Standard:** primalSpring Wave 56 — three-step VPS deployment with UDS-only NUCLEUS.
+
+### Full NUCLEUS deployment (UDS-only)
+
+```bash
+cd ../../infra/plasmidBin
+
+# Step 1: Deploy NUCLEUS base (13 primals, UDS-only)
+./deploy_membrane.sh deploy root@$VPS_IP --composition nucleus --uds-only --validate
+
+# Step 2: Deploy spring overlay (e.g. hotspring)
+./deploy_membrane.sh spring-overlay root@$VPS_IP --cell hotspring
+
+# Step 3: Spring runtime discovers NUCLEUS via UDS (automatic)
+# Spring uses CompositionContext::from_live_discovery() — no manual config needed
+```
+
+### Verify NUCLEUS launcher
+
+```bash
+ssh root@$VPS_IP "systemctl status nucleus-launcher"
+ssh root@$VPS_IP "ls -la /run/membrane/*.sock"
+```
+
+### VPS-ready springs
+
+Only springs with `vps_standard = true` in the cell manifest can be deployed:
+- hotspring, wetspring, neuralspring, airspring, groundspring, healthspring
+
+### What NOT to use on VPS
+
+- `desktop_nucleus.sh` — desktop-only
+- `cell_launcher.sh` — desktop-only
+- TCP port flags for NUCLEUS primals — UDS-only is the standard
+- Harness-based spawning — use `biomeos deploy` instead
+
+---
+
+## 7. Nest Atomic Operations (Current Composition)
 
 > **Status: LIVE** (Wave 38, 2026-05-22). Nest Atomic deployed with provenance trio.
 
@@ -208,7 +250,7 @@ cd ../../infra/plasmidBin
 
 ---
 
-## 7. Credential Management
+## 8. Credential Management
 
 ### Encrypt credentials for sharing
 ```bash
@@ -250,7 +292,7 @@ Deploys to `/opt/membrane/credentials.age` on VPS.
 
 ---
 
-## 8. SSH Key Management (Multi-Gate)
+## 9. SSH Key Management (Multi-Gate)
 
 ### List authorized keys
 ```bash
@@ -279,7 +321,7 @@ ssh root@$VPS_IP "cat /root/.ssh/authorized_keys"
 
 ---
 
-## 9. Emergency Procedures
+## 10. Emergency Procedures
 
 ### Service down — single service restart
 ```bash
@@ -344,7 +386,7 @@ Then redeploy firewall rules via `deploy_membrane.sh`.
 
 ---
 
-## 10. Self-Hosted GitHub Actions Runner
+## 11. Self-Hosted GitHub Actions Runner
 
 ### Status check
 ```bash

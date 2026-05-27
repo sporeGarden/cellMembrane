@@ -195,4 +195,47 @@ impl CompositionSpec {
     pub fn service_for(&self, binary: &str) -> Option<&'static MembraneService> {
         MembraneService::for_binary(binary)
     }
+
+    /// UDS socket paths for services in UDS-only mode (VPS standard).
+    /// Returns `(binary, socket_path)` pairs for all primals that use UDS transport.
+    pub fn uds_socket_paths(&self) -> Vec<(&'static str, &'static str)> {
+        let services = MembraneService::for_composition(self.composition);
+        services
+            .iter()
+            .filter(|s| s.is_uds_only())
+            .filter_map(|s| s.socket_path.map(|path| (s.binary, path)))
+            .collect()
+    }
+
+    /// TCP ports still required in UDS-only mode (symbiotic services + relay).
+    /// These are services that must bind to TCP regardless of transport mode.
+    pub fn tcp_ports_uds_mode(&self) -> Vec<u16> {
+        let services = MembraneService::for_composition(self.composition);
+        let mut ports = vec![crate::composition::SSH_PORT];
+
+        for svc in &services {
+            if svc.requires_tcp_in_uds_mode() {
+                if let Some(port) = svc.port {
+                    match svc.protocol {
+                        crate::service::Protocol::Tcp | crate::service::Protocol::TcpAndUdp => {
+                            ports.push(port);
+                        }
+                        _ => {}
+                    }
+                }
+                for &(port, proto, _) in svc.extra_ports {
+                    match proto {
+                        crate::service::Protocol::Tcp | crate::service::Protocol::TcpAndUdp => {
+                            ports.push(port);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        ports.sort();
+        ports.dedup();
+        ports
+    }
 }

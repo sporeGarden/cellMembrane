@@ -39,6 +39,33 @@ impl fmt::Display for Protocol {
     }
 }
 
+/// Transport mode for VPS deployment (Wave 56 standard).
+///
+/// Determines whether a primal uses TCP ports or Unix domain sockets
+/// for inter-primal communication. The VPS standard is `UdsOnly` —
+/// zero TCP ports for all NUCLEUS primals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransportMode {
+    /// UDS-only: no TCP ports allocated. VPS deployment standard.
+    /// Health checks via socket file existence.
+    UdsOnly,
+    /// TCP default: service binds to a TCP port (legacy / symbiotic).
+    TcpDefault,
+    /// TCP opt-in: UDS primary, TCP available via `--port` flag.
+    TcpOptIn,
+}
+
+impl fmt::Display for TransportMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UdsOnly => write!(f, "uds_only"),
+            Self::TcpDefault => write!(f, "tcp_default"),
+            Self::TcpOptIn => write!(f, "tcp_opt_in"),
+        }
+    }
+}
+
 /// Health check strategy for a service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HealthCheckMethod {
@@ -50,6 +77,8 @@ pub enum HealthCheckMethod {
     HttpsProbe,
     /// DNS query probe.
     DnsProbe,
+    /// UDS socket file existence check (VPS standard).
+    SocketExists,
 }
 
 impl fmt::Display for HealthCheckMethod {
@@ -59,6 +88,7 @@ impl fmt::Display for HealthCheckMethod {
             Self::TcpConnect => write!(f, "tcp_connect"),
             Self::HttpsProbe => write!(f, "https_probe"),
             Self::DnsProbe => write!(f, "dns_probe"),
+            Self::SocketExists => write!(f, "socket_exists"),
         }
     }
 }
@@ -97,6 +127,8 @@ pub struct MembraneService {
     pub extra_ports: &'static [(u16, Protocol, &'static str)],
     /// Minimum composition tier that includes this service.
     pub min_composition: MembraneComposition,
+    /// VPS deployment transport mode (Wave 56 standard).
+    pub vps_transport: TransportMode,
 }
 
 const BEARDOG: MembraneService = MembraneService {
@@ -111,6 +143,7 @@ const BEARDOG: MembraneService = MembraneService {
     install_path: "/opt/membrane/beardog",
     extra_ports: &[(8443, Protocol::Tcp, "beardog-tls-shadow")],
     min_composition: MembraneComposition::Tower,
+    vps_transport: TransportMode::UdsOnly,
 };
 
 const SONGBIRD: MembraneService = MembraneService {
@@ -125,6 +158,7 @@ const SONGBIRD: MembraneService = MembraneService {
     install_path: "/opt/membrane/songbird",
     extra_ports: &[],
     min_composition: MembraneComposition::Relay,
+    vps_transport: TransportMode::TcpOptIn,
 };
 
 const SKUNKBAT: MembraneService = MembraneService {
@@ -132,13 +166,14 @@ const SKUNKBAT: MembraneService = MembraneService {
     systemd_unit: "skunkbat-membrane.service",
     port: Some(9140),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    socket_path: Some("/run/membrane/skunkbat.sock"),
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/skunkbat",
     extra_ports: &[],
     min_composition: MembraneComposition::Tower,
+    vps_transport: TransportMode::UdsOnly,
 };
 
 const NESTGATE: MembraneService = MembraneService {
@@ -146,13 +181,14 @@ const NESTGATE: MembraneService = MembraneService {
     systemd_unit: "nestgate-membrane.service",
     port: Some(9500),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    socket_path: Some("/run/membrane/nestgate.sock"),
     bind: BIND_ALL,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/nestgate",
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
+    vps_transport: TransportMode::UdsOnly,
 };
 
 const RHIZOCRYPT: MembraneService = MembraneService {
@@ -160,13 +196,14 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     systemd_unit: "rhizocrypt-membrane.service",
     port: Some(9601),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    socket_path: Some("/run/membrane/rhizocrypt.sock"),
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/rhizocrypt",
     extra_ports: &[(9602, Protocol::Tcp, "rhizocrypt-jsonrpc")],
     min_composition: MembraneComposition::Nest,
+    vps_transport: TransportMode::UdsOnly,
 };
 
 const LOAMSPINE: MembraneService = MembraneService {
@@ -174,13 +211,14 @@ const LOAMSPINE: MembraneService = MembraneService {
     systemd_unit: "loamspine-membrane.service",
     port: Some(9700),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    socket_path: Some("/run/membrane/loamspine.sock"),
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/loamspine",
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
+    vps_transport: TransportMode::UdsOnly,
 };
 
 const SWEETGRASS: MembraneService = MembraneService {
@@ -188,13 +226,14 @@ const SWEETGRASS: MembraneService = MembraneService {
     systemd_unit: "sweetgrass-membrane.service",
     port: Some(9850),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    socket_path: Some("/run/membrane/sweetgrass.sock"),
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     install_path: "/opt/membrane/sweetgrass",
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
+    vps_transport: TransportMode::UdsOnly,
 };
 
 const HBBS: MembraneService = MembraneService {
@@ -209,6 +248,7 @@ const HBBS: MembraneService = MembraneService {
     install_path: "/opt/membrane/hbbs",
     extra_ports: &[(21115, Protocol::Tcp, "hbbs-id")],
     min_composition: MembraneComposition::RustDesk,
+    vps_transport: TransportMode::TcpDefault,
 };
 
 const HBBR: MembraneService = MembraneService {
@@ -223,6 +263,7 @@ const HBBR: MembraneService = MembraneService {
     install_path: "/opt/membrane/hbbr",
     extra_ports: &[],
     min_composition: MembraneComposition::RustDesk,
+    vps_transport: TransportMode::TcpDefault,
 };
 
 const CADDY: MembraneService = MembraneService {
@@ -237,6 +278,7 @@ const CADDY: MembraneService = MembraneService {
     install_path: "/usr/bin/caddy",
     extra_ports: &[(80, Protocol::Tcp, "caddy-acme")],
     min_composition: MembraneComposition::Nest,
+    vps_transport: TransportMode::TcpDefault,
 };
 
 const KNOTDNS: MembraneService = MembraneService {
@@ -251,6 +293,7 @@ const KNOTDNS: MembraneService = MembraneService {
     install_path: "/usr/sbin/knotd",
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
+    vps_transport: TransportMode::TcpDefault,
 };
 
 /// All known membrane services. Runtime discovery starts here.
@@ -282,6 +325,28 @@ impl MembraneService {
     /// Whether this service is externally reachable (bind != loopback, not UDS).
     pub fn is_externally_reachable(&self) -> bool {
         self.bind != BIND_LOOPBACK && self.protocol != Protocol::Uds
+    }
+
+    /// Whether this service uses UDS-only transport on VPS (Wave 56 standard).
+    pub fn is_uds_only(&self) -> bool {
+        self.vps_transport == TransportMode::UdsOnly
+    }
+
+    /// Health check method to use in UDS-only mode.
+    /// Primals with UDS-only transport use socket existence checks instead of TCP probes.
+    pub fn uds_health_check(&self) -> HealthCheckMethod {
+        if self.is_uds_only() {
+            if let Some(_path) = self.socket_path {
+                return HealthCheckMethod::SocketExists;
+            }
+        }
+        self.health_method
+    }
+
+    /// Services that require TCP ports even in UDS-only deployments
+    /// (symbiotic partners and relay services with external surface).
+    pub fn requires_tcp_in_uds_mode(&self) -> bool {
+        self.vps_transport == TransportMode::TcpDefault
     }
 }
 
