@@ -176,7 +176,7 @@ Run `deploy_membrane.sh status root@<host>`:
 Run `darkforest_membrane.sh`:
 - 17 MEM checks (MEM-01 through MEM-17)
 - SSH hardening, credential perms, port inventory, binary provenance
-- Must be 17/17 PASS for production status
+- Must be 21/21 PASS for Nest Atomic production status (MEM-01 through MEM-17)
 
 ---
 

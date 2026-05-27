@@ -5,7 +5,7 @@
 | | |
 |-|-|
 | **Owner** | cellMembrane team (ironGate) |
-| **Class** | fieldMouse — Tower atomic on external substrate |
+| **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, 157.230.3.183, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | Nest Atomic (Tower + NestGate + rhizoCrypt + loamSpine + sweetGrass) + RustDesk |

@@ -135,15 +135,15 @@ with TLS content delivery.
 |-----------------|----------------------------------------------------------|
 | Primals         | beardog, songbird, skunkbat, nestgate, rhizocrypt, loamspine, sweetgrass |
 | Symbiotic       | hbbs, hbbr, caddy (TLS termination)                     |
-| Channels active | Channel 2, Channel 2b, Channel 3 (Surface)              |
-| Ports           | 22, 3478, 21115-21117, 80, 443, 9500, 9601, 9700, 9850 |
+| Channels active | Channel 1 (Signal/DNS), Channel 2 (Relay), Channel 2b (RustDesk), Channel 3 (Surface) |
+| Ports           | 22, 53, 3478, 21115-21117, 80, 443, 8443, 9500, 9602, 9700, 9850 |
 | Systemd units   | Tower units + `nestgate-membrane`, `rhizocrypt-membrane`, `loamspine-membrane`, `sweetgrass-membrane`, `caddy-tls` |
 | Credentials     | Tower credentials + NestGate config, Caddy TLS certs    |
 | Boot order      | Tower boot → NestGate → provenance trio → Caddy         |
 | Health check    | Tower checks + NestGate :9500 + Caddy TLS probe         |
 | Dark Forest     | Full + content provenance validation                     |
 
-Nest adds significant surface area. The additional ports (9500, 9601,
+Nest adds significant surface area. The additional ports (9500, 9602,
 9700, 9850) are for Nest-internal primal communication; they should be
 firewall-restricted to known gate IPs in production.
 

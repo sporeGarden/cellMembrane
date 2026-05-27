@@ -74,8 +74,10 @@ image = "debian-12-x64"
 tags = ["membrane", "production"]
 
 [membrane.channels.signal]
-enabled = false
-# port, primal, etc. use defaults from composition
+enabled = true
+primal = "knot-dns"
+port = 53
+dnssec = true
 
 [membrane.channels.relay]
 enabled = true

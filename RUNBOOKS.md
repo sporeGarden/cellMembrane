@@ -29,7 +29,14 @@ cd ../../infra/plasmidBin
 # Quick manual check
 ssh root@157.230.3.183 "
   echo '=== Services ==='
-  systemctl is-active beardog-membrane songbird-relay skunkbat-membrane hbbs-membrane hbbr-membrane caddy
+  echo '=== Tower ==='
+  systemctl is-active beardog-membrane songbird-relay skunkbat-membrane
+  echo '=== Nest ==='
+  systemctl is-active nestgate-membrane rhizocrypt-membrane loamspine-membrane sweetgrass-membrane
+  echo '=== RustDesk ==='
+  systemctl is-active hbbs-membrane hbbr-membrane
+  echo '=== Surface + DNS ==='
+  systemctl is-active caddy knot
   echo '=== Firewall ==='
   ufw status | grep -c ALLOW
   echo '=== Disk ==='
@@ -41,7 +48,7 @@ ssh root@157.230.3.183 "
 "
 ```
 
-**Expected:** All 6 services active, 9 UFW ALLOW rules, disk < 80%.
+**Expected:** All 11+ services active, 16+ UFW ALLOW rules, disk < 80%.
 
 ---
 
@@ -141,23 +148,18 @@ Sovereignty threshold: must be ≤ 1.5× GitHub Pages TTFB (~89ms).
 
 ## 5. Channel 1 Signal — Sovereign DNS (knot-dns)
 
-> **Status: NOT DEPLOYED.** This is a glacial shift blocker. Procedures below are for when deployment begins.
+> **Status: DEPLOYED** (Wave 38, 2026-05-22). knot-dns running with DNSSEC. NS cutover to primary pending (registrar action).
 
-### Pre-deployment
+### Current state
 
-1. Install knot-dns on VPS:
-```bash
-ssh root@157.230.3.183 "apt update && apt install -y knot knot-dnsutils"
-```
+knot-dns v3.2.6 is installed and running on the VPS with DNSSEC zone signing enabled.
+UFW ports 53/tcp and 53/udp are open. Zone file configured for `primals.eco`.
 
-2. Open UFW ports:
-```bash
-ssh root@157.230.3.183 "ufw allow 53/tcp comment 'Channel 1 DNS' && ufw allow 53/udp comment 'Channel 1 DNS'"
-```
+### Remaining: NS cutover to primary
 
-3. Configure zone file for `primals.eco` at `/etc/knot/knot.conf`
-
-4. Start as secondary first (point to current commercial DNS as primary)
+1. Validate current resolution: `dig @157.230.3.183 primals.eco A`
+2. Update registrar NS records to include 157.230.3.183 as primary
+3. Monitor for 7+ days before removing commercial DNS fallback
 
 ### Validation
 ```bash
@@ -173,40 +175,35 @@ dig @157.230.3.183 primals.eco NS
 
 ---
 
-## 6. Nest Expansion Deployment
+## 6. Nest Atomic Operations (Current Composition)
 
-### Pre-flight
-```bash
-# Confirm Tower is healthy
-cd ../../infra/plasmidBin
-./deploy_membrane.sh status root@157.230.3.183
+> **Status: LIVE** (Wave 38, 2026-05-22). Nest Atomic deployed with provenance trio.
 
-# Verify VPS resources
-ssh root@157.230.3.183 "free -h && df -h / && nproc"
-```
-
-### Deploy
-```bash
-./deploy_membrane.sh deploy root@157.230.3.183 --composition nest --validate
-```
-
-This deploys Tower + RustDesk + Nest atomically. Adds:
-- nestgate-membrane (:9500)
-- rhizocrypt-membrane (:9601)
-- loamspine-membrane (:9700)
-- sweetgrass-membrane (:9850)
-
-### Post-deploy validation
+### Health check
 ```bash
 ssh root@157.230.3.183 "
   systemctl is-active nestgate-membrane rhizocrypt-membrane loamspine-membrane sweetgrass-membrane
-  ufw status | grep -E '950[0]|960[1]|970[0]|985[0]'
+  echo '=== Nest Ports ==='
+  ss -tlnp | grep -E '9500|9602|9700|9850'
+  echo '=== Data Dirs ==='
   ls -la /var/lib/membrane/
 "
 ```
 
-### Known issue
-`deploy_membrane.sh --validate` UFW verification does not check nest ports (9500-9850). Nest ports may trigger "unexpected UFW rules" warnings — this is a false positive.
+### Service details
+
+| Service | Port | Health check |
+|---------|------|-------------|
+| nestgate-membrane | :9500 | `curl -s http://157.230.3.183:9500/health` |
+| rhizocrypt-membrane | :9602 (JSON-RPC) | `curl -s -X POST http://127.0.0.1:9602` |
+| loamspine-membrane | :9700 | `curl -s http://127.0.0.1:9700/health` |
+| sweetgrass-membrane | :9850 | TCP connection probe |
+
+### Redeployment (upgrade or recovery)
+```bash
+cd ../../infra/plasmidBin
+./deploy_membrane.sh deploy root@157.230.3.183 --composition nest --validate
+```
 
 ---
 
@@ -288,18 +285,20 @@ ssh root@157.230.3.183 "cat /root/.ssh/authorized_keys"
 ssh root@157.230.3.183 "systemctl restart <unit-name>"
 ```
 
-### Full Tower restart (preserves boot order)
+### Full Nest Atomic restart (preserves boot order)
 ```bash
 ssh root@157.230.3.183 "
-  systemctl restart beardog-membrane
-  sleep 2
-  systemctl restart songbird-relay
-  sleep 2
-  systemctl restart skunkbat-membrane
+  systemctl restart beardog-membrane && sleep 2
+  systemctl restart songbird-relay && sleep 2
+  systemctl restart skunkbat-membrane && sleep 2
+  systemctl restart nestgate-membrane && sleep 2
+  systemctl restart rhizocrypt-membrane && sleep 2
+  systemctl restart loamspine-membrane && sleep 2
+  systemctl restart sweetgrass-membrane
 "
 ```
 
-Boot order is critical: BearDog → Songbird → SkunkBat.
+Boot order: BearDog → Songbird → SkunkBat → NestGate → rhizoCrypt → loamSpine → sweetGrass.
 
 ### VPS unreachable — reprovisioning
 ```bash
@@ -312,8 +311,8 @@ doctl compute droplet list --tag-name membrane
 # If droplet destroyed, reprovision:
 ./deploy_membrane.sh provision --region nyc1
 
-# Redeploy current composition
-./deploy_membrane.sh deploy root@<new-ip> --composition tower --validate
+# Redeploy current composition (Nest Atomic)
+./deploy_membrane.sh deploy root@<new-ip> --composition nest --validate
 
 # Push credentials
 ./membrane/share_credentials.sh push root@<new-ip>
