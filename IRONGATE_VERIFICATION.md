@@ -27,10 +27,10 @@ doctl auth init --access-token <decrypted-token>
 doctl compute droplet list --tag-name membrane
 
 # 4. Full status check via deploy script
-./deploy_membrane.sh status root@157.230.3.183
+./deploy_membrane.sh status root@$VPS_IP
 
 # 5. Verify Nest Atomic composition services
-ssh root@157.230.3.183 "
+ssh root@$VPS_IP "
   echo '=== Tower ==='
   systemctl is-active beardog-membrane songbird-relay skunkbat-membrane
   echo '=== Nest (Provenance Trio) ==='
@@ -48,14 +48,14 @@ ssh root@157.230.3.183 "
 
 # 6. Verify Channel 3 TLS
 curl -sI https://membrane.primals.eco/ | head -5
-echo | openssl s_client -connect 157.230.3.183:443 -servername membrane.primals.eco 2>/dev/null | openssl x509 -noout -dates
+echo | openssl s_client -connect $VPS_IP:443 -servername membrane.primals.eco 2>/dev/null | openssl x509 -noout -dates
 
 # 7. Verify Channel 1 Signal (DNS)
-dig @157.230.3.183 primals.eco A
-dig @157.230.3.183 primals.eco DNSKEY  # DNSSEC
+dig @$VPS_IP primals.eco A
+dig @$VPS_IP primals.eco DNSKEY  # DNSSEC
 
 # 8. Verify Nest data directories
-ssh root@157.230.3.183 "ls -la /var/lib/membrane/ && du -sh /var/cache/membrane/nestgate/"
+ssh root@$VPS_IP "ls -la /var/lib/membrane/ && du -sh /var/cache/membrane/nestgate/"
 
 # 9. TTFB sovereignty check
 curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s https://membrane.primals.eco/

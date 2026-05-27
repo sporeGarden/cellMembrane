@@ -61,7 +61,7 @@ configured, UFW :53 open. Remaining step is the registrar NS delegation update.
 - [x] DNSSEC enabled
 - [x] UFW port :53 tcp/udp open
 - [ ] Registrar NS record update (secondary → primary cutover)
-- [ ] Validate resolution: `dig @157.230.3.183 primals.eco`
+- [ ] Validate resolution: `dig @$VPS_IP primals.eco`
 - [ ] 7-day monitoring period before declaring S2 closed
 
 **Dependencies:**

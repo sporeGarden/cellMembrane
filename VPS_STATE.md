@@ -2,6 +2,7 @@
 
 **Last updated:** 2026-05-27
 **Deployed composition:** Nest Atomic (Wave 38, deployed 2026-05-22)
+**VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 
 ---
@@ -14,7 +15,7 @@
 | Region | nyc1 |
 | Size | s-1vcpu-2gb ($12/mo) |
 | OS | Debian 12 x64 |
-| IP | 157.230.3.183 |
+| IP | $VPS_IP |
 | Hostname | membrane-relay |
 | SSH user | root |
 
@@ -149,8 +150,8 @@ After any VPS change, update this file:
 
 ```bash
 # Verify current state
-ssh root@157.230.3.183 "systemctl list-units 'beardog*' 'songbird*' 'skunkbat*' 'hbbs*' 'hbbr*' 'caddy*' 'nestgate*' 'rhizocrypt*' 'loamspine*' 'sweetgrass*' 'knot*' --no-pager"
-ssh root@157.230.3.183 "ufw status numbered"
+ssh root@$VPS_IP "systemctl list-units 'beardog*' 'songbird*' 'skunkbat*' 'hbbs*' 'hbbr*' 'caddy*' 'nestgate*' 'rhizocrypt*' 'loamspine*' 'sweetgrass*' 'knot*' --no-pager"
+ssh root@$VPS_IP "ufw status numbered"
 
 # Then edit VPS_STATE.md with changes
 ```

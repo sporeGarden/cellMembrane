@@ -1,7 +1,8 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (ironGate team)
-**VPS:** 157.230.3.183 (root)
+**VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`, or `deploy_membrane.sh` resolves it.
+All `$VPS_IP` references below are the membrane relay host.
 
 ---
 
@@ -24,10 +25,10 @@
 ```bash
 # Full status via deploy script
 cd ../../infra/plasmidBin
-./deploy_membrane.sh status root@157.230.3.183
+./deploy_membrane.sh status root@$VPS_IP
 
 # Quick manual check
-ssh root@157.230.3.183 "
+ssh root@$VPS_IP "
   echo '=== Services ==='
   echo '=== Tower ==='
   systemctl is-active beardog-membrane songbird-relay skunkbat-membrane
@@ -56,17 +57,17 @@ ssh root@157.230.3.183 "
 
 ### View logs
 ```bash
-ssh root@157.230.3.183 "journalctl -u songbird-relay -f"
+ssh root@$VPS_IP "journalctl -u songbird-relay -f"
 ```
 
 ### Restart
 ```bash
-ssh root@157.230.3.183 "systemctl restart songbird-relay"
+ssh root@$VPS_IP "systemctl restart songbird-relay"
 ```
 
 ### Verify TURN credentials
 ```bash
-ssh root@157.230.3.183 "cat /etc/songbird/relay-credentials"
+ssh root@$VPS_IP "cat /etc/songbird/relay-credentials"
 ```
 
 Format: `nucleus-relay:<hex-key>`
@@ -74,7 +75,7 @@ Format: `nucleus-relay:<hex-key>`
 ### Test connectivity
 ```bash
 # From a gate machine
-stun 157.230.3.183:3478
+stun $VPS_IP:3478
 ```
 
 ---
@@ -83,24 +84,24 @@ stun 157.230.3.183:3478
 
 ### View logs
 ```bash
-ssh root@157.230.3.183 "journalctl -u hbbs-membrane -u hbbr-membrane -f"
+ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 ```
 
 ### Restart
 ```bash
-ssh root@157.230.3.183 "systemctl restart hbbs-membrane hbbr-membrane"
+ssh root@$VPS_IP "systemctl restart hbbs-membrane hbbr-membrane"
 ```
 
 ### Get public key (for client config)
 ```bash
-ssh root@157.230.3.183 "cat /opt/membrane/rustdesk/id_ed25519.pub"
+ssh root@$VPS_IP "cat /opt/membrane/rustdesk/id_ed25519.pub"
 ```
 
 ### Client settings
 | Setting | Value |
 |---------|-------|
-| ID Server | 157.230.3.183 |
-| Relay Server | 157.230.3.183 |
+| ID Server | $VPS_IP |
+| Relay Server | $VPS_IP |
 | Key | (output of above command) |
 
 ---
@@ -109,30 +110,30 @@ ssh root@157.230.3.183 "cat /opt/membrane/rustdesk/id_ed25519.pub"
 
 ### View logs
 ```bash
-ssh root@157.230.3.183 "journalctl -u caddy -f"
+ssh root@$VPS_IP "journalctl -u caddy -f"
 ```
 
 ### Check certificate status
 ```bash
 # From local machine
-echo | openssl s_client -connect 157.230.3.183:443 -servername membrane.primals.eco 2>/dev/null | openssl x509 -noout -dates -issuer
+echo | openssl s_client -connect $VPS_IP:443 -servername membrane.primals.eco 2>/dev/null | openssl x509 -noout -dates -issuer
 ```
 
 ### Restart Caddy
 ```bash
-ssh root@157.230.3.183 "systemctl restart caddy"
+ssh root@$VPS_IP "systemctl restart caddy"
 ```
 
 ### Verify content cache
 ```bash
-ssh root@157.230.3.183 "du -sh /var/cache/membrane/nestgate/"
+ssh root@$VPS_IP "du -sh /var/cache/membrane/nestgate/"
 ```
 
 Expected: ~19 MB sporePrint content.
 
 ### Force certificate renewal
 ```bash
-ssh root@157.230.3.183 "caddy reload --config /etc/caddy/Caddyfile"
+ssh root@$VPS_IP "caddy reload --config /etc/caddy/Caddyfile"
 ```
 
 Caddy auto-renews via ACME. Manual renewal should rarely be needed.
@@ -157,20 +158,20 @@ UFW ports 53/tcp and 53/udp are open. Zone file configured for `primals.eco`.
 
 ### Remaining: NS cutover to primary
 
-1. Validate current resolution: `dig @157.230.3.183 primals.eco A`
-2. Update registrar NS records to include 157.230.3.183 as primary
+1. Validate current resolution: `dig @$VPS_IP primals.eco A`
+2. Update registrar NS records to include $VPS_IP as primary
 3. Monitor for 7+ days before removing commercial DNS fallback
 
 ### Validation
 ```bash
-dig @157.230.3.183 primals.eco A
-dig @157.230.3.183 membrane.primals.eco A
-dig @157.230.3.183 primals.eco NS
+dig @$VPS_IP primals.eco A
+dig @$VPS_IP membrane.primals.eco A
+dig @$VPS_IP primals.eco NS
 ```
 
 ### Primary cutover
 1. Validate secondary serving correct records for 7+ days
-2. Update registrar NS records to include 157.230.3.183
+2. Update registrar NS records to include $VPS_IP
 3. Remove commercial DNS after TTL expiry + monitoring period
 
 ---
@@ -181,7 +182,7 @@ dig @157.230.3.183 primals.eco NS
 
 ### Health check
 ```bash
-ssh root@157.230.3.183 "
+ssh root@$VPS_IP "
   systemctl is-active nestgate-membrane rhizocrypt-membrane loamspine-membrane sweetgrass-membrane
   echo '=== Nest Ports ==='
   ss -tlnp | grep -E '9500|9602|9700|9850'
@@ -194,7 +195,7 @@ ssh root@157.230.3.183 "
 
 | Service | Port | Health check |
 |---------|------|-------------|
-| nestgate-membrane | :9500 | `curl -s http://157.230.3.183:9500/health` |
+| nestgate-membrane | :9500 | `curl -s http://$VPS_IP:9500/health` |
 | rhizocrypt-membrane | :9602 (JSON-RPC) | `curl -s -X POST http://127.0.0.1:9602` |
 | loamspine-membrane | :9700 | `curl -s http://127.0.0.1:9700/health` |
 | sweetgrass-membrane | :9850 | TCP connection probe |
@@ -202,7 +203,7 @@ ssh root@157.230.3.183 "
 ### Redeployment (upgrade or recovery)
 ```bash
 cd ../../infra/plasmidBin
-./deploy_membrane.sh deploy root@157.230.3.183 --composition nest --validate
+./deploy_membrane.sh deploy root@$VPS_IP --composition nest --validate
 ```
 
 ---
@@ -224,14 +225,14 @@ Creates `membrane-credentials.age` encrypted with SSH ed25519 keys.
 
 ### Push encrypted blob to VPS
 ```bash
-./membrane/share_credentials.sh push root@157.230.3.183
+./membrane/share_credentials.sh push root@$VPS_IP
 ```
 
 Deploys to `/opt/membrane/credentials.age` on VPS.
 
 ### Pull and decrypt from VPS
 ```bash
-./membrane/share_credentials.sh pull root@157.230.3.183
+./membrane/share_credentials.sh pull root@$VPS_IP
 ```
 
 ### Credential contents
@@ -254,12 +255,12 @@ Deploys to `/opt/membrane/credentials.age` on VPS.
 ### List authorized keys
 ```bash
 cd ../../infra/plasmidBin
-./deploy_membrane.sh keys list root@157.230.3.183
+./deploy_membrane.sh keys list root@$VPS_IP
 ```
 
 ### Add a gate's key
 ```bash
-./deploy_membrane.sh keys add root@157.230.3.183 \
+./deploy_membrane.sh keys add root@$VPS_IP \
   --name "eastGate" \
   --pubkey "ssh-ed25519 AAAA..."
 ```
@@ -268,12 +269,12 @@ Keys are tagged in `authorized_keys` with `# gate:<name> added:<date>`.
 
 ### Revoke a gate's key
 ```bash
-./deploy_membrane.sh keys revoke root@157.230.3.183 --name "eastGate"
+./deploy_membrane.sh keys revoke root@$VPS_IP --name "eastGate"
 ```
 
 ### Audit keys manually
 ```bash
-ssh root@157.230.3.183 "cat /root/.ssh/authorized_keys"
+ssh root@$VPS_IP "cat /root/.ssh/authorized_keys"
 ```
 
 ---
@@ -282,12 +283,12 @@ ssh root@157.230.3.183 "cat /root/.ssh/authorized_keys"
 
 ### Service down — single service restart
 ```bash
-ssh root@157.230.3.183 "systemctl restart <unit-name>"
+ssh root@$VPS_IP "systemctl restart <unit-name>"
 ```
 
 ### Full Nest Atomic restart (preserves boot order)
 ```bash
-ssh root@157.230.3.183 "
+ssh root@$VPS_IP "
   systemctl restart beardog-membrane && sleep 2
   systemctl restart songbird-relay && sleep 2
   systemctl restart skunkbat-membrane && sleep 2

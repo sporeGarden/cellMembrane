@@ -13,7 +13,7 @@
 #   ./forgejo_pull_mirror.sh --status           # Show mirror status for all repos
 #
 # Requires: FORGEJO_TOKEN env var, curl, python3
-# cellMembrane is excluded — it's inner-only (direct push, not mirrored from GitHub)
+# cellMembrane is excluded — it's direct-push to Forgejo (not mirrored from GitHub)
 
 set -uo pipefail
 
@@ -56,7 +56,7 @@ fi
 
 declare -A REPOS
 # Format: "forgejo_org/repo_name" -> "github_org/repo_name"
-# cellMembrane EXCLUDED — inner-only, not mirrored from GitHub
+# cellMembrane EXCLUDED — direct-push to Forgejo, not mirrored from GitHub
 
 # gardens (sporeGarden)
 REPOS["sporeGarden/projectNUCLEUS"]="sporeGarden/projectNUCLEUS"

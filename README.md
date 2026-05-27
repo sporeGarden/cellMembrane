@@ -1,13 +1,13 @@
 # cellMembrane
 
-**Private operational repo for the cellMembrane fieldMouse deployment — the sovereign external surface of the ecoPrimals ecosystem.**
+**Operational repo + typed Rust library for the cellMembrane — sovereign external surface of the ecoPrimals ecosystem.**
 
 | | |
 |-|-|
 | **Owner** | cellMembrane team (ironGate) |
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
-| **VPS** | `membrane-relay`, 157.230.3.183, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
+| **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | Nest Atomic (Tower + NestGate + rhizoCrypt + loamSpine + sweetGrass) + RustDesk |
 | **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 38, 2026-05-22) |
 
@@ -82,7 +82,7 @@ validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
 | `forgejo_sync.sh` | Sync non-mirror repos GitHub → Forgejo |
 | `forgejo_pull_mirror.sh` | Bulk Forgejo pull-mirror management |
 
-**This repo is private.** Classified as inner-membrane-only per `REPO_MEMBRANE_BOUNDARY.md` — Forgejo is the target remote; GitHub mirror is transitional.
+Forgejo is the primary remote; GitHub is the public mirror. See `REPO_MEMBRANE_BOUNDARY.md` for classification.
 
 ---
 
@@ -91,24 +91,24 @@ validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
 ```bash
 # Check cellMembrane status (all channels + services)
 cd ../../infra/plasmidBin
-./deploy_membrane.sh status root@157.230.3.183
+./deploy_membrane.sh status root@$VPS_IP
 
 # SSH to VPS
-ssh root@157.230.3.183
+ssh root@$VPS_IP
 
 # View Tower logs (BearDog → Songbird → SkunkBat)
-ssh root@157.230.3.183 "journalctl -u beardog-membrane -u songbird-relay -u skunkbat-membrane -f"
+ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-relay -u skunkbat-membrane -f"
 
 # View Nest Atomic logs (provenance trio)
-ssh root@157.230.3.183 "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loamspine-membrane -u sweetgrass-membrane -f"
+ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loamspine-membrane -u sweetgrass-membrane -f"
 
 # View RustDesk logs
-ssh root@157.230.3.183 "journalctl -u hbbs-membrane -u hbbr-membrane -f"
+ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 
 # Manage SSH keys for multi-gate access
-./deploy_membrane.sh keys list root@157.230.3.183
-./deploy_membrane.sh keys add root@157.230.3.183 --name "friend-gate" --pubkey "ssh-ed25519 AAAA..."
-./deploy_membrane.sh keys revoke root@157.230.3.183 --name "friend-gate"
+./deploy_membrane.sh keys list root@$VPS_IP
+./deploy_membrane.sh keys add root@$VPS_IP --name "friend-gate" --pubkey "ssh-ed25519 AAAA..."
+./deploy_membrane.sh keys revoke root@$VPS_IP --name "friend-gate"
 ```
 
 ---
@@ -188,9 +188,9 @@ rendezvous and relay:
 
 | Setting | Value |
 |---------|-------|
-| ID Server | `157.230.3.183` |
-| Relay Server | `157.230.3.183` |
-| Key | `YxLlA1Nb6mlH5FmcCQod6kDD6bIcXT5R3ex1CAFogMU=` |
+| ID Server | `$VPS_IP` |
+| Relay Server | `$VPS_IP` |
+| Key | (from `/opt/membrane/rustdesk/id_ed25519.pub` on VPS) |
 
 Server public key stored at `/opt/membrane/rustdesk/id_ed25519.pub` on the VPS.
 
