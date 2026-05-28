@@ -1,7 +1,7 @@
 # VPS State Snapshot
 
 **Last updated:** 2026-05-28
-**Deployed composition:** Nest Atomic (Wave 38, deployed 2026-05-22)
+**Deployed composition:** NUCLEUS (Wave 59, deployed 2026-05-28) — 13 primals + 4 symbiotic
 **VPS transport:** UDS-only (Wave 56 standard) — NUCLEUS primals on Unix domain sockets, zero TCP ports
 **VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
@@ -22,7 +22,9 @@
 
 ---
 
-## Running Services (14 services, 7 primals)
+## Running Services (20 services, 13 primals)
+
+### Tower Tier (identity + relay + audit)
 
 | Service | Unit Name | Status | Port / Socket | Version |
 |---------|-----------|--------|---------------|---------|
@@ -30,18 +32,55 @@
 | BearDog TLS shadow | `beardog-tls-shadow` | ACTIVE | :8443 | v0.9.0 |
 | Songbird TURN | `songbird-relay` | ACTIVE | :3478 tcp/udp | v0.2.1 |
 | SkunkBat | `skunkbat-membrane` | ACTIVE | 127.0.0.1:9140 | — |
-| NestGate | `nestgate-membrane` | ACTIVE | :9500 | v2.1.0 |
-| rhizoCrypt | `rhizocrypt-membrane` | ACTIVE | :9602 | v0.14.0 |
-| loamSpine | `loamspine-membrane` | ACTIVE | :9700 | v0.9.16 |
-| sweetGrass | `sweetgrass-membrane` | ACTIVE | :9850 | v0.7.34 |
+
+### Node Tier (compute) — NEW Wave 59
+
+| Service | Unit Name | Status | Port / Socket | Version |
+|---------|-----------|--------|---------------|---------|
+| toadStool | `toadstool-membrane` | ACTIVE | `/tmp/biomeos/compute-tarpc.sock` | v0.2.0 |
+| barraCuda | `barracuda-membrane` | ACTIVE | `/run/membrane/barracuda.sock` | v0.4.0 |
+| coralReef | `coralreef-membrane` | ACTIVE | `/run/membrane/coralreef.sock` | v0.2.0 |
+
+### Nest Tier (provenance)
+
+| Service | Unit Name | Status | Port / Socket | Version |
+|---------|-----------|--------|---------------|---------|
+| NestGate | `nestgate-membrane` | ACTIVE | `/run/membrane/nestgate.sock` + :9500 | v2.1.0 |
+| rhizoCrypt | `rhizocrypt-membrane` | ACTIVE | `/run/membrane/rhizocrypt.sock` + :9602 | v0.14.0 |
+| loamSpine | `loamspine-membrane` | ACTIVE | `/run/membrane/loamspine.sock` + :9700 | v0.9.16 |
+| sweetGrass | `sweetgrass-membrane` | ACTIVE | `/run/membrane/sweetgrass.sock` + :9850 | v0.7.34 |
+
+### Meta Tier (orchestration) — NEW Wave 59
+
+| Service | Unit Name | Status | Port / Socket | Version |
+|---------|-----------|--------|---------------|---------|
+| biomeOS | `biomeos-membrane` | ACTIVE | `/run/membrane/biomeos.sock` | v0.1.0 |
+| squirrel | `squirrel-membrane` | ACTIVE | `/run/membrane/squirrel.sock` | v0.1.0 |
+| petalTongue | `petaltongue-membrane` | ACTIVE | `/run/membrane/petaltongue.sock` | v1.6.6 |
+
+### Symbiotic (non-ecoPrimal)
+
+| Service | Unit Name | Status | Port / Socket | Version |
+|---------|-----------|--------|---------------|---------|
 | RustDesk hbbs | `hbbs-membrane` | ACTIVE | :21115-21116 | — |
 | RustDesk hbbr | `hbbr-membrane` | ACTIVE | :21117 | — |
 | Caddy | `caddy-tls` | ACTIVE | :80/:443 | — |
-| petalTongue | `petaltongue-web` | ACTIVE | :8080 | — |
 | fail2ban | `fail2ban` | ACTIVE | — | — |
 | knot-dns | `knot` | ACTIVE | :53 tcp/udp | DNSSEC enabled |
 
-**Boot order constraint (systemd):** BearDog → Songbird → SkunkBat → NestGate → rhizoCrypt → loamSpine → sweetGrass
+### Capability Symlinks (auto-created at runtime)
+
+| Symlink | Target | Capability |
+|---------|--------|------------|
+| `/run/membrane/btsp.sock` | beardog.sock | BTSP identity |
+| `/run/membrane/crypto.sock` | beardog.sock | Cryptographic ops |
+| `/run/membrane/security.sock` | beardog.sock | Security boundary |
+| `/run/membrane/ed25519.sock` | beardog.sock | Ed25519 signing |
+| `/run/membrane/x25519.sock` | beardog.sock | X25519 key exchange |
+| `/run/membrane/ai.sock` | squirrel.sock | AI inference |
+| `/run/membrane/visualization.sock` | petaltongue.sock | Visualization |
+
+**Boot order (systemd):** BearDog → Songbird → SkunkBat → toadStool → barraCuda → coralReef → NestGate → rhizoCrypt → loamSpine → sweetGrass → biomeOS → squirrel → petalTongue
 
 ---
 
@@ -124,13 +163,18 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 
 | Check | Result | Date |
 |-------|--------|------|
-| Dark Forest audit | 21 PASS, 0 FAIL, 1 SKIP (MEM-09 b3sum) | 2026-05-22 |
+| NUCLEUS deploy (13 primals) | ALL ACTIVE, UDS sockets healthy | 2026-05-28 |
+| biomeOS health.liveness | healthy (JSON-RPC over UDS) | 2026-05-28 |
+| Spring overlay graph validation | 14 nodes parsed, validated | 2026-05-28 |
+| Dark Forest audit (Nest) | 21 PASS, 0 FAIL, 1 SKIP (MEM-09 b3sum) | 2026-05-22 |
 | Provenance trio pipeline | 10/10 PASS | 2026-05-22 |
 | Shadow orchestrator | 6/6 PASS | 2026-05-22 |
-| `deploy_membrane.sh status` | All 11 services RUNNING | 2026-05-22 |
-| `cargo test` (cellmembrane-types) | 175 PASS, 0 FAIL, 0 clippy warnings (NUCLEUS typed) | 2026-05-28 |
+| `deploy_membrane.sh status` | All 17 services RUNNING | 2026-05-28 |
+| `cargo test` (cellmembrane-types) | 175 PASS, 0 FAIL, 0 clippy warnings | 2026-05-28 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
+
+**Pending re-validation (NUCLEUS):** Dark Forest audit with 13 primals, provenance pipeline with full NUCLEUS.
 
 ---
 
