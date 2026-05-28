@@ -2,7 +2,7 @@
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
 **Last validated:** Phase 1.5 (Nest Atomic, Wave 38 — 2026-05-22)
-**Updated:** 2026-05-27 (Wave 55 NC-3 alignment)
+**Updated:** 2026-05-27 (Wave 56 VPS deployment standard + deep debt sprint)
 
 ---
 
@@ -38,7 +38,7 @@ ssh root@$VPS_IP "
   echo '=== RustDesk ==='
   systemctl is-active hbbs-membrane hbbr-membrane
   echo '=== Channel 3 Surface ==='
-  systemctl is-active caddy
+  systemctl is-active caddy-tls
   echo '=== Channel 1 Signal (DNS) ==='
   systemctl is-active knot
   echo '=== Security ==='
@@ -57,7 +57,10 @@ dig @$VPS_IP primals.eco DNSKEY  # DNSSEC
 # 8. Verify Nest data directories
 ssh root@$VPS_IP "ls -la /var/lib/membrane/ && du -sh /var/cache/membrane/nestgate/"
 
-# 9. TTFB sovereignty check
+# 9. Verify UDS sockets (Wave 56 VPS standard)
+ssh root@$VPS_IP "ls -la /run/membrane/*.sock"
+
+# 10. TTFB sovereignty check
 curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s https://membrane.primals.eco/
 ```
 
@@ -75,6 +78,7 @@ All checks must pass:
 - [ ] knot-dns active, DNSSEC responding
 - [ ] `membrane.primals.eco` resolves and serves HTTPS
 - [ ] sporePrint content cache present (~19 MB)
+- [ ] UDS sockets present at `/run/membrane/*.sock` (Wave 56 VPS standard)
 - [ ] TTFB ≤ 100ms (sovereignty parity with GitHub Pages)
 - [ ] `fail2ban` protecting SSH
 - [ ] UFW shows 16+ ALLOW rules (22, 53×2, 80, 443, 3478×2, 8443, 9500, 9602, 9700, 9850, 21115, 21116×2, 21117)

@@ -88,7 +88,7 @@ True CI sovereignty requires Forgejo Actions to own the dispatch plane.
 All 5 plasmidBin workflows evolved to sovereign-first `runs-on` strategy. `validate.yml`
 uses raw git checkout — zero marketplace action dependency, survives codeload outages.
 
-**Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_SELF_HOSTED_RUNNERS_WAVE50_MAY26_2026.md`
+**Handoff:** `infra/wateringHole/handoffs/archive/CELLMEMBRANE_SELF_HOSTED_RUNNERS_WAVE50_MAY26_2026.md`
 
 **Acceptance:**
 - [x] ironGate runner online (org-level): `irongate-runner online self-hosted,Linux,X64,x86_64,irongate,lan`
@@ -106,7 +106,7 @@ cellMembrane formalized from operational docs + bash into a typed Rust system.
 5 spec documents define the architecture, composition model, fieldMouse contract,
 multi-membrane deployment, and K-Derm cell envelope topology. `cellmembrane-types`
 crate provides typed config parsing, firewall derivation, envelope topology, and
-validation — **80 tests** across 6 domain test modules, **zero clippy warnings**.
+validation — **93 tests** across 7 domain test modules, **zero clippy warnings**.
 
 Gap analysis against `darkforest_membrane.sh` (MEM-01..17) and `s_membrane_composition.rs`
 (Pillar 4 telemetry) closed 5 gaps: journald persistence, credential file inventory,
@@ -122,7 +122,7 @@ typed `ShadowMode` enum (replaced stringly-typed), capability-derived boundary
 policies (layers declare bonds, policies assemble from capabilities), all clippy
 warnings resolved, `default_true` deduplicated, tests smart-refactored by domain.
 
-**Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_FORMALIZATION_WAVE50_MAY26_2026.md`
+**Handoff:** `infra/wateringHole/handoffs/archive/CELLMEMBRANE_FORMALIZATION_WAVE50_MAY26_2026.md`
 
 **Deliverables:**
 - [x] `specs/CELLMEMBRANE_ARCHITECTURE.md` — 3-channel model, crypto layers, firewall policy, K-Derm section
@@ -130,7 +130,7 @@ warnings resolved, `default_true` deduplicated, tests smart-refactored by domain
 - [x] `specs/FIELDMOUSE_CONTRACT.md` — third-party deployment contract
 - [x] `specs/MULTI_MEMBRANE_DEPLOYMENT.md` — provider abstraction, multi-region
 - [x] `specs/K_DERM_TOPOLOGY.md` — monoderm/diderm, periplasm, bonding, channel proteins, vesicle transport
-- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (80 tests, 6 modules)
+- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (93 tests, 7 modules)
 - [x] `membrane.toml` — reference config for live VPS deployment
 - [x] Gap closure: 5 Dark Forest audit gaps closed in types
 - [x] Debt resolution: static registry, typed ShadowMode, capability-based derivation, clippy-clean
@@ -172,7 +172,7 @@ hardcoded `/opt/biomeos/bin` and `"default"` network references centralized,
 9 `println!` → tracing, unsafe FFI `dhcp_leases.rs` evolved to safe `Option<&CStr>`
 API, call sites no longer touch raw pointers.
 
-**Handoff:** `infra/wateringHole/handoffs/CELLMEMBRANE_DEEP_DEBT_WAVE51_MAY26_2026.md`
+**Handoff:** `infra/wateringHole/handoffs/archive/CELLMEMBRANE_DEEP_DEBT_WAVE51_MAY26_2026.md`
 
 ### Wave 56: VPS Deployment Standard Absorption
 
@@ -202,7 +202,7 @@ primalSpring `s_kderm_boundary` live validation can activate against this config
 - [x] `membrane.toml` → `composition = "nest"`, `topology = "diderm"`
 - [x] Signal channel enabled: `knot-dns` :53, `dnssec = true`
 - [x] Integration tests updated: `parse_reference_membrane_toml` expects `Nest`, signal `enabled = true`
-- [x] 80/80 tests pass, 0 clippy warnings
+- [x] 93/93 tests pass, 0 clippy warnings
 
 ### NC-3.4: Forgejo Releases (Criteria #6 enabler)
 

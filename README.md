@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | Nest Atomic (Tower + NestGate + rhizoCrypt + loamSpine + sweetGrass) + RustDesk |
-| **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 38, 2026-05-22) |
+| **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 56, 2026-05-27) |
 
 ---
 
@@ -54,14 +54,20 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 80 tests — envelope, composition, channels, firewall, service, config, validation
+cargo test                  # 93 tests — envelope, composition, channels, firewall, service, transport, config, validation
 cargo clippy                # Zero warnings, #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation
 ```
 
-Wave 51 deep debt: `FirewallRule.comment` zero-allocation (`&'static str`),
-supplementary ports in service registry (hbbs 21115, caddy 80 — no more
-special cases), output-only types drop `Deserialize`.
+**Wave 56:** `TransportMode` enum (UDS-only / TCP default / TCP opt-in) for VPS
+deployment standard. `HealthCheckMethod::SocketExists` for UDS socket checks.
+`CompositionSpec::uds_socket_paths()` and `tcp_ports_uds_mode()` helpers.
+13 transport-specific tests covering serde roundtrip, service classification,
+socket path conventions, and composition-level UDS queries.
+
+Wave 51: `FirewallRule.comment` zero-allocation (`&'static str`),
+supplementary ports in service registry (hbbs 21115, caddy 80),
+output-only types drop `Deserialize`.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
@@ -82,7 +88,7 @@ validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
 | `forgejo_sync.sh` | Sync non-mirror repos GitHub → Forgejo |
 | `forgejo_pull_mirror.sh` | Bulk Forgejo pull-mirror management |
 
-Forgejo is the primary remote; GitHub is the public mirror. See `REPO_MEMBRANE_BOUNDARY.md` for classification.
+Forgejo is the primary remote; GitHub is the public mirror. See `infra/wateringHole/REPO_MEMBRANE_BOUNDARY.md` for classification.
 
 ---
 
@@ -132,6 +138,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Provenance trio pipeline: 10/10 PASS on VPS | DONE |
 | Shadow orchestrator: 6/6 PASS | DONE |
 | NestGate :9500, rhizoCrypt :9602, loamSpine :9700, sweetGrass :9850 | DONE |
+| VPS deployment standard (Wave 56): UDS-only, TransportMode typed | DONE |
 
 ---
 
@@ -153,7 +160,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0 | Relay only | Superseded |
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
-| **1.5** | **Nest Atomic + Channel 1 DNS + TLS** | **Current** (Wave 38, 2026-05-22) |
+| **1.5** | **Nest Atomic + Channel 1 DNS + TLS + VPS Standard** | **Current** (Wave 56, 2026-05-27) |
 | 2 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
@@ -222,6 +229,7 @@ gardens/cellMembrane/
         envelope.rs           # K-Derm topology, layers, bonding, policies (27 tests)
         firewall.rs           # UFW derivation per composition (5 tests)
         service.rs            # Registry, binary integrity, credentials (15 tests)
+        transport.rs          # TransportMode, UDS helpers, health checks (13 tests)
         integration.rs        # Cross-module: config parsing, validation, topology (23 tests)
   specs/                      # Formal architecture specs (5 documents)
   README.md
@@ -245,10 +253,11 @@ cellMembrane K-Derm topology is validated by the ecosystem's testing infrastruct
 | benchScale | `infra/benchScale/` | Reproducible isolated test environments, K-Derm diderm topology in `topologies/nucleus/` |
 | agentReagents | `infra/agentReagents/` | Manifest-driven VM image building, `plasmidBin` integration |
 
-Both are mature Rust codebases converged into `infra/` as of Wave 51 (308 + 113 tests).
-Deep debt sprint: `println!`→tracing, deploy paths centralized via env vars,
-hardcoded `"default"` network deduplicated, unsafe FFI evolved to safe API,
-`PciAttachMode` enum, verification types documented.
+Both are mature Rust codebases converged into `infra/` as of Wave 51 (272 + 94 tests).
+Deep debt sprint (Wave 56): benchScale `senescence.rs` smart refactored (829L → types + mod),
+`BackendType` String → enum, TTY-safe build pause, `DEFAULT_DEPLOY_DIR` evolved to `/opt/plasmidBin`.
+agentReagents `CloudInitStatusInfo.status` String → typed `CloudInitStatus` enum.
+plasmidBin remote dir centralized via `ECOPRIMALS_PLASMID_BIN` env var, stale socket dirs updated.
 
 ---
 

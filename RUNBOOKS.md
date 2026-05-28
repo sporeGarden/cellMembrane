@@ -39,7 +39,7 @@ ssh root@$VPS_IP "
   echo '=== RustDesk ==='
   systemctl is-active hbbs-membrane hbbr-membrane
   echo '=== Surface + DNS ==='
-  systemctl is-active caddy knot
+  systemctl is-active caddy-tls knot
   echo '=== Firewall ==='
   ufw status | grep -c ALLOW
   echo '=== Disk ==='
@@ -123,7 +123,7 @@ echo | openssl s_client -connect $VPS_IP:443 -servername membrane.primals.eco 2>
 
 ### Restart Caddy
 ```bash
-ssh root@$VPS_IP "systemctl restart caddy"
+ssh root@$VPS_IP "systemctl restart caddy-tls"
 ```
 
 ### Verify content cache
