@@ -40,6 +40,13 @@ primal = "caddy"
 tls_domain = "membrane.primals.eco"
 acme_email = "ops@primals.eco"
 
+[membrane.channels.surface.lab]
+enabled = true
+domain = "lab.primals.eco"
+cache_root = "/var/cache/membrane/lab"
+static_content = true
+interactive_proxy = "gate"
+
 [membrane.credentials]
 model = "age"
 

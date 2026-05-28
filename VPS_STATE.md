@@ -127,8 +127,10 @@
 | `/opt/membrane/rustdesk/` | RustDesk keys and working directory |
 | `/etc/songbird/relay-credentials` | TURN credentials (nucleus-relay:<hex>) |
 | `/etc/membrane/` | Tower configuration |
+| `/etc/membrane/Caddyfile` | Channel 3 Caddy config (SSOT: `plasmidBin/membrane/Caddyfile`) |
 | `/run/membrane/` | Unix domain sockets (BearDog, SkunkBat) |
 | `/var/cache/membrane/nestgate/` | sporePrint content cache (19 MB synced from NestGate) |
+| `/var/cache/membrane/lab/` | Static lab page root (intra layer — ecosystem dashboard) |
 | `/var/lib/membrane/nestgate` | NestGate data directory |
 | `/var/lib/membrane/loamspine` | loamSpine data directory |
 

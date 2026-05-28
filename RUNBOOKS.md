@@ -112,7 +112,7 @@ ssh root@$VPS_IP "cat /opt/membrane/rustdesk/id_ed25519.pub"
 
 ### View logs
 ```bash
-ssh root@$VPS_IP "journalctl -u caddy -f"
+ssh root@$VPS_IP "journalctl -u caddy-tls -f"
 ```
 
 ### Check certificate status
@@ -128,14 +128,27 @@ ssh root@$VPS_IP "systemctl restart caddy-tls"
 
 ### Verify content cache
 ```bash
-ssh root@$VPS_IP "du -sh /var/cache/membrane/nestgate/"
+ssh root@$VPS_IP "du -sh /var/cache/membrane/nestgate/ /var/cache/membrane/lab/"
 ```
 
-Expected: ~19 MB sporePrint content.
+Expected: ~19 MB sporePrint content, lab content varies.
+
+### Deploy updated Caddyfile
+```bash
+# SSOT: infra/plasmidBin/membrane/Caddyfile → /etc/membrane/Caddyfile on VPS
+scp plasmidBin/membrane/Caddyfile root@$VPS_IP:/etc/membrane/Caddyfile
+ssh root@$VPS_IP "/opt/membrane/caddy validate --config /etc/membrane/Caddyfile && systemctl reload caddy-tls"
+```
+
+### Sync lab static content to VPS
+```bash
+rsync -avz --delete /path/to/lab/export/ root@$VPS_IP:/var/cache/membrane/lab/
+ssh root@$VPS_IP "systemctl reload caddy-tls"
+```
 
 ### Force certificate renewal
 ```bash
-ssh root@$VPS_IP "caddy reload --config /etc/caddy/Caddyfile"
+ssh root@$VPS_IP "/opt/membrane/caddy reload --config /etc/membrane/Caddyfile"
 ```
 
 Caddy auto-renews via ACME. Manual renewal should rarely be needed.
