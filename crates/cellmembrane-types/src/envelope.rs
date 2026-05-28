@@ -14,6 +14,15 @@ use std::fmt;
 ///
 /// Monoderm = single boundary (gate firewall only).
 /// Diderm = double boundary (gate firewall + VPS outer membrane, with periplasm).
+///
+/// ```
+/// use cellmembrane_types::EnvelopeTopology;
+///
+/// let topo = EnvelopeTopology::Diderm;
+/// assert_eq!(topo.boundary_count(), 2);
+/// assert!(topo.has_periplasm());
+/// assert_eq!(topo.layers().len(), 5);
+/// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EnvelopeTopology {
@@ -26,12 +35,14 @@ pub enum EnvelopeTopology {
 
 impl EnvelopeTopology {
     /// Returns all topology variants.
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         &[Self::Monoderm, Self::Diderm]
     }
 
     /// Layers present in this topology, ordered inside-out.
-    pub fn layers(&self) -> &'static [EnvelopeLayer] {
+    #[must_use]
+    pub const fn layers(&self) -> &'static [EnvelopeLayer] {
         match self {
             Self::Monoderm => &[
                 EnvelopeLayer::Cytoplasm,
@@ -50,12 +61,14 @@ impl EnvelopeTopology {
 
     /// Number of membrane boundaries (selectively permeable layers) in this topology.
     /// Derived from the layer list — not hardcoded per variant.
+    #[must_use]
     pub fn boundary_count(&self) -> usize {
         self.layers().iter().filter(|l| l.is_boundary()).count()
     }
 
     /// Number of periplasmic spaces (compartments between adjacent boundaries).
     /// Derived from the layer list.
+    #[must_use]
     pub fn periplasm_count(&self) -> usize {
         self.layers()
             .iter()
@@ -65,19 +78,29 @@ impl EnvelopeTopology {
 
     /// Whether a VPS relay/periplasm layer exists.
     /// Discovered from layer capabilities, not hardcoded.
+    #[must_use]
     pub fn has_periplasm(&self) -> bool {
         self.layers().contains(&EnvelopeLayer::Periplasm)
     }
 
     /// Boundary layers present in this topology, ordered inside-out.
+    #[must_use]
     pub fn boundaries(&self) -> Vec<EnvelopeLayer> {
-        self.layers().iter().copied().filter(|l| l.is_boundary()).collect()
+        self.layers()
+            .iter()
+            .copied()
+            .filter(EnvelopeLayer::is_boundary)
+            .collect()
     }
 
     /// Default boundary policies for this topology.
     /// Each boundary layer derives its policy from its own capabilities.
+    #[must_use]
     pub fn default_boundaries(&self) -> Vec<BoundaryPolicy> {
-        self.boundaries().into_iter().map(BoundaryPolicy::for_layer).collect()
+        self.boundaries()
+            .into_iter()
+            .map(BoundaryPolicy::for_layer)
+            .collect()
     }
 }
 
@@ -113,7 +136,8 @@ pub enum EnvelopeLayer {
 
 impl EnvelopeLayer {
     /// Returns all layers in inside-out order.
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         &[
             Self::Cytoplasm,
             Self::PlasmaMembrane,
@@ -124,17 +148,23 @@ impl EnvelopeLayer {
     }
 
     /// Whether this layer is a membrane boundary (selectively permeable).
-    pub fn is_boundary(&self) -> bool {
+    #[must_use]
+    pub const fn is_boundary(&self) -> bool {
         matches!(self, Self::PlasmaMembrane | Self::OuterMembrane)
     }
 
     /// Whether this layer is a compartment (contains processes/routing).
-    pub fn is_compartment(&self) -> bool {
-        matches!(self, Self::Cytoplasm | Self::Periplasm | Self::Extracellular)
+    #[must_use]
+    pub const fn is_compartment(&self) -> bool {
+        matches!(
+            self,
+            Self::Cytoplasm | Self::Periplasm | Self::Extracellular
+        )
     }
 
     /// Bond types that may cross into this layer from outside.
-    pub fn permitted_inbound_bonds(&self) -> &'static [BondType] {
+    #[must_use]
+    pub const fn permitted_inbound_bonds(&self) -> &'static [BondType] {
         match self {
             Self::Cytoplasm => &[BondType::Covalent],
             Self::PlasmaMembrane => &[BondType::Covalent, BondType::Metallic],
@@ -177,7 +207,8 @@ pub enum BondType {
 
 impl BondType {
     /// Returns all bond types ordered by trust level (highest first).
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         &[
             Self::Covalent,
             Self::Metallic,
@@ -188,10 +219,10 @@ impl BondType {
     }
 
     /// Channel protein that mediates this bond type at a membrane boundary.
-    pub fn channel_protein(&self) -> ChannelProtein {
+    #[must_use]
+    pub const fn channel_protein(&self) -> ChannelProtein {
         match self {
-            Self::Covalent => ChannelProtein::Aquaporin,
-            Self::Metallic => ChannelProtein::Aquaporin,
+            Self::Covalent | Self::Metallic => ChannelProtein::Aquaporin,
             Self::Ionic => ChannelProtein::GatedIon,
             Self::Ceremony => ChannelProtein::VoltageGated,
             Self::Weak => ChannelProtein::PassiveDiffusion,
@@ -229,7 +260,8 @@ pub enum ChannelProtein {
 
 impl ChannelProtein {
     /// Returns all channel protein variants.
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         &[
             Self::Aquaporin,
             Self::GatedIon,
@@ -239,7 +271,8 @@ impl ChannelProtein {
     }
 
     /// Bond types this channel protein permits.
-    pub fn permitted_bonds(&self) -> &'static [BondType] {
+    #[must_use]
+    pub const fn permitted_bonds(&self) -> &'static [BondType] {
         match self {
             Self::Aquaporin => &[BondType::Covalent, BondType::Metallic],
             Self::GatedIon => &[BondType::Ionic],
@@ -260,7 +293,7 @@ impl fmt::Display for ChannelProtein {
     }
 }
 
-/// How braid (sweetGrass provenance attribution) is handled when crossing
+/// How braid (`sweetGrass` provenance attribution) is handled when crossing
 /// a membrane boundary — the vesicle transport policy.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -276,7 +309,8 @@ pub enum BraidPolicy {
 
 impl BraidPolicy {
     /// Default braid policy for a given bond type.
-    pub fn for_bond(bond: BondType) -> Self {
+    #[must_use]
+    pub const fn for_bond(bond: BondType) -> Self {
         match bond {
             BondType::Covalent | BondType::Metallic => Self::PassThrough,
             BondType::Ionic | BondType::Ceremony => Self::Verify,
@@ -313,19 +347,17 @@ impl BoundaryPolicy {
     /// Derive the default policy for any boundary layer from its own properties.
     /// The layer itself declares what bonds it permits; the policy is assembled
     /// from those capabilities rather than hardcoded per named membrane.
+    #[must_use]
     pub fn for_layer(layer: EnvelopeLayer) -> Self {
         let permitted_bonds = layer.permitted_inbound_bonds().to_vec();
 
         let mut proteins: Vec<ChannelProtein> = permitted_bonds
             .iter()
-            .map(|b| b.channel_protein())
+            .map(BondType::channel_protein)
             .collect();
         proteins.dedup();
 
-        let strongest_bond = permitted_bonds
-            .first()
-            .copied()
-            .unwrap_or(BondType::Weak);
+        let strongest_bond = permitted_bonds.first().copied().unwrap_or(BondType::Weak);
 
         Self {
             layer,
@@ -336,21 +368,25 @@ impl BoundaryPolicy {
     }
 
     /// Named constructor preserved for readability — delegates to `for_layer`.
+    #[must_use]
     pub fn plasma_membrane() -> Self {
         Self::for_layer(EnvelopeLayer::PlasmaMembrane)
     }
 
     /// Named constructor preserved for readability — delegates to `for_layer`.
+    #[must_use]
     pub fn outer_membrane() -> Self {
         Self::for_layer(EnvelopeLayer::OuterMembrane)
     }
 
     /// Whether a given bond type is permitted at this boundary.
+    #[must_use]
     pub fn permits_bond(&self, bond: BondType) -> bool {
         self.permitted_bonds.contains(&bond)
     }
 
     /// Whether a given channel protein is active at this boundary.
+    #[must_use]
     pub fn has_channel_protein(&self, protein: ChannelProtein) -> bool {
         self.channel_proteins.contains(&protein)
     }

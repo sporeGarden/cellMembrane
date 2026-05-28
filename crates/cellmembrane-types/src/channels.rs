@@ -6,6 +6,7 @@
 //! each with distinct trust levels, crypto layers, and port policies. See
 //! `specs/CELLMEMBRANE_ARCHITECTURE.md` for the full specification.
 
+use crate::default_true;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -20,18 +21,20 @@ pub enum MembraneChannel {
     Signal,
     /// Channel 2: NAT traversal / TURN relay (Songbird, port 3478).
     Relay,
-    /// Channel 3: HTTPS / content delivery (Caddy + NestGate, ports 80/443).
+    /// Channel 3: HTTPS / content delivery (Caddy + `NestGate`, ports 80/443).
     Surface,
 }
 
 impl MembraneChannel {
     /// Returns all channel variants.
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         &[Self::Signal, Self::Relay, Self::Surface]
     }
 
     /// Default port(s) for this channel.
-    pub fn default_ports(&self) -> &'static [u16] {
+    #[must_use]
+    pub const fn default_ports(&self) -> &'static [u16] {
         match self {
             Self::Signal => &[53],
             Self::Relay => &[3478],
@@ -40,7 +43,8 @@ impl MembraneChannel {
     }
 
     /// Default primal name for this channel.
-    pub fn default_primal(&self) -> &'static str {
+    #[must_use]
+    pub const fn default_primal(&self) -> &'static str {
         match self {
             Self::Signal => "knot-dns",
             Self::Relay => "songbird",
@@ -49,7 +53,8 @@ impl MembraneChannel {
     }
 
     /// Trust level for this channel.
-    pub fn trust_level(&self) -> TrustLevel {
+    #[must_use]
+    pub const fn trust_level(&self) -> TrustLevel {
         match self {
             Self::Signal => TrustLevel::Public,
             Self::Relay => TrustLevel::Medium,
@@ -58,7 +63,8 @@ impl MembraneChannel {
     }
 
     /// Default crypto layer for this channel.
-    pub fn default_crypto(&self) -> CryptoLayer {
+    #[must_use]
+    pub const fn default_crypto(&self) -> CryptoLayer {
         match self {
             Self::Signal => CryptoLayer::None,
             Self::Relay => CryptoLayer::TurnHmac,
@@ -171,5 +177,3 @@ impl Default for ChannelConfig {
         }
     }
 }
-
-use crate::default_true;

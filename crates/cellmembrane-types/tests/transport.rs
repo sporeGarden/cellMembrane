@@ -169,7 +169,10 @@ fn tower_uds_socket_paths_covers_primals() {
 fn tower_tcp_ports_uds_mode_includes_ssh() {
     let spec = MembraneComposition::Tower.spec();
     let ports = spec.tcp_ports_uds_mode();
-    assert!(ports.contains(&22), "UDS-mode TCP ports should always include SSH (22)");
+    assert!(
+        ports.contains(&22),
+        "UDS-mode TCP ports should always include SSH (22)"
+    );
 }
 
 #[test]

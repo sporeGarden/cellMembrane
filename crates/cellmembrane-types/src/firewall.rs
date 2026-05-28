@@ -5,18 +5,39 @@
 //! Given a [`MembraneComposition`], produces the exact set of UFW rules.
 //! The firewall is composition-deterministic — no manual port management.
 
-use crate::composition::MembraneComposition;
+use crate::composition::{MembraneComposition, SSH_PORT};
 use crate::service::Protocol;
 use serde::Serialize;
 use std::fmt;
 
-fn push_port_rules(rules: &mut Vec<FirewallRule>, port: u16, proto: Protocol, comment: &'static str) {
+fn push_port_rules(
+    rules: &mut Vec<FirewallRule>,
+    port: u16,
+    proto: Protocol,
+    comment: &'static str,
+) {
     match proto {
-        Protocol::Tcp => rules.push(FirewallRule { port, protocol: FirewallProtocol::Tcp, comment }),
-        Protocol::Udp => rules.push(FirewallRule { port, protocol: FirewallProtocol::Udp, comment }),
+        Protocol::Tcp => rules.push(FirewallRule {
+            port,
+            protocol: FirewallProtocol::Tcp,
+            comment,
+        }),
+        Protocol::Udp => rules.push(FirewallRule {
+            port,
+            protocol: FirewallProtocol::Udp,
+            comment,
+        }),
         Protocol::TcpAndUdp => {
-            rules.push(FirewallRule { port, protocol: FirewallProtocol::Tcp, comment });
-            rules.push(FirewallRule { port, protocol: FirewallProtocol::Udp, comment });
+            rules.push(FirewallRule {
+                port,
+                protocol: FirewallProtocol::Tcp,
+                comment,
+            });
+            rules.push(FirewallRule {
+                port,
+                protocol: FirewallProtocol::Udp,
+                comment,
+            });
         }
         Protocol::Uds => {}
     }
@@ -57,6 +78,7 @@ impl fmt::Display for FirewallProtocol {
 
 impl FirewallRule {
     /// Format as a `ufw allow` command.
+    #[must_use]
     pub fn to_ufw_command(&self) -> String {
         format!(
             "ufw allow {}/{} comment '{}'",
@@ -82,12 +104,13 @@ pub struct FirewallRuleset {
 
 impl FirewallRuleset {
     /// Derive the firewall ruleset for a given composition.
+    #[must_use]
     pub fn for_composition(composition: MembraneComposition) -> Self {
         let spec = composition.spec();
         let mut rules = Vec::new();
 
         rules.push(FirewallRule {
-            port: 22,
+            port: SSH_PORT,
             protocol: FirewallProtocol::Tcp,
             comment: "SSH",
         });
@@ -106,25 +129,23 @@ impl FirewallRuleset {
             }
         }
 
-        // Sort for deterministic output
         rules.sort_by(|a, b| a.port.cmp(&b.port).then(a.protocol.cmp(&b.protocol)));
         rules.dedup();
 
-        Self {
-            composition,
-            rules,
-        }
+        Self { composition, rules }
     }
 
     /// All unique ports in this ruleset.
+    #[must_use]
     pub fn ports(&self) -> Vec<u16> {
         let mut ports: Vec<u16> = self.rules.iter().map(|r| r.port).collect();
-        ports.sort();
+        ports.sort_unstable();
         ports.dedup();
         ports
     }
 
     /// Generate the full UFW setup script.
+    #[must_use]
     pub fn to_ufw_script(&self) -> String {
         let mut lines = vec![
             "ufw --force reset".to_string(),

@@ -1,8 +1,12 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-05-27
+**Last updated:** 2026-05-28
 **Overall status:** PROGRESSING — Nest Atomic LIVE, VPS deployment standard absorbed, NS cutover remaining
+**Wave 57 update:** Deep debt sprint — `clippy::pedantic` + `nursery` enforced (zero warnings),
+typed `ConfigError` via `thiserror`, `DeployPaths` configurable paths, `iter_binaries()` zero-copy,
+`#[must_use]` + `const fn` across all pure functions, scyBorg triple license, `cargo-deny` ecoBin
+ban list, coverage **77% → 96%** (160 tests). Zero TODOs, zero unsafe, zero C deps. Audit-ready.
 **Wave 56 update:** primalSpring Wave 56 VPS deployment standard consumed. `TransportMode::UdsOnly`
 typed into service registry. `deploy_membrane.sh` evolved with `--uds-only` flag for `nucleus_launcher`
 integration and `spring-overlay` mode for cell graph deployment. Three-step VPS deploy flow documented.
@@ -106,7 +110,8 @@ cellMembrane formalized from operational docs + bash into a typed Rust system.
 5 spec documents define the architecture, composition model, fieldMouse contract,
 multi-membrane deployment, and K-Derm cell envelope topology. `cellmembrane-types`
 crate provides typed config parsing, firewall derivation, envelope topology, and
-validation — **93 tests** across 7 domain test modules, **zero clippy warnings**.
+validation — **160 tests** across 8 domain test modules, **zero clippy warnings**
+(pedantic + nursery), **95.8% line coverage** (llvm-cov).
 
 Gap analysis against `darkforest_membrane.sh` (MEM-01..17) and `s_membrane_composition.rs`
 (Pillar 4 telemetry) closed 5 gaps: journald persistence, credential file inventory,
@@ -130,7 +135,7 @@ warnings resolved, `default_true` deduplicated, tests smart-refactored by domain
 - [x] `specs/FIELDMOUSE_CONTRACT.md` — third-party deployment contract
 - [x] `specs/MULTI_MEMBRANE_DEPLOYMENT.md` — provider abstraction, multi-region
 - [x] `specs/K_DERM_TOPOLOGY.md` — monoderm/diderm, periplasm, bonding, channel proteins, vesicle transport
-- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (93 tests, 7 modules)
+- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (160 tests, 8 modules, 95.8% coverage)
 - [x] `membrane.toml` — reference config for live VPS deployment
 - [x] Gap closure: 5 Dark Forest audit gaps closed in types
 - [x] Debt resolution: static registry, typed ShadowMode, capability-based derivation, clippy-clean

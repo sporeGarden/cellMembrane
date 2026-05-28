@@ -13,7 +13,7 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderType {
-    /// DigitalOcean VPS (provisioned via `doctl`).
+    /// `DigitalOcean` VPS (provisioned via `doctl`).
     #[serde(alias = "digitalocean")]
     DigitalOcean,
     /// Hetzner Cloud (provisioned via `hcloud`).
@@ -78,22 +78,26 @@ pub struct ProviderConfig {
 
 impl ProviderConfig {
     /// SSH user, defaulting to "root".
+    #[must_use]
     pub fn ssh_user_or_default(&self) -> &str {
         self.ssh_user.as_deref().unwrap_or("root")
     }
 
     /// SSH port, defaulting to 22.
+    #[must_use]
     pub fn ssh_port_or_default(&self) -> u16 {
-        self.ssh_port.unwrap_or(22)
+        self.ssh_port.unwrap_or(crate::composition::SSH_PORT)
     }
 
     /// Whether this provider requires remote SSH access for deployment.
-    pub fn requires_ssh(&self) -> bool {
+    #[must_use]
+    pub const fn requires_ssh(&self) -> bool {
         !matches!(self.provider_type, ProviderType::GateLocal)
     }
 
     /// Whether this provider supports API-based provisioning.
-    pub fn supports_provisioning(&self) -> bool {
+    #[must_use]
+    pub const fn supports_provisioning(&self) -> bool {
         matches!(
             self.provider_type,
             ProviderType::DigitalOcean | ProviderType::Hetzner
@@ -101,7 +105,8 @@ impl ProviderConfig {
     }
 
     /// Derive the substrate profile from the provider type.
-    pub fn substrate_profile(&self) -> SubstrateProfile {
+    #[must_use]
+    pub const fn substrate_profile(&self) -> SubstrateProfile {
         match self.provider_type {
             ProviderType::DigitalOcean | ProviderType::Hetzner | ProviderType::Custom => {
                 SubstrateProfile::VpsFieldMouse
@@ -125,13 +130,15 @@ pub enum SubstrateProfile {
 }
 
 impl SubstrateProfile {
-    /// Whether biomeOS integration is available on this substrate.
-    pub fn has_biomeos(&self) -> bool {
+    /// Whether `biomeOS` integration is available on this substrate.
+    #[must_use]
+    pub const fn has_biomeos(&self) -> bool {
         matches!(self, Self::GateLocal)
     }
 
     /// Whether full Dark Forest hardening is required.
-    pub fn requires_full_hardening(&self) -> bool {
+    #[must_use]
+    pub const fn requires_full_hardening(&self) -> bool {
         matches!(self, Self::VpsFieldMouse)
     }
 }

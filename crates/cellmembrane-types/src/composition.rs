@@ -19,37 +19,42 @@ use std::fmt;
 pub enum MembraneComposition {
     /// Tier 1: Songbird TURN relay only.
     Relay,
-    /// Tier 2: Relay + RustDesk remote desktop.
+    /// Tier 2: Relay + `RustDesk` remote desktop.
     #[serde(alias = "rust_desk")]
     RustDesk,
-    /// Tier 3: RustDesk + BearDog/SkunkBat BTSP identity boundary.
+    /// Tier 3: `RustDesk` + `BearDog`/`SkunkBat` BTSP identity boundary.
     Tower,
-    /// Tier 4: Tower + NestGate + provenance trio + Caddy TLS.
+    /// Tier 4: Tower + `NestGate` + provenance trio + Caddy TLS.
     Nest,
 }
 
 impl MembraneComposition {
     /// Returns all composition variants in ladder order.
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         &[Self::Relay, Self::RustDesk, Self::Tower, Self::Nest]
     }
 
     /// Whether this composition includes BTSP identity (Tower+).
-    pub fn has_btsp(&self) -> bool {
+    #[must_use]
+    pub const fn has_btsp(&self) -> bool {
         matches!(self, Self::Tower | Self::Nest)
     }
 
     /// Whether this composition requires a `tower.env` identity file.
-    pub fn requires_tower_env(&self) -> bool {
+    #[must_use]
+    pub const fn requires_tower_env(&self) -> bool {
         self.has_btsp()
     }
 
     /// Whether this composition satisfies Dark Forest full compliance.
-    pub fn dark_forest_compliant(&self) -> bool {
+    #[must_use]
+    pub const fn dark_forest_compliant(&self) -> bool {
         self.has_btsp()
     }
 
     /// Active channels for this composition.
+    #[must_use]
     pub fn active_channels(&self) -> Vec<MembraneChannel> {
         match self {
             Self::Relay | Self::RustDesk | Self::Tower => {
@@ -68,6 +73,7 @@ impl MembraneComposition {
     /// Returns the full specification for this composition, derived from the
     /// service registry. No duplication — the registry is the single source
     /// of truth for binaries, ports, units, and tier membership.
+    #[must_use]
     pub fn spec(&self) -> CompositionSpec {
         CompositionSpec::from_registry(*self)
     }
@@ -99,7 +105,7 @@ pub struct CompositionSpec {
     pub composition: MembraneComposition,
     /// ecoPrimals binaries required.
     pub primals: Vec<&'static str>,
-    /// Non-ecoPrimal binaries (RustDesk, Caddy, knot-dns).
+    /// Non-ecoPrimal binaries (`RustDesk`, Caddy, knot-dns).
     pub symbiotic: Vec<&'static str>,
     /// TCP ports that must be open in the firewall.
     pub tcp_ports: Vec<u16>,
@@ -156,9 +162,9 @@ impl CompositionSpec {
             }
         }
 
-        tcp_ports.sort();
+        tcp_ports.sort_unstable();
         tcp_ports.dedup();
-        udp_ports.sort();
+        udp_ports.sort_unstable();
         udp_ports.dedup();
 
         Self {
@@ -172,32 +178,39 @@ impl CompositionSpec {
         }
     }
 
-    /// All binaries required (primals + symbiotic).
+    /// All binaries required (primals + symbiotic), zero-allocation iterator.
+    pub fn iter_binaries(&self) -> impl Iterator<Item = &str> {
+        self.primals.iter().chain(self.symbiotic.iter()).copied()
+    }
+
+    /// All binaries required (primals + symbiotic) as a collected `Vec`.
+    #[must_use]
     pub fn all_binaries(&self) -> Vec<&str> {
-        let mut bins = self.primals.to_vec();
-        bins.extend_from_slice(&self.symbiotic);
-        bins
+        self.iter_binaries().collect()
     }
 
     /// All listening ports (TCP + UDP deduplicated).
+    #[must_use]
     pub fn all_ports(&self) -> Vec<u16> {
         let mut ports = self.tcp_ports.clone();
-        for p in &self.udp_ports {
-            if !ports.contains(p) {
-                ports.push(*p);
+        for &p in &self.udp_ports {
+            if !ports.contains(&p) {
+                ports.push(p);
             }
         }
-        ports.sort();
+        ports.sort_unstable();
         ports
     }
 
     /// Lookup a service definition by binary name.
+    #[must_use]
     pub fn service_for(&self, binary: &str) -> Option<&'static MembraneService> {
         MembraneService::for_binary(binary)
     }
 
     /// UDS socket paths for services in UDS-only mode (VPS standard).
     /// Returns `(binary, socket_path)` pairs for all primals that use UDS transport.
+    #[must_use]
     pub fn uds_socket_paths(&self) -> Vec<(&'static str, &'static str)> {
         let services = MembraneService::for_composition(self.composition);
         services
@@ -209,9 +222,10 @@ impl CompositionSpec {
 
     /// TCP ports still required in UDS-only mode (symbiotic services + relay).
     /// These are services that must bind to TCP regardless of transport mode.
+    #[must_use]
     pub fn tcp_ports_uds_mode(&self) -> Vec<u16> {
         let services = MembraneService::for_composition(self.composition);
-        let mut ports = vec![crate::composition::SSH_PORT];
+        let mut ports = vec![SSH_PORT];
 
         for svc in &services {
             if svc.requires_tcp_in_uds_mode() {
@@ -234,7 +248,7 @@ impl CompositionSpec {
             }
         }
 
-        ports.sort();
+        ports.sort_unstable();
         ports.dedup();
         ports
     }

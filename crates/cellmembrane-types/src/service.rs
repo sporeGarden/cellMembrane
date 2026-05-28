@@ -298,23 +298,26 @@ const KNOTDNS: MembraneService = MembraneService {
 
 /// All known membrane services. Runtime discovery starts here.
 const ALL_SERVICES: &[MembraneService] = &[
-    BEARDOG, SONGBIRD, SKUNKBAT, NESTGATE, RHIZOCRYPT,
-    LOAMSPINE, SWEETGRASS, HBBS, HBBR, CADDY, KNOTDNS,
+    BEARDOG, SONGBIRD, SKUNKBAT, NESTGATE, RHIZOCRYPT, LOAMSPINE, SWEETGRASS, HBBS, HBBR, CADDY,
+    KNOTDNS,
 ];
 
 impl MembraneService {
     /// Look up the canonical service definition for a binary name.
     /// Returns a static reference — zero allocation.
+    #[must_use]
     pub fn for_binary(name: &str) -> Option<&'static Self> {
         ALL_SERVICES.iter().find(|s| s.binary == name)
     }
 
     /// All known services in the registry.
-    pub fn all() -> &'static [Self] {
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
         ALL_SERVICES
     }
 
     /// Services included in the given composition tier.
+    #[must_use]
     pub fn for_composition(composition: MembraneComposition) -> Vec<&'static Self> {
         ALL_SERVICES
             .iter()
@@ -323,37 +326,39 @@ impl MembraneService {
     }
 
     /// Whether this service is externally reachable (bind != loopback, not UDS).
-    pub fn is_externally_reachable(&self) -> bool {
-        self.bind != BIND_LOOPBACK && self.protocol != Protocol::Uds
+    #[must_use]
+    pub const fn is_externally_reachable(&self) -> bool {
+        !matches!(self.bind.as_bytes(), b"127.0.0.1") && !matches!(self.protocol, Protocol::Uds)
     }
 
     /// Whether this service uses UDS-only transport on VPS (Wave 56 standard).
-    pub fn is_uds_only(&self) -> bool {
-        self.vps_transport == TransportMode::UdsOnly
+    #[must_use]
+    pub const fn is_uds_only(&self) -> bool {
+        matches!(self.vps_transport, TransportMode::UdsOnly)
     }
 
     /// Health check method to use in UDS-only mode.
     /// Primals with UDS-only transport use socket existence checks instead of TCP probes.
-    pub fn uds_health_check(&self) -> HealthCheckMethod {
-        if self.is_uds_only() {
-            if let Some(_path) = self.socket_path {
-                return HealthCheckMethod::SocketExists;
-            }
+    #[must_use]
+    pub const fn uds_health_check(&self) -> HealthCheckMethod {
+        if self.is_uds_only() && self.socket_path.is_some() {
+            return HealthCheckMethod::SocketExists;
         }
         self.health_method
     }
 
     /// Services that require TCP ports even in UDS-only deployments
     /// (symbiotic partners and relay services with external surface).
-    pub fn requires_tcp_in_uds_mode(&self) -> bool {
-        self.vps_transport == TransportMode::TcpDefault
+    #[must_use]
+    pub const fn requires_tcp_in_uds_mode(&self) -> bool {
+        matches!(self.vps_transport, TransportMode::TcpDefault)
     }
 }
 
 /// Binary integrity expectation for a membrane service.
 ///
 /// Maps to MEM-09 (Songbird binary integrity) in `darkforest_membrane.sh`.
-/// The BLAKE3 hash is verified against plasmidBin's `checksums.toml`.
+/// The BLAKE3 hash is verified against `plasmidBin`'s `checksums.toml`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BinaryIntegrity {
     /// Binary name.
@@ -369,7 +374,7 @@ pub struct BinaryIntegrity {
 /// Hash algorithm for binary verification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashAlgorithm {
-    /// BLAKE3 — used by plasmidBin checksums.toml.
+    /// BLAKE3 — used by `plasmidBin` `checksums.toml`.
     Blake3,
     /// SHA-256 — fallback when b3sum is not installed.
     Sha256,
@@ -382,6 +387,7 @@ pub enum HashAlgorithm {
 ///
 /// Install paths are derived from the service registry — no duplication,
 /// no `Box::leak`.
+#[must_use]
 pub fn binary_integrity_for(
     composition: crate::composition::MembraneComposition,
 ) -> Vec<BinaryIntegrity> {

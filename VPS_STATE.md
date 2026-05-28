@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-05-27
+**Last updated:** 2026-05-28
 **Deployed composition:** Nest Atomic (Wave 38, deployed 2026-05-22)
 **VPS transport:** UDS-only (Wave 56 standard) — NUCLEUS primals on Unix domain sockets, zero TCP ports
 **VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
@@ -128,7 +128,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Provenance trio pipeline | 10/10 PASS | 2026-05-22 |
 | Shadow orchestrator | 6/6 PASS | 2026-05-22 |
 | `deploy_membrane.sh status` | All 11 services RUNNING | 2026-05-22 |
-| `cargo test` (cellmembrane-types) | 93 PASS, 0 FAIL, 0 clippy warnings | 2026-05-27 |
+| `cargo test` (cellmembrane-types) | 160 PASS, 0 FAIL, 0 clippy warnings (95.8% coverage) | 2026-05-28 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

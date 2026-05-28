@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | Nest Atomic (Tower + NestGate + rhizoCrypt + loamSpine + sweetGrass) + RustDesk |
-| **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 56, 2026-05-27) |
+| **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 57, 2026-05-28) |
 
 ---
 
@@ -54,20 +54,22 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 93 tests — envelope, composition, channels, firewall, service, transport, config, validation
-cargo clippy                # Zero warnings, #![forbid(unsafe_code)]
-cargo doc --open            # Full API documentation
+cargo test                  # 160 tests — 95.8% line coverage (llvm-cov)
+cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
+cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 56:** `TransportMode` enum (UDS-only / TCP default / TCP opt-in) for VPS
+**Wave 57 (deep debt sprint):** `clippy::pedantic` + `clippy::nursery` zero warnings
+enforced. Typed `ConfigError` via `thiserror`. `DeployPaths` configurable base
+directories for substrate-agnostic deployment. `iter_binaries()` zero-copy iterator.
+`#[must_use]` + `const fn` across all pure functions. scyBorg triple license.
+`cargo-deny` ecoBin ban list. Coverage 77% → 96%.
+
+Wave 56: `TransportMode` enum (UDS-only / TCP default / TCP opt-in) for VPS
 deployment standard. `HealthCheckMethod::SocketExists` for UDS socket checks.
-`CompositionSpec::uds_socket_paths()` and `tcp_ports_uds_mode()` helpers.
-13 transport-specific tests covering serde roundtrip, service classification,
-socket path conventions, and composition-level UDS queries.
 
 Wave 51: `FirewallRule.comment` zero-allocation (`&'static str`),
-supplementary ports in service registry (hbbs 21115, caddy 80),
-output-only types drop `Deserialize`.
+supplementary ports in service registry.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
@@ -139,6 +141,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Shadow orchestrator: 6/6 PASS | DONE |
 | NestGate :9500, rhizoCrypt :9602, loamSpine :9700, sweetGrass :9850 | DONE |
 | VPS deployment standard (Wave 56): UDS-only, TransportMode typed | DONE |
+| Deep debt sprint (Wave 57): 95.8% coverage, pedantic clean, typed errors | DONE |
 
 ---
 
@@ -160,7 +163,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0 | Relay only | Superseded |
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
-| **1.5** | **Nest Atomic + Channel 1 DNS + TLS + VPS Standard** | **Current** (Wave 56, 2026-05-27) |
+| **1.5** | **Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt** | **Current** (Wave 57, 2026-05-28) |
 | 2 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
@@ -207,25 +210,32 @@ Server public key stored at `/opt/membrane/rustdesk/id_ed25519.pub` on the VPS.
 
 ```
 gardens/cellMembrane/
-  Cargo.toml                  # Rust workspace root
+  Cargo.toml                  # Rust workspace root (pedantic + nursery lints)
   membrane.toml               # Reference config (live deployment)
+  rustfmt.toml                # Format config (edition 2024, 100 col)
+  deny.toml                   # cargo-deny ecoBin ban list
+  LICENSE                     # AGPL-3.0-or-later
+  LICENSE-ORC                 # ORC (mechanics)
+  LICENSE-CC-BY-SA            # CC-BY-SA 4.0 (creative)
   crates/
     cellmembrane-types/       # Typed domain models (#![forbid(unsafe_code)])
       src/
-        lib.rs                # Crate root, re-exports, shared helpers
+        lib.rs                # Crate root, re-exports, doc-tests
         channels.rs           # Signal / Relay / Surface
-        composition.rs        # Relay → RustDesk → Tower → Nest
-        config.rs             # membrane.toml parser + validator + ShadowMode
+        composition.rs        # Relay → RustDesk → Tower → Nest + iter_binaries()
+        config.rs             # membrane.toml parser + validator + DeployPaths
         credentials.rs        # age / BTSP vault / manual
         envelope.rs           # K-Derm topology — monoderm/diderm, bonding, channel proteins
-        firewall.rs           # UFW rules from composition
+        error.rs              # Typed ConfigError (thiserror)
+        firewall.rs           # UFW rules from composition (SSH_PORT constant)
         identity.rs           # Family ID, gate ID
         provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
-        service.rs            # Static service registry — zero allocation, no Box::leak
-        validation.rs         # Report pattern (pass/fail/warn)
+        service.rs            # Static service registry — zero allocation, const fn
+        validation.rs         # Report pattern (pass/fail/warn) + doc-tests
       tests/
         channels.rs           # Channel trust, ports, crypto, serde (4 tests)
         composition.rs        # Ladder ordering, specs, serde (6 tests)
+        coverage.rs           # Deep coverage expansion (63 tests)
         envelope.rs           # K-Derm topology, layers, bonding, policies (27 tests)
         firewall.rs           # UFW derivation per composition (5 tests)
         service.rs            # Registry, binary integrity, credentials (15 tests)
@@ -279,4 +289,7 @@ plasmidBin remote dir centralized via `ECOPRIMALS_PLASMID_BIN` env var, stale so
 
 ## License
 
-AGPL-3.0-or-later
+scyBorg triple license:
+- **AGPL-3.0-or-later** — code (Rust, TOML, shell scripts, tests)
+- **ORC** — coordination patterns and mechanics
+- **CC-BY-SA 4.0** — documentation and creative content

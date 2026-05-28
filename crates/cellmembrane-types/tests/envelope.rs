@@ -105,7 +105,10 @@ fn periplasm_permits_ionic_and_metallic() {
 
 #[test]
 fn covalent_uses_aquaporin() {
-    assert_eq!(BondType::Covalent.channel_protein(), ChannelProtein::Aquaporin);
+    assert_eq!(
+        BondType::Covalent.channel_protein(),
+        ChannelProtein::Aquaporin
+    );
 }
 
 #[test]
@@ -115,19 +118,28 @@ fn ionic_uses_gated_ion() {
 
 #[test]
 fn ceremony_uses_voltage_gated() {
-    assert_eq!(BondType::Ceremony.channel_protein(), ChannelProtein::VoltageGated);
+    assert_eq!(
+        BondType::Ceremony.channel_protein(),
+        ChannelProtein::VoltageGated
+    );
 }
 
 #[test]
 fn weak_uses_passive_diffusion() {
-    assert_eq!(BondType::Weak.channel_protein(), ChannelProtein::PassiveDiffusion);
+    assert_eq!(
+        BondType::Weak.channel_protein(),
+        ChannelProtein::PassiveDiffusion
+    );
 }
 
 #[test]
 fn channel_protein_round_trip_to_bonds() {
     for protein in ChannelProtein::all() {
         let bonds = protein.permitted_bonds();
-        assert!(!bonds.is_empty(), "{protein} should permit at least one bond type");
+        assert!(
+            !bonds.is_empty(),
+            "{protein} should permit at least one bond type"
+        );
         for bond in bonds {
             assert_eq!(
                 bond.channel_protein(),
@@ -142,14 +154,23 @@ fn channel_protein_round_trip_to_bonds() {
 
 #[test]
 fn covalent_braid_passes_through() {
-    assert_eq!(BraidPolicy::for_bond(BondType::Covalent), BraidPolicy::PassThrough);
-    assert_eq!(BraidPolicy::for_bond(BondType::Metallic), BraidPolicy::PassThrough);
+    assert_eq!(
+        BraidPolicy::for_bond(BondType::Covalent),
+        BraidPolicy::PassThrough
+    );
+    assert_eq!(
+        BraidPolicy::for_bond(BondType::Metallic),
+        BraidPolicy::PassThrough
+    );
 }
 
 #[test]
 fn ionic_braid_is_verified() {
     assert_eq!(BraidPolicy::for_bond(BondType::Ionic), BraidPolicy::Verify);
-    assert_eq!(BraidPolicy::for_bond(BondType::Ceremony), BraidPolicy::Verify);
+    assert_eq!(
+        BraidPolicy::for_bond(BondType::Ceremony),
+        BraidPolicy::Verify
+    );
 }
 
 #[test]

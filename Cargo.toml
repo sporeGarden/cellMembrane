@@ -11,7 +11,17 @@ license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
+thiserror = "2"
 toml = "0.8"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+missing_const_for_fn = "warn"
+use_self = "warn"
+doc_markdown = "warn"
+must_use_candidate = "warn"
+module_name_repetitions = "allow"

@@ -10,6 +10,7 @@ description = "Typed domain models for cellMembrane deployment: channels, compos
 
 [dependencies]
 serde = { workspace = true }
+thiserror = { workspace = true }
 toml = { workspace = true }
 
 [lints]

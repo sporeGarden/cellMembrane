@@ -43,7 +43,7 @@ pub enum CredentialModel {
     #[default]
     Age,
 
-    /// Credentials stored in BearDog's BTSP-encrypted secrets store.
+    /// Credentials stored in `BearDog`'s BTSP-encrypted secrets store.
     /// Mid-term target — requires Tower composition.
     BtspVault,
 
@@ -64,7 +64,7 @@ impl std::fmt::Display for CredentialModel {
 
 /// A file on the membrane host that must have specific permissions.
 ///
-/// Maps to MEM-08 (credential perms) and MEM-12 (RustDesk key) in
+/// Maps to MEM-08 (credential perms) and MEM-12 (`RustDesk` key) in
 /// `darkforest_membrane.sh`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CredentialFile {
@@ -81,6 +81,7 @@ pub struct CredentialFile {
 /// Credential files required for a given composition.
 ///
 /// These are the files `darkforest_membrane.sh` MEM-08/MEM-12 audit.
+#[must_use]
 pub fn credential_files_for(
     composition: crate::composition::MembraneComposition,
 ) -> Vec<CredentialFile> {
@@ -88,14 +89,12 @@ pub fn credential_files_for(
 
     let mut files = vec![];
 
-    // TURN credentials — all compositions
     files.push(CredentialFile {
         path: "/etc/songbird/relay-credentials",
         expected_mode: "600",
         expected_owner: "root",
         description: "Songbird TURN shared secret",
     });
-    // Legacy path checked by darkforest_membrane.sh
     files.push(CredentialFile {
         path: "/opt/membrane/songbird/turn-credentials",
         expected_mode: "600",
@@ -103,7 +102,6 @@ pub fn credential_files_for(
         description: "Songbird TURN credentials (legacy path)",
     });
 
-    // RustDesk key — RustDesk+ compositions
     if composition >= MembraneComposition::RustDesk {
         files.push(CredentialFile {
             path: "/opt/membrane/rustdesk/id_ed25519",
@@ -119,7 +117,6 @@ pub fn credential_files_for(
         });
     }
 
-    // tower.env — Tower+ compositions
     if composition >= MembraneComposition::Tower {
         files.push(CredentialFile {
             path: "/opt/membrane/tower.env",

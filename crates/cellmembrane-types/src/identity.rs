@@ -30,6 +30,7 @@ pub struct MembraneIdentity {
 
 impl MembraneIdentity {
     /// Gate ID, falling back to a default derived from the family ID.
+    #[must_use]
     pub fn gate_id_or_default(&self) -> String {
         self.gate_id
             .clone()

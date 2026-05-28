@@ -38,7 +38,7 @@ impl fmt::Display for Severity {
 pub struct ReportEntry {
     /// Severity of this finding.
     pub severity: Severity,
-    /// Check identifier (e.g. "composition.primals_present").
+    /// Check identifier (e.g. `"composition.primals_present"`).
     pub check: String,
     /// Human-readable message.
     pub message: String,
@@ -51,6 +51,16 @@ impl fmt::Display for ReportEntry {
 }
 
 /// Accumulated validation report for a membrane configuration.
+///
+/// ```
+/// use cellmembrane_types::validation::Report;
+///
+/// let mut report = Report::new();
+/// report.pass("config.name", "Name: membrane-relay");
+/// report.fail("identity.missing", "Family ID required");
+/// assert!(!report.is_ok());
+/// assert_eq!(report.total_checks(), 2);
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Report {
     /// All findings.
@@ -59,6 +69,7 @@ pub struct Report {
 
 impl Report {
     /// Create an empty report.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -100,26 +111,33 @@ impl Report {
     }
 
     /// Whether all checks passed (no FAIL entries).
+    #[must_use]
     pub fn is_ok(&self) -> bool {
         !self.entries.iter().any(|e| e.severity == Severity::Fail)
     }
 
     /// Count of entries by severity.
+    #[must_use]
     pub fn count(&self, severity: Severity) -> usize {
-        self.entries.iter().filter(|e| e.severity == severity).count()
+        self.entries
+            .iter()
+            .filter(|e| e.severity == severity)
+            .count()
     }
 
     /// Total number of checks (PASS + FAIL).
+    #[must_use]
     pub fn total_checks(&self) -> usize {
         self.count(Severity::Pass) + self.count(Severity::Fail)
     }
 
     /// Merge another report into this one.
-    pub fn merge(&mut self, other: Report) {
+    pub fn merge(&mut self, other: Self) {
         self.entries.extend(other.entries);
     }
 
     /// Summary line (e.g. "12 passed, 2 failed, 1 warning").
+    #[must_use]
     pub fn summary(&self) -> String {
         format!(
             "{} passed, {} failed, {} warnings",

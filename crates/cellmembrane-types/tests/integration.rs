@@ -44,7 +44,11 @@ fn parse_provider_from_toml() {
 #[test]
 fn parse_channel_overrides() {
     let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
-    let signal = config.channels.signal.as_ref().expect("signal should exist");
+    let signal = config
+        .channels
+        .signal
+        .as_ref()
+        .expect("signal should exist");
     assert!(signal.enabled);
 
     let relay = config.channels.relay.as_ref().expect("relay should exist");
@@ -93,11 +97,14 @@ fn credential_model_defaults_to_age() {
 
 #[test]
 fn hardening_defaults_include_journald() {
-    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(r#"
+    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(
+        r#"
         [membrane]
         name = "test"
         composition = "relay"
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     assert!(config.membrane.hardening.journald_persistent);
 }
 
@@ -113,14 +120,20 @@ fn hardening_prohibited_services() {
 
 #[test]
 fn telemetry_defaults_match_glacial_standard() {
-    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(r#"
+    let config: cellmembrane_types::config::MembraneConfigFile = toml::from_str(
+        r#"
         [membrane]
         name = "test"
         composition = "relay"
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     let t = &config.membrane.telemetry;
     assert!(t.enabled);
-    assert_eq!(t.shadow_mode, cellmembrane_types::config::ShadowMode::Permanent);
+    assert_eq!(
+        t.shadow_mode,
+        cellmembrane_types::config::ShadowMode::Permanent
+    );
     assert!(t.cutover_gate_days >= 7);
 }
 
@@ -128,7 +141,10 @@ fn telemetry_defaults_match_glacial_standard() {
 fn telemetry_parsed_from_reference_toml() {
     let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
     assert!(config.telemetry.enabled);
-    assert_eq!(config.telemetry.shadow_mode, cellmembrane_types::config::ShadowMode::Permanent);
+    assert_eq!(
+        config.telemetry.shadow_mode,
+        cellmembrane_types::config::ShadowMode::Permanent
+    );
     assert_eq!(config.telemetry.cutover_gate_days, 7);
     assert!(config.telemetry.skunkbat_correlation);
 }
@@ -172,7 +188,10 @@ fn topology_defaults_to_monoderm_for_gate_local() {
     "#;
     let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
     assert!(file.membrane.topology.is_none());
-    assert_eq!(file.membrane.effective_topology(), EnvelopeTopology::Monoderm);
+    assert_eq!(
+        file.membrane.effective_topology(),
+        EnvelopeTopology::Monoderm
+    );
 }
 
 // --- Cross-module validation ---
@@ -213,7 +232,10 @@ fn validate_relay_without_identity_passes() {
 
     let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
     let report = file.membrane.validate();
-    assert!(report.is_ok(), "Relay without identity should pass:\n{report}");
+    assert!(
+        report.is_ok(),
+        "Relay without identity should pass:\n{report}"
+    );
 }
 
 #[test]
@@ -242,7 +264,10 @@ fn validate_low_cutover_days_fails() {
 
     let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
     let report = file.membrane.validate();
-    assert!(!report.is_ok(), "cutover_gate_days < 7 should fail:\n{report}");
+    assert!(
+        !report.is_ok(),
+        "cutover_gate_days < 7 should fail:\n{report}"
+    );
 }
 
 #[test]
@@ -272,10 +297,22 @@ fn validate_reference_includes_credential_and_integrity_info() {
     let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
     let report = config.validate();
     let checks: Vec<&str> = report.entries.iter().map(|e| e.check.as_str()).collect();
-    assert!(checks.contains(&"credentials.files"), "Should report credential file count");
-    assert!(checks.contains(&"integrity.binaries"), "Should report binary integrity count");
-    assert!(checks.contains(&"telemetry.enabled"), "Should report telemetry status");
-    assert!(checks.contains(&"telemetry.cutover_days"), "Should report cutover gate");
+    assert!(
+        checks.contains(&"credentials.files"),
+        "Should report credential file count"
+    );
+    assert!(
+        checks.contains(&"integrity.binaries"),
+        "Should report binary integrity count"
+    );
+    assert!(
+        checks.contains(&"telemetry.enabled"),
+        "Should report telemetry status"
+    );
+    assert!(
+        checks.contains(&"telemetry.cutover_days"),
+        "Should report cutover gate"
+    );
 }
 
 #[test]
@@ -283,8 +320,14 @@ fn validate_reference_includes_topology_info() {
     let config = MembraneConfig::load(Path::new("../../membrane.toml")).unwrap();
     let report = config.validate();
     let checks: Vec<&str> = report.entries.iter().map(|e| e.check.as_str()).collect();
-    assert!(checks.contains(&"topology.effective"), "Should report topology");
-    assert!(checks.contains(&"topology.boundaries"), "Should report boundary count for diderm");
+    assert!(
+        checks.contains(&"topology.effective"),
+        "Should report topology"
+    );
+    assert!(
+        checks.contains(&"topology.boundaries"),
+        "Should report boundary count for diderm"
+    );
 }
 
 #[test]
@@ -301,7 +344,10 @@ fn validate_monoderm_vps_warns() {
     let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
     let report = file.membrane.validate();
     assert!(
-        report.entries.iter().any(|e| e.check == "topology.monoderm_vps"),
+        report
+            .entries
+            .iter()
+            .any(|e| e.check == "topology.monoderm_vps"),
         "Monoderm with VPS should warn"
     );
 }

@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# cargo-deny configuration — ecoBin compliance gate
+# Run: cargo deny check
+
+[advisories]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+
+[licenses]
+unlicensed = "deny"
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+]
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+]
+copyleft = "warn"
+
+[[licenses.clarify]]
+name = "unicode-ident"
+expression = "(MIT OR Apache-2.0) AND Unicode-3.0"
+license-files = [{ path = "LICENSE-UNICODE", hash = 0xb1e81de4 }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = [
+    # ecoBin: zero application C — no native TLS, no openssl, no ring
+    { name = "openssl-sys" },
+    { name = "openssl" },
+    { name = "native-tls" },
+    { name = "ring" },
+    # No vendor SDKs
+    { name = "aws-sdk-core" },
+    { name = "azure_core" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
