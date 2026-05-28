@@ -22,7 +22,7 @@
 
 ---
 
-## Running Services (20 services, 13 primals)
+## Running Services (21 services, 13 primals + Forgejo)
 
 ### Tower Tier (identity + relay + audit)
 
@@ -67,6 +67,7 @@
 | Caddy | `caddy-tls` | ACTIVE | :80/:443 | — |
 | fail2ban | `fail2ban` | ACTIVE | — | — |
 | knot-dns | `knot` | ACTIVE | :53 tcp/udp | DNSSEC enabled |
+| Forgejo | `forgejo` | ACTIVE | 127.0.0.1:3000 + :2222 | v15.0.2 (golgiBody Phase A) |
 
 ### Capability Symlinks (auto-created at runtime)
 
@@ -95,6 +96,7 @@
 | 443/tcp ALLOW | Caddy HTTPS (Channel 3 Surface) |
 | 3478/tcp ALLOW | Songbird TURN (Channel 2 Relay) |
 | 3478/udp ALLOW | Songbird TURN (Channel 2 Relay) |
+| 2222/tcp ALLOW | Forgejo SSH git (golgiBody) |
 | 8443/tcp ALLOW | BearDog TLS shadow |
 | 9500/tcp ALLOW | NestGate |
 | 9602/tcp ALLOW | rhizoCrypt JSON-RPC |

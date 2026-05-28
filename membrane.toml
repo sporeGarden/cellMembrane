@@ -47,6 +47,14 @@ cache_root = "/var/cache/membrane/lab"
 static_content = true
 interactive_proxy = "gate"
 
+[membrane.channels.surface.git]
+enabled = true
+domain = "git.primals.eco"
+role = "golgiBody"
+backend = "forgejo"
+backend_port = 3000
+ssh_port = 2222
+
 [membrane.credentials]
 model = "age"
 
