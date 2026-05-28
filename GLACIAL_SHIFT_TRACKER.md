@@ -2,7 +2,12 @@
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-05-28
-**Overall status:** PROGRESSING — NUCLEUS typed, biomeOS deploy P0, NS cutover remaining
+**Overall status:** PROGRESSING — golgiBody Phase A live, WaterFall 33/36 validated, NS cutover remaining
+**Wave 60 update:** golgiBody Phase A complete — VPS Forgejo live at `git.primals.eco`, 34 repos seeded,
+eastGate WaterFall shadow validated (33/36 pull clean from sovereign Forgejo). VPS knot-dns zone updated
+with `lab` and `git` A records. Caddyfile lab routes fixed (dead proxy → 503 + static file_server).
+`cascade-pull.sh` fixed for non-default remote branch resolution. 2 repos need ironGate action
+(rustChip seeding, toadStool branch rename). Cloudflare tunnel orphaned but kept for JupyterHub until BTSP relay.
 **Wave 59 update:** NUCLEUS composition tier (13 primals, 17 services) typed into service registry.
 6 new services: toadStool, barraCuda, coralReef, biomeOS, squirrel, petalTongue. All UDS-only.
 `membrane.toml` evolved to `composition = "nucleus"`. 175 tests. Spring overlay readiness proven.
@@ -36,8 +41,8 @@ All six criteria must be satisfied before glacial shift.
 | 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **4 gates running** (Wave 50), mesh seeded | Provide TURN rendezvous | Gate teams |
 | 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38, 2026-05-22) — 21/0/1 darkforest, 10/10 trio | Operate Nest Atomic | **RESOLVED** |
 | 4 | Remote covalent node (flockGate) validated over WAN | flockGate not deployed | Provide WAN rendezvous | Shared |
-| 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** with DNSSEC — NS cutover to primary pending (registrar) | Complete registrar NS record change | **cellMembrane** |
-| 6 | Cloudflare/cloudflared removed from production path | S1 not cut over | Caddy → BearDog ACME cutover | Shared |
+| 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** with DNSSEC — zone has lab/git/membrane A records, NS cutover pending (registrar) | Complete registrar NS record change | **cellMembrane** |
+| 6 | Cloudflare/cloudflared removed from production path | S1 not cut over, tunnel orphaned (git route superseded by VPS Caddy) | Caddy → BearDog ACME cutover | Shared |
 
 ---
 
