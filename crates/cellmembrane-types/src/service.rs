@@ -236,6 +236,102 @@ const SWEETGRASS: MembraneService = MembraneService {
     vps_transport: TransportMode::UdsOnly,
 };
 
+// ── Compute tier (Node composition) ──────────────────────────────────────────
+
+const TOADSTOOL: MembraneService = MembraneService {
+    binary: "toadstool",
+    systemd_unit: "toadstool-membrane.service",
+    port: None,
+    protocol: Protocol::Uds,
+    socket_path: Some("/run/membrane/toadstool.sock"),
+    bind: "",
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: true,
+    install_path: "/opt/membrane/toadstool",
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::UdsOnly,
+};
+
+const BARRACUDA: MembraneService = MembraneService {
+    binary: "barracuda",
+    systemd_unit: "barracuda-membrane.service",
+    port: None,
+    protocol: Protocol::Uds,
+    socket_path: Some("/run/membrane/barracuda.sock"),
+    bind: "",
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: true,
+    install_path: "/opt/membrane/barracuda",
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::UdsOnly,
+};
+
+const CORALREEF: MembraneService = MembraneService {
+    binary: "coralreef",
+    systemd_unit: "coralreef-membrane.service",
+    port: None,
+    protocol: Protocol::Uds,
+    socket_path: Some("/run/membrane/coralreef.sock"),
+    bind: "",
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: true,
+    install_path: "/opt/membrane/coralreef",
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::UdsOnly,
+};
+
+// ── Meta tier (orchestration) ────────────────────────────────────────────────
+
+const BIOMEOS: MembraneService = MembraneService {
+    binary: "biomeos",
+    systemd_unit: "biomeos-membrane.service",
+    port: None,
+    protocol: Protocol::Uds,
+    socket_path: Some("/run/membrane/biomeos.sock"),
+    bind: "",
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: true,
+    install_path: "/opt/membrane/biomeos",
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::UdsOnly,
+};
+
+const SQUIRREL: MembraneService = MembraneService {
+    binary: "squirrel",
+    systemd_unit: "squirrel-membrane.service",
+    port: None,
+    protocol: Protocol::Uds,
+    socket_path: Some("/run/membrane/squirrel.sock"),
+    bind: "",
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: true,
+    install_path: "/opt/membrane/squirrel",
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::UdsOnly,
+};
+
+const PETALTONGUE: MembraneService = MembraneService {
+    binary: "petaltongue",
+    systemd_unit: "petaltongue-membrane.service",
+    port: Some(8080),
+    protocol: Protocol::Tcp,
+    socket_path: Some("/run/membrane/petaltongue.sock"),
+    bind: BIND_LOOPBACK,
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: true,
+    install_path: "/opt/membrane/petaltongue",
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::UdsOnly,
+};
+
+// ── Symbiotic partners (not ecoPrimals) ──────────────────────────────────────
+
 const HBBS: MembraneService = MembraneService {
     binary: "hbbs",
     systemd_unit: "hbbs-membrane.service",
@@ -297,8 +393,25 @@ const KNOTDNS: MembraneService = MembraneService {
 };
 
 /// All known membrane services. Runtime discovery starts here.
+///
+/// Order: Tower (3) → Nest provenance (4) → Nucleus compute (3) → Nucleus meta (3) → Symbiotic (4).
 const ALL_SERVICES: &[MembraneService] = &[
-    BEARDOG, SONGBIRD, SKUNKBAT, NESTGATE, RHIZOCRYPT, LOAMSPINE, SWEETGRASS, HBBS, HBBR, CADDY,
+    BEARDOG,
+    SONGBIRD,
+    SKUNKBAT,
+    NESTGATE,
+    RHIZOCRYPT,
+    LOAMSPINE,
+    SWEETGRASS,
+    TOADSTOOL,
+    BARRACUDA,
+    CORALREEF,
+    BIOMEOS,
+    SQUIRREL,
+    PETALTONGUE,
+    HBBS,
+    HBBR,
+    CADDY,
     KNOTDNS,
 ];
 

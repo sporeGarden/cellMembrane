@@ -8,8 +8,8 @@
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
-| **Composition** | Nest Atomic (Tower + NestGate + rhizoCrypt + loamSpine + sweetGrass) + RustDesk |
-| **Escalation** | Phase 1.5 (Nest Atomic) — **current** (Wave 57, 2026-05-28) |
+| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 59, 2026-05-28) |
 
 ---
 
@@ -54,22 +54,21 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 160 tests — 95.8% line coverage (llvm-cov)
+cargo test                  # 175 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 57 (deep debt sprint):** `clippy::pedantic` + `clippy::nursery` zero warnings
-enforced. Typed `ConfigError` via `thiserror`. `DeployPaths` configurable base
-directories for substrate-agnostic deployment. `iter_binaries()` zero-copy iterator.
-`#[must_use]` + `const fn` across all pure functions. scyBorg triple license.
-`cargo-deny` ecoBin ban list. Coverage 77% → 96%.
+**Wave 59 (NUCLEUS composition):** Full 13-primal NUCLEUS composition tier
+added to service registry. 6 new services: toadStool, barraCuda, coralReef
+(compute), biomeOS, squirrel, petalTongue (meta). All UDS-only. Zero new
+firewall ports. `has_biomeos()` capability query. Spring overlay readiness.
 
-Wave 56: `TransportMode` enum (UDS-only / TCP default / TCP opt-in) for VPS
-deployment standard. `HealthCheckMethod::SocketExists` for UDS socket checks.
+Wave 57: `clippy::pedantic` + `clippy::nursery` enforced. Typed `ConfigError`
+via `thiserror`. `DeployPaths` configurable paths. Coverage 77% → 96%.
 
-Wave 51: `FirewallRule.comment` zero-allocation (`&'static str`),
-supplementary ports in service registry.
+Wave 56: `TransportMode` enum (UDS-only / TCP default / TCP opt-in).
+`HealthCheckMethod::SocketExists` for UDS socket checks.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
@@ -142,6 +141,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | NestGate :9500, rhizoCrypt :9602, loamSpine :9700, sweetGrass :9850 | DONE |
 | VPS deployment standard (Wave 56): UDS-only, TransportMode typed | DONE |
 | Deep debt sprint (Wave 57): 95.8% coverage, pedantic clean, typed errors | DONE |
+| NUCLEUS composition typed (Wave 59): 13 primals, 17 services in registry | DONE |
 
 ---
 
@@ -163,8 +163,9 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0 | Relay only | Superseded |
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
-| **1.5** | **Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt** | **Current** (Wave 57, 2026-05-28) |
-| 2 | Encrypted-at-rest (BearDog Vault) | Planned |
+| 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays** | **Current** (Wave 59, 2026-05-28) |
+| 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
 | 4 | Full autonomy (BearDog auto-rotation) | Future |

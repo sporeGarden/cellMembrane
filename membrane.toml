@@ -1,12 +1,13 @@
 # cellMembrane reference configuration
 # This describes the live membrane-relay VPS at membrane.primals.eco
-# Composition: Nest Atomic (Wave 38) — Tower + provenance trio
+# Composition: Nucleus (Wave 59) — full 13-primal NUCLEUS runtime
 # K-Derm: Diderm envelope — gate plasma membrane + VPS periplasm/outer membrane
+# Deploy: deploy_membrane.sh deploy root@$VPS --composition nucleus --uds-only
 
 [membrane]
 name = "membrane-relay"
 domain = "membrane.primals.eco"
-composition = "nest"
+composition = "nucleus"
 topology = "diderm"
 transport = "uds_only"
 
@@ -47,6 +48,11 @@ enabled = true
 shadow_mode = "permanent"
 cutover_gate_days = 7
 skunkbat_correlation = true
+
+[membrane.paths]
+install_base = "/opt/membrane"
+socket_base = "/run/membrane"
+credential_base = "/opt/membrane"
 
 [membrane.hardening]
 fail2ban = true

@@ -2,7 +2,11 @@
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-05-28
-**Overall status:** PROGRESSING — Nest Atomic LIVE, VPS deployment standard absorbed, NS cutover remaining
+**Overall status:** PROGRESSING — NUCLEUS typed, biomeOS deploy P0, NS cutover remaining
+**Wave 59 update:** NUCLEUS composition tier (13 primals, 17 services) typed into service registry.
+6 new services: toadStool, barraCuda, coralReef, biomeOS, squirrel, petalTongue. All UDS-only.
+`membrane.toml` evolved to `composition = "nucleus"`. 175 tests. Spring overlay readiness proven.
+primalSpring Wave 59 corrections applied: S2 DNS = "DEPLOYED", S4 CI = GitHub Actions gap.
 **Wave 57 update:** Deep debt sprint — `clippy::pedantic` + `nursery` enforced (zero warnings),
 typed `ConfigError` via `thiserror`, `DeployPaths` configurable paths, `iter_binaries()` zero-copy,
 `#[must_use]` + `const fn` across all pure functions, scyBorg triple license, `cargo-deny` ecoBin
@@ -75,6 +79,37 @@ configured, UFW :53 open. Remaining step is the registrar NS delegation update.
 **Dependencies:**
 - ICANN registrar cooperation (permanently external)
 - Current commercial DNS must remain available during transition
+
+### Blocker: Deploy biomeOS v3.84 to VPS (P0 — Critical Path)
+
+**What:** Deploy the full NUCLEUS composition (13 primals) including biomeOS v3.84.
+This unblocks all spring emissions and column U progression.
+
+**Current state:** biomeOS binary available in plasmidBin (`primals/x86_64-unknown-linux-musl/biomeos`).
+`deploy_membrane.sh deploy --composition nucleus --uds-only` ready. Cell graphs ready in primalSpring.
+`cellmembrane-types` NUCLEUS composition typed (17 services, 175 tests).
+
+**Checklist:**
+- [x] biomeOS binary harvested in plasmidBin ecoBin
+- [x] `deploy_membrane.sh` supports `--composition nucleus --uds-only`
+- [x] `spring-overlay` mode implemented in deploy script
+- [x] Cell graphs available: `hotspring_cell.toml` (6 VPS-standard springs)
+- [x] `cellmembrane-types` models NUCLEUS composition (13 primals, 6 new services)
+- [x] `membrane.toml` updated to `composition = "nucleus"`
+- [ ] Execute: `deploy_membrane.sh deploy root@$VPS_IP --composition nucleus --uds-only`
+- [ ] Verify: all 13 primals healthy via UDS sockets
+- [ ] Test: `deploy_membrane.sh spring-overlay root@$VPS_IP --cell hotspring`
+- [ ] Verify: hotSpring column U pass
+
+**Dependencies:**
+- SSH access to VPS (available)
+- DNS resolution working (currently intermittent — see CI note)
+
+### Observation: CI Sovereignty Gap (S4)
+
+**Noted by primalSpring Wave 59:** Git hosting is Forgejo-primary but CI/CD
+is still GitHub Actions. This is a glacial gate **observation**, not a stadial
+blocker. Options: Forgejo Actions, self-hosted runners on LAN gates.
 
 ---
 

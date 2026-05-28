@@ -39,7 +39,7 @@ pub struct MembraneConfig {
     #[serde(default)]
     pub domain: Option<String>,
 
-    /// Composition tier: relay, rustdesk, tower, nest.
+    /// Composition tier: relay, rustdesk, tower, nest, nucleus.
     pub composition: MembraneComposition,
 
     /// K-Derm envelope topology: monoderm (gate-only) or diderm (gate + VPS).

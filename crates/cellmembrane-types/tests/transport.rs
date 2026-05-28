@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Tests for TransportMode, UDS helpers, health check methods, and composition queries.
+//! Tests for `TransportMode`, UDS helpers, health check methods, and composition queries.
 
 use cellmembrane_types::composition::MembraneComposition;
 use cellmembrane_types::service::{HealthCheckMethod, MembraneService, TransportMode};
@@ -130,7 +130,9 @@ fn all_uds_primals_have_socket_paths() {
             "{name} socket path should be under /run/membrane/, got: {path}"
         );
         assert!(
-            path.ends_with(".sock"),
+            std::path::Path::new(path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("sock")),
             "{name} socket path should end with .sock, got: {path}"
         );
     }

@@ -13,7 +13,7 @@ use std::fmt;
 /// Membrane composition tier.
 ///
 /// Each composition is a strict superset of the one below:
-/// `relay < rustdesk < tower < nest`.
+/// `relay < rustdesk < tower < nest < nucleus`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MembraneComposition {
@@ -26,19 +26,29 @@ pub enum MembraneComposition {
     Tower,
     /// Tier 4: Tower + `NestGate` + provenance trio + Caddy TLS.
     Nest,
+    /// Tier 5: Nest + compute (toadStool/`barraCuda`/`coralReef`) + meta (`biomeOS`/squirrel/`petalTongue`).
+    ///
+    /// Full 13-primal NUCLEUS runtime. Springs overlay onto this via `biomeOS` deploy.
+    Nucleus,
 }
 
 impl MembraneComposition {
     /// Returns all composition variants in ladder order.
     #[must_use]
     pub const fn all() -> &'static [Self] {
-        &[Self::Relay, Self::RustDesk, Self::Tower, Self::Nest]
+        &[
+            Self::Relay,
+            Self::RustDesk,
+            Self::Tower,
+            Self::Nest,
+            Self::Nucleus,
+        ]
     }
 
     /// Whether this composition includes BTSP identity (Tower+).
     #[must_use]
     pub const fn has_btsp(&self) -> bool {
-        matches!(self, Self::Tower | Self::Nest)
+        matches!(self, Self::Tower | Self::Nest | Self::Nucleus)
     }
 
     /// Whether this composition requires a `tower.env` identity file.
@@ -53,6 +63,12 @@ impl MembraneComposition {
         self.has_btsp()
     }
 
+    /// Whether this composition includes the `biomeOS` Neural API orchestrator.
+    #[must_use]
+    pub const fn has_biomeos(&self) -> bool {
+        matches!(self, Self::Nucleus)
+    }
+
     /// Active channels for this composition.
     #[must_use]
     pub fn active_channels(&self) -> Vec<MembraneChannel> {
@@ -60,7 +76,7 @@ impl MembraneComposition {
             Self::Relay | Self::RustDesk | Self::Tower => {
                 vec![MembraneChannel::Relay]
             }
-            Self::Nest => {
+            Self::Nest | Self::Nucleus => {
                 vec![
                     MembraneChannel::Signal,
                     MembraneChannel::Relay,
@@ -86,6 +102,7 @@ impl fmt::Display for MembraneComposition {
             Self::RustDesk => write!(f, "rustdesk"),
             Self::Tower => write!(f, "tower"),
             Self::Nest => write!(f, "nest"),
+            Self::Nucleus => write!(f, "nucleus"),
         }
     }
 }

@@ -21,7 +21,7 @@ fn parse_reference_membrane_toml() {
 
     assert_eq!(config.name, "membrane-relay");
     assert_eq!(config.domain.as_deref(), Some("membrane.primals.eco"));
-    assert_eq!(config.composition, MembraneComposition::Nest);
+    assert_eq!(config.composition, MembraneComposition::Nucleus);
 }
 
 #[test]
