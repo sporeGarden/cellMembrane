@@ -1,8 +1,10 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-05-29
-**Deployed composition:** NUCLEUS (Wave 59, deployed 2026-05-28) — 13 primals + 4 symbiotic + federation
-**VPS transport:** UDS + federation TCP :7700 (Wave 60) — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
+**Last updated:** 2026-05-29 (Wave 61)
+**Deployed composition:** Full NUCLEUS (Wave 61) — 13 primals + 4 symbiotic + federation + standard workspace
+**VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
+**VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade-pull enabled
+**Deployment model:** Standard NUCLEUS — `nucleus_launcher.sh` + `cascade-pull.sh --gate golgiBody`
 **VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 
@@ -133,6 +135,14 @@
 | `/etc/membrane/` | Tower configuration |
 | `/etc/membrane/Caddyfile` | Channel 3 Caddy config (SSOT: `plasmidBin/membrane/Caddyfile`) |
 | `/etc/membrane/family/` | MitoBeacon seeds: `.beacon.seed`, `family.key`, `nodes/*.lineage.seed` |
+| `/opt/ecoPrimals/` | Standard ecoPrimals workspace (17 repos from Forgejo) |
+| `/opt/ecoPrimals/infra/plasmidBin/` | Deployment tooling (fetch.sh, nucleus_launcher.sh, start_primal.sh) |
+| `/opt/ecoPrimals/infra/wateringHole/` | Ecosystem standards + cascade-pull.sh |
+| `/opt/ecoPrimals/primals/` | 13 primal source repos (cloned from sovereign Forgejo) |
+| `/opt/ecoPrimals/gardens/` | cellMembrane + projectNUCLEUS |
+| `/opt/membrane/nucleus_launcher.sh` | Symlink → plasmidBin launcher |
+| `/opt/membrane/start_primal.sh` | Symlink → plasmidBin start script |
+| `/opt/membrane/fetch.sh` | Symlink → plasmidBin binary fetch |
 | `/run/membrane/` | Unix domain sockets (BearDog, Songbird, SkunkBat) |
 | `/var/cache/membrane/nestgate/` | sporePrint content cache (19 MB synced from NestGate) |
 | `/var/cache/membrane/lab/` | Static lab page root (intra layer — ecosystem dashboard) |
@@ -176,7 +186,9 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Dark Forest audit (Nest) | 21 PASS, 0 FAIL, 1 SKIP (MEM-09 b3sum) | 2026-05-22 |
 | Provenance trio pipeline | 10/10 PASS | 2026-05-22 |
 | Shadow orchestrator | 6/6 PASS | 2026-05-22 |
-| `deploy_membrane.sh status` | All 17 services RUNNING | 2026-05-28 |
+| `deploy_membrane.sh status` | All 19 services RUNNING | 2026-05-28 |
+| `cascade-pull.sh --gate golgiBody` | 17/17 repos synced from sovereign Forgejo | 2026-05-29 |
+| `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `cargo test` (cellmembrane-types) | 175 PASS, 0 FAIL, 0 clippy warnings | 2026-05-28 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
@@ -226,6 +238,15 @@ Step 3: Spring runtime discovers NUCLEUS via UDS
 | Cell manifest | `graphs/cells/cells_manifest.toml` | Index with `vps_standard` field |
 | Launch profiles | `config/primal_launch_profiles.toml` | Per-primal CLI/env wiring |
 | Seed fingerprints | `validation/seed_fingerprints.toml` | Crypto tier 0 bootstrap |
+
+---
+
+## Resource Notes
+
+| Resource | Value | Threshold |
+|----------|-------|-----------|
+| Disk | 8.2G / 9.7G (89%) | Resize or prune needed before fieldMouse evolution |
+| RAM | 517M / 1.9G used | Healthy for current composition |
 
 ---
 
