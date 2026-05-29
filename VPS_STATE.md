@@ -110,6 +110,7 @@
 | 21116/tcp ALLOW | RustDesk ID registration |
 | 21116/udp ALLOW | RustDesk hole punching |
 | 21117/tcp ALLOW | RustDesk relay |
+| 49152:65535/udp ALLOW | Songbird TURN relay data (ephemeral media channels) |
 
 **Default policy:** deny incoming, allow outgoing
 
@@ -189,6 +190,8 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `deploy_membrane.sh status` | All 19 services RUNNING | 2026-05-28 |
 | `cascade-pull.sh --gate golgiBody` | 17/17 repos synced from sovereign Forgejo | 2026-05-29 |
 | `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
+| `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
+| `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
 | `cargo test` (cellmembrane-types) | 175 PASS, 0 FAIL, 0 clippy warnings | 2026-05-28 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
