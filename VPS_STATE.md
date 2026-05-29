@@ -1,8 +1,8 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-05-28
-**Deployed composition:** NUCLEUS (Wave 59, deployed 2026-05-28) — 13 primals + 4 symbiotic
-**VPS transport:** UDS-only (Wave 56 standard) — NUCLEUS primals on Unix domain sockets, zero TCP ports
+**Last updated:** 2026-05-29
+**Deployed composition:** NUCLEUS (Wave 59, deployed 2026-05-28) — 13 primals + 4 symbiotic + federation
+**VPS transport:** UDS + federation TCP :7700 (Wave 60) — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 
@@ -22,14 +22,15 @@
 
 ---
 
-## Running Services (21 services, 13 primals + Forgejo)
+## Running Services (22 services, 13 primals + Forgejo + federation)
 
-### Tower Tier (identity + relay + audit)
+### Tower Tier (identity + relay + federation + audit)
 
 | Service | Unit Name | Status | Port / Socket | Version |
 |---------|-----------|--------|---------------|---------|
 | BearDog | `beardog-membrane` | ACTIVE | `/run/membrane/beardog.sock` | v0.9.0 |
 | BearDog TLS shadow | `beardog-tls-shadow` | ACTIVE | :8443 | v0.9.0 |
+| **Songbird Federation** | `songbird-membrane` | **ACTIVE** | `/run/membrane/songbird.sock` + **:7700** | v0.2.1 |
 | Songbird TURN | `songbird-relay` | ACTIVE | :3478 tcp/udp | v0.2.1 |
 | SkunkBat | `skunkbat-membrane` | ACTIVE | 127.0.0.1:9140 | — |
 
@@ -96,6 +97,7 @@
 | 443/tcp ALLOW | Caddy HTTPS (Channel 3 Surface) |
 | 3478/tcp ALLOW | Songbird TURN (Channel 2 Relay) |
 | 3478/udp ALLOW | Songbird TURN (Channel 2 Relay) |
+| 7700/tcp ALLOW | Songbird Federation (Channel 2b Mesh Hub) |
 | 2222/tcp ALLOW | Forgejo SSH git (golgiBody) |
 | 8443/tcp ALLOW | BearDog TLS shadow |
 | 9500/tcp ALLOW | NestGate |
@@ -130,7 +132,8 @@
 | `/etc/songbird/relay-credentials` | TURN credentials (nucleus-relay:<hex>) |
 | `/etc/membrane/` | Tower configuration |
 | `/etc/membrane/Caddyfile` | Channel 3 Caddy config (SSOT: `plasmidBin/membrane/Caddyfile`) |
-| `/run/membrane/` | Unix domain sockets (BearDog, SkunkBat) |
+| `/etc/membrane/family/` | MitoBeacon seeds: `.beacon.seed`, `family.key`, `nodes/*.lineage.seed` |
+| `/run/membrane/` | Unix domain sockets (BearDog, Songbird, SkunkBat) |
 | `/var/cache/membrane/nestgate/` | sporePrint content cache (19 MB synced from NestGate) |
 | `/var/cache/membrane/lab/` | Static lab page root (intra layer — ecosystem dashboard) |
 | `/var/lib/membrane/nestgate` | NestGate data directory |
