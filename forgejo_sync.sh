@@ -1,143 +1,292 @@
 #!/usr/bin/env bash
-# forgejo_sync.sh — Sync non-mirror repos to Forgejo inner membrane
+# forgejo_sync.sh — Manifest-driven Forgejo membrane sync
 #
-# Model: GitHub (external membrane) is authoritative. Forgejo (inner membrane)
-# trails behind. 25/31 repos are native Forgejo pull mirrors that auto-sync
-# every 8h. The remaining 6 repos (3 private, 3 large/public) couldn't become
-# native mirrors, so this script fetches from GitHub and pushes to Forgejo.
-#
-# When covalent gates host Forgejo, we invert: Forgejo becomes primary.
+# Reads ecosystem_manifest.toml and works with Forgejo's mirror topology:
+# - Pull mirrors (36 repos): triggers API sync so Forgejo re-pulls from GitHub
+# - Inner-only repos (cellMembrane): pushes directly to Forgejo
+# - Outer-only repos (sporePrint): skipped
 #
 # Usage:
-#   ./forgejo_sync.sh              # Sync the 6 non-mirror repos
-#   ./forgejo_sync.sh --status     # Show sync status without pushing
-#   ./forgejo_sync.sh --all        # Also trigger mirror-sync on native mirrors
-#   ./forgejo_sync.sh --force      # Force-push diverged repos
+#   ./forgejo_sync.sh                  # Sync all repos (trigger mirrors + push inner-only)
+#   ./forgejo_sync.sh --status         # Show sync status without action
+#   ./forgejo_sync.sh --check          # Quick parity check (no push/trigger)
+#   ./forgejo_sync.sh --force          # Force-push diverged inner-only repos
+#   ./forgejo_sync.sh --mirrors-only   # Only trigger Forgejo mirror sync
+#   ./forgejo_sync.sh --push-only      # Only push inner-only repos
 #
-# Designed for cron/systemd timer on the Forgejo host machine (ironGate).
-# Does NOT require the dev machine to be the one that pushed to GitHub.
+# Token resolution:
+#   1. FORGEJO_TOKEN env var
+#   2. ~/.config/forgejo/token file
+#
+# Manifest: ecosystem_manifest.toml (auto-discovered from script location)
+# Coordination domain: waterFall (SYNC / autonomic)
 
 set -uo pipefail
 
-ECOPRIMALS_ROOT="${ECOPRIMALS_ROOT:-$HOME/Development/ecoPrimals}"
-FORGEJO_URL="${FORGEJO_URL:-http://127.0.0.1:3000}"
-FORGEJO_TOKEN="${FORGEJO_TOKEN:-}"
-LOGFILE="${LOGFILE:-/tmp/forgejo_sync.log}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+_find_manifest() {
+    local candidates=(
+        "${ECOPRIMALS_ROOT:-}/infra/wateringHole/ecosystem_manifest.toml"
+        "$SCRIPT_DIR/../../infra/wateringHole/ecosystem_manifest.toml"
+        "$SCRIPT_DIR/../wateringHole/ecosystem_manifest.toml"
+    )
+    for c in "${candidates[@]}"; do
+        [[ -f "$c" ]] && { echo "$c"; return; }
+    done
+    echo ""
+}
+
+MANIFEST="${ECOSYSTEM_MANIFEST:-$(_find_manifest)}"
+if [[ -z "$MANIFEST" || ! -f "$MANIFEST" ]]; then
+    echo "ERROR: ecosystem_manifest.toml not found"
+    echo "Hint: set ECOPRIMALS_ROOT or ECOSYSTEM_MANIFEST"
+    exit 1
+fi
+
+_resolve_root() {
+    local mdir
+    mdir="$(cd "$(dirname "$MANIFEST")/../.." && pwd)"
+    echo "$mdir"
+}
+
+ECOPRIMALS_ROOT="${ECOPRIMALS_ROOT:-$(_resolve_root)}"
+
+_resolve_token() {
+    if [[ -n "${FORGEJO_TOKEN:-}" ]]; then
+        echo "$FORGEJO_TOKEN"
+        return
+    fi
+    local token_file="$HOME/.config/forgejo/token"
+    if [[ -f "$token_file" ]]; then
+        cat "$token_file"
+        return
+    fi
+    echo ""
+}
+
+FORGEJO_TOKEN="$(_resolve_token)"
+FORGEJO_API="${FORGEJO_API:-https://git.primals.eco/api/v1}"
+LOGFILE="${LOGFILE:-${XDG_STATE_HOME:-$HOME/.local/state}/forgejo/sync.log}"
+
 FORCE=false
 STATUS_ONLY=false
-SYNC_ALL=false
+CHECK_ONLY=false
+MIRRORS_ONLY=false
+PUSH_ONLY=false
 
 for arg in "$@"; do
-  case "$arg" in
-    --force)    FORCE=true ;;
-    --status)   STATUS_ONLY=true ;;
-    --all)      SYNC_ALL=true ;;
-    --help|-h)
-      echo "Usage: $0 [--status] [--force] [--all]"
-      echo "  --status   Show sync status without pushing"
-      echo "  --force    Use --force-with-lease for diverged repos"
-      echo "  --all      Also trigger native mirror sync via API"
-      exit 0 ;;
-    *) echo "Unknown arg: $arg" >&2; exit 1 ;;
-  esac
+    case "$arg" in
+        --force)          FORCE=true ;;
+        --status)         STATUS_ONLY=true ;;
+        --check)          CHECK_ONLY=true ;;
+        --mirrors-only)   MIRRORS_ONLY=true ;;
+        --push-only)      PUSH_ONLY=true ;;
+        --help|-h)
+            cat <<'USAGE'
+Usage: forgejo_sync.sh [OPTIONS]
+
+Options:
+  --status          Show mirror/sync status for all repos
+  --check           Quick parity check (no push, no trigger)
+  --force           Use --force-with-lease for diverged inner-only repos
+  --mirrors-only    Only trigger Forgejo mirror sync (API)
+  --push-only       Only push inner-only repos to Forgejo
+  -h, --help        Show this help
+
+Sync model:
+  Pull mirrors: Forgejo auto-syncs from GitHub every 8h. This script
+  triggers immediate sync via API when you want faster convergence.
+  Inner-only repos (e.g. cellMembrane): pushed directly to Forgejo.
+
+Token: Set FORGEJO_TOKEN env var, or store at ~/.config/forgejo/token
+Coordination domain: waterFall (SYNC / autonomic)
+USAGE
+            exit 0 ;;
+        *) echo "Unknown option: $arg"; exit 1 ;;
+    esac
 done
 
-if ! curl -sf "$FORGEJO_URL/api/v1/version" --max-time 5 >/dev/null 2>&1; then
-  echo "$(date '+%H:%M:%S') Forgejo not reachable — skipping" | tee -a "$LOGFILE"
-  exit 0
-fi
+_py_read_manifest() {
+    python3 -c "
+import sys, json
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
-sync_ok=0
-sync_fail=0
+with open('$MANIFEST', 'rb') as f:
+    m = tomllib.load(f)
+
+cmd = sys.argv[1]
+
+if cmd == 'all_repos':
+    sync = m.get('sync', {})
+    forgejo_ssh = sync.get('forgejo_ssh', 'ssh://git@git.primals.eco:2222')
+    for key, repo in sorted(m.get('repos', {}).items()):
+        lp = repo.get('local_path', '')
+        fr = repo.get('forgejo_repo', '')
+        gr = repo.get('github_repo', '')
+        mem = repo.get('membrane', 'trailing-mirror')
+        if lp and fr:
+            print(json.dumps({
+                'key': key,
+                'local_path': lp,
+                'forgejo_repo': fr,
+                'github_repo': gr,
+                'membrane': mem,
+                'forgejo_ssh': f'{forgejo_ssh}/{fr}.git',
+            }))
+" "$@"
+}
+
+mkdir -p "$(dirname "$LOGFILE")"
+
+echo "=== Forgejo Membrane Sync ==="
+echo "Manifest: $MANIFEST"
+echo "Root:     $ECOPRIMALS_ROOT"
+echo "API:      $FORGEJO_API"
+echo "Token:    $([ -n "$FORGEJO_TOKEN" ] && echo 'configured' || echo 'MISSING')"
+echo ""
+
+mirror_triggered=0
+push_ok=0
+push_fail=0
 already_sync=0
+skipped=0
 
-# Non-mirror repos: fetch from GitHub, push to Forgejo
-declare -A NON_MIRROR_REPOS
-NON_MIRROR_REPOS["primals/bearDog"]="ecoPrimals/bearDog"
-NON_MIRROR_REPOS["primals/skunkBat"]="ecoPrimals/skunkBat"
-NON_MIRROR_REPOS["infra/whitePaper"]="ecoPrimals/whitePaper"
-NON_MIRROR_REPOS["springs/neuralSpring"]="syntheticChemistry/neuralSpring"
-NON_MIRROR_REPOS["springs/primalSpring"]="syntheticChemistry/primalSpring"
-NON_MIRROR_REPOS["springs/wetSpring"]="syntheticChemistry/wetSpring"
+while IFS= read -r repo_json; do
+    key=$(echo "$repo_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['key'])")
+    local_path=$(echo "$repo_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['local_path'])")
+    forgejo_repo=$(echo "$repo_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['forgejo_repo'])")
+    membrane=$(echo "$repo_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['membrane'])")
+    forgejo_ssh=$(echo "$repo_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['forgejo_ssh'])")
 
-echo "Forgejo sync — $(date '+%Y-%m-%d %H:%M:%S')"
-echo ""
-echo "=== Non-mirror repos (fetch origin → push forgejo) ==="
+    full="$ECOPRIMALS_ROOT/$local_path"
 
-for local_dir in $(printf '%s\n' "${!NON_MIRROR_REPOS[@]}" | sort); do
-  forgejo_path="${NON_MIRROR_REPOS[$local_dir]}"
-  full="$ECOPRIMALS_ROOT/$local_dir"
-
-  if [ ! -d "$full/.git" ]; then
-    printf "  %-30s MISSING\n" "$local_dir"
-    continue
-  fi
-
-  branch=$(git -C "$full" symbolic-ref --short HEAD 2>/dev/null || echo "main")
-
-  # Fetch latest from GitHub (origin)
-  if ! git -C "$full" fetch origin --quiet 2>/dev/null; then
-    printf "  %-30s FETCH FAILED\n" "$local_dir"
-    ((sync_fail++))
-    continue
-  fi
-
-  # Fast-forward local to origin if behind
-  local_ref=$(git -C "$full" rev-parse "$branch" 2>/dev/null)
-  origin_ref=$(git -C "$full" rev-parse "origin/$branch" 2>/dev/null || echo "none")
-  if [ "$local_ref" != "$origin_ref" ] && [ "$origin_ref" != "none" ]; then
-    git -C "$full" merge --ff-only "origin/$branch" --quiet 2>/dev/null || true
-  fi
-
-  # Check if Forgejo is already up to date
-  git -C "$full" fetch forgejo --quiet 2>/dev/null
-  fg_ref=$(git -C "$full" rev-parse "forgejo/$branch" 2>/dev/null || echo "none")
-  local_ref=$(git -C "$full" rev-parse "$branch" 2>/dev/null)
-
-  if [ "$local_ref" = "$fg_ref" ]; then
-    printf "  %-30s UP TO DATE\n" "$local_dir"
-    ((already_sync++))
-    continue
-  fi
-
-  ahead=$(git -C "$full" rev-list --count "forgejo/$branch".."$branch" 2>/dev/null || echo "?")
-
-  if $STATUS_ONLY; then
-    printf "  %-30s ahead +%s\n" "$local_dir" "$ahead"
-    continue
-  fi
-
-  push_flags=""
-  if $FORCE; then push_flags="--force-with-lease"; fi
-
-  if git -C "$full" push $push_flags forgejo "$branch" >/dev/null 2>&1; then
-    printf "  %-30s PUSHED (+%s)\n" "$local_dir" "$ahead"
-    ((sync_ok++))
-  else
-    printf "  %-30s PUSH FAILED (diverged? use --force)\n" "$local_dir"
-    ((sync_fail++))
-  fi
-done
-
-# Optionally trigger sync on native pull mirrors
-if $SYNC_ALL && [ -n "$FORGEJO_TOKEN" ]; then
-  echo ""
-  echo "=== Native pull mirrors (trigger sync via API) ==="
-  AUTH="Authorization: token $FORGEJO_TOKEN"
-  mirror_synced=0
-  for path in ecoPrimals/{barraCuda,bingoCube,biomeOS,coralReef,loamSpine,nestGate,petalTongue,plasmidBin,rhizoCrypt,songBird,sourDough,sporePrint,squirrel,sweetGrass,toadStool,wateringHole} \
-              sporeGarden/{esotericWebb,lithoSpore,projectFOUNDATION,projectNUCLEUS} \
-              syntheticChemistry/{airSpring,groundSpring,healthSpring,hotSpring,ludoSpring}; do
-    code=$(curl -sf -X POST -H "$AUTH" "$FORGEJO_URL/api/v1/repos/$path/mirror-sync" -w "%{http_code}" -o /dev/null 2>/dev/null)
-    if [ "$code" = "200" ]; then
-      ((mirror_synced++))
-    else
-      printf "  %-40s SYNC FAILED (HTTP %s)\n" "$path" "$code"
+    if [[ "$membrane" == "outer-only" ]]; then
+        $STATUS_ONLY && printf "  %-30s OUTER-ONLY (skip)\n" "$key"
+        ((skipped++))
+        continue
     fi
-  done
-  printf "  Triggered sync on %d native mirrors\n" "$mirror_synced"
-fi
+
+    # ── Status mode ──────────────────────────────────────────────
+    if $STATUS_ONLY && [[ -n "$FORGEJO_TOKEN" ]]; then
+        info=$(curl -sf --max-time 10 -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/repos/$forgejo_repo" 2>/dev/null)
+        if [[ -z "$info" ]]; then
+            printf "  %-30s NOT ON FORGEJO\n" "$key"
+        else
+            is_mirror=$(echo "$info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('mirror',False))" 2>/dev/null)
+            if [[ "$is_mirror" == "True" ]]; then
+                interval=$(echo "$info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('mirror_interval','?'))" 2>/dev/null)
+                updated=$(echo "$info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('mirror_updated','?')[:19])" 2>/dev/null)
+                printf "  %-30s ✓ MIRROR  interval=%s  last=%s\n" "$key" "$interval" "$updated"
+            else
+                printf "  %-30s REPO (not mirror, membrane=%s)\n" "$key" "$membrane"
+            fi
+        fi
+        continue
+    fi
+
+    # ── Check mode ───────────────────────────────────────────────
+    if $CHECK_ONLY; then
+        if [[ ! -d "$full/.git" ]]; then
+            printf "  %-30s NOT CLONED\n" "$key"
+            continue
+        fi
+        branch=$(git -C "$full" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+        local_ref=$(git -C "$full" rev-parse HEAD 2>/dev/null || echo "none")
+
+        if git -C "$full" remote get-url forgejo >/dev/null 2>&1; then
+            git -C "$full" fetch forgejo "$branch" --quiet 2>/dev/null || true
+            fg_ref=$(git -C "$full" rev-parse "forgejo/$branch" 2>/dev/null || echo "none")
+        else
+            fg_ref="none"
+        fi
+
+        if [[ "$local_ref" == "$fg_ref" ]]; then
+            printf "  %-30s PARITY\n" "$key"
+            ((already_sync++))
+        elif [[ "$fg_ref" == "none" ]]; then
+            printf "  %-30s NO FORGEJO REF\n" "$key"
+        else
+            ahead=$(git -C "$full" rev-list --count "forgejo/$branch".."$branch" 2>/dev/null || echo "?")
+            behind=$(git -C "$full" rev-list --count "$branch".."forgejo/$branch" 2>/dev/null || echo "?")
+            printf "  %-30s DRIFT (ahead=%s behind=%s)\n" "$key" "$ahead" "$behind"
+        fi
+        continue
+    fi
+
+    # ── Sync mode ────────────────────────────────────────────────
+    # For mirror repos: trigger API sync (Forgejo pulls from GitHub)
+    # For inner-only repos: push directly to Forgejo
+
+    if [[ "$membrane" == "inner-only" ]]; then
+        # Inner-only repo: push directly to Forgejo
+        if $MIRRORS_ONLY; then
+            continue
+        fi
+
+        if [[ ! -d "$full/.git" ]]; then
+            printf "  %-30s NOT CLONED (skip)\n" "$key"
+            ((skipped++))
+            continue
+        fi
+
+        branch=$(git -C "$full" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+
+        if ! git -C "$full" remote get-url forgejo >/dev/null 2>&1; then
+            git -C "$full" remote add forgejo "$forgejo_ssh" 2>/dev/null || true
+        fi
+
+        git -C "$full" fetch forgejo "$branch" --quiet 2>/dev/null || true
+        fg_ref=$(git -C "$full" rev-parse "forgejo/$branch" 2>/dev/null || echo "none")
+        local_ref=$(git -C "$full" rev-parse "$branch" 2>/dev/null)
+
+        if [[ "$local_ref" == "$fg_ref" ]]; then
+            printf "  %-30s UP TO DATE (inner-only)\n" "$key"
+            ((already_sync++))
+            continue
+        fi
+
+        push_flags=""
+        $FORCE && push_flags="--force-with-lease"
+
+        if git -C "$full" push $push_flags forgejo "$branch" >/dev/null 2>&1; then
+            ahead=$(git -C "$full" rev-list --count "forgejo/$branch".."$branch" 2>/dev/null || echo "?")
+            printf "  %-30s PUSHED (+%s) (inner-only)\n" "$key" "$ahead"
+            ((push_ok++))
+        else
+            printf "  %-30s PUSH FAILED (inner-only)\n" "$key"
+            ((push_fail++))
+        fi
+    else
+        # Mirror repo: trigger Forgejo to re-pull from GitHub
+        if $PUSH_ONLY; then
+            continue
+        fi
+
+        if [[ -n "$FORGEJO_TOKEN" ]]; then
+            code=$(curl -sf --max-time 10 -X POST -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/repos/$forgejo_repo/mirror-sync" -w "%{http_code}" -o /dev/null 2>/dev/null)
+            if [[ "$code" == "200" ]]; then
+                printf "  %-30s SYNC TRIGGERED (mirror)\n" "$key"
+                ((mirror_triggered++))
+            else
+                printf "  %-30s SYNC FAILED HTTP %s (mirror)\n" "$key" "$code"
+                ((push_fail++))
+            fi
+        else
+            printf "  %-30s NO TOKEN (mirror sync skipped)\n" "$key"
+            ((skipped++))
+        fi
+    fi
+done < <(_py_read_manifest all_repos)
 
 echo ""
-echo "Summary: $sync_ok pushed, $already_sync up-to-date, $sync_fail failed"
-echo "$(date '+%Y-%m-%d %H:%M:%S') | pushed=$sync_ok synced=$already_sync failed=$sync_fail" >> "$LOGFILE"
+echo "=== Summary ==="
+echo "Mirrors triggered: $mirror_triggered"
+[[ $push_ok -gt 0 ]] && echo "Pushed (inner-only): $push_ok"
+[[ $already_sync -gt 0 ]] && echo "Already synced: $already_sync"
+[[ $push_fail -gt 0 ]] && echo "Failed: $push_fail"
+[[ $skipped -gt 0 ]] && echo "Skipped: $skipped"
+echo "$(date '+%Y-%m-%d %H:%M:%S') mirrors=$mirror_triggered pushed=$push_ok failed=$push_fail" >> "$LOGFILE"

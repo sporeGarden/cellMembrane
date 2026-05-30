@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "membrane-shadow"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Sovereign shadow functions — typed Rust API for agentic golgiBody VPS control"
+
+[[bin]]
+name = "membrane"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = "1"
+thiserror = { workspace = true }
+tokio = { version = "1", features = ["process", "fs", "io-util", "macros"] }
+reqwest = { version = "0.12", features = ["json"], default-features = false, optional = true }
+
+[features]
+default = ["http"]
+http = ["reqwest/rustls-tls"]
+
+[lints]
+workspace = true
