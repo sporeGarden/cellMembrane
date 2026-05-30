@@ -55,8 +55,11 @@ pub mod config;
 pub mod error;
 pub mod forgejo;
 pub mod gate;
+pub mod identity;
+pub mod manifest;
 pub mod service;
 pub mod ssh;
+pub mod temporal;
 
 pub use config::ShadowConfig;
 pub use error::{Result, ShadowError, ShadowOutcome};

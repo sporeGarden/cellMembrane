@@ -6,23 +6,23 @@
 //! commands to the appropriate shadow function, returning structured
 //! JSON or human-readable output.
 
-use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, service};
+use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, identity, manifest, service, temporal};
 use std::process::ExitCode;
 
 fn usage() {
     eprintln!(
-        r#"membrane — sovereign shadow functions for golgiBody VPS
+        r"membrane — sovereign shadow functions for golgiBody VPS
 
 Usage: membrane <domain.operation> [args...]
 
 Repo (nestGate content.repo.*):
   repo.create <org/name>           Create repo on Forgejo
-  repo.list [org]                  List repos (default: ecoPrimals)
+  repo.list <org>                  List repos in org
   repo.delete <org/name>           Delete repo from Forgejo
 
 Mirror (nestGate content.mirror.*):
   mirror.sync <org/name>           Trigger mirror sync for one repo
-  mirror.sync-all                  Trigger sync on all mirrors
+  mirror.sync-all [org...]         Trigger sync on all mirrors (default: ecoPrimals)
   mirror.status <org/name>         Show mirror status for a repo
 
 Service (biomeOS gate.service.*):
@@ -36,6 +36,18 @@ Gate (biomeOS gate.*):
   gate.pull                        Run cascade-pull on golgiBody
   gate.check                       Parity check on golgiBody workspace
 
+Temporal (waterFall temporal.*):
+  temporal.check [repo_path...]    Temporal position matrix (local, all remotes)
+  temporal.sync  [repo_path...]    Pull leader, push followers (ff-only)
+
+Manifest (ecosystem manifest):
+  manifest.info                    Show manifest metadata + sync config
+  manifest.repos [gate]            List repos (all, or filtered by gate profile)
+  manifest.orgs                    List all orgs from manifest
+
+Identity:
+  identity.resolve                 Show current gate identity
+
 Token (bearDog auth.token.*):
   token.list                       List all Forgejo API tokens
   token.create <name> [scopes]     Generate new API token
@@ -46,7 +58,7 @@ Forgejo:
 
 Options:
   --json                           Output as JSON (default: human-readable)
-  -h, --help                       Show this help"#
+  -h, --help                       Show this help"
     );
 }
 
@@ -113,7 +125,7 @@ async fn dispatch(
             ))
         }
         "repo.list" => {
-            let org = args.first().copied().unwrap_or("ecoPrimals");
+            let org = require_arg(args, 0, "org")?;
             let repos = forgejo::repo_list(config, org).await?;
             let lines: Vec<String> = repos
                 .iter()
@@ -147,9 +159,14 @@ async fn dispatch(
             }
         }
         "mirror.sync-all" => {
+            let orgs: Vec<&str> = if args.is_empty() {
+                vec!["ecoPrimals"]
+            } else {
+                args.to_vec()
+            };
             let mut triggered = 0u32;
             let mut failed = 0u32;
-            for org in &["ecoPrimals", "syntheticChemistry", "sporeGarden"] {
+            for org in &orgs {
                 let repos = forgejo::repo_list(config, org).await?;
                 for repo in &repos {
                     if repo.mirror {
@@ -198,7 +215,7 @@ async fn dispatch(
             let s = service::status(config, unit).await?;
             let state = if s.active { "active" } else { "inactive" };
             let mem = s.memory.as_deref().unwrap_or("-");
-            let pid = s.pid.map_or("-".to_string(), |p| p.to_string());
+            let pid = s.pid.map_or_else(|| "-".to_string(), |p| p.to_string());
             Ok(ShadowOutcome::ok_with(
                 format!("{unit}: {state}/{} pid={pid} mem={mem}", s.sub_state),
                 serde_json::to_value(&s)?,
@@ -316,6 +333,122 @@ async fn dispatch(
                 ))?;
             forgejo::token_revoke(config, id).await?;
             Ok(ShadowOutcome::ok(format!("REVOKED token id={id}")))
+        }
+
+        // ── Temporal ──────────────────────────────────────────────
+        "temporal.check" => {
+            let root = temporal::resolve_workspace_root()?;
+            if args.is_empty() {
+                return Err(membrane_shadow::ShadowError::Parse(
+                    "temporal.check requires at least one repo path".into(),
+                ));
+            }
+            let matrices: Vec<temporal::TemporalMatrix> = {
+                let mut v = Vec::with_capacity(args.len());
+                for path in args {
+                    v.push(temporal::check(&root, path).await?);
+                }
+                v
+            };
+            let lines: Vec<String> = matrices.iter().map(ToString::to_string).collect();
+            let parity = matrices
+                .iter()
+                .filter(|m| m.classification == temporal::SyncClassification::Parity)
+                .count();
+            Ok(ShadowOutcome::ok_with(
+                format!(
+                    "{}/{} parity\n{}",
+                    parity,
+                    matrices.len(),
+                    lines.join("\n")
+                ),
+                serde_json::to_value(&matrices)?,
+            ))
+        }
+        "temporal.sync" => {
+            let root = temporal::resolve_workspace_root()?;
+            if args.is_empty() {
+                return Err(membrane_shadow::ShadowError::Parse(
+                    "temporal.sync requires at least one repo path".into(),
+                ));
+            }
+            let mut results = Vec::with_capacity(args.len());
+            let mut synced = 0u32;
+            let mut failed = 0u32;
+            for path in args {
+                let r = temporal::sync(&root, path).await?;
+                if r.ok {
+                    synced += 1;
+                } else {
+                    failed += 1;
+                }
+                results.push(r);
+            }
+            let lines: Vec<String> = results
+                .iter()
+                .map(|r| {
+                    let status = if r.ok { "OK" } else { "FAIL" };
+                    format!("  {:<35} {status} {}", r.repo_path, r.summary)
+                })
+                .collect();
+            Ok(ShadowOutcome::ok_with(
+                format!(
+                    "synced={synced} failed={failed}\n{}",
+                    lines.join("\n")
+                ),
+                serde_json::to_value(&results)?,
+            ))
+        }
+
+        // ── Manifest ──────────────────────────────────────────────
+        "manifest.info" => {
+            let root = temporal::resolve_workspace_root()?;
+            let m = manifest::load_from_workspace(&root)?;
+            let msg = format!(
+                "manifest v{} wave {} ({} repos)\n\
+                 sync: source={} branch={} divergence={} push_followers={}",
+                m.meta.version, m.meta.wave, m.meta.total_repos,
+                m.sync.default_source, m.sync.default_branch,
+                m.sync.divergence_policy, m.sync.push_to_followers,
+            );
+            Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&m.meta)?))
+        }
+        "manifest.repos" => {
+            let root = temporal::resolve_workspace_root()?;
+            let m = manifest::load_from_workspace(&root)?;
+            let repos: Vec<(&str, &manifest::RepoEntry)> = if let Some(gate_name) = args.first() {
+                m.gate_repos(gate_name)
+            } else {
+                m.repos.iter().map(|(n, e)| (n.as_str(), e)).collect()
+            };
+            let lines: Vec<String> = repos
+                .iter()
+                .map(|(name, e)| format!("  {:<25} {:<30} {:<18} {}", name, e.local_path, e.membrane, e.category))
+                .collect();
+            let header = if let Some(g) = args.first() {
+                format!("{} repos for gate {g}", repos.len())
+            } else {
+                format!("{} repos total", repos.len())
+            };
+            Ok(ShadowOutcome::ok(format!("{header}\n{}", lines.join("\n"))))
+        }
+        "manifest.orgs" => {
+            let root = temporal::resolve_workspace_root()?;
+            let m = manifest::load_from_workspace(&root)?;
+            let orgs = m.orgs();
+            Ok(ShadowOutcome::ok(format!("{} orgs: {}", orgs.len(), orgs.join(", "))))
+        }
+
+        // ── Identity ─────────────────────────────────────────────
+        "identity.resolve" => {
+            let root = temporal::resolve_workspace_root()?;
+            match identity::resolve(&root) {
+                Ok(id) => Ok(ShadowOutcome::ok_with(
+                    format!("{} (via {:?})", id.name, id.source),
+                    serde_json::to_value(&id)?,
+                )),
+                Err(e) => Ok(ShadowOutcome::fail(e)),
+            }
         }
 
         // ── Forgejo ─────────────────────────────────────────────

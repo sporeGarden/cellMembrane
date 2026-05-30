@@ -36,12 +36,12 @@ pub struct ServiceStatus {
 ///
 /// Shadow for: `biomeOS gate.service.list`
 pub async fn list(config: &ShadowConfig) -> Result<Vec<ServiceStatus>> {
-    let output = ssh::exec(
-        config,
+    let cmd = format!(
         "systemctl list-units --type=service --state=running --no-pager --no-legend | \
-         grep -E 'membrane|forgejo|caddy|knot|hbb|fail2ban'",
-    )
-    .await?;
+         grep -E '{}'",
+        config.service_filter,
+    );
+    let output = ssh::exec(config, &cmd).await?;
 
     let mut services = Vec::new();
     for line in output.lines() {

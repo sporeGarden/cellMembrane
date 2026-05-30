@@ -12,6 +12,11 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
+const API_TIMEOUT_WRITE: std::time::Duration = std::time::Duration::from_secs(30);
+const API_TIMEOUT_READ: std::time::Duration = std::time::Duration::from_secs(15);
+const API_TIMEOUT_FAST: std::time::Duration = std::time::Duration::from_secs(5);
+const PAGE_SIZE: u32 = 50;
+
 // ── Types ───────────────────────────────────────────────────────────
 
 /// Forgejo repository info (subset of API response).
@@ -57,6 +62,27 @@ pub struct MirrorSyncResult {
     pub http_code: u16,
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────
+
+fn auth_header(token: &str) -> String {
+    format!("token {token}")
+}
+
+/// Validate input contains no shell metacharacters. Prevents injection
+/// when arguments are interpolated into remote shell commands.
+fn validate_shell_safe(input: &str, field: &str) -> Result<()> {
+    const FORBIDDEN: &[char] = &['\'', '"', '`', '$', '\\', ';', '&', '|', '(', ')', '{', '}', '<', '>', '\n', '\r', '\0'];
+    if input.chars().any(|c| FORBIDDEN.contains(&c)) {
+        return Err(ShadowError::Parse(format!(
+            "{field} contains forbidden characters: {input:?}"
+        )));
+    }
+    if input.is_empty() {
+        return Err(ShadowError::Parse(format!("{field} cannot be empty")));
+    }
+    Ok(())
+}
+
 // ── Repo operations (nestGate content.repo.*) ───────────────────────
 
 /// Create a repository on Forgejo.
@@ -76,9 +102,9 @@ pub async fn repo_create(config: &ShadowConfig, org: &str, name: &str) -> Result
     let client = reqwest::Client::new();
     let resp = client
         .post(&url)
-        .header("Authorization", format!("token {token}"))
+        .header("Authorization", auth_header(token))
         .json(&body)
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(API_TIMEOUT_WRITE)
         .send()
         .await?;
 
@@ -103,13 +129,13 @@ pub async fn repo_list(config: &ShadowConfig, org: &str) -> Result<Vec<RepoInfo>
 
     loop {
         let url = format!(
-            "{}/orgs/{org}/repos?limit=50&page={page}",
+            "{}/orgs/{org}/repos?limit={PAGE_SIZE}&page={page}",
             config.forgejo_api
         );
         let resp = client
             .get(&url)
-            .header("Authorization", format!("token {token}"))
-            .timeout(std::time::Duration::from_secs(15))
+            .header("Authorization", auth_header(token))
+            .timeout(API_TIMEOUT_READ)
             .send()
             .await?;
 
@@ -122,7 +148,7 @@ pub async fn repo_list(config: &ShadowConfig, org: &str) -> Result<Vec<RepoInfo>
         let batch: Vec<RepoInfo> = resp.json().await?;
         let count = batch.len();
         all_repos.extend(batch);
-        if count < 50 {
+        if count < PAGE_SIZE as usize {
             break;
         }
         page += 1;
@@ -142,8 +168,8 @@ pub async fn repo_delete(config: &ShadowConfig, full_name: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .delete(&url)
-        .header("Authorization", format!("token {token}"))
-        .timeout(std::time::Duration::from_secs(15))
+        .header("Authorization", auth_header(token))
+        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
@@ -169,8 +195,8 @@ pub async fn mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<Mirro
     let client = reqwest::Client::new();
     let resp = client
         .post(&url)
-        .header("Authorization", format!("token {token}"))
-        .timeout(std::time::Duration::from_secs(10))
+        .header("Authorization", auth_header(token))
+        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
@@ -193,8 +219,8 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
     let client = reqwest::Client::new();
     let resp = client
         .get(&url)
-        .header("Authorization", format!("token {token}"))
-        .timeout(std::time::Duration::from_secs(10))
+        .header("Authorization", auth_header(token))
+        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
@@ -209,23 +235,37 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
 
 // ── Token operations (bearDog auth.token.*) ─────────────────────────
 
+/// Forgejo data directory on the VPS. Resolved from config; falls back
+/// to the standard Forgejo package layout.
+fn forgejo_db_path(config: &ShadowConfig) -> String {
+    config
+        .forgejo_data_dir
+        .as_deref()
+        .unwrap_or("/opt/forgejo/data")
+        .to_string()
+}
+
 /// List all Forgejo API tokens (via VPS database).
 ///
 /// Shadow for: `bearDog auth.token.list`
 pub async fn token_list(config: &ShadowConfig) -> Result<Vec<TokenInfo>> {
-    let output = ssh::exec(
-        config,
-        "sudo -u git sqlite3 /opt/forgejo/data/forgejo.db \
-         \"SELECT id, name, created_unix FROM access_token ORDER BY id;\"",
-    )
-    .await?;
+    let db = format!("{}/forgejo.db", forgejo_db_path(config));
+    let cmd = format!(
+        "sudo -u git sqlite3 '{db}' \
+         'SELECT id, name, created_unix FROM access_token ORDER BY id;'"
+    );
+    let output = ssh::exec(config, &cmd).await?;
 
     let mut tokens = Vec::new();
     for line in output.lines() {
         let parts: Vec<&str> = line.split('|').collect();
         if parts.len() >= 3 {
+            let id = parts[0]
+                .trim()
+                .parse()
+                .map_err(|_| ShadowError::Parse(format!("bad token id: {:?}", parts[0])))?;
             tokens.push(TokenInfo {
-                id: parts[0].trim().parse().unwrap_or(0),
+                id,
                 name: parts[1].trim().to_string(),
                 created: parts[2].trim().to_string(),
             });
@@ -242,11 +282,26 @@ pub async fn token_create(
     name: &str,
     scopes: &str,
 ) -> Result<String> {
+    validate_shell_safe(name, "token name")?;
+    validate_shell_safe(scopes, "token scopes")?;
+
+    let forgejo_dir = config
+        .forgejo_data_dir
+        .as_deref()
+        .map_or_else(
+            || "/opt/forgejo".to_string(),
+            |d| d.rsplit_once('/').map_or_else(|| d.to_string(), |(parent, _)| parent.to_string()),
+        );
+    let admin_user = config
+        .forgejo_admin_user
+        .as_deref()
+        .unwrap_or("golgiAdmin");
+
     let cmd = format!(
-        "sudo -u git FORGEJO_WORK_DIR=/opt/forgejo HOME=/opt/forgejo \
+        "sudo -u git FORGEJO_WORK_DIR='{forgejo_dir}' HOME='{forgejo_dir}' \
          forgejo admin user generate-access-token \
-         --username golgiAdmin --token-name '{name}' --scopes '{scopes}' \
-         --raw --config /opt/forgejo/custom/conf/app.ini 2>/dev/null"
+         --username '{admin_user}' --token-name '{name}' --scopes '{scopes}' \
+         --raw --config '{forgejo_dir}/custom/conf/app.ini' 2>/dev/null"
     );
 
     let output = ssh::exec(config, &cmd).await?;
@@ -262,23 +317,18 @@ pub async fn token_create(
 ///
 /// Shadow for: `bearDog auth.token.revoke`
 pub async fn token_revoke(config: &ShadowConfig, token_id: u64) -> Result<()> {
-    ssh::exec(
-        config,
-        &format!(
-            "sudo -u git sqlite3 /opt/forgejo/data/forgejo.db \
-             \"DELETE FROM access_token WHERE id={token_id};\""
-        ),
-    )
-    .await?;
+    let db = format!("{}/forgejo.db", forgejo_db_path(config));
+    let cmd = format!(
+        "sudo -u git sqlite3 '{db}' \
+         'DELETE FROM access_token WHERE id={token_id};'"
+    );
+    ssh::exec(config, &cmd).await?;
 
-    let remaining = ssh::exec(
-        config,
-        &format!(
-            "sudo -u git sqlite3 /opt/forgejo/data/forgejo.db \
-             \"SELECT count(*) FROM access_token WHERE id={token_id};\""
-        ),
-    )
-    .await?;
+    let verify_cmd = format!(
+        "sudo -u git sqlite3 '{db}' \
+         'SELECT count(*) FROM access_token WHERE id={token_id};'"
+    );
+    let remaining = ssh::exec(config, &verify_cmd).await?;
 
     if remaining.trim() == "0" {
         Ok(())
@@ -296,13 +346,13 @@ pub async fn version(config: &ShadowConfig) -> Result<String> {
     let client = reqwest::Client::new();
     let resp = client
         .get(&url)
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(API_TIMEOUT_FAST)
         .send()
         .await?;
 
     let body: serde_json::Value = resp.json().await?;
-    Ok(body["version"]
+    body["version"]
         .as_str()
-        .unwrap_or("unknown")
-        .to_string())
+        .map(String::from)
+        .ok_or_else(|| ShadowError::Parse("missing 'version' field in response".into()))
 }

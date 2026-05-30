@@ -63,21 +63,25 @@ pub struct SyncResult {
 ///
 /// Shadow for: `biomeOS gate.info`
 pub async fn info(config: &ShadowConfig) -> Result<GateInfo> {
-    let script = r#"
+    let root = &config.vps_root;
+    let filter = &config.service_filter;
+    let script = format!(
+        r#"
 echo "HOSTNAME:$(hostname)"
 echo "UPTIME:$(uptime -p)"
-echo "GATE:$(cat /opt/ecoPrimals/.gate 2>/dev/null || echo UNKNOWN)"
+echo "GATE:$(cat {root}/.gate 2>/dev/null || echo UNKNOWN)"
 echo "LOAD:$(cat /proc/loadavg | cut -d' ' -f1-3)"
-echo "MEMORY:$(free -h | awk '/Mem:/{printf "%s/%s", $3, $2}')"
-echo "DISK:$(df -h / | awk 'NR==2{printf "%s/%s(%s)", $3, $2, $5}')"
-echo "REPOS:$(find /opt/ecoPrimals -maxdepth 3 -name .git -type d 2>/dev/null | wc -l)"
+echo "MEMORY:$(free -h | awk '/Mem:/{{printf "%s/%s", $3, $2}}')"
+echo "DISK:$(df -h / | awk 'NR==2{{printf "%s/%s(%s)", $3, $2, $5}}')"
+echo "REPOS:$(find {root} -maxdepth 3 -name .git -type d 2>/dev/null | wc -l)"
 echo "---SERVICES---"
 systemctl list-units --type=service --state=running --no-pager --no-legend | \
-    grep -E 'membrane|forgejo|caddy|knot|hbb|fail2ban' | \
-    awk '{print $1 ":" $4}'
-"#;
+    grep -E '{filter}' | \
+    awk '{{print $1 ":" $4}}'
+"#
+    );
 
-    let output = ssh::exec(config, script).await?;
+    let output = ssh::exec(config, &script).await?;
 
     let mut info = GateInfo {
         hostname: String::new(),
@@ -129,30 +133,36 @@ systemctl list-units --type=service --state=running --no-pager --no-legend | \
 /// Run cascade-pull on golgiBody.
 ///
 /// Shadow for: `biomeOS gate.pull`
+///
+/// # Errors
+/// Returns `ShadowError::Ssh` if the SSH connection or remote command fails.
 pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
     let cmd = format!(
-        "cd {} && infra/wateringHole/scripts/cascade-pull.sh --gate golgiBody --source forgejo",
+        "cd {} && infra/wateringHole/scripts/cascade-pull.sh --gate golgiBody --source temporal",
         config.vps_root
     );
     let output = ssh::exec(config, &cmd).await?;
-    parse_sync_output(&output)
+    Ok(parse_sync_output(&output))
 }
 
 /// Run parity check on golgiBody workspace.
 ///
 /// Shadow for: `biomeOS gate.check`
+///
+/// # Errors
+/// Returns `ShadowError::Ssh` if the SSH connection or remote command fails.
 pub async fn check(config: &ShadowConfig) -> Result<SyncResult> {
     let cmd = format!(
-        "cd {} && infra/wateringHole/scripts/cascade-pull.sh --gate golgiBody --check",
+        "cd {} && infra/wateringHole/scripts/cascade-pull.sh --gate golgiBody --source temporal --check",
         config.vps_root
     );
     let output = ssh::exec(config, &cmd).await?;
-    parse_sync_output(&output)
+    Ok(parse_sync_output(&output))
 }
 
-fn parse_sync_output(output: &str) -> Result<SyncResult> {
+fn parse_sync_output(output: &str) -> SyncResult {
     let mut result = SyncResult {
-        gate: "golgiBody".to_string(),
+        gate: String::new(),
         total: 0,
         synced: 0,
         drifted: 0,
@@ -162,20 +172,22 @@ fn parse_sync_output(output: &str) -> Result<SyncResult> {
 
     for line in output.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("Repos:") || trimmed.starts_with("Repos: ") {
+
+        if let Some(rest) = trimmed.strip_prefix("Gate:") {
+            result.gate = rest.trim().to_string();
+        }
+
+        if trimmed.starts_with("Repos:") {
             if let Some(n) = trimmed.split_whitespace().nth(1) {
                 result.total = n.parse().unwrap_or(0);
             }
         }
-        if trimmed.contains("In sync:") {
-            if let Some(n) = trimmed
-                .split_whitespace()
-                .nth(2)
-            {
+        if trimmed.contains("In sync:") || trimmed.contains("Parity:") {
+            if let Some(n) = trimmed.split_whitespace().nth(2) {
                 result.synced = n.parse().unwrap_or(0);
             }
         }
-        if trimmed.starts_with("Drifted:") {
+        if trimmed.starts_with("Drifted:") || trimmed.starts_with("Diverge:") {
             if let Some(n) = trimmed.split_whitespace().nth(1) {
                 result.drifted = n.parse().unwrap_or(0);
             }
@@ -185,12 +197,12 @@ fn parse_sync_output(output: &str) -> Result<SyncResult> {
                 result.missing = n.parse().unwrap_or(0);
             }
         }
-        if trimmed.starts_with("Pulled:") {
+        if trimmed.starts_with("Pulled:") || trimmed.starts_with("Synced:") {
             if let Some(n) = trimmed.split_whitespace().nth(1) {
                 result.synced = n.parse().unwrap_or(0);
             }
         }
     }
 
-    Ok(result)
+    result
 }

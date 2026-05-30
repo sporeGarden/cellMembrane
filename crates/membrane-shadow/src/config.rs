@@ -20,6 +20,12 @@ pub struct ShadowConfig {
     pub vps_root: String,
     /// SSH connect timeout in seconds.
     pub ssh_timeout: u32,
+    /// Forgejo data directory on VPS (default: /opt/forgejo/data).
+    pub forgejo_data_dir: Option<String>,
+    /// Forgejo admin username for token ops (default: golgiAdmin).
+    pub forgejo_admin_user: Option<String>,
+    /// Grep filter for systemd service discovery (default: membrane stack services).
+    pub service_filter: String,
 }
 
 impl Default for ShadowConfig {
@@ -30,6 +36,9 @@ impl Default for ShadowConfig {
             forgejo_token: None,
             vps_root: "/opt/ecoPrimals".into(),
             ssh_timeout: 10,
+            forgejo_data_dir: None,
+            forgejo_admin_user: None,
+            service_filter: "membrane|forgejo|caddy|knot|hbb|fail2ban".into(),
         }
     }
 }
@@ -52,6 +61,10 @@ impl ShadowConfig {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(10),
             forgejo_token: None,
+            forgejo_data_dir: std::env::var("FORGEJO_DATA_DIR").ok(),
+            forgejo_admin_user: std::env::var("FORGEJO_ADMIN_USER").ok(),
+            service_filter: std::env::var("MEMBRANE_SERVICE_FILTER")
+                .unwrap_or_else(|_| "membrane|forgejo|caddy|knot|hbb|fail2ban".into()),
         };
 
         cfg.forgejo_token = resolve_token().await;
