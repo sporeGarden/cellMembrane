@@ -1,8 +1,9 @@
 # cellMembrane reference configuration
-# This describes the live membrane-relay VPS at membrane.primals.eco
-# Composition: Nucleus (Wave 59) — full 13-primal NUCLEUS runtime
-# K-Derm: Diderm envelope — gate plasma membrane + VPS periplasm/outer membrane
-# Deploy: deploy_membrane.sh deploy root@$VPS --composition nucleus --uds-only
+# K-Derm: Diderm envelope physically realized across three VPS nodes
+# Inner membrane (golgiBody): Forgejo, NUCLEUS primals, sovereign services
+# Peptidoglycan (peptidoglycan): Build hub, workspace, temporal sync convergence
+# Outer membrane (golgiBody-ext): sporePrint hosting, TURN relay, public-facing
+# Wave 63: Three-node diderm deployment
 
 [membrane]
 name = "membrane-relay"
@@ -18,9 +19,30 @@ gate_id = "nyc-01"
 [membrane.provider]
 type = "digitalocean"
 region = "nyc1"
+
+# Inner membrane — sovereign periplasm
+[membrane.layers.inner]
+host = "golgiBody"
+ip = "157.230.3.183"
 size = "s-1vcpu-2gb"
-image = "debian-12-x64"
-tags = ["membrane", "production"]
+services = ["forgejo", "nucleus-primals", "knot-dns", "btsp-auth"]
+bond_types = ["covalent", "metallic"]
+
+# Peptidoglycan — structural sync layer
+[membrane.layers.peptidoglycan]
+host = "peptidoglycan"
+ip = "157.230.209.218"
+size = "s-2vcpu-4gb"
+services = ["workspace", "builds", "temporal-sync", "membrane-binary"]
+bond_types = ["metallic"]
+
+# Outer membrane — public-facing
+[membrane.layers.outer]
+host = "golgiBody-ext"
+ip = "137.184.197.151"
+size = "s-1vcpu-2gb"
+services = ["caddy-tls", "sporeprint", "turn-relay", "rustdesk"]
+bond_types = ["ionic", "weak"]
 
 [membrane.channels.signal]
 enabled = true
