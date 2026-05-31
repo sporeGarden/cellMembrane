@@ -6,7 +6,7 @@
 //! commands to the appropriate shadow function, returning structured
 //! JSON or human-readable output.
 
-use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, identity, impulse, manifest, service, temporal};
+use membrane_shadow::{ShadowConfig, ShadowOutcome, context, forgejo, gate, identity, impulse, manifest, service, temporal};
 use std::process::ExitCode;
 
 fn usage() {
@@ -61,6 +61,11 @@ Impulse — rP action potentials (rootPulse ACTION):
 Potential — qS membrane potential (quorumSignal SENSE):
   potential.sense [--all] [--count]    Measure pending potential for this gate
   potential.check                      Gradient health across the mesh
+
+Context — sweetGrass-external braids (developer state weaving):
+  context.weave --project <path> --summary <text>  Weave a context braid
+  context.sense [--gate <gate>] [--project <path>] [--all]  Sense context
+  context.clear [--project <path>] [--expired]     Clear/decay braids
 
 Forgejo:
   forgejo.version                  Show Forgejo version
@@ -564,6 +569,65 @@ async fn dispatch(
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&health)?))
         }
 
+        // ── Context (sweetGrass-external braids) ─────────────
+        "context.weave" => {
+            let root = temporal::resolve_workspace_root()?;
+            let weave_args = parse_context_weave_args(args)?;
+            let braid = context::weave(&root, &weave_args).await?;
+            Ok(ShadowOutcome::ok_with(
+                format!(
+                    "WOVEN [{status}] {gate}/{slug}: {summary}",
+                    status = braid.strands.focus.status,
+                    gate = braid.braid.gate,
+                    slug = context_slug(&braid.braid.project),
+                    summary = braid.strands.focus.summary,
+                ),
+                serde_json::to_value(&braid)?,
+            ))
+        }
+        "context.sense" => {
+            let root = temporal::resolve_workspace_root()?;
+            let all = args.iter().any(|a| *a == "--all");
+            let filter_gate = extract_flag_value(args, "--gate");
+            let filter_project = extract_flag_value(args, "--project");
+            let braids = context::sense(&root, filter_gate, filter_project, all)?;
+            if braids.is_empty() {
+                Ok(ShadowOutcome::ok("No context braids woven (resting state).".to_string()))
+            } else {
+                let lines: Vec<String> = braids
+                    .iter()
+                    .map(|b| {
+                        format!(
+                            "  [{status}] {gate}/{project}: {summary}",
+                            status = b.strands.focus.status,
+                            gate = b.braid.gate,
+                            project = context_slug(&b.braid.project),
+                            summary = b.strands.focus.summary,
+                        )
+                    })
+                    .collect();
+                Ok(ShadowOutcome::ok_with(
+                    format!("{} context braid(s)\n{}", braids.len(), lines.join("\n")),
+                    serde_json::to_value(&braids)?,
+                ))
+            }
+        }
+        "context.clear" => {
+            let root = temporal::resolve_workspace_root()?;
+            let project = extract_flag_value(args, "--project");
+            let expired = args.iter().any(|a| *a == "--expired");
+            let cleared = context::clear(&root, project, expired).await?;
+            if cleared.is_empty() {
+                Ok(ShadowOutcome::ok("No braids to clear.".to_string()))
+            } else {
+                Ok(ShadowOutcome::ok(format!(
+                    "Cleared {} braid(s): {}",
+                    cleared.len(),
+                    cleared.join(", "),
+                )))
+            }
+        }
+
         // ── Deprecated signal.* aliases ──────────────────────
         "signal.post" => {
             eprintln!("DEPRECATED: signal.post is now impulse.post (see IMPULSE_POTENTIAL_STANDARD.md)");
@@ -699,4 +763,50 @@ fn extract_flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
     args.iter()
         .position(|a| *a == flag)
         .and_then(|i| args.get(i + 1).copied())
+}
+
+fn parse_context_weave_args<'a>(args: &[&'a str]) -> membrane_shadow::Result<context::WeaveArgs<'a>> {
+    let project = extract_flag_value(args, "--project")
+        .ok_or_else(|| membrane_shadow::ShadowError::Parse("--project <path> required".into()))?;
+    let summary = extract_flag_value(args, "--summary")
+        .ok_or_else(|| membrane_shadow::ShadowError::Parse("--summary required".into()))?;
+
+    let status_str = extract_flag_value(args, "--status").unwrap_or("active");
+    let status = match status_str {
+        "active" => context::FocusStatus::Active,
+        "paused" => context::FocusStatus::Paused,
+        "blocked" => context::FocusStatus::Blocked,
+        "complete" => context::FocusStatus::Complete,
+        _ => {
+            return Err(membrane_shadow::ShadowError::Parse(format!(
+                "unknown status: {status_str} (expected: active|paused|blocked|complete)"
+            )));
+        }
+    };
+
+    let ttl_str = extract_flag_value(args, "--ttl").unwrap_or("48");
+    let ttl_hours: u32 = ttl_str.parse().unwrap_or(48);
+
+    Ok(context::WeaveArgs {
+        project,
+        summary,
+        status,
+        breadcrumbs: extract_flag_value(args, "--breadcrumbs").unwrap_or(""),
+        next: extract_flag_value(args, "--next").unwrap_or(""),
+        blockers: extract_flag_value(args, "--blockers").unwrap_or(""),
+        notes: extract_flag_value(args, "--notes").unwrap_or(""),
+        ttl_hours,
+    })
+}
+
+fn context_slug(project: &str) -> String {
+    project
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
 }
