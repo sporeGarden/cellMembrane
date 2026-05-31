@@ -18,12 +18,52 @@ pub struct EcosystemManifest {
     pub meta: ManifestMeta,
     /// Sync configuration — default source, divergence policy.
     pub sync: SyncConfig,
+    /// K-Derm diderm topology — node placement and roles.
+    #[serde(default)]
+    pub topology: Option<Topology>,
     /// Repository definitions keyed by short name (e.g. `biomeOS`).
     #[serde(default)]
     pub repos: BTreeMap<String, RepoEntry>,
     /// Gate profiles keyed by gate name (e.g. `eastGate`).
     #[serde(default)]
     pub gates: BTreeMap<String, GateProfile>,
+}
+
+/// K-Derm diderm topology configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Topology {
+    /// Envelope model: `monoderm` or `diderm`.
+    #[serde(default)]
+    pub model: String,
+    /// Inner membrane node name.
+    #[serde(default)]
+    pub inner_membrane: String,
+    /// Peptidoglycan (structural) node name.
+    #[serde(default)]
+    pub peptidoglycan: String,
+    /// Outer membrane node name.
+    #[serde(default)]
+    pub outer_membrane: String,
+    /// Per-host IP addresses.
+    #[serde(default)]
+    pub hosts: BTreeMap<String, String>,
+    /// Layer-specific functional roles in the waterFall relay chain.
+    #[serde(default)]
+    pub roles: Option<TopologyRoles>,
+}
+
+/// Functional role assignments per K-Derm layer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopologyRoles {
+    /// Cis face: receives gate pushes (Forgejo sovereign store).
+    #[serde(default)]
+    pub push_receiver: String,
+    /// Structural: sync hub + impulse cascade mediator.
+    #[serde(default)]
+    pub sync_mediator: String,
+    /// Trans face: ships to extracellular (GitHub SSH push).
+    #[serde(default)]
+    pub external_publisher: String,
 }
 
 /// Manifest metadata.

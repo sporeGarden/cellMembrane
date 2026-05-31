@@ -272,13 +272,13 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
     }
 }
 
-// ── Push mirror operations (VPS → GitHub external ledger) ───────────
+// ── Push mirror operations (Forgejo API) ─────────────────────────────
 //
-// BONDING DEBT: These operations currently fire from golgiBody-inner
-// (covalent/metallic) directly to GitHub (weak), bypassing the K-Derm
-// diderm layers. Correct flow: inner→peptidoglycan (metallic)→golgiBody-ext
-// (ionic)→GitHub (weak). Resolves when membrane separates inner/outer
-// sovereign roles — GitHub SSH keys migrate to golgiBody-ext (trans face).
+// These create/list/sync push mirrors via the Forgejo API on golgiBody-inner.
+// The K-Derm diderm relay chain handles actual GitHub propagation:
+// inner (covalent) → peptidoglycan (metallic) → golgiBody-ext (ionic) → GitHub (weak).
+// GitHub SSH write credentials live on golgiBody-ext (trans/shipping face).
+// See hooks/forgejo/pepti-sync-relay.sh + ext-github-push.sh for the relay.
 
 /// Create a push mirror from Forgejo to an external remote (typically GitHub).
 /// Uses SSH authentication — Forgejo generates and manages the keypair.

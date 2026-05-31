@@ -462,14 +462,32 @@ async fn dispatch(
         "manifest.info" => {
             let root = temporal::resolve_workspace_root()?;
             let m = manifest::load_from_workspace(&root)?;
+            let topo = m.topology.as_ref().map_or_else(
+                || "monoderm (no topology section)".to_string(),
+                |t| {
+                    let roles = t.roles.as_ref().map_or_else(
+                        || "no roles assigned".to_string(),
+                        |r| format!(
+                            "receiver={} mediator={} publisher={}",
+                            r.push_receiver, r.sync_mediator, r.external_publisher
+                        ),
+                    );
+                    format!(
+                        "{}: {} → {} → {} ({})",
+                        t.model, t.inner_membrane, t.peptidoglycan, t.outer_membrane, roles
+                    )
+                },
+            );
             let msg = format!(
                 "manifest v{} wave {} ({} repos)\n\
-                 sync: source={} branch={} divergence={} push_followers={}",
+                 sync: source={} branch={} push_target={} divergence={}\n\
+                 topology: {}",
                 m.meta.version, m.meta.wave, m.meta.total_repos,
                 m.sync.default_source, m.sync.default_branch,
-                m.sync.divergence_policy, m.sync.push_to_followers,
+                m.sync.push_target, m.sync.divergence_policy,
+                topo,
             );
-            Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&m.meta)?))
+            Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&m)?))
         }
         "manifest.repos" => {
             let root = temporal::resolve_workspace_root()?;
