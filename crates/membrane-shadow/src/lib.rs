@@ -23,7 +23,8 @@
 //!
 //! - **Forgejo API**: HTTPS via `reqwest` (feature `http`)
 //! - **VPS commands**: SSH via system client (`ssh golgi '...'`)
-//! - **Future**: UDS JSON-RPC when primals gain native shadow dispatch
+//! - **Neural API**: UDS JSON-RPC via `bridge` module (feature `neural-bridge`)
+//!   — try-primal-first, fall back to shadow when biomeOS unavailable
 //!
 //! # Usage
 //!
@@ -64,6 +65,8 @@ pub mod impulse;
 pub mod signal;
 pub mod ssh;
 pub mod temporal;
+#[cfg(feature = "neural-bridge")]
+pub mod bridge;
 
 pub use config::ShadowConfig;
 pub use error::{Result, ShadowError, ShadowOutcome};

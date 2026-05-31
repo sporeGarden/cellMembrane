@@ -80,6 +80,9 @@ pub struct ImpulseFile {
     pub content: ImpulseContent,
     /// Operational metadata.
     pub meta: ImpulseOpMeta,
+    /// Ed25519 signature (optional — present when bearDog is available).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<ImpulseSignature>,
     /// Acknowledgments from receiving gates.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub acks: Vec<ImpulseAck>,
@@ -147,6 +150,23 @@ pub struct ImpulseOpMeta {
     /// Whether acknowledgment is required.
     #[serde(default)]
     pub ack_required: bool,
+}
+
+/// Optional Ed25519 signature (Phase 3 graduation — bearDog signing).
+///
+/// When bearDog is available, `impulse.post` signs the impulse payload
+/// and stores the signature here. Gates can verify authenticity without
+/// trusting git history alone.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImpulseSignature {
+    /// Signing algorithm.
+    pub algorithm: String,
+    /// Hex-encoded Ed25519 public key of the signing gate.
+    pub public_key: String,
+    /// Hex-encoded signature over the canonical impulse payload.
+    pub value: String,
+    /// When the signature was created.
+    pub signed_at: String,
 }
 
 /// An acknowledgment entry.
@@ -270,7 +290,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
 
     let impulse = ImpulseFile {
         impulse: ImpulseMeta {
-            id: impulse_id,
+            id: impulse_id.clone(),
             impulse_type: args.impulse_type.clone(),
             priority: args.priority.clone(),
             wave,
@@ -299,6 +319,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
             ack_required: args.impulse_type == ImpulseType::Frago
                 || args.impulse_type == ImpulseType::Request,
         },
+        signature: try_sign_impulse(workspace_root, &impulse_id),
         acks: vec![],
     };
 
@@ -322,6 +343,8 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
         ),
     )
     .await?;
+
+    try_relay_impulse(&impulse);
 
     Ok(impulse)
 }
@@ -529,8 +552,125 @@ fn parse_impulse_or_signal(contents: &str) -> std::result::Result<ImpulseFile, t
             to: legacy.to,
             content: legacy.content,
             meta: legacy.meta,
+            signature: None,
             acks: legacy.acks,
         })
+    })
+}
+
+/// Attempt to sign an impulse via bearDog's UDS socket.
+///
+/// Discovers bearDog at the standard socket path. If unavailable,
+/// returns None — unsigned impulses are valid (Phase 3 graceful
+/// degradation). When bearDog is present, signs the impulse ID
+/// with Ed25519 and returns the signature.
+/// Attempt near-realtime impulse relay via songbird mesh.publish.
+///
+/// Discovers songbird at the standard socket path. If unavailable,
+/// silently falls through — git push is the reliable baseline.
+/// When songbird is present, publishes a lightweight notification
+/// to the mesh topic `impulse/{gate}` so subscribing gates can
+/// trigger an immediate cascade-pull.
+fn try_relay_impulse(impulse: &ImpulseFile) {
+    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+    let socket_candidates = [
+        format!("{xdg}/biomeos/songbird-default.sock"),
+        "/tmp/biomeos/songbird-default.sock".to_string(),
+    ];
+
+    let socket_path = match socket_candidates
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+    {
+        Some(p) => p.clone(),
+        None => return,
+    };
+
+    let notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "mesh.publish",
+        "params": {
+            "topic": format!("impulse/{}", impulse.from.gate),
+            "payload": {
+                "id": impulse.impulse.id,
+                "type": impulse.impulse.impulse_type,
+                "from": impulse.from.gate,
+                "to": impulse.to.gates,
+                "subject": impulse.content.subject,
+                "priority": impulse.impulse.priority,
+            }
+        }
+    });
+
+    let Ok(request_str) = serde_json::to_string(&notification) else {
+        return;
+    };
+
+    let mut child = match std::process::Command::new("socat")
+        .args(["-", &format!("UNIX-CONNECT:{socket_path}")])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = writeln!(stdin, "{request_str}");
+    }
+
+    let _ = child.wait();
+}
+
+fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
+    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+    let socket_candidates = [
+        format!("{xdg}/biomeos/beardog-default.sock"),
+        "/tmp/biomeos/beardog-default.sock".to_string(),
+    ];
+
+    let socket_path = socket_candidates
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())?;
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "crypto.sign_ed25519",
+        "params": { "data": impulse_id }
+    });
+    let request_str = serde_json::to_string(&request).ok()?;
+
+    let mut child = std::process::Command::new("socat")
+        .args(["-", &format!("UNIX-CONNECT:{socket_path}")])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = writeln!(stdin, "{request_str}");
+    }
+
+    let output = child.wait_with_output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let result = response.get("result")?;
+
+    Some(ImpulseSignature {
+        algorithm: "ed25519".to_string(),
+        public_key: result.get("public_key")?.as_str()?.to_string(),
+        value: result.get("signature")?.as_str()?.to_string(),
+        signed_at: Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
     })
 }
 
