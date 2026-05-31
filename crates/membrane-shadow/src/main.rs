@@ -6,7 +6,7 @@
 //! commands to the appropriate shadow function, returning structured
 //! JSON or human-readable output.
 
-use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, identity, manifest, service, temporal};
+use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, identity, manifest, service, signal, temporal};
 use std::process::ExitCode;
 
 fn usage() {
@@ -53,6 +53,12 @@ Token (bearDog auth.token.*):
   token.create <name> [scopes]     Generate new API token
   token.revoke <id>                Delete token by database ID
 
+Signal (waterFall signal.*):
+  signal.post --to <gate> --type <type> --subject <text>  Post a signal/FRAGO
+  signal.list [--all]              List active signals for this gate
+  signal.ack <id> [--note <text>]  Acknowledge a signal
+  signal.archive                   Archive expired/acked signals
+
 Forgejo:
   forgejo.version                  Show Forgejo version
 
@@ -69,7 +75,7 @@ async fn main() -> ExitCode {
     let json_mode = args.iter().any(|a| a == "--json");
     let args: Vec<&str> = args
         .iter()
-        .filter(|a| !a.starts_with("--"))
+        .filter(|a| a.as_str() != "--json")
         .map(String::as_str)
         .collect();
 
@@ -451,6 +457,82 @@ async fn dispatch(
             }
         }
 
+        // ── Signal ──────────────────────────────────────────────
+        "signal.post" => {
+            let root = temporal::resolve_workspace_root()?;
+            let post_args = parse_signal_post_args(args)?;
+            let sig = signal::post(&root, &post_args).await?;
+            Ok(ShadowOutcome::ok_with(
+                format!(
+                    "POSTED [{}] {} → {}: {}",
+                    sig.signal.signal_type,
+                    sig.from.gate,
+                    sig.to.gates.join(","),
+                    sig.content.subject,
+                ),
+                serde_json::to_value(&sig)?,
+            ))
+        }
+        "signal.list" => {
+            let root = temporal::resolve_workspace_root()?;
+            let all = args.iter().any(|a| *a == "--all");
+            let signals = signal::list(&root, all)?;
+            if signals.is_empty() {
+                Ok(ShadowOutcome::ok("No active signals.".to_string()))
+            } else {
+                let lines: Vec<String> = signals
+                    .iter()
+                    .map(|(_, s)| {
+                        let ack_mark = if s.meta.ack_required && s.acks.is_empty() {
+                            " [NEEDS ACK]"
+                        } else if !s.acks.is_empty() {
+                            " [ACKED]"
+                        } else {
+                            ""
+                        };
+                        format!(
+                            "  [{}] {}/{}: {}{}",
+                            s.signal.signal_type,
+                            s.from.gate,
+                            s.from.team,
+                            s.content.subject,
+                            ack_mark,
+                        )
+                    })
+                    .collect();
+                Ok(ShadowOutcome::ok_with(
+                    format!("{} active signal(s)\n{}", signals.len(), lines.join("\n")),
+                    serde_json::to_value(
+                        &signals.iter().map(|(_, s)| s).collect::<Vec<_>>()
+                    )?,
+                ))
+            }
+        }
+        "signal.ack" => {
+            let root = temporal::resolve_workspace_root()?;
+            let signal_id = require_arg(args, 0, "signal-id")?;
+            let note = extract_flag_value(args, "--note").unwrap_or("");
+            let sig = signal::ack(&root, signal_id, note).await?;
+            Ok(ShadowOutcome::ok(format!(
+                "ACKED: {} (note: {})",
+                sig.signal.id,
+                if note.is_empty() { "-" } else { note },
+            )))
+        }
+        "signal.archive" => {
+            let root = temporal::resolve_workspace_root()?;
+            let archived = signal::archive(&root).await?;
+            if archived.is_empty() {
+                Ok(ShadowOutcome::ok("No signals to archive.".to_string()))
+            } else {
+                Ok(ShadowOutcome::ok(format!(
+                    "Archived {} signal(s): {}",
+                    archived.len(),
+                    archived.join(", "),
+                )))
+            }
+        }
+
         // ── Forgejo ─────────────────────────────────────────────
         "forgejo.version" => {
             let v = forgejo::version(config).await?;
@@ -488,4 +570,51 @@ impl TapMessage for ShadowOutcome {
         self.message = f(&self.message);
         self
     }
+}
+
+fn parse_signal_post_args<'a>(args: &[&'a str]) -> membrane_shadow::Result<signal::PostArgs<'a>> {
+    let to_str = extract_flag_value(args, "--to")
+        .ok_or_else(|| membrane_shadow::ShadowError::Parse("--to <gate> required".into()))?;
+    let subject = extract_flag_value(args, "--subject")
+        .ok_or_else(|| membrane_shadow::ShadowError::Parse("--subject required".into()))?;
+
+    let type_str = extract_flag_value(args, "--type").unwrap_or("status");
+    let signal_type = match type_str {
+        "frago" => signal::SignalType::Frago,
+        "status" => signal::SignalType::Status,
+        "request" => signal::SignalType::Request,
+        "announce" => signal::SignalType::Announce,
+        _ => {
+            return Err(membrane_shadow::ShadowError::Parse(format!(
+                "unknown signal type: {type_str} (expected: frago|status|request|announce)"
+            )));
+        }
+    };
+
+    let priority_str = extract_flag_value(args, "--priority").unwrap_or("routine");
+    let priority = match priority_str {
+        "routine" => signal::Priority::Routine,
+        "priority" => signal::Priority::Priority,
+        "flash" => signal::Priority::Flash,
+        _ => signal::Priority::Routine,
+    };
+
+    let to_gates: Vec<&str> = to_str.split(',').collect();
+
+    Ok(signal::PostArgs {
+        to_gates,
+        signal_type,
+        priority,
+        subject,
+        body: extract_flag_value(args, "--body").unwrap_or(""),
+        project: extract_flag_value(args, "--project").unwrap_or(""),
+        git_ref: extract_flag_value(args, "--ref").unwrap_or(""),
+        team: extract_flag_value(args, "--team").unwrap_or(""),
+    })
+}
+
+fn extract_flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
+    args.iter()
+        .position(|a| *a == flag)
+        .and_then(|i| args.get(i + 1).copied())
 }

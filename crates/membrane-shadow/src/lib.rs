@@ -58,6 +58,7 @@ pub mod gate;
 pub mod identity;
 pub mod manifest;
 pub mod service;
+pub mod signal;
 pub mod ssh;
 pub mod temporal;
 
