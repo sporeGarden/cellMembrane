@@ -130,31 +130,35 @@ systemctl list-units --type=service --state=running --no-pager --no-legend | \
     Ok(info)
 }
 
-/// Run cascade-pull on golgiBody.
+/// Run cascade-pull on the VPS.
 ///
 /// Shadow for: `biomeOS gate.pull`
+/// Gate identity is read from `$VPS_ROOT/.gate` — no hardcoded gate names.
 ///
 /// # Errors
 /// Returns `ShadowError::Ssh` if the SSH connection or remote command fails.
 pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
+    let root = &config.vps_root;
     let cmd = format!(
-        "cd {} && infra/wateringHole/scripts/cascade-pull.sh --gate golgiBody --source temporal",
-        config.vps_root
+        "cd {root} && GATE=$(cat {root}/.gate 2>/dev/null || echo auto) && \
+         infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal",
     );
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
 }
 
-/// Run parity check on golgiBody workspace.
+/// Run parity check on the VPS workspace.
 ///
 /// Shadow for: `biomeOS gate.check`
+/// Gate identity is read from `$VPS_ROOT/.gate` — no hardcoded gate names.
 ///
 /// # Errors
 /// Returns `ShadowError::Ssh` if the SSH connection or remote command fails.
 pub async fn check(config: &ShadowConfig) -> Result<SyncResult> {
+    let root = &config.vps_root;
     let cmd = format!(
-        "cd {} && infra/wateringHole/scripts/cascade-pull.sh --gate golgiBody --source temporal --check",
-        config.vps_root
+        "cd {root} && GATE=$(cat {root}/.gate 2>/dev/null || echo auto) && \
+         infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal --check",
     );
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))

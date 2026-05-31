@@ -19,6 +19,7 @@ gate_id = "nyc-01"
 [membrane.provider]
 type = "digitalocean"
 region = "nyc1"
+size = "s-1vcpu-2gb"
 
 # Inner membrane — sovereign periplasm
 [membrane.layers.inner]

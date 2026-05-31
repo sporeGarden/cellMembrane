@@ -183,7 +183,7 @@ fn current_wave(workspace_root: &Path) -> u32 {
     if let Ok(contents) = std::fs::read_to_string(&freshness) {
         if let Ok(val) = contents.parse::<toml::Table>() {
             if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {
-                if let Some(id) = wave.get("id").and_then(|i| i.as_integer()) {
+                if let Some(id) = wave.get("id").and_then(toml::Value::as_integer) {
                     return id as u32;
                 }
             }
@@ -221,7 +221,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
         None
     } else {
         let items: Vec<String> = args.blockers.split(',').map(|s| s.trim().to_string()).collect();
-        if items.iter().all(|i| i.is_empty()) {
+        if items.iter().all(String::is_empty) {
             None
         } else {
             Some(BlockerStrand { items })
@@ -300,7 +300,7 @@ pub fn sense(
     };
 
     let target_gate = filter_gate
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .or(local_gate);
 
     let mut braids = Vec::new();
@@ -313,7 +313,7 @@ pub fn sense(
             .map_err(ShadowError::Io)?
             .filter_map(|e| e.ok())
             .map(|e| e.path())
-            .filter(|p| p.is_dir())
+            .filter(|p: &PathBuf| p.is_dir())
             .collect()
     };
 
@@ -456,65 +456,9 @@ fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> boo
 }
 
 async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
-    let status = tokio::process::Command::new("git")
-        .args(["add", file_path])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse(format!("git add failed for {file_path}")));
-    }
-
-    let status = tokio::process::Command::new("git")
-        .args(["commit", "-m", message])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse("git commit failed".into()));
-    }
-
-    for remote in ["origin", "forgejo"] {
-        let _ = tokio::process::Command::new("git")
-            .args(["push", remote, "main", "--quiet"])
-            .current_dir(repo_dir)
-            .status()
-            .await;
-    }
-
-    Ok(())
+    crate::git_ops::add_commit_push(repo_dir, file_path, message).await
 }
 
 async fn git_add_all_commit_push(repo_dir: &Path, message: &str) -> Result<()> {
-    let status = tokio::process::Command::new("git")
-        .args(["add", "-A", "context/"])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse("git add -A context/ failed".into()));
-    }
-
-    let status = tokio::process::Command::new("git")
-        .args(["commit", "-m", message])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse("git commit failed".into()));
-    }
-
-    for remote in ["origin", "forgejo"] {
-        let _ = tokio::process::Command::new("git")
-            .args(["push", remote, "main", "--quiet"])
-            .current_dir(repo_dir)
-            .status()
-            .await;
-    }
-
-    Ok(())
+    crate::git_ops::add_all_commit_push(repo_dir, "context/", message).await
 }

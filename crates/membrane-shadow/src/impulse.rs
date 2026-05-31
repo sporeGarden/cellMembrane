@@ -227,7 +227,7 @@ fn current_wave(workspace_root: &Path) -> u32 {
     if let Ok(contents) = std::fs::read_to_string(&freshness) {
         if let Ok(val) = contents.parse::<toml::Table>() {
             if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {
-                if let Some(id) = wave.get("id").and_then(|i| i.as_integer()) {
+                if let Some(id) = wave.get("id").and_then(toml::Value::as_integer) {
                     return id as u32;
                 }
             }
@@ -241,23 +241,7 @@ fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
     if project.is_empty() {
         return String::new();
     }
-    let project_path = workspace_root.join(project);
-    if !project_path.join(".git").exists() {
-        return String::new();
-    }
-    std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .current_dir(&project_path)
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_default()
+    crate::git_ops::resolve_head_ref(&workspace_root.join(project))
 }
 
 /// Fire a new impulse — rootPulse ACTION.
@@ -302,7 +286,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
             git_ref,
         },
         to: ImpulseTo {
-            gates: args.to_gates.iter().map(|s| s.to_string()).collect(),
+            gates: args.to_gates.iter().map(ToString::to_string).collect(),
             teams: if args.team.is_empty() {
                 vec![]
             } else {
@@ -720,65 +704,9 @@ fn find_impulse_by_id(active_dir: &Path, impulse_id: &str) -> Result<(PathBuf, I
 }
 
 async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
-    let status = tokio::process::Command::new("git")
-        .args(["add", file_path])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse(format!("git add failed for {file_path}")));
-    }
-
-    let status = tokio::process::Command::new("git")
-        .args(["commit", "-m", message])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse("git commit failed".into()));
-    }
-
-    for remote in ["origin", "forgejo"] {
-        let _ = tokio::process::Command::new("git")
-            .args(["push", remote, "main", "--quiet"])
-            .current_dir(repo_dir)
-            .status()
-            .await;
-    }
-
-    Ok(())
+    crate::git_ops::add_commit_push(repo_dir, file_path, message).await
 }
 
 async fn git_add_all_commit_push(repo_dir: &Path, message: &str) -> Result<()> {
-    let status = tokio::process::Command::new("git")
-        .args(["add", "-A", "impulses/"])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse("git add -A impulses/ failed".into()));
-    }
-
-    let status = tokio::process::Command::new("git")
-        .args(["commit", "-m", message])
-        .current_dir(repo_dir)
-        .status()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !status.success() {
-        return Err(ShadowError::Parse("git commit failed".into()));
-    }
-
-    for remote in ["origin", "forgejo"] {
-        let _ = tokio::process::Command::new("git")
-            .args(["push", remote, "main", "--quiet"])
-            .current_dir(repo_dir)
-            .status()
-            .await;
-    }
-
-    Ok(())
+    crate::git_ops::add_all_commit_push(repo_dir, "impulses/", message).await
 }

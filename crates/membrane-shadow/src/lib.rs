@@ -52,16 +52,20 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod cli;
 pub mod config;
+pub mod dispatch;
 pub mod error;
 pub mod forgejo;
 pub mod gate;
+pub mod git_ops;
 pub mod identity;
 pub mod manifest;
+pub mod plasmid;
 pub mod service;
 pub mod context;
 pub mod impulse;
-#[deprecated(note = "use `impulse` module — signal.* renamed to impulse.*/potential.*")]
+#[deprecated(note = "superseded by `impulse` module — will be removed in Wave 66")]
 pub mod signal;
 pub mod ssh;
 pub mod temporal;
