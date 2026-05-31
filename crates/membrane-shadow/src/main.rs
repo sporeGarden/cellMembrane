@@ -6,7 +6,7 @@
 //! commands to the appropriate shadow function, returning structured
 //! JSON or human-readable output.
 
-use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, identity, manifest, service, signal, temporal};
+use membrane_shadow::{ShadowConfig, ShadowOutcome, forgejo, gate, identity, impulse, manifest, service, temporal};
 use std::process::ExitCode;
 
 fn usage() {
@@ -53,11 +53,14 @@ Token (bearDog auth.token.*):
   token.create <name> [scopes]     Generate new API token
   token.revoke <id>                Delete token by database ID
 
-Signal (waterFall signal.*):
-  signal.post --to <gate> --type <type> --subject <text>  Post a signal/FRAGO
-  signal.list [--all]              List active signals for this gate
-  signal.ack <id> [--note <text>]  Acknowledge a signal
-  signal.archive                   Archive expired/acked signals
+Impulse — rP action potentials (rootPulse ACTION):
+  impulse.post --to <gate> --type <type> --subject <text>  Fire an impulse
+  impulse.ack <id> [--note <text>]                         Acknowledge (receptor bind)
+  impulse.archive                                          Discharge spent impulses
+
+Potential — qS membrane potential (quorumSignal SENSE):
+  potential.sense [--all] [--count]    Measure pending potential for this gate
+  potential.check                      Gradient health across the mesh
 
 Forgejo:
   forgejo.version                  Show Forgejo version
@@ -457,30 +460,59 @@ async fn dispatch(
             }
         }
 
-        // ── Signal ──────────────────────────────────────────────
-        "signal.post" => {
+        // ── Impulse (rootPulse ACTION) ─────────────────────────
+        "impulse.post" => {
             let root = temporal::resolve_workspace_root()?;
-            let post_args = parse_signal_post_args(args)?;
-            let sig = signal::post(&root, &post_args).await?;
+            let post_args = parse_impulse_post_args(args)?;
+            let imp = impulse::post(&root, &post_args).await?;
             Ok(ShadowOutcome::ok_with(
                 format!(
-                    "POSTED [{}] {} → {}: {}",
-                    sig.signal.signal_type,
-                    sig.from.gate,
-                    sig.to.gates.join(","),
-                    sig.content.subject,
+                    "FIRED [{}] {} → {}: {}",
+                    imp.impulse.impulse_type,
+                    imp.from.gate,
+                    imp.to.gates.join(","),
+                    imp.content.subject,
                 ),
-                serde_json::to_value(&sig)?,
+                serde_json::to_value(&imp)?,
             ))
         }
-        "signal.list" => {
+        "impulse.ack" => {
+            let root = temporal::resolve_workspace_root()?;
+            let impulse_id = require_arg(args, 0, "impulse-id")?;
+            let note = extract_flag_value(args, "--note").unwrap_or("");
+            let imp = impulse::ack(&root, impulse_id, note).await?;
+            Ok(ShadowOutcome::ok(format!(
+                "ACKED: {} (note: {})",
+                imp.impulse.id,
+                if note.is_empty() { "-" } else { note },
+            )))
+        }
+        "impulse.archive" => {
+            let root = temporal::resolve_workspace_root()?;
+            let archived = impulse::archive(&root).await?;
+            if archived.is_empty() {
+                Ok(ShadowOutcome::ok("No impulses to discharge.".to_string()))
+            } else {
+                Ok(ShadowOutcome::ok(format!(
+                    "Discharged {} impulse(s): {}",
+                    archived.len(),
+                    archived.join(", "),
+                )))
+            }
+        }
+
+        // ── Potential (quorumSignal SENSE) ─────────────────────
+        "potential.sense" => {
             let root = temporal::resolve_workspace_root()?;
             let all = args.iter().any(|a| *a == "--all");
-            let signals = signal::list(&root, all)?;
-            if signals.is_empty() {
-                Ok(ShadowOutcome::ok("No active signals.".to_string()))
+            let count_only = args.iter().any(|a| *a == "--count");
+            let (impulses, count) = impulse::sense(&root, all, count_only)?;
+            if count_only {
+                Ok(ShadowOutcome::ok(count.to_string()))
+            } else if impulses.is_empty() {
+                Ok(ShadowOutcome::ok("Membrane potential: resting (no pending impulses).".to_string()))
             } else {
-                let lines: Vec<String> = signals
+                let lines: Vec<String> = impulses
                     .iter()
                     .map(|(_, s)| {
                         let ack_mark = if s.meta.ack_required && s.acks.is_empty() {
@@ -492,7 +524,7 @@ async fn dispatch(
                         };
                         format!(
                             "  [{}] {}/{}: {}{}",
-                            s.signal.signal_type,
+                            s.impulse.impulse_type,
                             s.from.gate,
                             s.from.team,
                             s.content.subject,
@@ -501,35 +533,86 @@ async fn dispatch(
                     })
                     .collect();
                 Ok(ShadowOutcome::ok_with(
-                    format!("{} active signal(s)\n{}", signals.len(), lines.join("\n")),
+                    format!("{count} active impulse(s)\n{}", lines.join("\n")),
                     serde_json::to_value(
-                        &signals.iter().map(|(_, s)| s).collect::<Vec<_>>()
+                        &impulses.iter().map(|(_, s)| s).collect::<Vec<_>>()
                     )?,
                 ))
             }
         }
-        "signal.ack" => {
+        "potential.check" => {
             let root = temporal::resolve_workspace_root()?;
-            let signal_id = require_arg(args, 0, "signal-id")?;
+            let health = impulse::check(&root)?;
+            let wave_lines: Vec<String> = health
+                .by_wave
+                .iter()
+                .map(|(w, c)| format!("  wave {w}: {c} impulse(s)"))
+                .collect();
+            let msg = format!(
+                "Membrane potential gradient:\n\
+                 Total active:    {}\n\
+                 Needs ack:       {}\n\
+                 Expired:         {}\n\
+                 Current wave:    {}\n\
+                 {}",
+                health.total,
+                health.needs_ack,
+                health.expired,
+                health.current_wave,
+                if wave_lines.is_empty() { String::new() } else { format!("Volume:\n{}", wave_lines.join("\n")) },
+            );
+            Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&health)?))
+        }
+
+        // ── Deprecated signal.* aliases ──────────────────────
+        "signal.post" => {
+            eprintln!("DEPRECATED: signal.post is now impulse.post (see IMPULSE_POTENTIAL_STANDARD.md)");
+            let root = temporal::resolve_workspace_root()?;
+            let post_args = parse_impulse_post_args(args)?;
+            let imp = impulse::post(&root, &post_args).await?;
+            Ok(ShadowOutcome::ok_with(
+                format!(
+                    "FIRED [{}] {} → {}: {}",
+                    imp.impulse.impulse_type, imp.from.gate,
+                    imp.to.gates.join(","), imp.content.subject,
+                ),
+                serde_json::to_value(&imp)?,
+            ))
+        }
+        "signal.list" => {
+            eprintln!("DEPRECATED: signal.list is now potential.sense (see IMPULSE_POTENTIAL_STANDARD.md)");
+            let root = temporal::resolve_workspace_root()?;
+            let all = args.iter().any(|a| *a == "--all");
+            let (impulses, count) = impulse::sense(&root, all, false)?;
+            if impulses.is_empty() {
+                Ok(ShadowOutcome::ok("No active impulses.".to_string()))
+            } else {
+                let lines: Vec<String> = impulses
+                    .iter()
+                    .map(|(_, s)| format!("  [{}] {}/{}: {}", s.impulse.impulse_type, s.from.gate, s.from.team, s.content.subject))
+                    .collect();
+                Ok(ShadowOutcome::ok_with(
+                    format!("{count} active impulse(s)\n{}", lines.join("\n")),
+                    serde_json::to_value(&impulses.iter().map(|(_, s)| s).collect::<Vec<_>>())?,
+                ))
+            }
+        }
+        "signal.ack" => {
+            eprintln!("DEPRECATED: signal.ack is now impulse.ack (see IMPULSE_POTENTIAL_STANDARD.md)");
+            let root = temporal::resolve_workspace_root()?;
+            let impulse_id = require_arg(args, 0, "impulse-id")?;
             let note = extract_flag_value(args, "--note").unwrap_or("");
-            let sig = signal::ack(&root, signal_id, note).await?;
-            Ok(ShadowOutcome::ok(format!(
-                "ACKED: {} (note: {})",
-                sig.signal.id,
-                if note.is_empty() { "-" } else { note },
-            )))
+            let imp = impulse::ack(&root, impulse_id, note).await?;
+            Ok(ShadowOutcome::ok(format!("ACKED: {} (note: {})", imp.impulse.id, if note.is_empty() { "-" } else { note })))
         }
         "signal.archive" => {
+            eprintln!("DEPRECATED: signal.archive is now impulse.archive (see IMPULSE_POTENTIAL_STANDARD.md)");
             let root = temporal::resolve_workspace_root()?;
-            let archived = signal::archive(&root).await?;
+            let archived = impulse::archive(&root).await?;
             if archived.is_empty() {
-                Ok(ShadowOutcome::ok("No signals to archive.".to_string()))
+                Ok(ShadowOutcome::ok("No impulses to discharge.".to_string()))
             } else {
-                Ok(ShadowOutcome::ok(format!(
-                    "Archived {} signal(s): {}",
-                    archived.len(),
-                    archived.join(", "),
-                )))
+                Ok(ShadowOutcome::ok(format!("Discharged {} impulse(s): {}", archived.len(), archived.join(", "))))
             }
         }
 
@@ -572,43 +655,42 @@ impl TapMessage for ShadowOutcome {
     }
 }
 
-fn parse_signal_post_args<'a>(args: &[&'a str]) -> membrane_shadow::Result<signal::PostArgs<'a>> {
+fn parse_impulse_post_args<'a>(args: &[&'a str]) -> membrane_shadow::Result<impulse::PostArgs<'a>> {
     let to_str = extract_flag_value(args, "--to")
         .ok_or_else(|| membrane_shadow::ShadowError::Parse("--to <gate> required".into()))?;
     let subject = extract_flag_value(args, "--subject")
         .ok_or_else(|| membrane_shadow::ShadowError::Parse("--subject required".into()))?;
 
     let type_str = extract_flag_value(args, "--type").unwrap_or("status");
-    let signal_type = match type_str {
-        "frago" => signal::SignalType::Frago,
-        "status" => signal::SignalType::Status,
-        "request" => signal::SignalType::Request,
-        "announce" => signal::SignalType::Announce,
+    let impulse_type = match type_str {
+        "frago" => impulse::ImpulseType::Frago,
+        "status" => impulse::ImpulseType::Status,
+        "request" => impulse::ImpulseType::Request,
+        "announce" => impulse::ImpulseType::Announce,
         _ => {
             return Err(membrane_shadow::ShadowError::Parse(format!(
-                "unknown signal type: {type_str} (expected: frago|status|request|announce)"
+                "unknown impulse type: {type_str} (expected: frago|status|request|announce)"
             )));
         }
     };
 
     let priority_str = extract_flag_value(args, "--priority").unwrap_or("routine");
     let priority = match priority_str {
-        "routine" => signal::Priority::Routine,
-        "priority" => signal::Priority::Priority,
-        "flash" => signal::Priority::Flash,
-        _ => signal::Priority::Routine,
+        "routine" => impulse::Priority::Routine,
+        "priority" => impulse::Priority::Priority,
+        "flash" => impulse::Priority::Flash,
+        _ => impulse::Priority::Routine,
     };
 
     let to_gates: Vec<&str> = to_str.split(',').collect();
 
-    Ok(signal::PostArgs {
+    Ok(impulse::PostArgs {
         to_gates,
-        signal_type,
+        impulse_type,
         priority,
         subject,
         body: extract_flag_value(args, "--body").unwrap_or(""),
         project: extract_flag_value(args, "--project").unwrap_or(""),
-        git_ref: extract_flag_value(args, "--ref").unwrap_or(""),
         team: extract_flag_value(args, "--team").unwrap_or(""),
     })
 }

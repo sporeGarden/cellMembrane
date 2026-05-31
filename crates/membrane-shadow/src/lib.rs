@@ -58,6 +58,8 @@ pub mod gate;
 pub mod identity;
 pub mod manifest;
 pub mod service;
+pub mod impulse;
+#[deprecated(note = "use `impulse` module — signal.* renamed to impulse.*/potential.*")]
 pub mod signal;
 pub mod ssh;
 pub mod temporal;
