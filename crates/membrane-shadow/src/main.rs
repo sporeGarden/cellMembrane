@@ -24,6 +24,9 @@ Mirror (nestGate content.mirror.*):
   mirror.sync <org/name>           Trigger mirror sync for one repo
   mirror.sync-all [org...]         Trigger sync on all mirrors (default: ecoPrimals)
   mirror.status <org/name>         Show mirror status for a repo
+  mirror.push-create <org/name> <remote_url>  Create push mirror (Forgejo → GitHub)
+  mirror.push-list <org/name>      List push mirrors for a repo
+  mirror.push-sync <org/name>      Trigger push mirror sync
 
 Service (biomeOS gate.service.*):
   service.list                     List running membrane services
@@ -212,6 +215,44 @@ async fn dispatch(
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&info)?))
         }
 
+        // ── Push Mirror ──────────────────────────────────────────
+        "mirror.push-create" => {
+            let full_name = require_arg(args, 0, "org/name")?;
+            let remote_url = require_arg(args, 1, "remote_url")?;
+            let mirror = forgejo::push_mirror_create(config, full_name, remote_url).await?;
+            Ok(ShadowOutcome::ok_with(
+                format!("PUSH MIRROR CREATED {} → {}", full_name, mirror.remote_address),
+                serde_json::to_value(&mirror)?,
+            ))
+        }
+        "mirror.push-list" => {
+            let full_name = require_arg(args, 0, "org/name")?;
+            let mirrors = forgejo::push_mirror_list(config, full_name).await?;
+            let lines: Vec<String> = mirrors
+                .iter()
+                .map(|m| {
+                    let sync = if m.sync_on_commit { "on-commit" } else { &m.interval };
+                    format!("  {} → {} ({sync})", m.remote_name, m.remote_address)
+                })
+                .collect();
+            Ok(ShadowOutcome::ok_with(
+                format!("{} push mirror(s) for {full_name}\n{}", mirrors.len(), lines.join("\n")),
+                serde_json::to_value(&mirrors)?,
+            ))
+        }
+        "mirror.push-sync" => {
+            let full_name = require_arg(args, 0, "org/name")?;
+            let result = forgejo::push_mirror_sync(config, full_name).await?;
+            if result.triggered {
+                Ok(ShadowOutcome::ok(format!("PUSH SYNC TRIGGERED {full_name}")))
+            } else {
+                Ok(ShadowOutcome::fail(format!(
+                    "PUSH SYNC FAILED {full_name} (HTTP {})",
+                    result.http_code
+                )))
+            }
+        }
+
         // ── Service ─────────────────────────────────────────────
         "service.list" => {
             let services = service::list(config).await?;
@@ -386,11 +427,14 @@ async fn dispatch(
                     "temporal.sync requires at least one repo path".into(),
                 ));
             }
+            let push_target = manifest::load_from_workspace(&root)
+                .map(|m| m.sync.push_target.clone())
+                .unwrap_or_else(|_| "all".to_string());
             let mut results = Vec::with_capacity(args.len());
             let mut synced = 0u32;
             let mut failed = 0u32;
             for path in args {
-                let r = temporal::sync(&root, path).await?;
+                let r = temporal::sync_with_target(&root, path, &push_target).await?;
                 if r.ok {
                     synced += 1;
                 } else {

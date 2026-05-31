@@ -328,9 +328,21 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
 ///
 /// Shadow for: `waterFall temporal.sync`
 ///
+/// `push_target`: `"all"` pushes to every follower remote (legacy),
+/// `"forgejo"` pushes only to the forgejo remote (VPS mediator model).
+///
 /// Returns `Err` only on infrastructure failures. Divergence is reported
 /// as an `Ok` result with `ok: false` — the DAG is never force-mutated.
 pub async fn sync(workspace_root: &Path, repo_path: &str) -> Result<TemporalSyncResult> {
+    sync_with_target(workspace_root, repo_path, "all").await
+}
+
+/// Temporal sync respecting the manifest's `push_target` setting.
+pub async fn sync_with_target(
+    workspace_root: &Path,
+    repo_path: &str,
+    push_target: &str,
+) -> Result<TemporalSyncResult> {
     let local_path = workspace_root.join(repo_path);
 
     if !local_path.join(".git").exists() {
@@ -390,12 +402,16 @@ pub async fn sync(workspace_root: &Path, repo_path: &str) -> Result<TemporalSync
                 }
             }
 
-            // Push to all remotes that are behind
+            // Push to follower remotes, filtered by push_target.
+            // "forgejo" = only push to the forgejo remote (VPS mediator handles GitHub).
+            // "all" = push to every remote that is behind (legacy dual-push).
             for pos in &matrix.positions {
                 if pulled_from.as_deref() == Some(&pos.remote) {
                     continue;
                 }
-                // Re-check: after pull, local may now be ahead of this remote
+                if push_target == "forgejo" && pos.remote != "forgejo" {
+                    continue;
+                }
                 let remote_ref = format!("{}/{branch}", pos.remote);
                 let ahead_range = format!("{remote_ref}..HEAD");
                 let ahead = rev_list_count(&local_path, &ahead_range).await;

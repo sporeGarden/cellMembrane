@@ -63,6 +63,15 @@ pub struct SyncConfig {
     /// Whether temporal sync should push to follower remotes.
     #[serde(default)]
     pub push_to_followers: bool,
+    /// Push target: "forgejo" (sovereign mediator) or "all" (legacy dual-push).
+    /// When "forgejo", temporal.sync pushes only to the forgejo remote;
+    /// the VPS push mirror handles GitHub propagation.
+    #[serde(default = "default_push_target")]
+    pub push_target: String,
+}
+
+fn default_push_target() -> String {
+    "all".into()
 }
 
 fn default_source() -> String {
