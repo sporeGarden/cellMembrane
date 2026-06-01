@@ -6,17 +6,16 @@
 //! handles JSON vs human output formatting.
 
 use crate::cli::{self, TapMessage};
-use crate::{ShadowConfig, ShadowOutcome, context, forgejo, gate, identity, impulse, manifest, plasmid, service, temporal};
+use crate::{
+    ShadowConfig, ShadowOutcome, context, forgejo, gate, identity, impulse, manifest, plasmid,
+    relay, service, temporal,
+};
 
 /// Dispatch a CLI command to the appropriate shadow function.
 ///
 /// Returns `Ok(ShadowOutcome)` for both success and domain-level failures.
 /// Returns `Err` only for infrastructure failures (SSH, parse, etc.).
-pub async fn run(
-    config: &ShadowConfig,
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
         c if c.starts_with("repo.") => dispatch_repo(config, cmd, args).await,
         c if c.starts_with("mirror.") => dispatch_mirror(config, cmd, args).await,
@@ -32,13 +31,12 @@ pub async fn run(
         // Deprecated signal.* → impulse.*/potential.*
         c if c.starts_with("signal.") => dispatch_signal_deprecated(cmd, args).await,
         c if c.starts_with("plasmid.") => dispatch_plasmid(config, cmd, args).await,
+        c if c.starts_with("relay.") => dispatch_relay(cmd, args).await,
         "forgejo.version" => {
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))
         }
-        _ => {
-            Ok(ShadowOutcome::fail(format!("unknown command: {cmd}")))
-        }
+        _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
     }
 }
 
@@ -72,7 +70,8 @@ async fn dispatch_repo(
             Ok(ShadowOutcome::ok_with(
                 format!("{} repos in {org}", repos.len()),
                 serde_json::to_value(&repos)?,
-            ).tap_message(|m| format!("{m}\n{}", lines.join("\n"))))
+            )
+            .tap_message(|m| format!("{m}\n{}", lines.join("\n"))))
         }
         "repo.delete" => {
             let path = cli::require_arg(args, 0, "org/name")?;
@@ -98,7 +97,8 @@ async fn dispatch_mirror(
                 Ok(ShadowOutcome::ok(format!("TRIGGERED {path}")))
             } else {
                 Ok(ShadowOutcome::fail(format!(
-                    "FAILED {path} (HTTP {})", result.http_code
+                    "FAILED {path} (HTTP {})",
+                    result.http_code
                 )))
             }
         }
@@ -115,11 +115,17 @@ async fn dispatch_mirror(
                 for repo in &repos {
                     if repo.mirror {
                         let r = forgejo::mirror_sync(config, &repo.full_name).await?;
-                        if r.triggered { triggered += 1; } else { failed += 1; }
+                        if r.triggered {
+                            triggered += 1;
+                        } else {
+                            failed += 1;
+                        }
                     }
                 }
             }
-            Ok(ShadowOutcome::ok(format!("triggered={triggered} failed={failed}")))
+            Ok(ShadowOutcome::ok(format!(
+                "triggered={triggered} failed={failed}"
+            )))
         }
         "mirror.status" => {
             let path = cli::require_arg(args, 0, "org/name")?;
@@ -140,7 +146,10 @@ async fn dispatch_mirror(
             let remote_url = cli::require_arg(args, 1, "remote_url")?;
             let mirror = forgejo::push_mirror_create(config, full_name, remote_url).await?;
             Ok(ShadowOutcome::ok_with(
-                format!("PUSH MIRROR CREATED {} → {}", full_name, mirror.remote_address),
+                format!(
+                    "PUSH MIRROR CREATED {} → {}",
+                    full_name, mirror.remote_address
+                ),
                 serde_json::to_value(&mirror)?,
             ))
         }
@@ -150,12 +159,20 @@ async fn dispatch_mirror(
             let lines: Vec<String> = mirrors
                 .iter()
                 .map(|m| {
-                    let sync = if m.sync_on_commit { "on-commit" } else { &m.interval };
+                    let sync = if m.sync_on_commit {
+                        "on-commit"
+                    } else {
+                        &m.interval
+                    };
                     format!("  {} → {} ({sync})", m.remote_name, m.remote_address)
                 })
                 .collect();
             Ok(ShadowOutcome::ok_with(
-                format!("{} push mirror(s) for {full_name}\n{}", mirrors.len(), lines.join("\n")),
+                format!(
+                    "{} push mirror(s) for {full_name}\n{}",
+                    mirrors.len(),
+                    lines.join("\n")
+                ),
                 serde_json::to_value(&mirrors)?,
             ))
         }
@@ -163,14 +180,19 @@ async fn dispatch_mirror(
             let full_name = cli::require_arg(args, 0, "org/name")?;
             let result = forgejo::push_mirror_sync(config, full_name).await?;
             if result.triggered {
-                Ok(ShadowOutcome::ok(format!("PUSH SYNC TRIGGERED {full_name}")))
+                Ok(ShadowOutcome::ok(format!(
+                    "PUSH SYNC TRIGGERED {full_name}"
+                )))
             } else {
                 Ok(ShadowOutcome::fail(format!(
-                    "PUSH SYNC FAILED {full_name} (HTTP {})", result.http_code
+                    "PUSH SYNC FAILED {full_name} (HTTP {})",
+                    result.http_code
                 )))
             }
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown mirror command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown mirror command: {cmd}"
+        ))),
     }
 }
 
@@ -210,7 +232,10 @@ async fn dispatch_service(
             if s.active {
                 Ok(ShadowOutcome::ok(format!("RESTARTED {unit}")))
             } else {
-                Ok(ShadowOutcome::fail(format!("RESTART FAILED {unit} (state={})", s.sub_state)))
+                Ok(ShadowOutcome::fail(format!(
+                    "RESTART FAILED {unit} (state={})",
+                    s.sub_state
+                )))
             }
         }
         "service.logs" => {
@@ -219,7 +244,9 @@ async fn dispatch_service(
             let output = service::logs(config, unit, lines).await?;
             Ok(ShadowOutcome::ok(output))
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown service command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown service command: {cmd}"
+        ))),
     }
 }
 
@@ -263,7 +290,10 @@ async fn dispatch_gate(
         "gate.pull" => {
             let result = gate::pull(config).await?;
             Ok(ShadowOutcome::ok_with(
-                format!("pulled {}/{} repos on {}", result.synced, result.total, result.gate),
+                format!(
+                    "pulled {}/{} repos on {}",
+                    result.synced, result.total, result.gate
+                ),
                 serde_json::to_value(&result)?,
             ))
         }
@@ -271,9 +301,19 @@ async fn dispatch_gate(
             let result = gate::check(config).await?;
             let msg = format!(
                 "{}: {}/{} in sync{}{}",
-                result.gate, result.synced, result.total,
-                if result.drifted > 0 { format!(", {} drifted", result.drifted) } else { String::new() },
-                if result.missing > 0 { format!(", {} missing", result.missing) } else { String::new() },
+                result.gate,
+                result.synced,
+                result.total,
+                if result.drifted > 0 {
+                    format!(", {} drifted", result.drifted)
+                } else {
+                    String::new()
+                },
+                if result.missing > 0 {
+                    format!(", {} missing", result.missing)
+                } else {
+                    String::new()
+                },
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
@@ -302,9 +342,10 @@ async fn dispatch_token(
         }
         "token.create" => {
             let name = cli::require_arg(args, 0, "token-name")?;
-            let scopes = args.get(1).copied().unwrap_or(
-                "write:repository,read:repository,write:organization,read:organization",
-            );
+            let scopes = args
+                .get(1)
+                .copied()
+                .unwrap_or("write:repository,read:repository,write:organization,read:organization");
             let token = forgejo::token_create(config, name, scopes).await?;
             Ok(ShadowOutcome::ok_with(
                 format!("TOKEN: {token}\nname={name} scopes={scopes}"),
@@ -366,7 +407,11 @@ async fn dispatch_temporal(
             let mut failed = 0u32;
             for path in args {
                 let r = temporal::sync_with_target(&root, path, &push_target).await?;
-                if r.ok { synced += 1; } else { failed += 1; }
+                if r.ok {
+                    synced += 1;
+                } else {
+                    failed += 1;
+                }
                 results.push(r);
             }
             let lines: Vec<String> = results
@@ -382,15 +427,14 @@ async fn dispatch_temporal(
             ))
         }
         "temporal.cascade" => dispatch_cascade(config, args).await,
-        _ => Ok(ShadowOutcome::fail(format!("unknown temporal command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown temporal command: {cmd}"
+        ))),
     }
 }
 
 /// `temporal.cascade` — thin dispatch to `temporal::cascade`.
-async fn dispatch_cascade(
-    _config: &ShadowConfig,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
 
     let gate_name = cli::extract_flag_value(args, "--gate")
@@ -413,10 +457,7 @@ async fn dispatch_cascade(
 
 // ── Manifest domain ──────────────────────────────────────────────────
 
-async fn dispatch_manifest(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "manifest.info" => {
@@ -426,21 +467,30 @@ async fn dispatch_manifest(
                 |t| {
                     let roles = t.roles.as_ref().map_or_else(
                         || "no roles assigned".to_string(),
-                        |r| format!(
-                            "receiver={} mediator={} publisher={}",
-                            r.push_receiver, r.sync_mediator, r.external_publisher
-                        ),
+                        |r| {
+                            format!(
+                                "receiver={} mediator={} publisher={}",
+                                r.push_receiver, r.sync_mediator, r.external_publisher
+                            )
+                        },
                     );
-                    format!("{}: {} → {} → {} ({})", t.model, t.inner_membrane, t.peptidoglycan, t.outer_membrane, roles)
+                    format!(
+                        "{}: {} → {} → {} ({})",
+                        t.model, t.inner_membrane, t.peptidoglycan, t.outer_membrane, roles
+                    )
                 },
             );
             let msg = format!(
                 "manifest v{} wave {} ({} repos)\n\
                  sync: source={} branch={} push_target={} divergence={}\n\
                  topology: {}",
-                m.meta.version, m.meta.wave, m.meta.total_repos,
-                m.sync.default_source, m.sync.default_branch,
-                m.sync.push_target, m.sync.divergence_policy,
+                m.meta.version,
+                m.meta.wave,
+                m.meta.total_repos,
+                m.sync.default_source,
+                m.sync.default_branch,
+                m.sync.push_target,
+                m.sync.divergence_policy,
                 topo,
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&m)?))
@@ -454,7 +504,12 @@ async fn dispatch_manifest(
             };
             let lines: Vec<String> = repos
                 .iter()
-                .map(|(name, e)| format!("  {:<25} {:<30} {:<18} {}", name, e.local_path, e.membrane, e.category))
+                .map(|(name, e)| {
+                    format!(
+                        "  {:<25} {:<30} {:<18} {}",
+                        name, e.local_path, e.membrane, e.category
+                    )
+                })
                 .collect();
             let header = if let Some(g) = args.first() {
                 format!("{} repos for gate {g}", repos.len())
@@ -466,9 +521,15 @@ async fn dispatch_manifest(
         "manifest.orgs" => {
             let m = manifest::load_from_workspace(&root)?;
             let orgs = m.orgs();
-            Ok(ShadowOutcome::ok(format!("{} orgs: {}", orgs.len(), orgs.join(", "))))
+            Ok(ShadowOutcome::ok(format!(
+                "{} orgs: {}",
+                orgs.len(),
+                orgs.join(", ")
+            )))
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown manifest command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown manifest command: {cmd}"
+        ))),
     }
 }
 
@@ -487,10 +548,7 @@ async fn dispatch_identity() -> crate::Result<ShadowOutcome> {
 
 // ── Impulse domain (rootPulse ACTION) ────────────────────────────────
 
-async fn dispatch_impulse(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn dispatch_impulse(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "impulse.post" => {
@@ -499,8 +557,10 @@ async fn dispatch_impulse(
             Ok(ShadowOutcome::ok_with(
                 format!(
                     "FIRED [{}] {} → {}: {}",
-                    imp.impulse.impulse_type, imp.from.gate,
-                    imp.to.gates.join(","), imp.content.subject,
+                    imp.impulse.impulse_type,
+                    imp.from.gate,
+                    imp.to.gates.join(","),
+                    imp.content.subject,
                 ),
                 serde_json::to_value(&imp)?,
             ))
@@ -521,20 +581,21 @@ async fn dispatch_impulse(
                 Ok(ShadowOutcome::ok("No impulses to discharge.".to_string()))
             } else {
                 Ok(ShadowOutcome::ok(format!(
-                    "Discharged {} impulse(s): {}", archived.len(), archived.join(", "),
+                    "Discharged {} impulse(s): {}",
+                    archived.len(),
+                    archived.join(", "),
                 )))
             }
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown impulse command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown impulse command: {cmd}"
+        ))),
     }
 }
 
 // ── Potential domain (quorumSignal SENSE) ────────────────────────────
 
-async fn dispatch_potential(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn dispatch_potential(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "potential.sense" => {
@@ -544,7 +605,9 @@ async fn dispatch_potential(
             if count_only {
                 Ok(ShadowOutcome::ok(count.to_string()))
             } else if impulses.is_empty() {
-                Ok(ShadowOutcome::ok("Membrane potential: resting (no pending impulses).".to_string()))
+                Ok(ShadowOutcome::ok(
+                    "Membrane potential: resting (no pending impulses).".to_string(),
+                ))
             } else {
                 let lines: Vec<String> = impulses
                     .iter()
@@ -558,8 +621,11 @@ async fn dispatch_potential(
                         };
                         format!(
                             "  [{}] {}/{}: {}{}",
-                            s.impulse.impulse_type, s.from.gate, s.from.team,
-                            s.content.subject, ack_mark,
+                            s.impulse.impulse_type,
+                            s.from.gate,
+                            s.from.team,
+                            s.content.subject,
+                            ack_mark,
                         )
                     })
                     .collect();
@@ -583,21 +649,27 @@ async fn dispatch_potential(
                  Expired:         {}\n\
                  Current wave:    {}\n\
                  {}",
-                health.total, health.needs_ack, health.expired, health.current_wave,
-                if wave_lines.is_empty() { String::new() } else { format!("Volume:\n{}", wave_lines.join("\n")) },
+                health.total,
+                health.needs_ack,
+                health.expired,
+                health.current_wave,
+                if wave_lines.is_empty() {
+                    String::new()
+                } else {
+                    format!("Volume:\n{}", wave_lines.join("\n"))
+                },
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&health)?))
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown potential command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown potential command: {cmd}"
+        ))),
     }
 }
 
 // ── Context domain (sweetGrass-external braids) ──────────────────────
 
-async fn dispatch_context(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn dispatch_context(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "context.weave" => {
@@ -620,7 +692,9 @@ async fn dispatch_context(
             let filter_project = cli::extract_flag_value(args, "--project");
             let braids = context::sense(&root, filter_gate, filter_project, all)?;
             if braids.is_empty() {
-                Ok(ShadowOutcome::ok("No context braids woven (resting state).".to_string()))
+                Ok(ShadowOutcome::ok(
+                    "No context braids woven (resting state).".to_string(),
+                ))
             } else {
                 let lines: Vec<String> = braids
                     .iter()
@@ -648,11 +722,15 @@ async fn dispatch_context(
                 Ok(ShadowOutcome::ok("No braids to clear.".to_string()))
             } else {
                 Ok(ShadowOutcome::ok(format!(
-                    "Cleared {} braid(s): {}", cleared.len(), cleared.join(", "),
+                    "Cleared {} braid(s): {}",
+                    cleared.len(),
+                    cleared.join(", "),
                 )))
             }
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown context command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown context command: {cmd}"
+        ))),
     }
 }
 
@@ -677,22 +755,25 @@ async fn dispatch_plasmid(
             };
             plasmid::fetch(config, &fetch_args).await
         }
-        _ => Ok(ShadowOutcome::fail(format!("unknown plasmid command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown plasmid command: {cmd}"
+        ))),
     }
 }
 
 // ── Deprecated signal.* aliases ──────────────────────────────────────
 
-async fn dispatch_signal_deprecated(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn dispatch_signal_deprecated(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let new_cmd = match cmd {
         "signal.post" => "impulse.post",
         "signal.ack" => "impulse.ack",
         "signal.archive" => "impulse.archive",
         "signal.list" => "potential.sense",
-        _ => return Ok(ShadowOutcome::fail(format!("unknown signal command: {cmd}"))),
+        _ => {
+            return Ok(ShadowOutcome::fail(format!(
+                "unknown signal command: {cmd}"
+            )));
+        }
     };
     eprintln!("DEPRECATED: {cmd} → {new_cmd} (see IMPULSE_POTENTIAL_STANDARD.md)");
 
@@ -702,5 +783,72 @@ async fn dispatch_signal_deprecated(
         "impulse.archive" => dispatch_impulse(new_cmd, args).await,
         "potential.sense" => dispatch_potential(new_cmd, args).await,
         _ => unreachable!(),
+    }
+}
+
+// ── Relay domain (K-Derm relay chain) ────────────────────────────────
+
+async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+    match cmd {
+        "relay.run" => {
+            let config = relay::RelayConfig::from_env();
+            let result = relay::run(&config, args).await?;
+            let summary = format!(
+                "relay complete: pulled={} pushed={} impulses={} failures={}",
+                result.pulled.len(),
+                result.pushed.len(),
+                result.impulses_sensed,
+                result.pull_failures.len() + result.push_failures.len(),
+            );
+            Ok(ShadowOutcome::ok_with(
+                summary,
+                serde_json::to_value(&result)?,
+            ))
+        }
+        "relay.mediate" => {
+            let config = relay::RelayConfig::from_env();
+            let paths: Vec<&str> = if args.is_empty() {
+                vec!["infra/wateringHole"]
+            } else {
+                args.to_vec()
+            };
+            let (pulled, failures) = relay::mediate(&config, &paths).await;
+            let summary = format!(
+                "mediate: pulled={} failures={}",
+                pulled.len(),
+                failures.len()
+            );
+            Ok(ShadowOutcome::ok_with(
+                summary,
+                serde_json::json!({
+                    "pulled": pulled,
+                    "failures": failures,
+                }),
+            ))
+        }
+        "relay.ship" => {
+            let config = relay::RelayConfig::from_env();
+            let paths: Vec<&str> = if args.is_empty() {
+                vec!["infra/wateringHole"]
+            } else {
+                args.to_vec()
+            };
+            let (pushed, skipped, failures) = relay::ship_extracellular(&config, &paths).await;
+            let summary = format!(
+                "ship: pushed={} skipped={} failures={}",
+                pushed.len(),
+                skipped.len(),
+                failures.len()
+            );
+            Ok(ShadowOutcome::ok_with(
+                summary,
+                serde_json::json!({
+                    "pushed": pushed,
+                    "skipped": skipped,
+                    "failures": failures,
+                }),
+            ))
+        }
+        _ => Ok(ShadowOutcome::fail(format!("unknown relay command: {cmd}"))),
     }
 }

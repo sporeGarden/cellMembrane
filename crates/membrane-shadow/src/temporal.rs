@@ -29,7 +29,7 @@ pub struct RemotePosition {
 
 impl RemotePosition {
     /// True when local and remote share the same tip.
-    #[must_use] 
+    #[must_use]
     pub const fn is_parity(&self) -> bool {
         self.ahead == 0 && self.behind == 0
     }
@@ -415,12 +415,7 @@ pub async fn sync_with_target(
                 let remote_ref = format!("{}/{branch}", pos.remote);
                 let ahead_range = format!("{remote_ref}..HEAD");
                 let ahead = rev_list_count(&local_path, &ahead_range).await;
-                if ahead > 0
-                    && git_ok(
-                        &local_path,
-                        &["push", &pos.remote, branch, "--quiet"],
-                    )
-                    .await
+                if ahead > 0 && git_ok(&local_path, &["push", &pos.remote, branch, "--quiet"]).await
                 {
                     pushed_to.push(pos.remote.clone());
                 }
@@ -552,10 +547,8 @@ pub async fn cascade(
 
         if !full_path.join(".git").exists() {
             if clone_missing {
-                let forgejo_url = format!(
-                    "ssh://git@git.primals.eco:2222/{}.git",
-                    entry.forgejo_repo
-                );
+                let forgejo_url =
+                    format!("ssh://git@git.primals.eco:2222/{}.git", entry.forgejo_repo);
                 let clone_result = tokio::process::Command::new("git")
                     .args(["clone", &forgejo_url, &full_path.to_string_lossy()])
                     .output()
@@ -580,9 +573,18 @@ pub async fn cascade(
             match check(&root, repo_path).await {
                 Ok(matrix) => {
                     let status = match matrix.classification {
-                        SyncClassification::Parity => { synced += 1; "OK parity" }
-                        SyncClassification::Converge => { synced += 1; "OK converge" }
-                        _ => { failed += 1; "DIVERGE" }
+                        SyncClassification::Parity => {
+                            synced += 1;
+                            "OK parity"
+                        }
+                        SyncClassification::Converge => {
+                            synced += 1;
+                            "OK converge"
+                        }
+                        _ => {
+                            failed += 1;
+                            "DIVERGE"
+                        }
                     };
                     lines.push(format!("  {:<35} {status}", name));
                 }
@@ -612,7 +614,11 @@ pub async fn cascade(
     }
 
     let action = if check_only { "checked" } else { "synced" };
-    let clone_info = if cloned > 0 { format!(" cloned={cloned}") } else { String::new() };
+    let clone_info = if cloned > 0 {
+        format!(" cloned={cloned}")
+    } else {
+        String::new()
+    };
     let header = format!(
         "=== WaterFall Cascade ({action}) ===\n\
          Manifest: v{} wave {} ({} repos)\n\

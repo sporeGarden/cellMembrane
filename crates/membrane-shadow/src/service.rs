@@ -111,11 +111,7 @@ pub async fn status(config: &ShadowConfig, unit: &str) -> Result<ServiceStatus> 
 ///
 /// Shadow for: `biomeOS gate.service.restart`
 pub async fn restart(config: &ShadowConfig, unit: &str) -> Result<ServiceStatus> {
-    ssh::exec(
-        config,
-        &format!("systemctl restart {unit}"),
-    )
-    .await?;
+    ssh::exec(config, &format!("systemctl restart {unit}")).await?;
 
     status(config, unit).await
 }

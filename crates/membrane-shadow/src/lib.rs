@@ -52,25 +52,26 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+#[cfg(feature = "neural-bridge")]
+pub mod bridge;
 pub mod cli;
 pub mod config;
+pub mod context;
 pub mod dispatch;
 pub mod error;
 pub mod forgejo;
 pub mod gate;
 pub mod git_ops;
 pub mod identity;
+pub mod impulse;
 pub mod manifest;
 pub mod plasmid;
+pub mod relay;
 pub mod service;
-pub mod context;
-pub mod impulse;
 #[deprecated(note = "superseded by `impulse` module — will be removed in Wave 66")]
 pub mod signal;
 pub mod ssh;
 pub mod temporal;
-#[cfg(feature = "neural-bridge")]
-pub mod bridge;
 
 pub use config::ShadowConfig;
 pub use error::{Result, ShadowError, ShadowOutcome};

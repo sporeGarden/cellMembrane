@@ -60,7 +60,9 @@ impl NeuralBridge {
 
         let fallback = PathBuf::from("/tmp/biomeos/neural-api-default.sock");
         if fallback.exists() {
-            return Some(Self { socket_path: fallback });
+            return Some(Self {
+                socket_path: fallback,
+            });
         }
 
         None
@@ -78,11 +80,17 @@ impl NeuralBridge {
         method: &str,
         params: serde_json::Value,
     ) -> BridgeResult {
-        match self.rpc_call("capability.call", serde_json::json!({
-            "capability": domain,
-            "method": method,
-            "params": params,
-        })).await {
+        match self
+            .rpc_call(
+                "capability.call",
+                serde_json::json!({
+                    "capability": domain,
+                    "method": method,
+                    "params": params,
+                }),
+            )
+            .await
+        {
             Ok(result) => BridgeResult::Handled(result),
             Err(_) => BridgeResult::Fallthrough,
         }
@@ -107,7 +115,10 @@ impl NeuralBridge {
             .map_err(|e| ShadowError::Parse(format!("serialize rpc: {e}")))?;
         payload.push('\n');
 
-        writer.write_all(payload.as_bytes()).await.map_err(ShadowError::Io)?;
+        writer
+            .write_all(payload.as_bytes())
+            .await
+            .map_err(ShadowError::Io)?;
         writer.flush().await.map_err(ShadowError::Io)?;
 
         let mut buf_reader = BufReader::new(reader);
@@ -116,7 +127,8 @@ impl NeuralBridge {
         let timeout = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             buf_reader.read_line(&mut line),
-        ).await;
+        )
+        .await;
 
         match timeout {
             Ok(Ok(_)) => {
@@ -126,11 +138,15 @@ impl NeuralBridge {
                 if let Some(error) = response.get("error") {
                     return Err(ShadowError::Parse(format!(
                         "rpc error: {}",
-                        error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown")
+                        error
+                            .get("message")
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("unknown")
                     )));
                 }
 
-                response.get("result")
+                response
+                    .get("result")
                     .cloned()
                     .ok_or_else(|| ShadowError::Parse("rpc response missing result".into()))
             }

@@ -47,8 +47,7 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
 
     let gate_file = workspace_root.join(".gate");
     if gate_file.exists() {
-        let contents = std::fs::read_to_string(&gate_file)
-            .map_err(ShadowError::Io)?;
+        let contents = std::fs::read_to_string(&gate_file).map_err(ShadowError::Io)?;
         let name = contents.trim().to_string();
         if !name.is_empty() {
             return Ok(GateIdentity {

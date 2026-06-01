@@ -13,8 +13,10 @@ use tokio::process::Command;
 pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
     let output = Command::new("ssh")
         .args([
-            "-o", &format!("ConnectTimeout={}", config.ssh_timeout),
-            "-o", "BatchMode=yes",
+            "-o",
+            &format!("ConnectTimeout={}", config.ssh_timeout),
+            "-o",
+            "BatchMode=yes",
             &config.ssh_host,
             command,
         ])
@@ -37,8 +39,10 @@ pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
 pub async fn exec_raw(config: &ShadowConfig, command: &str) -> Result<(String, i32)> {
     let output = Command::new("ssh")
         .args([
-            "-o", &format!("ConnectTimeout={}", config.ssh_timeout),
-            "-o", "BatchMode=yes",
+            "-o",
+            &format!("ConnectTimeout={}", config.ssh_timeout),
+            "-o",
+            "BatchMode=yes",
             &config.ssh_host,
             command,
         ])

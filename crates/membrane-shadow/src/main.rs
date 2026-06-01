@@ -71,6 +71,11 @@ Plasmid (primal binary bootstrap):
                 [--force] [--dry-run] [--dest DIR]
                                    Fetch primal binaries with BLAKE3 verification
 
+Relay (K-Derm diderm relay chain):
+  relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)
+  relay.mediate [repo_path...]     Pull from Forgejo only (metallic bond inward)
+  relay.ship [repo_path...]        Push to GitHub via golgiBody-ext (ionic→weak outward)
+
 Forgejo:
   forgejo.version                  Show Forgejo version
 
@@ -125,5 +130,9 @@ fn render(o: &ShadowOutcome, json_mode: bool) -> ExitCode {
             println!("{}", serde_json::to_string_pretty(data).unwrap_or_default());
         }
     }
-    if o.ok { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+    if o.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }

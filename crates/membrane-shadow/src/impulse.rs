@@ -258,7 +258,13 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
         .subject
         .to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
@@ -337,7 +343,11 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
 ///
 /// Reads active impulses, optionally filtered to the local gate.
 /// With `count_only`, returns just the count (for cascade-pull integration).
-pub fn sense(workspace_root: &Path, all: bool, count_only: bool) -> Result<(Vec<(String, ImpulseFile)>, usize)> {
+pub fn sense(
+    workspace_root: &Path,
+    all: bool,
+    count_only: bool,
+) -> Result<(Vec<(String, ImpulseFile)>, usize)> {
     let active = active_dir(workspace_root);
     if !active.exists() {
         return Ok((vec![], 0));
@@ -499,7 +509,11 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
         let should_archive = is_expired(&impulse.meta.expires, &now) || is_fully_acked(&impulse);
 
         if should_archive {
-            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let fname = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             let dest = archive_dir.join(&fname);
             std::fs::rename(&path, &dest).map_err(ShadowError::Io)?;
             archived.push(fname);
@@ -508,7 +522,10 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
 
     if !archived.is_empty() {
         let wh_dir = workspace_root.join("infra/wateringHole");
-        let msg = format!("impulse archive: {} discharged → wave{wave}", archived.len());
+        let msg = format!(
+            "impulse archive: {} discharged → wave{wave}",
+            archived.len()
+        );
         git_add_all_commit_push(&wh_dir, &msg).await?;
     }
 
@@ -692,7 +709,9 @@ fn find_impulse_by_id(active_dir: &Path, impulse_id: &str) -> Result<(PathBuf, I
         let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
         if let Ok(impulse) = parse_impulse_or_signal(&contents) {
             if impulse.impulse.id == impulse_id
-                || path.file_stem().is_some_and(|s| s.to_string_lossy().contains(impulse_id))
+                || path
+                    .file_stem()
+                    .is_some_and(|s| s.to_string_lossy().contains(impulse_id))
             {
                 return Ok((path, impulse));
             }

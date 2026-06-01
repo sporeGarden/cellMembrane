@@ -110,7 +110,9 @@ fn auth_header(token: &str) -> String {
 /// Validate input contains no shell metacharacters. Prevents injection
 /// when arguments are interpolated into remote shell commands.
 fn validate_shell_safe(input: &str, field: &str) -> Result<()> {
-    const FORBIDDEN: &[char] = &['\'', '"', '`', '$', '\\', ';', '&', '|', '(', ')', '{', '}', '<', '>', '\n', '\r', '\0'];
+    const FORBIDDEN: &[char] = &[
+        '\'', '"', '`', '$', '\\', ';', '&', '|', '(', ')', '{', '}', '<', '>', '\n', '\r', '\0',
+    ];
     if input.chars().any(|c| FORBIDDEN.contains(&c)) {
         return Err(ShadowError::Parse(format!(
             "{field} contains forbidden characters: {input:?}"
@@ -152,7 +154,10 @@ pub async fn repo_create(config: &ShadowConfig, org: &str, name: &str) -> Result
         Ok(resp.json().await?)
     } else {
         let msg = resp.text().await.unwrap_or_default();
-        Err(ShadowError::ForgejoApi { status, message: msg })
+        Err(ShadowError::ForgejoApi {
+            status,
+            message: msg,
+        })
     }
 }
 
@@ -181,7 +186,10 @@ pub async fn repo_list(config: &ShadowConfig, org: &str) -> Result<Vec<RepoInfo>
         let status = resp.status().as_u16();
         if status != 200 {
             let msg = resp.text().await.unwrap_or_default();
-            return Err(ShadowError::ForgejoApi { status, message: msg });
+            return Err(ShadowError::ForgejoApi {
+                status,
+                message: msg,
+            });
         }
 
         let batch: Vec<RepoInfo> = resp.json().await?;
@@ -217,7 +225,10 @@ pub async fn repo_delete(config: &ShadowConfig, full_name: &str) -> Result<()> {
         Ok(())
     } else {
         let msg = resp.text().await.unwrap_or_default();
-        Err(ShadowError::ForgejoApi { status, message: msg })
+        Err(ShadowError::ForgejoApi {
+            status,
+            message: msg,
+        })
     }
 }
 
@@ -268,7 +279,10 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
         Ok(resp.json().await?)
     } else {
         let msg = resp.text().await.unwrap_or_default();
-        Err(ShadowError::ForgejoApi { status, message: msg })
+        Err(ShadowError::ForgejoApi {
+            status,
+            message: msg,
+        })
     }
 }
 
@@ -316,7 +330,10 @@ pub async fn push_mirror_create(
         Ok(resp.json().await?)
     } else {
         let msg = resp.text().await.unwrap_or_default();
-        Err(ShadowError::ForgejoApi { status, message: msg })
+        Err(ShadowError::ForgejoApi {
+            status,
+            message: msg,
+        })
     }
 }
 
@@ -324,10 +341,7 @@ pub async fn push_mirror_create(
 ///
 /// Shadow for: `nestGate content.mirror.push_list`
 #[cfg(feature = "http")]
-pub async fn push_mirror_list(
-    config: &ShadowConfig,
-    full_name: &str,
-) -> Result<Vec<PushMirror>> {
+pub async fn push_mirror_list(config: &ShadowConfig, full_name: &str) -> Result<Vec<PushMirror>> {
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}/push_mirrors", config.forgejo_api);
 
@@ -344,7 +358,10 @@ pub async fn push_mirror_list(
         Ok(resp.json().await?)
     } else {
         let msg = resp.text().await.unwrap_or_default();
-        Err(ShadowError::ForgejoApi { status, message: msg })
+        Err(ShadowError::ForgejoApi {
+            status,
+            message: msg,
+        })
     }
 }
 
@@ -352,10 +369,7 @@ pub async fn push_mirror_list(
 ///
 /// Shadow for: `nestGate content.mirror.push_sync`
 #[cfg(feature = "http")]
-pub async fn push_mirror_sync(
-    config: &ShadowConfig,
-    full_name: &str,
-) -> Result<MirrorSyncResult> {
+pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<MirrorSyncResult> {
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}/mirror-sync", config.forgejo_api);
 
@@ -419,25 +433,18 @@ pub async fn token_list(config: &ShadowConfig) -> Result<Vec<TokenInfo>> {
 /// Create a Forgejo API token (via Forgejo admin CLI on VPS).
 ///
 /// Shadow for: `bearDog auth.token.create`
-pub async fn token_create(
-    config: &ShadowConfig,
-    name: &str,
-    scopes: &str,
-) -> Result<String> {
+pub async fn token_create(config: &ShadowConfig, name: &str, scopes: &str) -> Result<String> {
     validate_shell_safe(name, "token name")?;
     validate_shell_safe(scopes, "token scopes")?;
 
-    let forgejo_dir = config
-        .forgejo_data_dir
-        .as_deref()
-        .map_or_else(
-            || "/opt/forgejo".to_string(),
-            |d| d.rsplit_once('/').map_or_else(|| d.to_string(), |(parent, _)| parent.to_string()),
-        );
-    let admin_user = config
-        .forgejo_admin_user
-        .as_deref()
-        .unwrap_or("golgiAdmin");
+    let forgejo_dir = config.forgejo_data_dir.as_deref().map_or_else(
+        || "/opt/forgejo".to_string(),
+        |d| {
+            d.rsplit_once('/')
+                .map_or_else(|| d.to_string(), |(parent, _)| parent.to_string())
+        },
+    );
+    let admin_user = config.forgejo_admin_user.as_deref().unwrap_or("golgiAdmin");
 
     let cmd = format!(
         "sudo -u git FORGEJO_WORK_DIR='{forgejo_dir}' HOME='{forgejo_dir}' \
@@ -486,11 +493,7 @@ pub async fn token_revoke(config: &ShadowConfig, token_id: u64) -> Result<()> {
 pub async fn version(config: &ShadowConfig) -> Result<String> {
     let url = format!("{}/version", config.forgejo_api);
     let client = reqwest::Client::new();
-    let resp = client
-        .get(&url)
-        .timeout(API_TIMEOUT_FAST)
-        .send()
-        .await?;
+    let resp = client.get(&url).timeout(API_TIMEOUT_FAST).send().await?;
 
     let body: serde_json::Value = resp.json().await?;
     body["version"]

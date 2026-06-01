@@ -95,9 +95,7 @@ impl ShadowConfig {
 
     /// Returns the token or an error.
     pub fn require_token(&self) -> Result<&str> {
-        self.forgejo_token
-            .as_deref()
-            .ok_or(ShadowError::NoToken)
+        self.forgejo_token.as_deref().ok_or(ShadowError::NoToken)
     }
 }
 
@@ -191,9 +189,5 @@ async fn resolve_token() -> Option<String> {
     let path = format!("{home}/.config/forgejo/token");
     let token = tokio::fs::read_to_string(&path).await.ok()?;
     let token = token.trim().to_string();
-    if token.is_empty() {
-        None
-    } else {
-        Some(token)
-    }
+    if token.is_empty() { None } else { Some(token) }
 }

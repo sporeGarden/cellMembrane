@@ -168,10 +168,8 @@ impl EcosystemManifest {
     /// Returns `ShadowError::Io` if the file can't be read, or
     /// `ShadowError::Parse` if the TOML is malformed.
     pub fn load(path: &Path) -> Result<Self> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(ShadowError::Io)?;
-        toml::from_str(&contents)
-            .map_err(|e| ShadowError::Parse(format!("manifest parse: {e}")))
+        let contents = std::fs::read_to_string(path).map_err(ShadowError::Io)?;
+        toml::from_str(&contents).map_err(|e| ShadowError::Parse(format!("manifest parse: {e}")))
     }
 
     /// Find the manifest file relative to a workspace root.
@@ -191,7 +189,9 @@ impl EcosystemManifest {
             .repos
             .iter()
             .filter_map(|name| {
-                self.repos.get(name.as_str()).map(|entry| (name.as_str(), entry))
+                self.repos
+                    .get(name.as_str())
+                    .map(|entry| (name.as_str(), entry))
             })
             .collect()
     }
@@ -206,11 +206,7 @@ impl EcosystemManifest {
 
     /// Get all distinct org names from repos.
     pub fn orgs(&self) -> Vec<&str> {
-        let mut orgs: Vec<&str> = self
-            .repos
-            .values()
-            .map(|r| r.org.as_str())
-            .collect();
+        let mut orgs: Vec<&str> = self.repos.values().map(|r| r.org.as_str()).collect();
         orgs.sort_unstable();
         orgs.dedup();
         orgs
@@ -241,9 +237,11 @@ impl EcosystemManifest {
 /// # Errors
 /// Returns error if manifest not found or unparseable.
 pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
-    let path = EcosystemManifest::find_in_workspace(workspace_root)
-        .ok_or_else(|| ShadowError::Parse(
-            format!("ecosystem_manifest.toml not found under {}", workspace_root.display())
-        ))?;
+    let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
+        ShadowError::Parse(format!(
+            "ecosystem_manifest.toml not found under {}",
+            workspace_root.display()
+        ))
+    })?;
     EcosystemManifest::load(&path)
 }
