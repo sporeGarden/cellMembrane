@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 59, 2026-05-28) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 66, 2026-05-31) |
 
 ---
 
@@ -54,10 +54,21 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 175 tests — pedantic clippy clean
+cargo test                  # 204 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 66 (Deep Debt Evolution):** Eliminated 3 external tool dependencies
+(socat→native UDS, curl→reqwest, b3sum→blake3 crate). Removed deprecated
+signal.rs. Real BLAKE3 verification via checksums.toml. K-Derm relay chain
+implemented in Rust (relay.rs). `FetchSource` implements `FromStr` trait.
+204 tests.
+
+**Wave 65 (K-Derm Relay):** New `relay.rs` module — full peptidoglycan
+relay chain in Rust: `relay::mediate()`, `relay::ship_extracellular()`,
+`relay::run()`. Exposed as `membrane relay.run <repo_path>`. Replaces
+`pepti-sync-relay.sh` (95L) and `ext-github-push.sh` (91L).
 
 **Wave 59 (NUCLEUS composition):** Full 13-primal NUCLEUS composition tier
 added to service registry. 6 new services: toadStool, barraCuda, coralReef
@@ -82,14 +93,17 @@ validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
 | `RUNBOOKS.md` | Operational procedures for all channels |
 | `IRONGATE_VERIFICATION.md` | ironGate acceptance checklist |
 
-### Sync Scripts
+### Shadow Functions (`crates/membrane-shadow/`)
 
-| Script | Purpose |
-|--------|---------|
-| `forgejo_sync.sh` | Sync non-mirror repos GitHub → Forgejo |
-| `forgejo_pull_mirror.sh` | Bulk Forgejo pull-mirror management |
+Typed Rust CLI for sovereign VPS control — replaces all bash sync/relay scripts:
 
-Forgejo is the primary remote; GitHub is the public mirror. See `infra/wateringHole/REPO_MEMBRANE_BOUNDARY.md` for classification.
+```bash
+membrane relay.run infra/wateringHole    # Full K-Derm relay: pull → impulse → ship
+membrane temporal.cascade                 # Manifest-driven cascade sync (Rust)
+membrane mirror.sync-all                  # Trigger Forgejo mirror sync for all repos
+membrane impulse.ack <id>                 # Acknowledge inter-gate impulse
+membrane plasmid.fetch                    # Download primal binaries with BLAKE3 verification
+```
 
 ---
 
@@ -142,6 +156,8 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | VPS deployment standard (Wave 56): UDS-only, TransportMode typed | DONE |
 | Deep debt sprint (Wave 57): 95.8% coverage, pedantic clean, typed errors | DONE |
 | NUCLEUS composition typed (Wave 59): 13 primals, 17 services in registry | DONE |
+| K-Derm relay chain in Rust (Wave 65): relay.rs replaces bash scripts | DONE |
+| Deep debt evolution (Wave 66): socat/curl/b3sum → native Rust, 204 tests | DONE |
 
 ---
 
@@ -164,7 +180,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
 | 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
-| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays** | **Current** (Wave 59, 2026-05-28) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 66, 2026-05-31) |
 | 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
@@ -242,14 +258,22 @@ gardens/cellMembrane/
         service.rs            # Registry, binary integrity, credentials (15 tests)
         transport.rs          # TransportMode, UDS helpers, health checks (13 tests)
         integration.rs        # Cross-module: config parsing, validation, topology (23 tests)
+    membrane-shadow/          # Sovereign shadow functions CLI (#![forbid(unsafe_code)])
+      src/
+        relay.rs              # K-Derm relay chain (pepti-sync + ext-github-push → Rust)
+        impulse.rs            # Inter-gate impulse coordination (native UDS JSON-RPC)
+        temporal.rs           # Manifest-driven temporal cascade sync
+        plasmid.rs            # Primal binary fetch (reqwest + blake3, no curl/b3sum)
+        dispatch.rs           # CLI command router
+        forgejo.rs            # Forgejo REST API (native reqwest)
+        config.rs / ssh.rs    # Config resolution + SSH transport
   specs/                      # Formal architecture specs (5 documents)
+  experiments/                # Validated experiment records
   README.md
   RUNBOOKS.md
   GLACIAL_SHIFT_TRACKER.md
   VPS_STATE.md
   IRONGATE_VERIFICATION.md
-  forgejo_sync.sh             # Sync non-mirror repos GitHub → Forgejo
-  forgejo_pull_mirror.sh      # Bulk Forgejo pull-mirror management
   .gitignore
 ```
 

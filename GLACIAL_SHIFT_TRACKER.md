@@ -1,8 +1,14 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-05-28
+**Last updated:** 2026-05-31
 **Overall status:** PROGRESSING — golgiBody Phase A live, WaterFall 33/36 validated, NS cutover remaining
+**Wave 66 update:** Deep debt evolution sprint — eliminated 3 external tool dependencies
+(socat→native UnixStream, curl→reqwest, b3sum→blake3 crate). Removed deprecated signal.rs.
+K-Derm relay chain fully in Rust (relay.rs: mediate + ship_extracellular + run). Real BLAKE3
+checksums.toml verification. FromStr trait for FetchSource. Hardcoded paths parameterized
+(relay SSH script, temporal clone URL uses manifest). 204 tests. Bash scripts archived
+(forgejo_sync.sh, forgejo_pull_mirror.sh → superseded by membrane CLI).
 **Wave 60 update:** golgiBody Phase A complete — VPS Forgejo live at `git.primals.eco`, 34 repos seeded,
 eastGate WaterFall shadow validated (33/36 pull clean from sovereign Forgejo). VPS knot-dns zone updated
 with `lab` and `git` A records. Caddyfile lab routes fixed (dead proxy → 503 + static file_server).
