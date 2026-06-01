@@ -524,10 +524,7 @@ async fn try_policy_resolve(
                     return Ok(TemporalSyncResult {
                         repo_path: matrix.repo_path.clone(),
                         ok: true,
-                        summary: format!(
-                            "merge-ff: pull {leader}, push {}",
-                            pushed_to.join(" ")
-                        ),
+                        summary: format!("merge-ff: pull {leader}, push {}", pushed_to.join(" ")),
                         pulled_from: Some(leader.clone()),
                         pushed_to,
                     });
@@ -546,11 +543,7 @@ async fn try_policy_resolve(
         "merge-rebase" => {
             // Auto-rebase local on the leader, then push. Fails gracefully
             // on conflicts (falls through to flag behavior).
-            let leaders: Vec<_> = matrix
-                .positions
-                .iter()
-                .filter(|p| p.behind > 0)
-                .collect();
+            let leaders: Vec<_> = matrix.positions.iter().filter(|p| p.behind > 0).collect();
 
             if let Some(leader) = leaders.first() {
                 let remote_ref = format!("{}/{branch}", leader.remote);
@@ -795,16 +788,11 @@ pub async fn cascade(
                                 {
                                     Ok(_) => {
                                         impulse_count += 1;
-                                        lines.push(format!(
-                                            "  {:<35}   -> SYNC impulse fired",
-                                            ""
-                                        ));
+                                        lines.push(format!("  {:<35}   -> SYNC impulse fired", ""));
                                     }
                                     Err(e) => {
-                                        lines.push(format!(
-                                            "  {:<35}   -> impulse failed: {e}",
-                                            ""
-                                        ));
+                                        lines
+                                            .push(format!("  {:<35}   -> impulse failed: {e}", ""));
                                     }
                                 }
                             }
