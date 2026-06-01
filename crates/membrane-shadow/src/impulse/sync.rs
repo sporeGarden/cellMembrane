@@ -8,7 +8,10 @@ use std::path::Path;
 
 use super::policy::{classify_diverge_type, suggest_action};
 use super::primal::try_sign_impulse;
-use super::types::*;
+use super::types::{
+    ImpulseContent, ImpulseFrom, ImpulseMeta, ImpulseOpMeta, ImpulseTo, ImpulseType, Priority,
+    SyncDivergeArgs, SyncImpulseFile, SyncPayload, active_dir, current_wave, resolve_head_ref,
+};
 use crate::error::{Result, ShadowError};
 use crate::identity;
 

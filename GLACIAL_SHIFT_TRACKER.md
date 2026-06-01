@@ -43,7 +43,7 @@ All six criteria must be satisfied before glacial shift.
 
 | # | Criterion | Status | cellMembrane Role | Blocker Owner |
 |---|-----------|--------|-------------------|---------------|
-| 1 | All 4 sovereignty shadows cut over (7-day gates) | S2 LIVE, S3 LIVE, S1/S4 incomplete | Operate shadow infrastructure | Shared |
+| 1 | All 4 sovereignty shadows cut over (7-day gates) | S1 **OPERATIONAL** (13d clean), S2 LIVE, S3 LIVE, S4 formal gate pending | Operate shadow infrastructure | Shared |
 | 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **4 gates running** (Wave 50), mesh seeded | Provide TURN rendezvous | Gate teams |
 | 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38, 2026-05-22) — 21/0/1 darkforest, 10/10 trio | Operate Nest Atomic | **RESOLVED** |
 | 4 | Remote covalent node (flockGate) validated over WAN | flockGate not deployed | Provide WAN rendezvous | Shared |

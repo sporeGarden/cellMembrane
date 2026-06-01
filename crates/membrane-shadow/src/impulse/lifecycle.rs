@@ -8,7 +8,11 @@ use std::path::Path;
 use super::parse::{find_impulse_by_id, parse_impulse_or_signal};
 use super::policy::{is_expired, is_fully_acked};
 use super::primal::{try_relay_impulse, try_sign_impulse};
-use super::types::*;
+use super::types::{
+    ImpulseAck, ImpulseContent, ImpulseFile, ImpulseFrom, ImpulseMeta, ImpulseOpMeta, ImpulseTo,
+    ImpulseType, PostArgs, PotentialHealth, active_dir, current_wave, impulses_dir,
+    resolve_head_ref,
+};
 use crate::error::{Result, ShadowError};
 use crate::identity;
 

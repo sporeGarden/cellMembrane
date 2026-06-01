@@ -2,7 +2,7 @@
 
 use super::types::ImpulseFile;
 
-pub(crate) fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
+pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
     let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
     let behind_remotes: Vec<_> = positions.iter().filter(|(_, _, b)| *b > 0).collect();
 
@@ -16,7 +16,7 @@ pub(crate) fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String 
     }
 }
 
-pub(crate) fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
+pub fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
     match repo_policy {
         "merge-ff" => "pull_leader_push_followers".to_string(),
         "merge-rebase" => "rebase_and_push".to_string(),
@@ -30,14 +30,14 @@ pub(crate) fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
     }
 }
 
-pub(crate) fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
+pub fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
     if expires.is_empty() {
         return false;
     }
     chrono::DateTime::parse_from_str(expires, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|exp| now > &exp)
 }
 
-pub(crate) fn is_fully_acked(impulse: &ImpulseFile) -> bool {
+pub fn is_fully_acked(impulse: &ImpulseFile) -> bool {
     if !impulse.meta.ack_required || impulse.to.gates.is_empty() {
         return false;
     }

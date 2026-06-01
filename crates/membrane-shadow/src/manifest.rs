@@ -82,7 +82,7 @@ pub struct ManifestMeta {
     pub total_repos: u32,
 }
 
-/// WaterFall sync configuration.
+/// `WaterFall` sync configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncConfig {
     /// Forgejo HTTPS base URL.
@@ -185,6 +185,7 @@ impl EcosystemManifest {
 
     /// Find the manifest file relative to a workspace root.
     /// Looks at `infra/wateringHole/ecosystem_manifest.toml`.
+    #[must_use]
     pub fn find_in_workspace(workspace_root: &Path) -> Option<PathBuf> {
         let path = workspace_root.join("infra/wateringHole/ecosystem_manifest.toml");
         path.exists().then_some(path)
@@ -192,6 +193,7 @@ impl EcosystemManifest {
 
     /// Get repo entries for a specific gate, resolved to `RepoEntry` references.
     /// Returns entries in the order they appear in the gate profile.
+    #[must_use]
     pub fn gate_repos(&self, gate: &str) -> Vec<(&str, &RepoEntry)> {
         let Some(profile) = self.gates.get(gate) else {
             return Vec::new();
@@ -208,6 +210,7 @@ impl EcosystemManifest {
     }
 
     /// Get local paths for a gate's repos (what cascade-pull iterates).
+    #[must_use]
     pub fn gate_local_paths(&self, gate: &str) -> Vec<&str> {
         self.gate_repos(gate)
             .into_iter()
@@ -216,6 +219,7 @@ impl EcosystemManifest {
     }
 
     /// Get all distinct org names from repos.
+    #[must_use]
     pub fn orgs(&self) -> Vec<&str> {
         let mut orgs: Vec<&str> = self.repos.values().map(|r| r.org.as_str()).collect();
         orgs.sort_unstable();
@@ -224,6 +228,7 @@ impl EcosystemManifest {
     }
 
     /// Get repos filtered by membrane type.
+    #[must_use]
     pub fn repos_by_membrane(&self, membrane: &str) -> Vec<(&str, &RepoEntry)> {
         self.repos
             .iter()
@@ -233,6 +238,7 @@ impl EcosystemManifest {
     }
 
     /// Resolve divergence policy for a repo — per-repo override or global default.
+    #[must_use]
     pub fn divergence_policy_for<'a>(&'a self, entry: &'a RepoEntry) -> &'a str {
         entry
             .divergence_policy
@@ -241,11 +247,13 @@ impl EcosystemManifest {
     }
 
     /// Build a GitHub clone URL for a repo.
+    #[must_use]
     pub fn github_clone_url(entry: &RepoEntry) -> String {
         format!("https://github.com/{}.git", entry.github_repo)
     }
 
     /// Build a Forgejo SSH clone URL using the sync config.
+    #[must_use]
     pub fn forgejo_clone_url(&self, entry: &RepoEntry) -> String {
         format!("{}/{}.git", self.sync.forgejo_ssh, entry.forgejo_repo)
     }

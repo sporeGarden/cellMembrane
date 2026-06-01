@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-05-29 (Wave 61)
+**Last updated:** 2026-06-01 (Wave 67)
 **Deployed composition:** Full NUCLEUS (Wave 61) — 13 primals + 4 symbiotic + federation + standard workspace
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade-pull enabled
@@ -152,15 +152,17 @@
 
 ---
 
-## TLS / Certificate State
+## TLS / Certificate State — S1 OPERATIONAL
 
 | Attribute | Value |
 |-----------|-------|
+| **Shadow status** | **OPERATIONAL** (13+ days clean, 7-day gate passed 2026-06-01) |
 | CA | Let's Encrypt |
 | Certificate chain | E8 intermediate |
 | Domain | `membrane.primals.eco` |
 | Renewal | Caddy automatic (ACME) |
 | TTFB (measured) | 68ms sovereign vs 89ms GitHub Pages |
+| Cutover note | Cloudflare TLS INACTIVE; Caddy + LE is sole TLS provider |
 
 ---
 
@@ -192,7 +194,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellmembrane-types) | 175 PASS, 0 FAIL, 0 clippy warnings | 2026-05-28 |
+| `cargo test` (cellMembrane workspace) | 208 PASS, 0 FAIL | 2026-06-01 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

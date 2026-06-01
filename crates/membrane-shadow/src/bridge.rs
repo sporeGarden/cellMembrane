@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! NeuralBridge — optional try-primal-first client for capability graduation.
+//! `NeuralBridge` — optional try-primal-first client for capability graduation.
 //!
 //! When the `neural-bridge` feature is enabled, membrane-shadow can attempt
 //! to route operations through biomeOS's Neural API before falling back to
@@ -42,6 +42,7 @@ impl NeuralBridge {
     ///
     /// Returns `None` if no socket is found — caller should proceed with
     /// shadow mode.
+    #[must_use]
     pub fn discover() -> Option<Self> {
         if let Ok(path) = std::env::var("NEURAL_API_SOCKET") {
             let p = PathBuf::from(&path);
@@ -80,20 +81,16 @@ impl NeuralBridge {
         method: &str,
         params: serde_json::Value,
     ) -> BridgeResult {
-        match self
-            .rpc_call(
-                "capability.call",
-                serde_json::json!({
-                    "capability": domain,
-                    "method": method,
-                    "params": params,
-                }),
-            )
-            .await
-        {
-            Ok(result) => BridgeResult::Handled(result),
-            Err(_) => BridgeResult::Fallthrough,
-        }
+        self.rpc_call(
+            "capability.call",
+            serde_json::json!({
+                "capability": domain,
+                "method": method,
+                "params": params,
+            }),
+        )
+        .await
+        .map_or(BridgeResult::Fallthrough, BridgeResult::Handled)
     }
 
     /// Low-level JSON-RPC 2.0 call over UDS.

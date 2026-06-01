@@ -21,6 +21,7 @@ pub fn split_repo_path(path: &str) -> crate::Result<(&str, &str)> {
 }
 
 /// Extract `--flag value` from a flat args slice.
+#[must_use]
 pub fn extract_flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
     args.iter()
         .position(|a| *a == flag)
@@ -49,7 +50,6 @@ pub fn parse_impulse_post_args<'a>(args: &[&'a str]) -> crate::Result<impulse::P
 
     let priority_str = extract_flag_value(args, "--priority").unwrap_or("routine");
     let priority = match priority_str {
-        "routine" => impulse::Priority::Routine,
         "priority" => impulse::Priority::Priority,
         "flash" => impulse::Priority::Flash,
         _ => impulse::Priority::Routine,
@@ -104,6 +104,7 @@ pub fn parse_context_weave_args<'a>(args: &[&'a str]) -> crate::Result<context::
 }
 
 /// Slugify a project path for display (e.g. `gardens/cellMembrane` → `gardens-cellmembrane`).
+#[must_use]
 pub fn context_slug(project: &str) -> String {
     project
         .to_lowercase()
@@ -119,6 +120,7 @@ pub fn context_slug(project: &str) -> String {
 /// Extension trait for composing human-readable output.
 pub trait TapMessage {
     /// Transform the message field while preserving the rest.
+    #[must_use]
     fn tap_message(self, f: impl FnOnce(&str) -> String) -> Self;
 }
 

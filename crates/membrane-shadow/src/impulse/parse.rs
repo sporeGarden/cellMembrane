@@ -4,11 +4,13 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::types::*;
+use super::types::{
+    ImpulseAck, ImpulseContent, ImpulseFile, ImpulseFrom, ImpulseMeta, ImpulseOpMeta, ImpulseTo,
+};
 use crate::error::{Result, ShadowError};
 
 /// Parse a TOML file that may use either `[impulse]` or legacy `[signal]` table name.
-pub(crate) fn parse_impulse_or_signal(
+pub fn parse_impulse_or_signal(
     contents: &str,
 ) -> std::result::Result<ImpulseFile, toml::de::Error> {
     toml::from_str::<ImpulseFile>(contents).or_else(|_| {
@@ -36,7 +38,7 @@ pub(crate) fn parse_impulse_or_signal(
 }
 
 /// Find an impulse by ID (exact match or filename stem contains).
-pub(crate) fn find_impulse_by_id(
+pub fn find_impulse_by_id(
     active_dir: &Path,
     impulse_id: &str,
 ) -> Result<(std::path::PathBuf, ImpulseFile)> {

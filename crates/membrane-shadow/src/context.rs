@@ -317,27 +317,23 @@ pub fn sense(
     } else {
         std::fs::read_dir(&ctx_dir)
             .map_err(ShadowError::Io)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| e.path())
             .filter(|p: &PathBuf| p.is_dir())
             .collect()
     };
 
-    let project_slug_filter = filter_project.map(|p| project_slug(p));
+    let project_slug_filter = filter_project.map(project_slug);
 
     for gate_dir in gate_dirs {
-        let entries = match std::fs::read_dir(&gate_dir) {
-            Ok(e) => e,
-            Err(_) => continue,
+        let Ok(entries) = std::fs::read_dir(&gate_dir) else {
+            continue;
         };
 
         for entry in entries {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+            let Ok(entry) = entry else { continue };
             let path = entry.path();
-            if !path.extension().is_some_and(|e| e == "toml") {
+            if path.extension().is_none_or(|e| e != "toml") {
                 continue;
             }
 
@@ -352,9 +348,8 @@ pub fn sense(
                 }
             }
 
-            let contents = match std::fs::read_to_string(&path) {
-                Ok(c) => c,
-                Err(_) => continue,
+            let Ok(contents) = std::fs::read_to_string(&path) else {
+                continue;
             };
 
             if let Ok(braid) = toml::from_str::<ContextBraid>(&contents) {
@@ -394,7 +389,7 @@ pub async fn clear(
         let now = Utc::now();
         let gate_dirs: Vec<PathBuf> = std::fs::read_dir(&ctx_dir)
             .map_err(ShadowError::Io)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| e.path())
             .filter(|p| p.is_dir())
             .collect();
@@ -406,24 +401,19 @@ pub async fn clear(
                 .to_string_lossy()
                 .to_string();
 
-            let entries = match std::fs::read_dir(&gate_dir) {
-                Ok(e) => e,
-                Err(_) => continue,
+            let Ok(entries) = std::fs::read_dir(&gate_dir) else {
+                continue;
             };
 
             for entry in entries {
-                let entry = match entry {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
+                let Ok(entry) = entry else { continue };
                 let path = entry.path();
-                if !path.extension().is_some_and(|e| e == "toml") {
+                if path.extension().is_none_or(|e| e != "toml") {
                     continue;
                 }
 
-                let contents = match std::fs::read_to_string(&path) {
-                    Ok(c) => c,
-                    Err(_) => continue,
+                let Ok(contents) = std::fs::read_to_string(&path) else {
+                    continue;
                 };
 
                 if let Ok(braid) = toml::from_str::<ContextBraid>(&contents) {
@@ -453,12 +443,10 @@ pub async fn clear(
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> bool {
-    if let Ok(updated_dt) = chrono::DateTime::parse_from_str(updated, "%Y-%m-%dT%H:%M:%S%:z") {
+    chrono::DateTime::parse_from_str(updated, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|updated_dt| {
         let expires_at = updated_dt + chrono::Duration::hours(i64::from(ttl_hours));
         now > &expires_at
-    } else {
-        false
-    }
+    })
 }
 
 async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {

@@ -5,8 +5,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Impulse types following the IMPULSE_POTENTIAL_STANDARD.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Impulse types following the `IMPULSE_POTENTIAL_STANDARD`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ImpulseType {
     /// Amends a standing order — action required.
@@ -34,7 +34,7 @@ impl std::fmt::Display for ImpulseType {
 }
 
 /// Priority levels for impulses.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Priority {
     /// Normal workflow coordination.
@@ -253,15 +253,15 @@ pub struct PotentialHealth {
     pub current_wave: u32,
 }
 
-pub(crate) fn impulses_dir(workspace_root: &Path) -> PathBuf {
+pub fn impulses_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("infra/wateringHole/impulses")
 }
 
-pub(crate) fn active_dir(workspace_root: &Path) -> PathBuf {
+pub fn active_dir(workspace_root: &Path) -> PathBuf {
     impulses_dir(workspace_root).join("active")
 }
 
-pub(crate) fn current_wave(workspace_root: &Path) -> u32 {
+pub fn current_wave(workspace_root: &Path) -> u32 {
     let freshness = workspace_root.join("infra/wateringHole/freshness.toml");
     if let Ok(contents) = std::fs::read_to_string(&freshness) {
         if let Ok(val) = contents.parse::<toml::Table>() {
@@ -275,7 +275,7 @@ pub(crate) fn current_wave(workspace_root: &Path) -> u32 {
     0
 }
 
-pub(crate) fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
+pub fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
     if project.is_empty() {
         return String::new();
     }

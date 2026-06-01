@@ -57,6 +57,7 @@ async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
 }
 
 /// Resolve the HEAD commit short SHA for a path containing a git repo.
+#[must_use]
 pub fn resolve_head_ref(project_path: &Path) -> String {
     if !project_path.join(".git").exists() {
         return String::new();

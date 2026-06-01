@@ -11,7 +11,7 @@ use chrono::Local;
 
 use super::types::{ImpulseFile, ImpulseSignature};
 
-pub(crate) fn try_relay_impulse(impulse: &ImpulseFile) {
+pub fn try_relay_impulse(impulse: &ImpulseFile) {
     let Some(socket_path) = discover_socket("songbird-default.sock") else {
         return;
     };
@@ -40,10 +40,7 @@ pub(crate) fn try_relay_impulse(impulse: &ImpulseFile) {
     uds_send(&socket_path, &request_str);
 }
 
-pub(crate) fn try_sign_impulse(
-    _workspace_root: &Path,
-    impulse_id: &str,
-) -> Option<ImpulseSignature> {
+pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
     let socket_path = discover_socket("beardog-default.sock")?;
 
     let request = serde_json::json!({
@@ -66,7 +63,7 @@ pub(crate) fn try_sign_impulse(
     })
 }
 
-pub(crate) fn discover_socket(socket_name: &str) -> Option<PathBuf> {
+pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
     let candidates = [
         PathBuf::from(format!("{xdg}/biomeos/{socket_name}")),

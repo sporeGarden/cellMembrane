@@ -23,10 +23,10 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("gate.") => dispatch_gate(config, cmd, args).await,
         c if c.starts_with("token.") => dispatch_token(config, cmd, args).await,
         c if c.starts_with("temporal.") => dispatch_temporal(config, cmd, args).await,
-        c if c.starts_with("manifest.") => dispatch_manifest(cmd, args).await,
-        "identity.resolve" => dispatch_identity().await,
+        c if c.starts_with("manifest.") => dispatch_manifest(cmd, args),
+        "identity.resolve" => dispatch_identity(),
         c if c.starts_with("impulse.") => dispatch_impulse(cmd, args).await,
-        c if c.starts_with("potential.") => dispatch_potential(cmd, args).await,
+        c if c.starts_with("potential.") => dispatch_potential(cmd, args),
         c if c.starts_with("context.") => dispatch_context(cmd, args).await,
         c if c.starts_with("plasmid.") => dispatch_plasmid(config, cmd, args).await,
         c if c.starts_with("relay.") => dispatch_relay(cmd, args).await,
@@ -82,6 +82,7 @@ async fn dispatch_repo(
 
 // ── Mirror domain ────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_lines)]
 async fn dispatch_mirror(
     config: &ShadowConfig,
     cmd: &str,
@@ -455,7 +456,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
 
 // ── Manifest domain ──────────────────────────────────────────────────
 
-async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "manifest.info" => {
@@ -509,11 +510,10 @@ async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutc
                     )
                 })
                 .collect();
-            let header = if let Some(g) = args.first() {
-                format!("{} repos for gate {g}", repos.len())
-            } else {
-                format!("{} repos total", repos.len())
-            };
+            let header = args.first().map_or_else(
+                || format!("{} repos total", repos.len()),
+                |g| format!("{} repos for gate {g}", repos.len()),
+            );
             Ok(ShadowOutcome::ok(format!("{header}\n{}", lines.join("\n"))))
         }
         "manifest.orgs" => {
@@ -533,7 +533,7 @@ async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutc
 
 // ── Identity domain ──────────────────────────────────────────────────
 
-async fn dispatch_identity() -> crate::Result<ShadowOutcome> {
+fn dispatch_identity() -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match identity::resolve(&root) {
         Ok(id) => Ok(ShadowOutcome::ok_with(
@@ -593,7 +593,7 @@ async fn dispatch_impulse(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutco
 
 // ── Potential domain (quorumSignal SENSE) ────────────────────────────
 
-async fn dispatch_potential(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+fn dispatch_potential(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "potential.sense" => {
@@ -629,7 +629,7 @@ async fn dispatch_potential(cmd: &str, args: &[&str]) -> crate::Result<ShadowOut
                     .collect();
                 Ok(ShadowOutcome::ok_with(
                     format!("{count} active impulse(s)\n{}", lines.join("\n")),
-                    serde_json::to_value(&impulses.iter().map(|(_, s)| s).collect::<Vec<_>>())?,
+                    serde_json::to_value(impulses.iter().map(|(_, s)| s).collect::<Vec<_>>())?,
                 ))
             }
         }

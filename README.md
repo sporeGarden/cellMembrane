@@ -165,7 +165,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 
 | Track | Sovereign Component | Commercial Shadow | Status | Cutover Gate |
 |-------|--------------------|--------------------|--------|--------------|
-| S1 TLS | BearDog :8443 | Cloudflare | Shadow live, not cut over | 7-day p95 ≤ 1.5× |
+| S1 TLS | Caddy + LE | Cloudflare (INACTIVE) | **OPERATIONAL** (13d clean, 7-day gate passed) | Graduated |
 | S2 NAT relay | Songbird TURN :3478 | cloudflared | **LIVE** | 7-day 100% reachable |
 | S3 Content | NestGate + petalTongue | GitHub Pages | **LIVE** (68ms TTFB) | 7-day TTFB parity |
 | S4 Auth | BearDog BTSP dual-auth | OAuth2/PAM | Ready, incomplete | 7-day p95 < 50ms |

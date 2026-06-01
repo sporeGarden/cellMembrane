@@ -94,10 +94,8 @@ pub async fn status(config: &ShadowConfig, unit: &str) -> Result<ServiceStatus> 
                         svc.memory = Some(format_bytes(bytes));
                     }
                 }
-                "ActiveEnterTimestamp" => {
-                    if !val.is_empty() {
-                        svc.uptime = Some(val.to_string());
-                    }
+                "ActiveEnterTimestamp" if !val.is_empty() => {
+                    svc.uptime = Some(val.to_string());
                 }
                 _ => {}
             }
