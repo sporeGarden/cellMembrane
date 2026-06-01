@@ -205,11 +205,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
         None
     } else {
         Some(BreadcrumbStrand {
-            trail: args
-                .breadcrumbs
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect(),
+            trail: args.breadcrumbs.split(',').map(|s| s.trim().to_string()).collect(),
         })
     };
 
@@ -224,11 +220,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
     let blockers = if args.blockers.is_empty() {
         None
     } else {
-        let items: Vec<String> = args
-            .blockers
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
+        let items: Vec<String> = args.blockers.split(',').map(|s| s.trim().to_string()).collect();
         if items.iter().all(String::is_empty) {
             None
         } else {
@@ -307,7 +299,9 @@ pub fn sense(
         None
     };
 
-    let target_gate = filter_gate.map(ToString::to_string).or(local_gate);
+    let target_gate = filter_gate
+        .map(ToString::to_string)
+        .or(local_gate);
 
     let mut braids = Vec::new();
 

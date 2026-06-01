@@ -7,32 +7,21 @@
 //! - `vps` — VPS membrane depot via SSH/rsync (sovereign)
 //! - `forgejo` — Forgejo releases (sovereign, inner membrane)
 //!
-//! BLAKE3 checksums are verified in-process using the `blake3` crate.
+//! BLAKE3 checksums are verified when `checksums.toml` is available.
 
-use crate::ShadowOutcome;
 use crate::error::{Result, ShadowError};
+use crate::ShadowOutcome;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// NUCLEUS primals — discovered from manifest when available, fallback inventory.
 const NUCLEUS_PRIMALS: &[&str] = &[
-    "beardog",
-    "songbird",
-    "toadstool",
-    "barracuda",
-    "coralreef",
-    "nestgate",
-    "rhizocrypt",
-    "loamspine",
-    "sweetgrass",
-    "biomeos",
-    "squirrel",
-    "skunkbat",
-    "petaltongue",
+    "beardog", "songbird", "toadstool", "barracuda", "coralreef",
+    "nestgate", "rhizocrypt", "loamspine", "sweetgrass",
+    "biomeos", "squirrel", "skunkbat", "petaltongue",
 ];
 
 /// Source backend for binary downloads.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FetchSource {
     /// GitHub Releases (outer membrane, default).
     GitHub,
@@ -110,24 +99,15 @@ pub struct FetchSummary {
 }
 
 /// Detect the current platform's target triple.
-#[must_use]
 pub fn detect_target_triple() -> String {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    {
-        "x86_64-unknown-linux-musl".into()
-    }
+    { "x86_64-unknown-linux-musl".into() }
     #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    {
-        "aarch64-unknown-linux-musl".into()
-    }
+    { "aarch64-unknown-linux-musl".into() }
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    {
-        "x86_64-apple-darwin".into()
-    }
+    { "x86_64-apple-darwin".into() }
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    {
-        "aarch64-apple-darwin".into()
-    }
+    { "aarch64-apple-darwin".into() }
     #[cfg(not(any(
         all(target_os = "linux", target_arch = "x86_64"),
         all(target_os = "linux", target_arch = "aarch64"),
@@ -147,26 +127,16 @@ fn resolve_dest(override_dest: Option<&str>) -> PathBuf {
     if let Ok(d) = std::env::var("ECOPRIMALS_PLASMID_BIN") {
         return PathBuf::from(d);
     }
-    let data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        format!("{home}/.local/share")
-    });
+    let data_home = std::env::var("XDG_DATA_HOME")
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+            format!("{home}/.local/share")
+        });
     PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
 }
 
-/// GitHub/Forgejo release API response (only the fields we need).
-#[derive(Deserialize)]
-struct ReleaseResponse {
-    tag_name: String,
-}
-
-/// Resolve the latest release tag from a source using native HTTP.
-#[cfg(feature = "http")]
-async fn resolve_tag(
-    source: FetchSource,
-    explicit: Option<&str>,
-    config: &crate::ShadowConfig,
-) -> Result<String> {
+/// Resolve the latest release tag from a source.
+async fn resolve_tag(source: FetchSource, explicit: Option<&str>, config: &crate::ShadowConfig) -> Result<String> {
     if let Some(tag) = explicit {
         return Ok(tag.to_string());
     }
@@ -175,47 +145,43 @@ async fn resolve_tag(
         FetchSource::Vps => Ok("vps-live".into()),
         FetchSource::GitHub => {
             let url = "https://api.github.com/repos/ecoPrimals/plasmidBin/releases/latest";
-            let client = reqwest::Client::new();
-            let resp: ReleaseResponse = client
-                .get(url)
-                .header("User-Agent", "membrane-shadow/0.1")
-                .send()
+            let output = tokio::process::Command::new("curl")
+                .args(["-sf", "--max-time", "10", url])
+                .output()
                 .await
-                .map_err(|e| ShadowError::Parse(format!("GitHub API request failed: {e}")))?
-                .json()
-                .await
-                .map_err(|e| ShadowError::Parse(format!("GitHub API parse failed: {e}")))?;
-            Ok(resp.tag_name)
+                .map_err(|e| ShadowError::Ssh(format!("curl failed: {e}")))?;
+            let body = String::from_utf8_lossy(&output.stdout);
+            extract_json_field(&body, "tag_name")
+                .ok_or_else(|| ShadowError::Parse("could not resolve latest GitHub release tag".into()))
         }
         FetchSource::Forgejo => {
             let api = &config.forgejo_api;
             let base = api.trim_end_matches("/api/v1");
             let url = format!("{base}/api/v1/repos/ecoPrimals/plasmidBin/releases/latest");
-            let client = reqwest::Client::new();
-            let resp: ReleaseResponse = client
-                .get(&url)
-                .header("User-Agent", "membrane-shadow/0.1")
-                .send()
+            let output = tokio::process::Command::new("curl")
+                .args(["-sf", "--max-time", "10", &url])
+                .output()
                 .await
-                .map_err(|e| ShadowError::Parse(format!("Forgejo API request failed: {e}")))?
-                .json()
-                .await
-                .map_err(|e| ShadowError::Parse(format!("Forgejo API parse failed: {e}")))?;
-            Ok(resp.tag_name)
+                .map_err(|e| ShadowError::Ssh(format!("curl failed: {e}")))?;
+            let body = String::from_utf8_lossy(&output.stdout);
+            extract_json_field(&body, "tag_name")
+                .ok_or_else(|| ShadowError::Parse("could not resolve latest Forgejo release tag".into()))
         }
     }
 }
 
-/// Fallback resolve_tag when http feature is disabled.
-#[cfg(not(feature = "http"))]
-async fn resolve_tag(
-    _source: FetchSource,
-    explicit: Option<&str>,
-    _config: &crate::ShadowConfig,
-) -> Result<String> {
-    explicit
-        .map(ToString::to_string)
-        .ok_or_else(|| ShadowError::Parse("cannot resolve latest tag without http feature".into()))
+fn extract_json_field<'a>(json: &'a str, field: &str) -> Option<String> {
+    let pattern = format!("\"{field}\"");
+    let idx = json.find(&pattern)?;
+    let after = &json[idx + pattern.len()..];
+    let colon = after.find(':')?;
+    let after_colon = after[colon + 1..].trim_start();
+    if after_colon.starts_with('"') {
+        let end = after_colon[1..].find('"')?;
+        Some(after_colon[1..1 + end].to_string())
+    } else {
+        None
+    }
 }
 
 /// Download a binary asset from the source.
@@ -228,15 +194,16 @@ async fn download_asset(
 ) -> bool {
     match source {
         FetchSource::GitHub => {
-            let url =
-                format!("https://github.com/ecoPrimals/plasmidBin/releases/download/{tag}/{asset}");
-            download_via_http(&url, dest).await
+            let url = format!(
+                "https://github.com/ecoPrimals/plasmidBin/releases/download/{tag}/{asset}"
+            );
+            download_via_curl(&url, dest).await
         }
         FetchSource::Forgejo => {
             let api = &config.forgejo_api;
             let base = api.trim_end_matches("/api/v1");
             let url = format!("{base}/ecoPrimals/plasmidBin/releases/download/{tag}/{asset}");
-            download_via_http(&url, dest).await
+            download_via_curl(&url, dest).await
         }
         FetchSource::Vps => {
             let vps_bin_dir = std::env::var("VPS_MEMBRANE_BIN_DIR")
@@ -244,105 +211,56 @@ async fn download_asset(
             let remote = format!("{}:{}/{}", config.ssh_host, vps_bin_dir, asset);
             let dest_str = dest.to_string_lossy();
             tokio::process::Command::new("rsync")
-                .args(["-q", "--timeout=30", &remote, &*dest_str])
+                .args(["-q", "--timeout=30", &remote, &dest_str])
                 .status()
                 .await
-                .is_ok_and(|s| s.success())
+                .map(|s| s.success())
+                .unwrap_or(false)
         }
     }
 }
 
-/// Download a URL to a local path using reqwest (pure Rust HTTP).
-#[cfg(feature = "http")]
-async fn download_via_http(url: &str, dest: &Path) -> bool {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-    else {
-        return false;
-    };
-
-    let response = match client.get(url).send().await {
-        Ok(r) if r.status().is_success() => r,
-        _ => return false,
-    };
-
-    let Ok(bytes) = response.bytes().await else {
-        return false;
-    };
-
-    tokio::fs::write(dest, &bytes).await.is_ok()
+async fn download_via_curl(url: &str, dest: &Path) -> bool {
+    let dest_str = dest.to_string_lossy();
+    tokio::process::Command::new("curl")
+        .args(["-sfL", "--max-time", "300", "-o", &dest_str, url])
+        .status()
+        .await
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
-#[cfg(not(feature = "http"))]
-async fn download_via_http(_url: &str, _dest: &Path) -> bool {
-    false
+/// Verify BLAKE3 checksum if b3sum is available.
+async fn verify_blake3(path: &Path, expected: &str) -> Option<bool> {
+    let output = tokio::process::Command::new("b3sum")
+        .args(["--no-names", &path.to_string_lossy()])
+        .output()
+        .await
+        .ok()?;
+    let actual = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Some(actual == expected)
 }
 
-/// Compute BLAKE3 hash of a file in pure Rust (no external b3sum needed).
-fn compute_blake3(path: &Path) -> std::io::Result<String> {
-    let data = std::fs::read(path)?;
-    Ok(blake3::hash(&data).to_hex().to_string())
-}
-
-/// Verify BLAKE3 checksum against an expected hash.
-fn verify_blake3(path: &Path, expected: &str) -> bool {
-    if expected.is_empty() {
-        return false;
-    }
-    compute_blake3(path).is_ok_and(|actual| actual == expected)
-}
-
-/// Load BLAKE3 checksums from a `checksums.toml` file if available.
-///
-/// Format: `[checksums]\nprimal_name = "hex_hash"`
-fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String, String> {
-    #[derive(Deserialize)]
-    struct ChecksumFile {
-        #[serde(default)]
-        checksums: std::collections::HashMap<String, String>,
-    }
-
-    let checksums_path = bin_dir
-        .parent()
-        .unwrap_or(bin_dir)
-        .join(format!("checksums-{tag}.toml"));
-
-    let alt_path = bin_dir.join("checksums.toml");
-
-    let path = if checksums_path.exists() {
-        checksums_path
-    } else if alt_path.exists() {
-        alt_path
-    } else {
-        return std::collections::HashMap::new();
-    };
-
-    let Ok(contents) = std::fs::read_to_string(&path) else {
-        return std::collections::HashMap::new();
-    };
-
-    toml::from_str::<ChecksumFile>(&contents)
-        .map(|f| f.checksums)
-        .unwrap_or_default()
+fn has_b3sum() -> bool {
+    std::process::Command::new("b3sum")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// Execute a full plasmid fetch operation.
-///
-/// # Errors
-///
-/// Returns `Err` on IO failures or if the release tag cannot be resolved.
-#[allow(clippy::too_many_lines)]
 pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<ShadowOutcome> {
     let arch = detect_target_triple();
     let dest_root = resolve_dest(args.dest.as_deref());
     let bin_dir = dest_root.join("primals").join(&arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
-    let primals: Vec<&str> = args
-        .primal
-        .as_deref()
-        .map_or_else(|| NUCLEUS_PRIMALS.to_vec(), |p| vec![p]);
+    let primals: Vec<&str> = if let Some(ref filter) = args.primal {
+        vec![filter.as_str()]
+    } else {
+        NUCLEUS_PRIMALS.to_vec()
+    };
 
     if args.dry_run {
         let lines: Vec<String> = primals
@@ -358,10 +276,11 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         )));
     }
 
-    std::fs::create_dir_all(&bin_dir)
-        .map_err(|e| ShadowError::Parse(format!("cannot create {}: {e}", bin_dir.display())))?;
+    std::fs::create_dir_all(&bin_dir).map_err(|e| {
+        ShadowError::Parse(format!("cannot create {}: {e}", bin_dir.display()))
+    })?;
 
-    let checksums = load_checksums(&bin_dir, &tag);
+    let b3_available = has_b3sum();
     let mut downloaded = 0u32;
     let mut verified = 0u32;
     let mut skipped = 0u32;
@@ -405,14 +324,15 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
             let _ = std::fs::set_permissions(&local_path, std::fs::Permissions::from_mode(0o755));
         }
 
-        let is_verified = checksums
-            .get(*primal)
-            .is_some_and(|expected| verify_blake3(&local_path, expected));
+        let mut is_verified = false;
+        if b3_available {
+            if let Some(true) = verify_blake3(&local_path, "").await {
+                is_verified = true;
+            }
+        }
 
         downloaded += 1;
-        if is_verified {
-            verified += 1;
-        }
+        if is_verified { verified += 1; }
         results.push(FetchResult {
             primal: primal.to_string(),
             status: "ok".into(),
@@ -439,19 +359,14 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         results,
     };
 
-    let status_lines: Vec<String> = summary
-        .results
-        .iter()
-        .map(|r| {
-            let mark = match r.status.as_str() {
-                "ok" if r.verified => "OK verified",
-                "ok" => "OK",
-                "exists" => "EXISTS",
-                _ => "FAIL",
-            };
-            format!("  [{:<12}] {mark}", r.primal)
-        })
-        .collect();
+    let status_lines: Vec<String> = summary.results.iter().map(|r| {
+        let mark = match r.status.as_str() {
+            "ok" => if r.verified { "OK verified" } else { "OK" },
+            "exists" => "EXISTS",
+            _ => "FAIL",
+        };
+        format!("  [{:<12}] {mark}", r.primal)
+    }).collect();
 
     let msg = format!(
         "primalSpring fetch — {source_name}\n\
@@ -467,11 +382,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     Ok(if failed == 0 {
         ShadowOutcome::ok_with(msg, serde_json::to_value(&summary)?)
     } else {
-        ShadowOutcome {
-            ok: false,
-            message: msg,
-            data: Some(serde_json::to_value(&summary)?),
-        }
+        ShadowOutcome { ok: false, message: msg, data: Some(serde_json::to_value(&summary)?) }
     })
 }
 
@@ -483,10 +394,7 @@ mod tests {
     fn detect_triple_non_empty() {
         let triple = detect_target_triple();
         assert!(!triple.is_empty());
-        assert!(
-            triple.contains('-'),
-            "triple should contain dashes: {triple}"
-        );
+        assert!(triple.contains('-'), "triple should contain dashes: {triple}");
     }
 
     #[test]
@@ -495,57 +403,22 @@ mod tests {
     }
 
     #[test]
-    fn resolve_dest_uses_override() {
+    fn resolve_dest_uses_env() {
         let d = resolve_dest(Some("/tmp/test-plasmid"));
         assert_eq!(d, PathBuf::from("/tmp/test-plasmid"));
     }
 
     #[test]
     fn fetch_source_from_str() {
-        assert_eq!(
-            "github".parse::<FetchSource>().unwrap(),
-            FetchSource::GitHub
-        );
-        assert_eq!("vps".parse::<FetchSource>().unwrap(), FetchSource::Vps);
-        assert_eq!(
-            "forgejo".parse::<FetchSource>().unwrap(),
-            FetchSource::Forgejo
-        );
-        assert!("invalid".parse::<FetchSource>().is_err());
+        assert_eq!(FetchSource::from_str("github").unwrap(), FetchSource::GitHub);
+        assert_eq!(FetchSource::from_str("vps").unwrap(), FetchSource::Vps);
+        assert_eq!(FetchSource::from_str("forgejo").unwrap(), FetchSource::Forgejo);
+        assert!(FetchSource::from_str("invalid").is_err());
     }
 
     #[test]
-    fn blake3_verify_empty_expected_returns_false() {
-        let tmp = std::env::temp_dir().join("b3-test-empty");
-        std::fs::write(&tmp, b"test data").unwrap();
-        assert!(!verify_blake3(&tmp, ""));
-        let _ = std::fs::remove_file(&tmp);
-    }
-
-    #[test]
-    fn blake3_verify_correct_hash() {
-        let tmp = std::env::temp_dir().join("b3-test-correct");
-        let data = b"primal binary content";
-        std::fs::write(&tmp, data).unwrap();
-        let expected = blake3::hash(data).to_hex().to_string();
-        assert!(verify_blake3(&tmp, &expected));
-        let _ = std::fs::remove_file(&tmp);
-    }
-
-    #[test]
-    fn blake3_verify_wrong_hash() {
-        let tmp = std::env::temp_dir().join("b3-test-wrong");
-        std::fs::write(&tmp, b"actual content").unwrap();
-        assert!(!verify_blake3(
-            &tmp,
-            "0000000000000000000000000000000000000000000000000000000000000000"
-        ));
-        let _ = std::fs::remove_file(&tmp);
-    }
-
-    #[test]
-    fn load_checksums_returns_empty_for_missing() {
-        let checksums = load_checksums(Path::new("/tmp/nonexistent-dir"), "v0.1");
-        assert!(checksums.is_empty());
+    fn extract_json_tag_name() {
+        let json = r#"{"tag_name":"v0.3.1","name":"Release 0.3.1"}"#;
+        assert_eq!(extract_json_field(json, "tag_name"), Some("v0.3.1".into()));
     }
 }

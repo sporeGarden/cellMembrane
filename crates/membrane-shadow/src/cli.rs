@@ -5,19 +5,20 @@
 //! Extracted from `main.rs` — these are pure parsing functions with no
 //! side effects, making them testable and reusable by other entry points.
 
-use crate::{ShadowError, ShadowOutcome, context, impulse};
+use crate::{ShadowOutcome, ShadowError, context, impulse};
 
 /// Extract a positional argument or return a parse error.
 pub fn require_arg<'a>(args: &[&'a str], idx: usize, name: &str) -> crate::Result<&'a str> {
-    args.get(idx)
-        .copied()
-        .ok_or_else(|| ShadowError::Parse(format!("{name} required")))
+    args.get(idx).copied().ok_or_else(|| {
+        ShadowError::Parse(format!("{name} required"))
+    })
 }
 
 /// Split `"org/name"` into `("org", "name")`.
 pub fn split_repo_path(path: &str) -> crate::Result<(&str, &str)> {
-    path.split_once('/')
-        .ok_or_else(|| ShadowError::Parse(format!("expected org/name format, got: {path}")))
+    path.split_once('/').ok_or_else(|| {
+        ShadowError::Parse(format!("expected org/name format, got: {path}"))
+    })
 }
 
 /// Extract `--flag value` from a flat args slice.
