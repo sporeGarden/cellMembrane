@@ -97,7 +97,8 @@ pub struct SyncConfig {
     /// Default git branch.
     #[serde(default = "default_branch")]
     pub default_branch: String,
-    /// What to do with diverged repos: `flag` or `skip`.
+    /// Global divergence policy: `flag`, `merge-ff`, `merge-rebase`,
+    /// `impulse-only`, `agentic`. Per-repo overrides in `RepoEntry`.
     #[serde(default = "default_divergence_policy")]
     pub divergence_policy: String,
     /// Whether temporal sync should push to follower remotes.
@@ -108,6 +109,9 @@ pub struct SyncConfig {
     /// the VPS push mirror handles GitHub propagation.
     #[serde(default = "default_push_target")]
     pub push_target: String,
+    /// Auto-fire a SYNC impulse when divergence is detected.
+    #[serde(default)]
+    pub diverge_impulse: bool,
 }
 
 fn default_push_target() -> String {
@@ -152,6 +156,13 @@ pub struct RepoEntry {
     /// Default branch override.
     #[serde(default)]
     pub default_branch: Option<String>,
+    /// Per-repo divergence policy override (falls back to `sync.divergence_policy`).
+    /// Values: `flag`, `merge-ff`, `merge-rebase`, `impulse-only`, `agentic`.
+    #[serde(default)]
+    pub divergence_policy: Option<String>,
+    /// Remotes to exclude from temporal matrix (e.g. `["upstream"]` for vendor forks).
+    #[serde(default)]
+    pub exclude_remotes: Vec<String>,
 }
 
 /// Gate profile — which repos a gate cares about.
@@ -219,6 +230,14 @@ impl EcosystemManifest {
             .filter(|(_, e)| e.membrane == membrane)
             .map(|(name, entry)| (name.as_str(), entry))
             .collect()
+    }
+
+    /// Resolve divergence policy for a repo — per-repo override or global default.
+    pub fn divergence_policy_for<'a>(&'a self, entry: &'a RepoEntry) -> &'a str {
+        entry
+            .divergence_policy
+            .as_deref()
+            .unwrap_or(&self.sync.divergence_policy)
     }
 
     /// Build a GitHub clone URL for a repo.

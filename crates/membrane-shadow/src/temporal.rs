@@ -199,7 +199,17 @@ async fn rev_list_count(repo_path: &Path, range: &str) -> u32 {
 ///
 /// Fetches all remotes, measures ahead/behind per remote relative to
 /// local HEAD, and classifies as `Parity`, `Converge`, or `Diverge`.
+/// Remotes listed in `exclude_remotes` are filtered out of the matrix.
 pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMatrix> {
+    check_with_excludes(workspace_root, repo_path, &[]).await
+}
+
+/// `check` with explicit remote exclusion list (from manifest `exclude_remotes`).
+pub async fn check_with_excludes(
+    workspace_root: &Path,
+    repo_path: &str,
+    exclude_remotes: &[String],
+) -> Result<TemporalMatrix> {
     let local_path = workspace_root.join(repo_path);
 
     if !local_path.join(".git").exists() {
@@ -216,11 +226,14 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         .await
         .unwrap_or_else(|_| "main".to_string());
 
-    // Fetch all remotes quietly
     let _ = git_ok(&local_path, &["fetch", "--all", "--quiet"]).await;
 
     let remotes_str = git(&local_path, &["remote"]).await?;
-    let remotes: Vec<&str> = remotes_str.lines().filter(|l| !l.is_empty()).collect();
+    let remotes: Vec<&str> = remotes_str
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter(|r| !exclude_remotes.iter().any(|ex| ex == r))
+        .collect();
 
     if remotes.is_empty() {
         return Ok(TemporalMatrix {
@@ -232,7 +245,6 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         });
     }
 
-    // Measure per-remote position
     let mut positions = Vec::with_capacity(remotes.len());
     let mut has_leader = false;
     let mut leader_remote = String::new();
@@ -278,7 +290,6 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         });
     }
 
-    // Divergence: check if multiple remotes have unique commits relative to each other
     let mut diverge_count = 0u32;
     for pos_a in &positions {
         let ref_a = format!("{}/{branch}", pos_a.remote);
@@ -343,6 +354,25 @@ pub async fn sync_with_target(
     repo_path: &str,
     push_target: &str,
 ) -> Result<TemporalSyncResult> {
+    sync_with_policy(workspace_root, repo_path, push_target, "flag", &[]).await
+}
+
+/// Temporal sync with full policy engine — per-repo `divergence_policy`
+/// and `exclude_remotes` from the manifest.
+///
+/// Policy engine:
+/// - `flag` — report diverge, no mutation (default)
+/// - `merge-ff` — auto-resolve if one side is a strict ancestor
+/// - `merge-rebase` — auto-rebase if no content conflicts
+/// - `impulse-only` — fire SYNC impulse, never auto-resolve
+/// - `agentic` — full pipeline (Phase 4 future)
+pub async fn sync_with_policy(
+    workspace_root: &Path,
+    repo_path: &str,
+    push_target: &str,
+    divergence_policy: &str,
+    exclude_remotes: &[String],
+) -> Result<TemporalSyncResult> {
     let local_path = workspace_root.join(repo_path);
 
     if !local_path.join(".git").exists() {
@@ -355,7 +385,7 @@ pub async fn sync_with_target(
         });
     }
 
-    let matrix = check(workspace_root, repo_path).await?;
+    let matrix = check_with_excludes(workspace_root, repo_path, exclude_remotes).await?;
 
     match matrix.classification {
         SyncClassification::Parity => Ok(TemporalSyncResult {
@@ -402,9 +432,6 @@ pub async fn sync_with_target(
                 }
             }
 
-            // Push to follower remotes, filtered by push_target.
-            // "forgejo" = only push to the forgejo remote (VPS mediator handles GitHub).
-            // "all" = push to every remote that is behind (legacy dual-push).
             for pos in &matrix.positions {
                 if pulled_from.as_deref() == Some(&pos.remote) {
                     continue;
@@ -437,18 +464,136 @@ pub async fn sync_with_target(
             })
         }
 
-        SyncClassification::Diverge => Ok(TemporalSyncResult {
-            repo_path: repo_path.to_string(),
-            ok: false,
-            summary: format!("DIVERGE — {matrix}"),
-            pulled_from: None,
-            pushed_to: vec![],
-        }),
+        SyncClassification::Diverge => {
+            try_policy_resolve(workspace_root, &matrix, push_target, divergence_policy).await
+        }
 
         SyncClassification::Missing | SyncClassification::NoRemote => Ok(TemporalSyncResult {
             repo_path: repo_path.to_string(),
             ok: false,
             summary: matrix.classification.to_string(),
+            pulled_from: None,
+            pushed_to: vec![],
+        }),
+    }
+}
+
+/// Attempt policy-based auto-resolution of diverged repos.
+///
+/// Returns `ok: true` if the policy successfully resolved the divergence,
+/// `ok: false` if human/agentic review is needed.
+async fn try_policy_resolve(
+    workspace_root: &Path,
+    matrix: &TemporalMatrix,
+    push_target: &str,
+    policy: &str,
+) -> Result<TemporalSyncResult> {
+    let local_path = workspace_root.join(&matrix.repo_path);
+    let branch = &matrix.branch;
+
+    match policy {
+        "merge-ff" => {
+            // Auto-resolve if exactly one remote is strictly ahead (ancestor relationship).
+            // This handles the plasmidBin case: origin(+2) forgejo(+0).
+            let leaders: Vec<_> = matrix
+                .positions
+                .iter()
+                .filter(|p| p.behind > 0 && p.ahead == 0)
+                .collect();
+
+            if leaders.len() == 1 {
+                let leader = &leaders[0].remote;
+                if git_ok(
+                    &local_path,
+                    &["pull", leader, branch, "--ff-only", "--quiet"],
+                )
+                .await
+                {
+                    let mut pushed_to = Vec::new();
+                    for pos in &matrix.positions {
+                        if pos.remote == *leader {
+                            continue;
+                        }
+                        if push_target == "forgejo" && pos.remote != "forgejo" {
+                            continue;
+                        }
+                        if git_ok(&local_path, &["push", &pos.remote, branch, "--quiet"]).await {
+                            pushed_to.push(pos.remote.clone());
+                        }
+                    }
+                    return Ok(TemporalSyncResult {
+                        repo_path: matrix.repo_path.clone(),
+                        ok: true,
+                        summary: format!(
+                            "merge-ff: pull {leader}, push {}",
+                            pushed_to.join(" ")
+                        ),
+                        pulled_from: Some(leader.clone()),
+                        pushed_to,
+                    });
+                }
+            }
+
+            Ok(TemporalSyncResult {
+                repo_path: matrix.repo_path.clone(),
+                ok: false,
+                summary: format!("DIVERGE (merge-ff failed) — {matrix}"),
+                pulled_from: None,
+                pushed_to: vec![],
+            })
+        }
+
+        "merge-rebase" => {
+            // Auto-rebase local on the leader, then push. Fails gracefully
+            // on conflicts (falls through to flag behavior).
+            let leaders: Vec<_> = matrix
+                .positions
+                .iter()
+                .filter(|p| p.behind > 0)
+                .collect();
+
+            if let Some(leader) = leaders.first() {
+                let remote_ref = format!("{}/{branch}", leader.remote);
+                if git_ok(&local_path, &["rebase", &remote_ref]).await {
+                    let mut pushed_to = Vec::new();
+                    for pos in &matrix.positions {
+                        if push_target == "forgejo" && pos.remote != "forgejo" {
+                            continue;
+                        }
+                        if git_ok(&local_path, &["push", &pos.remote, branch, "--quiet"]).await {
+                            pushed_to.push(pos.remote.clone());
+                        }
+                    }
+                    return Ok(TemporalSyncResult {
+                        repo_path: matrix.repo_path.clone(),
+                        ok: true,
+                        summary: format!(
+                            "merge-rebase: rebase on {}, push {}",
+                            leader.remote,
+                            pushed_to.join(" ")
+                        ),
+                        pulled_from: Some(leader.remote.clone()),
+                        pushed_to,
+                    });
+                }
+                let _ = git_ok(&local_path, &["rebase", "--abort"]).await;
+            }
+
+            Ok(TemporalSyncResult {
+                repo_path: matrix.repo_path.clone(),
+                ok: false,
+                summary: format!("DIVERGE (merge-rebase conflict) — {matrix}"),
+                pulled_from: None,
+                pushed_to: vec![],
+            })
+        }
+
+        // impulse-only, agentic, flag — all fall through to flag behavior.
+        // Impulse firing is handled at the cascade level, not here.
+        _ => Ok(TemporalSyncResult {
+            repo_path: matrix.repo_path.clone(),
+            ok: false,
+            summary: format!("DIVERGE — {matrix}"),
             pulled_from: None,
             pushed_to: vec![],
         }),
@@ -511,6 +656,9 @@ pub fn resolve_workspace_root() -> Result<PathBuf> {
 ///
 /// Reads the gate profile from `ecosystem_manifest.toml`, resolves temporal
 /// position for each repo, pulls from leader, and reports parity.
+///
+/// Honors per-repo `divergence_policy` and `exclude_remotes` from the manifest.
+/// When `diverge_impulse = true` in `[sync]`, auto-fires SYNC impulses on diverge.
 pub async fn cascade(
     gate_name: &str,
     source: &str,
@@ -527,7 +675,15 @@ pub async fn cascade(
     if dry_run {
         let lines: Vec<String> = repos
             .iter()
-            .map(|(name, e)| format!("  {:<25} {}", name, e.local_path))
+            .map(|(name, e)| {
+                let policy = m.divergence_policy_for(e);
+                let excl = if e.exclude_remotes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (exclude: {})", e.exclude_remotes.join(","))
+                };
+                format!("  {:<25} {} [{}]{}", name, e.local_path, policy, excl)
+            })
             .collect();
         return Ok(crate::ShadowOutcome::ok(format!(
             "DRY RUN: {total} repos for {gate_name} (source={source})\n{}",
@@ -536,14 +692,17 @@ pub async fn cascade(
     }
 
     let push_target = m.sync.push_target.clone();
+    let diverge_impulse = m.sync.diverge_impulse;
     let mut synced = 0u32;
     let mut failed = 0u32;
     let mut cloned = 0u32;
+    let mut impulse_count = 0u32;
     let mut lines = Vec::with_capacity(repos.len());
 
     for (name, entry) in &repos {
         let repo_path = &entry.local_path;
         let full_path = std::path::Path::new(&root).join(repo_path);
+        let repo_policy = m.divergence_policy_for(entry).to_string();
 
         if !full_path.join(".git").exists() {
             if clone_missing {
@@ -569,20 +728,24 @@ pub async fn cascade(
         }
 
         if check_only {
-            match check(&root, repo_path).await {
+            match check_with_excludes(&root, repo_path, &entry.exclude_remotes).await {
                 Ok(matrix) => {
                     let status = match matrix.classification {
                         SyncClassification::Parity => {
                             synced += 1;
-                            "OK parity"
+                            "OK parity".to_string()
                         }
                         SyncClassification::Converge => {
                             synced += 1;
-                            "OK converge"
+                            "OK converge".to_string()
+                        }
+                        SyncClassification::Diverge => {
+                            failed += 1;
+                            format!("DIVERGE [{}]", repo_policy)
                         }
                         _ => {
                             failed += 1;
-                            "DIVERGE"
+                            "MISSING".to_string()
                         }
                     };
                     lines.push(format!("  {:<35} {status}", name));
@@ -593,16 +756,60 @@ pub async fn cascade(
                 }
             }
         } else {
-            match sync_with_target(&root, repo_path, &push_target).await {
+            match sync_with_policy(
+                &root,
+                repo_path,
+                &push_target,
+                &repo_policy,
+                &entry.exclude_remotes,
+            )
+            .await
+            {
                 Ok(r) => {
-                    let status = if r.ok {
+                    if r.ok {
                         synced += 1;
-                        format!("OK {}", r.summary)
+                        lines.push(format!("  {:<35} OK {}", name, r.summary));
                     } else {
                         failed += 1;
-                        format!("FAIL {}", r.summary)
-                    };
-                    lines.push(format!("  {:<35} {status}", name));
+                        lines.push(format!("  {:<35} FAIL {}", name, r.summary));
+
+                        // Auto-fire SYNC impulse on diverge when enabled
+                        if diverge_impulse
+                            && r.summary.starts_with("DIVERGE")
+                            && repo_policy != "merge-ff"
+                        {
+                            if let Ok(matrix) =
+                                check_with_excludes(&root, repo_path, &entry.exclude_remotes).await
+                            {
+                                let positions: Vec<(String, u32, u32)> = matrix
+                                    .positions
+                                    .iter()
+                                    .map(|p| (p.remote.clone(), p.ahead, p.behind))
+                                    .collect();
+                                let impulse_args = crate::impulse::SyncDivergeArgs {
+                                    repo_path: repo_path.to_string(),
+                                    positions,
+                                    repo_policy: repo_policy.clone(),
+                                };
+                                match crate::impulse::post_sync_diverge(&root, &impulse_args).await
+                                {
+                                    Ok(_) => {
+                                        impulse_count += 1;
+                                        lines.push(format!(
+                                            "  {:<35}   -> SYNC impulse fired",
+                                            ""
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        lines.push(format!(
+                                            "  {:<35}   -> impulse failed: {e}",
+                                            ""
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     failed += 1;
@@ -618,6 +825,11 @@ pub async fn cascade(
     } else {
         String::new()
     };
+    let impulse_info = if impulse_count > 0 {
+        format!(" impulses={impulse_count}")
+    } else {
+        String::new()
+    };
     let header = format!(
         "=== WaterFall Cascade ({action}) ===\n\
          Manifest: v{} wave {} ({} repos)\n\
@@ -625,7 +837,7 @@ pub async fn cascade(
          Source:  {source}\n\
          Repos:   {total}\n\
          \n\
-         {action}={synced} failed={failed}{clone_info}",
+         {action}={synced} failed={failed}{clone_info}{impulse_info}",
         m.meta.version, m.meta.wave, m.meta.total_repos,
     );
 
@@ -638,6 +850,7 @@ pub async fn cascade(
             "synced": synced,
             "failed": failed,
             "cloned": cloned,
+            "impulses": impulse_count,
         }),
     ))
 }

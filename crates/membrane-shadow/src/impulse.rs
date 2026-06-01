@@ -32,6 +32,8 @@ pub enum ImpulseType {
     Request,
     /// Broadcast ecosystem-wide notice.
     Announce,
+    /// Divergence detected — merge coordination needed (auto-fired by cascade).
+    Sync,
 }
 
 impl std::fmt::Display for ImpulseType {
@@ -41,6 +43,7 @@ impl std::fmt::Display for ImpulseType {
             Self::Status => write!(f, "STATUS"),
             Self::Request => write!(f, "REQUEST"),
             Self::Announce => write!(f, "ANNOUNCE"),
+            Self::Sync => write!(f, "SYNC"),
         }
     }
 }
@@ -197,6 +200,216 @@ pub struct PostArgs<'a> {
     pub project: &'a str,
     /// Team name.
     pub team: &'a str,
+}
+
+/// Structured payload for SYNC impulses — carries divergence context
+/// enabling agentic or human resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncPayload {
+    /// Repo local path (e.g. `infra/plasmidBin`).
+    pub repo: String,
+    /// Divergence type classification.
+    pub diverge_type: String,
+    /// Merge base (common ancestor SHA, if known).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub merge_base: String,
+    /// Per-remote HEAD SHAs.
+    pub remotes: std::collections::BTreeMap<String, String>,
+    /// Per-remote ahead counts.
+    pub ahead: std::collections::BTreeMap<String, u32>,
+    /// Repo-level divergence policy from manifest.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub repo_policy: String,
+    /// Suggested resolution action.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub suggested_action: String,
+}
+
+/// Top-level structure for SYNC impulse files (extends ImpulseFile with payload).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncImpulseFile {
+    /// Standard impulse metadata.
+    pub impulse: ImpulseMeta,
+    /// Origin information.
+    pub from: ImpulseFrom,
+    /// Target information.
+    pub to: ImpulseTo,
+    /// Message content.
+    pub content: ImpulseContent,
+    /// Divergence payload.
+    pub payload: SyncPayload,
+    /// Operational metadata.
+    pub meta: ImpulseOpMeta,
+    /// Ed25519 signature (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<ImpulseSignature>,
+    /// Acknowledgments from receiving gates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acks: Vec<ImpulseAck>,
+}
+
+/// Arguments for auto-firing a SYNC divergence impulse from cascade.
+pub struct SyncDivergeArgs {
+    /// Repo local path.
+    pub repo_path: String,
+    /// Per-remote position data.
+    pub positions: Vec<(String, u32, u32)>,
+    /// Per-repo divergence policy from manifest.
+    pub repo_policy: String,
+}
+
+/// Fire a SYNC divergence impulse — auto-called by `temporal.cascade`
+/// when divergence is detected and `diverge_impulse = true` in manifest.
+///
+/// Creates a TOML file in `impulses/active/` with structured payload,
+/// commits, and pushes to all remotes.
+pub async fn post_sync_diverge(
+    workspace_root: &Path,
+    args: &SyncDivergeArgs,
+) -> Result<SyncImpulseFile> {
+    let gate_id = identity::resolve(workspace_root)?;
+    let now = Local::now();
+    let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
+    let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+
+    let repo_name = args
+        .repo_path
+        .rsplit('/')
+        .next()
+        .unwrap_or(&args.repo_path);
+
+    let mut remotes_map = std::collections::BTreeMap::new();
+    let mut ahead_map = std::collections::BTreeMap::new();
+    let mut diverge_summary_parts = Vec::new();
+
+    for (remote, ahead, behind) in &args.positions {
+        let sha = resolve_remote_head(workspace_root, &args.repo_path, remote);
+        remotes_map.insert(remote.clone(), sha);
+        ahead_map.insert(remote.clone(), *ahead);
+        if *ahead > 0 || *behind > 0 {
+            diverge_summary_parts.push(format!("{remote}(+{ahead},-{behind})"));
+        }
+    }
+
+    let diverge_type = classify_diverge_type(&args.positions);
+    let suggested = suggest_action(&diverge_type, &args.repo_policy);
+    let subject = format!(
+        "DIVERGE: {repo_name} - {}",
+        diverge_summary_parts.join(" vs ")
+    );
+
+    let slug = format!("diverge-{repo_name}");
+    let impulse_id = format!("{ts_file}-{}-{slug}", gate_id.name);
+    let filename = format!("{ts_file}_{}__{slug}.toml", gate_id.name);
+
+    let wave = current_wave(workspace_root);
+    let git_ref = resolve_head_ref(workspace_root, &args.repo_path);
+
+    let impulse = SyncImpulseFile {
+        impulse: ImpulseMeta {
+            id: impulse_id.clone(),
+            impulse_type: ImpulseType::Sync,
+            priority: Priority::Priority,
+            wave,
+        },
+        from: ImpulseFrom {
+            gate: gate_id.name.clone(),
+            team: String::new(),
+            project: args.repo_path.clone(),
+            git_ref,
+        },
+        to: ImpulseTo {
+            gates: vec!["*".to_string()],
+            teams: vec![],
+        },
+        content: ImpulseContent {
+            subject: subject.clone(),
+            body: format!(
+                "Cascade detected non-ff divergence in {}. Policy: {}. See payload for resolution context.",
+                args.repo_path, args.repo_policy
+            ),
+        },
+        payload: SyncPayload {
+            repo: args.repo_path.clone(),
+            diverge_type,
+            merge_base: String::new(),
+            remotes: remotes_map,
+            ahead: ahead_map,
+            repo_policy: args.repo_policy.clone(),
+            suggested_action: suggested,
+        },
+        meta: ImpulseOpMeta {
+            created: ts_iso,
+            expires: String::new(),
+            ack_required: true,
+        },
+        signature: try_sign_impulse(workspace_root, &impulse_id),
+        acks: vec![],
+    };
+
+    let active = active_dir(workspace_root);
+    std::fs::create_dir_all(&active).map_err(ShadowError::Io)?;
+
+    let filepath = active.join(&filename);
+    let toml_str = toml::to_string_pretty(&impulse)
+        .map_err(|e| ShadowError::Parse(format!("serialize sync impulse: {e}")))?;
+    std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
+
+    let wh_dir = workspace_root.join("infra/wateringHole");
+    git_add_commit_push(
+        &wh_dir,
+        &format!("impulses/active/{filename}"),
+        &format!("impulse sync: {subject}"),
+    )
+    .await?;
+
+    Ok(impulse)
+}
+
+fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
+    let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
+    let behind_remotes: Vec<_> = positions.iter().filter(|(_, _, b)| *b > 0).collect();
+
+    match (ahead_remotes.len(), behind_remotes.len()) {
+        (0, 1) => format!("{}_ahead", behind_remotes[0].0),
+        (1, 0) => "local_ahead".to_string(),
+        (_, _) if ahead_remotes.len() >= 2 || behind_remotes.len() >= 2 => {
+            "multi_remote_diverge".to_string()
+        }
+        _ => "diverge".to_string(),
+    }
+}
+
+fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
+    match repo_policy {
+        "merge-ff" => "pull_leader_push_followers".to_string(),
+        "merge-rebase" => "rebase_and_push".to_string(),
+        "impulse-only" => "human_review".to_string(),
+        "agentic" => "agentic_resolve".to_string(),
+        _ => match diverge_type {
+            t if t.ends_with("_ahead") => format!("pull_{t}_push_others"),
+            "local_ahead" => "push_all".to_string(),
+            _ => "human_review".to_string(),
+        },
+    }
+}
+
+fn resolve_remote_head(workspace_root: &Path, repo_path: &str, remote: &str) -> String {
+    let local_path = workspace_root.join(repo_path);
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&local_path)
+        .args(["rev-parse", "--short", &format!("{remote}/main")])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+    output.unwrap_or_default()
 }
 
 /// Result of `potential.check` — membrane gradient health.
@@ -726,6 +939,7 @@ mod tests {
         assert_eq!(ImpulseType::Status.to_string(), "STATUS");
         assert_eq!(ImpulseType::Request.to_string(), "REQUEST");
         assert_eq!(ImpulseType::Announce.to_string(), "ANNOUNCE");
+        assert_eq!(ImpulseType::Sync.to_string(), "SYNC");
     }
 
     #[test]
