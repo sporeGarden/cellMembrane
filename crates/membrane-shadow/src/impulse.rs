@@ -415,7 +415,7 @@ pub fn check(workspace_root: &Path) -> Result<PotentialHealth> {
         for entry in entries {
             let entry = entry.map_err(ShadowError::Io)?;
             let path = entry.path();
-            if !path.extension().is_some_and(|e| e == "toml") {
+            if path.extension().is_none_or(|e| e != "toml") {
                 continue;
             }
             let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
@@ -496,7 +496,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
     for entry in entries {
         let entry = entry.map_err(ShadowError::Io)?;
         let path = entry.path();
-        if !path.extension().is_some_and(|e| e == "toml") {
+        if path.extension().is_none_or(|e| e != "toml") {
             continue;
         }
 
@@ -559,32 +559,13 @@ fn parse_impulse_or_signal(contents: &str) -> std::result::Result<ImpulseFile, t
     })
 }
 
-/// Attempt to sign an impulse via bearDog's UDS socket.
-///
-/// Discovers bearDog at the standard socket path. If unavailable,
-/// returns None — unsigned impulses are valid (Phase 3 graceful
-/// degradation). When bearDog is present, signs the impulse ID
-/// with Ed25519 and returns the signature.
 /// Attempt near-realtime impulse relay via songbird mesh.publish.
 ///
-/// Discovers songbird at the standard socket path. If unavailable,
-/// silently falls through — git push is the reliable baseline.
-/// When songbird is present, publishes a lightweight notification
-/// to the mesh topic `impulse/{gate}` so subscribing gates can
-/// trigger an immediate cascade-pull.
+/// Connects to songbird's UDS socket natively (no socat dependency).
+/// If unavailable, silently falls through — git push is the reliable baseline.
 fn try_relay_impulse(impulse: &ImpulseFile) {
-    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
-    let socket_candidates = [
-        format!("{xdg}/biomeos/songbird-default.sock"),
-        "/tmp/biomeos/songbird-default.sock".to_string(),
-    ];
-
-    let socket_path = match socket_candidates
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())
-    {
-        Some(p) => p.clone(),
-        None => return,
+    let Some(socket_path) = discover_socket("songbird-default.sock") else {
+        return;
     };
 
     let notification = serde_json::json!({
@@ -608,35 +589,11 @@ fn try_relay_impulse(impulse: &ImpulseFile) {
         return;
     };
 
-    let mut child = match std::process::Command::new("socat")
-        .args(["-", &format!("UNIX-CONNECT:{socket_path}")])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    if let Some(mut stdin) = child.stdin.take() {
-        use std::io::Write;
-        let _ = writeln!(stdin, "{request_str}");
-    }
-
-    let _ = child.wait();
+    uds_send(&socket_path, &request_str);
 }
 
 fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
-    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
-    let socket_candidates = [
-        format!("{xdg}/biomeos/beardog-default.sock"),
-        "/tmp/biomeos/beardog-default.sock".to_string(),
-    ];
-
-    let socket_path = socket_candidates
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())?;
+    let socket_path = discover_socket("beardog-default.sock")?;
 
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -646,25 +603,8 @@ fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseS
     });
     let request_str = serde_json::to_string(&request).ok()?;
 
-    let mut child = std::process::Command::new("socat")
-        .args(["-", &format!("UNIX-CONNECT:{socket_path}")])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        use std::io::Write;
-        let _ = writeln!(stdin, "{request_str}");
-    }
-
-    let output = child.wait_with_output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    let response: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let response_bytes = uds_request(&socket_path, &request_str)?;
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
     let result = response.get("result")?;
 
     Some(ImpulseSignature {
@@ -675,13 +615,53 @@ fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseS
     })
 }
 
+/// Discover a primal socket by name using standard search paths.
+fn discover_socket(socket_name: &str) -> Option<PathBuf> {
+    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+    let candidates = [
+        PathBuf::from(format!("{xdg}/biomeos/{socket_name}")),
+        PathBuf::from(format!("/tmp/biomeos/{socket_name}")),
+    ];
+    candidates.into_iter().find(|p| p.exists())
+}
+
+/// Fire-and-forget: send a JSON-RPC request to a UDS without waiting for response.
+fn uds_send(socket_path: &Path, request: &str) {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+
+    let Ok(mut stream) = UnixStream::connect(socket_path) else {
+        return;
+    };
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
+    let _ = writeln!(stream, "{request}");
+}
+
+/// Send a JSON-RPC request to a UDS and read the response.
+fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+
+    let mut stream = UnixStream::connect(socket_path).ok()?;
+    stream
+        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .ok()?;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .ok()?;
+    writeln!(stream, "{request}").ok()?;
+    stream.shutdown(std::net::Shutdown::Write).ok()?;
+
+    let mut buf = Vec::with_capacity(4096);
+    stream.read_to_end(&mut buf).ok()?;
+    Some(buf)
+}
+
 fn is_expired(expires: &str, now: &chrono::DateTime<Utc>) -> bool {
     if expires.is_empty() {
         return false;
     }
-    chrono::DateTime::parse_from_str(expires, "%Y-%m-%dT%H:%M:%S%:z")
-        .map(|exp| now > &exp)
-        .unwrap_or(false)
+    chrono::DateTime::parse_from_str(expires, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|exp| now > &exp)
 }
 
 fn is_fully_acked(impulse: &ImpulseFile) -> bool {
@@ -703,7 +683,7 @@ fn find_impulse_by_id(active_dir: &Path, impulse_id: &str) -> Result<(PathBuf, I
     for entry in entries {
         let entry = entry.map_err(ShadowError::Io)?;
         let path = entry.path();
-        if !path.extension().is_some_and(|e| e == "toml") {
+        if path.extension().is_none_or(|e| e != "toml") {
             continue;
         }
         let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
@@ -728,4 +708,97 @@ async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) ->
 
 async fn git_add_all_commit_push(repo_dir: &Path, message: &str) -> Result<()> {
     crate::git_ops::add_all_commit_push(repo_dir, "impulses/", message).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn discover_socket_returns_none_for_missing() {
+        let result = discover_socket("nonexistent-primal-socket.sock");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn impulse_type_display() {
+        assert_eq!(ImpulseType::Frago.to_string(), "FRAGO");
+        assert_eq!(ImpulseType::Status.to_string(), "STATUS");
+        assert_eq!(ImpulseType::Request.to_string(), "REQUEST");
+        assert_eq!(ImpulseType::Announce.to_string(), "ANNOUNCE");
+    }
+
+    #[test]
+    fn priority_display() {
+        assert_eq!(Priority::Routine.to_string(), "routine");
+        assert_eq!(Priority::Priority.to_string(), "PRIORITY");
+        assert_eq!(Priority::Flash.to_string(), "FLASH");
+    }
+
+    #[test]
+    fn is_expired_empty_is_false() {
+        let now = chrono::Utc::now();
+        assert!(!is_expired("", &now));
+    }
+
+    #[test]
+    fn is_expired_future_is_false() {
+        let now = chrono::Utc::now();
+        let future = (now + chrono::Duration::hours(1))
+            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .to_string();
+        assert!(!is_expired(&future, &now));
+    }
+
+    #[test]
+    fn is_expired_past_is_true() {
+        let now = chrono::Utc::now();
+        let past = (now - chrono::Duration::hours(1))
+            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .to_string();
+        assert!(is_expired(&past, &now));
+    }
+
+    #[test]
+    fn is_fully_acked_empty_gates() {
+        let impulse = ImpulseFile {
+            impulse: ImpulseMeta {
+                id: "test".into(),
+                impulse_type: ImpulseType::Frago,
+                priority: Priority::Routine,
+                wave: 1,
+            },
+            from: ImpulseFrom {
+                gate: "a".into(),
+                team: String::new(),
+                project: String::new(),
+                git_ref: String::new(),
+            },
+            to: ImpulseTo {
+                gates: vec![],
+                teams: vec![],
+            },
+            content: ImpulseContent {
+                subject: "test".into(),
+                body: String::new(),
+            },
+            meta: ImpulseOpMeta {
+                created: String::new(),
+                expires: String::new(),
+                ack_required: true,
+            },
+            signature: None,
+            acks: vec![],
+        };
+        assert!(!is_fully_acked(&impulse));
+    }
+
+    #[test]
+    fn sense_returns_empty_for_missing_dir() {
+        let result = sense(Path::new("/tmp/nonexistent-impulse-test"), true, true);
+        assert!(result.is_ok());
+        let (impulses, count) = result.unwrap();
+        assert!(impulses.is_empty());
+        assert_eq!(count, 0);
+    }
 }

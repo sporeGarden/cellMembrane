@@ -219,9 +219,10 @@ enum ShipResult {
 ///   2. Determine if ahead of GitHub remote
 ///   3. If ahead, push to GitHub
 async fn ship_one_repo(config: &RelayConfig, repo_path: &str) -> ShipResult {
+    let eco_root = config.ecoprimals_root.to_string_lossy();
     let remote_script = format!(
         r#"set -euo pipefail
-d="/opt/ecoPrimals/{repo_path}"
+d="{eco_root}/{repo_path}"
 [ -d "$d/.git" ] || exit 2
 cd "$d"
 git pull --ff-only forgejo main --quiet 2>/dev/null || true

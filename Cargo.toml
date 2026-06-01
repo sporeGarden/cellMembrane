@@ -13,6 +13,7 @@ license = "AGPL-3.0-or-later"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toml = "0.8"
+blake3 = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

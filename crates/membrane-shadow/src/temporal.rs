@@ -547,8 +547,7 @@ pub async fn cascade(
 
         if !full_path.join(".git").exists() {
             if clone_missing {
-                let forgejo_url =
-                    format!("ssh://git@git.primals.eco:2222/{}.git", entry.forgejo_repo);
+                let forgejo_url = m.forgejo_clone_url(entry);
                 let clone_result = tokio::process::Command::new("git")
                     .args(["clone", &forgejo_url, &full_path.to_string_lossy()])
                     .output()

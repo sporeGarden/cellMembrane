@@ -28,8 +28,6 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("impulse.") => dispatch_impulse(cmd, args).await,
         c if c.starts_with("potential.") => dispatch_potential(cmd, args).await,
         c if c.starts_with("context.") => dispatch_context(cmd, args).await,
-        // Deprecated signal.* → impulse.*/potential.*
-        c if c.starts_with("signal.") => dispatch_signal_deprecated(cmd, args).await,
         c if c.starts_with("plasmid.") => dispatch_plasmid(config, cmd, args).await,
         c if c.starts_with("relay.") => dispatch_relay(cmd, args).await,
         "forgejo.version" => {
@@ -744,7 +742,7 @@ async fn dispatch_plasmid(
     match cmd {
         "plasmid.fetch" => {
             let source_str = cli::extract_flag_value(args, "--source").unwrap_or("github");
-            let source = plasmid::FetchSource::from_str(source_str)?;
+            let source: plasmid::FetchSource = source_str.parse()?;
             let fetch_args = plasmid::FetchArgs {
                 source,
                 primal: cli::extract_flag_value(args, "--primal").map(Into::into),
@@ -758,31 +756,6 @@ async fn dispatch_plasmid(
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),
-    }
-}
-
-// ── Deprecated signal.* aliases ──────────────────────────────────────
-
-async fn dispatch_signal_deprecated(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
-    let new_cmd = match cmd {
-        "signal.post" => "impulse.post",
-        "signal.ack" => "impulse.ack",
-        "signal.archive" => "impulse.archive",
-        "signal.list" => "potential.sense",
-        _ => {
-            return Ok(ShadowOutcome::fail(format!(
-                "unknown signal command: {cmd}"
-            )));
-        }
-    };
-    eprintln!("DEPRECATED: {cmd} → {new_cmd} (see IMPULSE_POTENTIAL_STANDARD.md)");
-
-    match new_cmd {
-        "impulse.post" => dispatch_impulse(new_cmd, args).await,
-        "impulse.ack" => dispatch_impulse(new_cmd, args).await,
-        "impulse.archive" => dispatch_impulse(new_cmd, args).await,
-        "potential.sense" => dispatch_potential(new_cmd, args).await,
-        _ => unreachable!(),
     }
 }
 
