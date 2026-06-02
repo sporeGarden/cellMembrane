@@ -179,7 +179,10 @@ mod tests {
     #[test]
     fn discover_returns_none_without_socket() {
         let result = NeuralBridge::discover();
-        assert!(result.is_none(), "should fall through when no socket exists");
+        assert!(
+            result.is_none(),
+            "should fall through when no socket exists"
+        );
     }
 
     #[tokio::test]

@@ -37,14 +37,22 @@ pub struct PushResult {
 /// Stage a specific file, commit, and push to all remotes.
 ///
 /// Returns the push result so callers can surface partial failures.
-pub async fn add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<PushResult> {
+pub async fn add_commit_push(
+    repo_dir: &Path,
+    file_path: &str,
+    message: &str,
+) -> Result<PushResult> {
     run_git(repo_dir, &["add", file_path]).await?;
     run_git(repo_dir, &["commit", "-m", message]).await?;
     Ok(push_all_remotes(repo_dir).await)
 }
 
 /// Stage all changes in a subdirectory, commit, and push.
-pub async fn add_all_commit_push(repo_dir: &Path, subdir: &str, message: &str) -> Result<PushResult> {
+pub async fn add_all_commit_push(
+    repo_dir: &Path,
+    subdir: &str,
+    message: &str,
+) -> Result<PushResult> {
     run_git(repo_dir, &["add", "-A", subdir]).await?;
     run_git(repo_dir, &["commit", "-m", message]).await?;
     Ok(push_all_remotes(repo_dir).await)

@@ -23,7 +23,7 @@
 //!
 //! - **Forgejo API**: HTTPS via `reqwest` (feature `http`)
 //! - **VPS commands**: SSH via system client (`ssh golgi '...'`)
-//! - **Neural API**: UDS JSON-RPC via `bridge` module (feature `neural-bridge`)
+//! - **Neural API**: UDS JSON-RPC via `bridge` module
 //!   — try-primal-first, fall back to shadow when biomeOS unavailable
 //!
 //! # Usage
