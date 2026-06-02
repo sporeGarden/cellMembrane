@@ -1,8 +1,12 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-01
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, 7-item cascade evolution complete, golgiBody Phase A live
+**Last updated:** 2026-06-02
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, graduated composition live, golgiBody Phase A live
+**Wave 68 update:** Graduated composition evolution — Neural Bridge wired into dispatch (try-primal-first
+for gate.*, service.*, repo.*, mirror.*, token.* commands). gate.pull/check evolved to use Rust membrane
+binary on VPS. PushResult struct replaces silent push failures. #[must_use] sweep (12 functions, 7 modules).
+resolve_workspace_root() promoted to crate-level. forgejo_work_dir config chain. 209 tests. Zero clippy.
 **Wave 67+ update:** Cascade evolution sprint — dispatch.rs split into 5 domain submodules (all <340L).
 Tree-parity divergence auto-resolution (SyncAction::TreeParity). `--publish-freshness` wired into cascade.
 `post_sync_diverge()` + graduated merge strategies (merge-ff, merge-rebase, impulse-only). Impulse ack

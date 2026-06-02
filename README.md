@@ -54,17 +54,23 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 207 tests — pedantic clippy clean
+cargo test                  # 209 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 68 (Graduated Composition):** Neural Bridge wired into dispatch
+(try-primal-first for 12 commands). `gate.pull`/`gate.check` evolved to use
+Rust `membrane` binary on VPS. `PushResult` replaces silent push failures.
+`#[must_use]` sweep across 7 modules. `resolve_workspace_root()` promoted
+to crate-level utility. `forgejo_work_dir` config chain. 209 tests.
 
 **Wave 67+ (Cascade Evolution Sprint):** dispatch.rs split into 5 domain
 submodules (all <340L). Tree-parity divergence auto-resolution. `--publish-freshness`
 wired. `post_sync_diverge()` + graduated merge strategies. Impulse ack safety
 (separate ack files). Binary freshness tracking (`--check-installed`). All
 hardcoded paths evolved to capability-based discovery. rsync eliminated
-(SSH+cat). `ServicePaths` + `CredentialPaths` runtime resolvers. 207 tests.
+(SSH+cat). `ServicePaths` + `CredentialPaths` runtime resolvers.
 
 **Wave 66 (Deep Debt Evolution):** Eliminated 3 external tool dependencies
 (socat→native UDS, curl→reqwest, b3sum→blake3 crate). Removed deprecated
@@ -165,6 +171,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | K-Derm relay chain in Rust (Wave 65): relay.rs replaces bash scripts | DONE |
 | Deep debt evolution (Wave 66): socat/curl/b3sum → native Rust | DONE |
 | Cascade evolution sprint (Wave 67+): dispatch split, tree-parity, freshness, ack safety, capability paths | DONE |
+| Graduated composition (Wave 68): Neural Bridge in dispatch, gate bash→Rust, PushResult, #[must_use] sweep | DONE |
 
 ---
 
@@ -187,7 +194,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
 | 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
-| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 67, 2026-06-01) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 68, 2026-06-02) |
 | 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
