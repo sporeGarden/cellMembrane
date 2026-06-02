@@ -9,6 +9,9 @@
 
 use crate::error::{Result, ShadowError};
 
+/// Default `systemctl` service filter regex — matches nucleus services on the VPS.
+const DEFAULT_SERVICE_FILTER: &str = "membrane|forgejo|caddy|knot|hbb|fail2ban";
+
 /// Shadow function configuration — all the context needed to reach the VPS.
 #[derive(Debug, Clone)]
 pub struct ShadowConfig {
@@ -52,7 +55,7 @@ impl Default for ShadowConfig {
             forgejo_data_dir: None,
             forgejo_work_dir: None,
             forgejo_admin_user: None,
-            service_filter: "membrane|forgejo|caddy|knot|hbb|fail2ban".into(),
+            service_filter: DEFAULT_SERVICE_FILTER.into(),
         }
     }
 }
@@ -90,7 +93,7 @@ impl ShadowConfig {
                 .ok()
                 .or(toml_overrides.forgejo_admin_user),
             service_filter: std::env::var("MEMBRANE_SERVICE_FILTER")
-                .unwrap_or_else(|_| "membrane|forgejo|caddy|knot|hbb|fail2ban".into()),
+                .unwrap_or_else(|_| DEFAULT_SERVICE_FILTER.into()),
         };
 
         cfg.forgejo_token = resolve_token().await;
