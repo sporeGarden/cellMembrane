@@ -283,7 +283,7 @@ d="{eco_root}/{repo_path}"
 [ -d "$d/.git" ] || exit 2
 cd "$d"
 git pull --ff-only forgejo main --quiet 2>/dev/null || true
-REMOTE=$(git remote get-url github 2>/dev/null && echo github || echo origin)
+REMOTE=$(git remote get-url github >/dev/null 2>&1 && echo github || echo origin)
 git fetch "$REMOTE" --quiet 2>/dev/null || exit 3
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 ahead=$(git rev-list --count "$REMOTE/$branch..HEAD" 2>/dev/null || echo 0)

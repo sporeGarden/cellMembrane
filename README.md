@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 67, 2026-06-01) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 69, 2026-06-02) |
 
 ---
 
@@ -58,6 +58,12 @@ cargo test                  # 209 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 69 (Sovereignty Graduation):** Membrane binary deployed to VPS
+(`x86_64-musl`, 6.1M static). Full K-Derm relay validated in Rust (zero bash
+dependencies for relay chain). S4 auth gate activated (`BEARDOG_AUTH_MODE=enforced`).
+Disk cleanup 69%→60%. Workspace resolution evolved for VPS sparse deployments.
+Relay ship bug fixed (`git remote get-url` stdout leak). 209 tests.
 
 **Wave 68 (Graduated Composition):** Neural Bridge wired into dispatch
 (try-primal-first for 12 commands). `gate.pull`/`gate.check` evolved to use
@@ -172,6 +178,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Deep debt evolution (Wave 66): socat/curl/b3sum → native Rust | DONE |
 | Cascade evolution sprint (Wave 67+): dispatch split, tree-parity, freshness, ack safety, capability paths | DONE |
 | Graduated composition (Wave 68): Neural Bridge in dispatch, gate bash→Rust, PushResult, #[must_use] sweep | DONE |
+| Sovereignty graduation (Wave 69): membrane deployed to VPS, S4 auth enforced, relay Rust-native, disk 60% | DONE |
 
 ---
 
@@ -194,7 +201,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
 | 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
-| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 68, 2026-06-02) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 69, 2026-06-02) |
 | 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |

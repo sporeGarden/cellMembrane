@@ -83,16 +83,24 @@ pub use error::{Result, ShadowError, ShadowOutcome};
 /// Resolve the ecoPrimals workspace root directory.
 ///
 /// Resolution chain:
-/// 1. `ECOPRIMALS_ROOT` env var (validated by checking `primals/` subdir)
+/// 1. `ECOPRIMALS_ROOT` env var (validated by workspace marker)
 /// 2. Walk up from current executable looking for workspace markers
 ///
-/// Returns an error if no workspace can be found.
+/// Recognized markers: `primals/`, `infra/`, `gardens/`, `.ecoprimals`
+/// This supports both full development workspaces and sparse VPS deployments.
 pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
     use std::path::{Path, PathBuf};
 
+    fn is_workspace(p: &Path) -> bool {
+        p.join("primals").exists()
+            || p.join("infra").exists()
+            || p.join("gardens").exists()
+            || p.join(".ecoprimals").exists()
+    }
+
     if let Ok(root) = std::env::var("ECOPRIMALS_ROOT") {
         let path = PathBuf::from(&root);
-        if path.join("primals").exists() {
+        if is_workspace(&path) {
             return Ok(path);
         }
     }
@@ -100,7 +108,7 @@ pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         let mut dir = exe.parent().map(Path::to_path_buf);
         while let Some(d) = dir {
-            if d.join("primals").exists() {
+            if is_workspace(&d) {
                 return Ok(d);
             }
             dir = d.parent().map(Path::to_path_buf);

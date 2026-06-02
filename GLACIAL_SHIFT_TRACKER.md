@@ -2,7 +2,15 @@
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-06-02
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, graduated composition live, golgiBody Phase A live
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, membrane deployed to VPS, relay Rust-native
+**Wave 69 update:** Sovereignty graduation sprint — membrane binary deployed to VPS (6.1M musl static,
+`/usr/local/bin/membrane`). Full K-Derm relay validated in Rust (relay.run, relay.mediate, relay.ship all
+operational, bash scripts archived). S4 auth formal 7-day gate ACTIVATED (`BEARDOG_AUTH_MODE=enforced`,
+monitoring timer at 15min intervals). Disk cleanup 69%→60% (old kernels, journals, apt lists, locales
+removed). Workspace resolution evolved to recognize sparse VPS deployments (`infra/` marker). Relay ship
+bug fixed (git remote get-url stdout leaking into variable). All primal binaries in `/opt/membrane/`
+recovered and validated. S1 TLS infrastructure verified ready for NS cutover (registrar action pending).
+Family seeds confirmed deployed (`/etc/membrane/family/`). Provenance sidecar written for membrane binary.
 **Wave 68 update:** Graduated composition evolution — Neural Bridge wired into dispatch (try-primal-first
 for gate.*, service.*, repo.*, mirror.*, token.* commands). gate.pull/check evolved to use Rust membrane
 binary on VPS. PushResult struct replaces silent push failures. #[must_use] sweep (12 functions, 7 modules).
