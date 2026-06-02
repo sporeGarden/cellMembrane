@@ -68,8 +68,8 @@ impl std::fmt::Display for CredentialModel {
 /// `darkforest_membrane.sh`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CredentialFile {
-    /// Absolute path on the membrane host.
-    pub path: &'static str,
+    /// Resolved path on the membrane host.
+    pub path: String,
     /// Expected octal mode (e.g. "600").
     pub expected_mode: &'static str,
     /// Expected file owner.
@@ -78,25 +78,65 @@ pub struct CredentialFile {
     pub description: &'static str,
 }
 
-/// Credential files required for a given composition.
+/// Runtime credential path resolver.
 ///
-/// These are the files `darkforest_membrane.sh` MEM-08/MEM-12 audit.
+/// Derives credential file locations from a configurable base path,
+/// eliminating hardcoded `/opt/membrane/` and `/etc/songbird/` assumptions.
+#[derive(Debug, Clone)]
+pub struct CredentialPaths {
+    /// Base path for membrane credentials (default: `/opt/membrane`).
+    pub membrane_base: String,
+    /// Base path for songbird config (default: `/etc/songbird`).
+    pub songbird_config: String,
+}
+
+impl CredentialPaths {
+    /// Resolve from environment or use defaults.
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self {
+            membrane_base: std::env::var("MEMBRANE_INSTALL_BASE")
+                .unwrap_or_else(|_| "/opt/membrane".to_string()),
+            songbird_config: std::env::var("SONGBIRD_CONFIG_PATH")
+                .unwrap_or_else(|_| "/etc/songbird".to_string()),
+        }
+    }
+}
+
+impl Default for CredentialPaths {
+    fn default() -> Self {
+        Self::from_env()
+    }
+}
+
+/// Credential files required for a given composition (using default paths).
 #[must_use]
 pub fn credential_files_for(
     composition: crate::composition::MembraneComposition,
+) -> Vec<CredentialFile> {
+    credential_files_for_paths(composition, &CredentialPaths::from_env())
+}
+
+/// Credential files required for a given composition with configurable paths.
+///
+/// These are the files `darkforest_membrane.sh` MEM-08/MEM-12 audit.
+#[must_use]
+pub fn credential_files_for_paths(
+    composition: crate::composition::MembraneComposition,
+    paths: &CredentialPaths,
 ) -> Vec<CredentialFile> {
     use crate::composition::MembraneComposition;
 
     let mut files = vec![];
 
     files.push(CredentialFile {
-        path: "/etc/songbird/relay-credentials",
+        path: format!("{}/relay-credentials", paths.songbird_config),
         expected_mode: "600",
         expected_owner: "root",
         description: "Songbird TURN shared secret",
     });
     files.push(CredentialFile {
-        path: "/opt/membrane/songbird/turn-credentials",
+        path: format!("{}/songbird/turn-credentials", paths.membrane_base),
         expected_mode: "600",
         expected_owner: "root",
         description: "Songbird TURN credentials (legacy path)",
@@ -104,13 +144,13 @@ pub fn credential_files_for(
 
     if composition >= MembraneComposition::RustDesk {
         files.push(CredentialFile {
-            path: "/opt/membrane/rustdesk/id_ed25519",
+            path: format!("{}/rustdesk/id_ed25519", paths.membrane_base),
             expected_mode: "600",
             expected_owner: "root",
             description: "RustDesk private key",
         });
         files.push(CredentialFile {
-            path: "/opt/membrane/rustdesk/id_ed25519.pub",
+            path: format!("{}/rustdesk/id_ed25519.pub", paths.membrane_base),
             expected_mode: "644",
             expected_owner: "root",
             description: "RustDesk public key",
@@ -119,7 +159,7 @@ pub fn credential_files_for(
 
     if composition >= MembraneComposition::Tower {
         files.push(CredentialFile {
-            path: "/opt/membrane/tower.env",
+            path: format!("{}/tower.env", paths.membrane_base),
             expected_mode: "600",
             expected_owner: "root",
             description: "BTSP family seed and membrane identity",

@@ -241,14 +241,35 @@ async fn download_asset(
         FetchSource::Vps => {
             let vps_bin_dir = std::env::var("VPS_MEMBRANE_BIN_DIR")
                 .unwrap_or_else(|_| "/opt/ecoPrimals/plasmidBin/primals".into());
-            let remote = format!("{}:{}/{}", config.ssh_host, vps_bin_dir, asset);
-            let dest_str = dest.to_string_lossy();
-            tokio::process::Command::new("rsync")
-                .args(["-q", "--timeout=30", &remote, &*dest_str])
-                .status()
-                .await
-                .is_ok_and(|s| s.success())
+            let remote_path = format!("{vps_bin_dir}/{asset}");
+            download_via_ssh(&config.ssh_host, &remote_path, dest).await
         }
+    }
+}
+
+/// Download a file from a remote host via SSH (replaces rsync dependency).
+///
+/// Pipes `cat <remote_path>` through SSH directly to the local file.
+/// Zero external dependencies beyond the system SSH client.
+async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
+    let output = tokio::process::Command::new("ssh")
+        .args([
+            "-o",
+            "ConnectTimeout=30",
+            "-o",
+            "BatchMode=yes",
+            host,
+            "cat",
+            remote_path,
+        ])
+        .output()
+        .await;
+
+    match output {
+        Ok(o) if o.status.success() && !o.stdout.is_empty() => {
+            tokio::fs::write(dest, &o.stdout).await.is_ok()
+        }
+        _ => false,
     }
 }
 
