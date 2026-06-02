@@ -14,7 +14,7 @@
 mod cascade;
 pub mod types;
 
-pub use cascade::{cascade, cascade_with_opts, CascadeMode, CascadeOpts};
+pub use cascade::{CascadeMode, CascadeOpts, cascade, cascade_with_opts};
 pub use types::*;
 
 use crate::error::Result;
@@ -278,8 +278,15 @@ pub async fn sync_with_policy(
             sync_converge(&local_path, repo_path, &matrix, push_target).await
         }
         SyncClassification::Diverge => {
-            sync_diverge(workspace_root, &local_path, repo_path, &matrix, push_target, manifest)
-                .await
+            sync_diverge(
+                workspace_root,
+                &local_path,
+                repo_path,
+                &matrix,
+                push_target,
+                manifest,
+            )
+            .await
         }
         SyncClassification::Missing | SyncClassification::NoRemote => Ok(TemporalSyncResult {
             repo_path: repo_path.to_string(),
@@ -303,7 +310,12 @@ async fn sync_converge(
 
     match &matrix.action {
         SyncAction::Pull { leader } => {
-            if git_ok(local_path, &["pull", leader, branch, "--ff-only", "--quiet"]).await {
+            if git_ok(
+                local_path,
+                &["pull", leader, branch, "--ff-only", "--quiet"],
+            )
+            .await
+            {
                 pulled_from = Some(leader.clone());
             } else {
                 return Ok(TemporalSyncResult {
@@ -417,7 +429,12 @@ async fn resolve_tree_parity(
     leader: &str,
     followers: &[String],
 ) -> Result<TemporalSyncResult> {
-    if !git_ok(local_path, &["reset", "--hard", &format!("{leader}/{branch}")]).await {
+    if !git_ok(
+        local_path,
+        &["reset", "--hard", &format!("{leader}/{branch}")],
+    )
+    .await
+    {
         return Ok(TemporalSyncResult {
             repo_path: repo_path.to_string(),
             ok: false,
@@ -429,7 +446,12 @@ async fn resolve_tree_parity(
 
     let mut pushed_to = Vec::new();
     for follower in followers {
-        if git_ok(local_path, &["push", "--force-with-lease", follower, branch]).await {
+        if git_ok(
+            local_path,
+            &["push", "--force-with-lease", follower, branch],
+        )
+        .await
+        {
             pushed_to.push(follower.clone());
         }
     }

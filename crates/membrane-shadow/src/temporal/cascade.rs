@@ -204,9 +204,7 @@ async fn clone_repo(
         .output()
         .await;
     match clone_result {
-        Ok(out) if out.status.success() => {
-            RepoResult::Cloned(format!("  {name:<35} CLONED"))
-        }
+        Ok(out) if out.status.success() => RepoResult::Cloned(format!("  {name:<35} CLONED")),
         _ => RepoResult::Failed(format!("  {name:<35} CLONE FAILED")),
     }
 }
