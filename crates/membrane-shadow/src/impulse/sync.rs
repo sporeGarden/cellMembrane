@@ -100,8 +100,7 @@ pub async fn post_sync_diverge(
     std::fs::create_dir_all(&active).map_err(ShadowError::Io)?;
 
     let filepath = active.join(&filename);
-    let toml_str = toml::to_string_pretty(&impulse)
-        .map_err(|e| ShadowError::Parse(format!("serialize sync impulse: {e}")))?;
+    let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
     std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");

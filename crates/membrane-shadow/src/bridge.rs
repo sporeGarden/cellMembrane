@@ -108,8 +108,7 @@ impl NeuralBridge {
             "params": params,
         });
 
-        let mut payload = serde_json::to_string(&request)
-            .map_err(|e| ShadowError::Parse(format!("serialize rpc: {e}")))?;
+        let mut payload = serde_json::to_string(&request)?;
         payload.push('\n');
 
         writer
@@ -129,8 +128,7 @@ impl NeuralBridge {
 
         match timeout {
             Ok(Ok(_)) => {
-                let response: serde_json::Value = serde_json::from_str(&line)
-                    .map_err(|e| ShadowError::Parse(format!("parse rpc response: {e}")))?;
+                let response: serde_json::Value = serde_json::from_str(&line)?;
 
                 if let Some(error) = response.get("error") {
                     return Err(ShadowError::Parse(format!(

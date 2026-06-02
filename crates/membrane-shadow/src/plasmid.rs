@@ -45,6 +45,16 @@ pub enum FetchSource {
     Forgejo,
 }
 
+impl std::fmt::Display for FetchSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::GitHub => f.write_str("github"),
+            Self::Vps => f.write_str("vps"),
+            Self::Forgejo => f.write_str("forgejo"),
+        }
+    }
+}
+
 impl std::str::FromStr for FetchSource {
     type Err = ShadowError;
 
@@ -77,7 +87,7 @@ pub struct FetchArgs {
 }
 
 /// Result of fetching a single primal binary.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FetchResult {
     /// Primal name.
     pub primal: String,
@@ -356,7 +366,6 @@ fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String
 /// # Errors
 ///
 /// Returns `Err` on IO failures or if the release tag cannot be resolved.
-#[allow(clippy::too_many_lines)]
 pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<ShadowOutcome> {
     let arch = detect_target_triple();
     let dest_root = resolve_dest(args.dest.as_deref());
@@ -369,34 +378,52 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         .map_or_else(|| NUCLEUS_PRIMALS.to_vec(), |p| vec![p]);
 
     if args.dry_run {
-        let lines: Vec<String> = primals
-            .iter()
-            .map(|p| format!("  [dry-run] {p}-{arch} from {tag}"))
-            .collect();
-        return Ok(ShadowOutcome::ok(format!(
-            "DRY RUN: {} primals from {:?} ({tag})\n  Arch: {arch}\n  Dest: {}\n{}",
-            primals.len(),
-            args.source,
-            bin_dir.display(),
-            lines.join("\n"),
-        )));
+        return Ok(format_dry_run(&primals, &arch, &tag, &bin_dir, args.source));
     }
 
-    std::fs::create_dir_all(&bin_dir)
-        .map_err(|e| ShadowError::Parse(format!("cannot create {}: {e}", bin_dir.display())))?;
+    std::fs::create_dir_all(&bin_dir).map_err(ShadowError::Io)?;
 
     let checksums = load_checksums(&bin_dir, &tag);
-    let mut downloaded = 0u32;
-    let mut verified = 0u32;
-    let mut skipped = 0u32;
-    let mut failed = 0u32;
+    let results = fetch_all_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
+
+    let summary = build_summary(args.source, &arch, &tag, &bin_dir, &results);
+    Ok(format_outcome(&summary))
+}
+
+fn format_dry_run(
+    primals: &[&str],
+    arch: &str,
+    tag: &str,
+    bin_dir: &Path,
+    source: FetchSource,
+) -> ShadowOutcome {
+    let lines: Vec<String> = primals
+        .iter()
+        .map(|p| format!("  [dry-run] {p}-{arch} from {tag}"))
+        .collect();
+    ShadowOutcome::ok(format!(
+        "DRY RUN: {} primals from {source} ({tag})\n  Arch: {arch}\n  Dest: {}\n{}",
+        primals.len(),
+        bin_dir.display(),
+        lines.join("\n"),
+    ))
+}
+
+async fn fetch_all_primals(
+    primals: &[&str],
+    bin_dir: &Path,
+    arch: &str,
+    tag: &str,
+    checksums: &std::collections::HashMap<String, String>,
+    args: &FetchArgs,
+    config: &crate::ShadowConfig,
+) -> Vec<FetchResult> {
     let mut results = Vec::with_capacity(primals.len());
 
-    for primal in &primals {
+    for primal in primals {
         let local_path = bin_dir.join(primal);
 
         if local_path.exists() && !args.force {
-            skipped += 1;
             results.push(FetchResult {
                 primal: primal.to_string(),
                 status: "exists".into(),
@@ -409,15 +436,14 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         let _ = std::fs::remove_file(&local_path);
 
         let arch_asset = format!("{primal}-{arch}");
-        let got = download_asset(args.source, config, &tag, &arch_asset, &local_path).await
-            || download_asset(args.source, config, &tag, primal, &local_path).await;
+        let got = download_asset(args.source, config, tag, &arch_asset, &local_path).await
+            || download_asset(args.source, config, tag, primal, &local_path).await;
 
         if !got {
-            failed += 1;
             results.push(FetchResult {
                 primal: primal.to_string(),
                 status: "download_failed".into(),
-                tag: Some(tag.clone()),
+                tag: Some(tag.to_string()),
                 verified: false,
             });
             continue;
@@ -433,36 +459,46 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
             .get(*primal)
             .is_some_and(|expected| verify_blake3(&local_path, expected));
 
-        downloaded += 1;
-        if is_verified {
-            verified += 1;
-        }
         results.push(FetchResult {
             primal: primal.to_string(),
             status: "ok".into(),
-            tag: Some(tag.clone()),
+            tag: Some(tag.to_string()),
             verified: is_verified,
         });
     }
 
-    let source_name = match args.source {
-        FetchSource::GitHub => "github",
-        FetchSource::Vps => "vps",
-        FetchSource::Forgejo => "forgejo",
-    };
+    results
+}
 
-    let summary = FetchSummary {
-        source: source_name.into(),
-        arch: arch.clone(),
-        release: tag.clone(),
-        dest: bin_dir.to_string_lossy().into(),
+fn build_summary(
+    source: FetchSource,
+    arch: &str,
+    tag: &str,
+    bin_dir: &Path,
+    results: &[FetchResult],
+) -> FetchSummary {
+    let downloaded = results.iter().filter(|r| r.status == "ok").count() as u32;
+    let verified = results.iter().filter(|r| r.verified).count() as u32;
+    let skipped = results.iter().filter(|r| r.status == "exists").count() as u32;
+    let failed = results
+        .iter()
+        .filter(|r| r.status == "download_failed")
+        .count() as u32;
+
+    FetchSummary {
+        source: source.to_string(),
+        arch: arch.to_string(),
+        release: tag.to_string(),
+        dest: bin_dir.to_string_lossy().into_owned(),
         downloaded,
         verified,
         skipped,
         failed,
-        results,
-    };
+        results: results.to_vec(),
+    }
+}
 
+fn format_outcome(summary: &FetchSummary) -> ShadowOutcome {
     let status_lines: Vec<String> = summary
         .results
         .iter()
@@ -478,25 +514,32 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         .collect();
 
     let msg = format!(
-        "primalSpring fetch — {source_name}\n\
-         Arch:     {arch}\n\
-         Release:  {tag}\n\
+        "primalSpring fetch — {}\n\
+         Arch:     {}\n\
+         Release:  {}\n\
          Dest:     {}\n\n\
          {}\n\n\
-         Downloaded: {downloaded}  Verified: {verified}  Skipped: {skipped}  Failed: {failed}",
+         Downloaded: {}  Verified: {}  Skipped: {}  Failed: {}",
+        summary.source,
+        summary.arch,
+        summary.release,
         summary.dest,
         status_lines.join("\n"),
+        summary.downloaded,
+        summary.verified,
+        summary.skipped,
+        summary.failed,
     );
 
-    Ok(if failed == 0 {
-        ShadowOutcome::ok_with(msg, serde_json::to_value(&summary)?)
+    if summary.failed == 0 {
+        ShadowOutcome::ok_with(msg, serde_json::to_value(summary).unwrap_or_default())
     } else {
         ShadowOutcome {
             ok: false,
             message: msg,
-            data: Some(serde_json::to_value(&summary)?),
+            data: serde_json::to_value(summary).ok(),
         }
-    })
+    }
 }
 
 #[cfg(test)]

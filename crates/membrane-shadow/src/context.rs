@@ -269,8 +269,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
     std::fs::create_dir_all(&gate_dir).map_err(ShadowError::Io)?;
 
     let filepath = braid_filepath(workspace_root, &gate_id.name, args.project);
-    let toml_str = toml::to_string_pretty(&braid)
-        .map_err(|e| ShadowError::Parse(format!("serialize context braid: {e}")))?;
+    let toml_str = toml::to_string_pretty(&braid).map_err(ShadowError::Serialize)?;
     std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
 
     let slug = project_slug(args.project);

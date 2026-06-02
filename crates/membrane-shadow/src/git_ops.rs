@@ -90,8 +90,8 @@ async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
         .await
         .map_err(ShadowError::Io)?;
     if !status.success() {
-        return Err(ShadowError::Parse(format!(
-            "git {} failed in {}",
+        return Err(ShadowError::Git(format!(
+            "{} failed in {}",
             args.join(" "),
             repo_dir.display()
         )));

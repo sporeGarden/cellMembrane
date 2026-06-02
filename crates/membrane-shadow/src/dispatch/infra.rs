@@ -51,7 +51,6 @@ pub(super) async fn dispatch_repo(
 
 // ── Mirror domain ────────────────────────────────────────────────────
 
-#[allow(clippy::too_many_lines)]
 pub(super) async fn dispatch_mirror(
     config: &ShadowConfig,
     cmd: &str,
@@ -70,31 +69,7 @@ pub(super) async fn dispatch_mirror(
                 )))
             }
         }
-        "mirror.sync-all" => {
-            let orgs: Vec<&str> = if args.is_empty() {
-                vec!["ecoPrimals"]
-            } else {
-                args.to_vec()
-            };
-            let mut triggered = 0u32;
-            let mut failed = 0u32;
-            for org in &orgs {
-                let repos = forgejo::repo_list(config, org).await?;
-                for repo in &repos {
-                    if repo.mirror {
-                        let r = forgejo::mirror_sync(config, &repo.full_name).await?;
-                        if r.triggered {
-                            triggered += 1;
-                        } else {
-                            failed += 1;
-                        }
-                    }
-                }
-            }
-            Ok(ShadowOutcome::ok(format!(
-                "triggered={triggered} failed={failed}"
-            )))
-        }
+        "mirror.sync-all" => mirror_sync_all(config, args).await,
         "mirror.status" => {
             let path = cli::require_arg(args, 0, "org/name")?;
             let info = forgejo::mirror_status(config, path).await?;
@@ -162,6 +137,32 @@ pub(super) async fn dispatch_mirror(
             "unknown mirror command: {cmd}"
         ))),
     }
+}
+
+async fn mirror_sync_all(config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let orgs: Vec<&str> = if args.is_empty() {
+        vec!["ecoPrimals"]
+    } else {
+        args.to_vec()
+    };
+    let mut triggered = 0u32;
+    let mut failed = 0u32;
+    for org in &orgs {
+        let repos = forgejo::repo_list(config, org).await?;
+        for repo in &repos {
+            if repo.mirror {
+                let r = forgejo::mirror_sync(config, &repo.full_name).await?;
+                if r.triggered {
+                    triggered += 1;
+                } else {
+                    failed += 1;
+                }
+            }
+        }
+    }
+    Ok(ShadowOutcome::ok(format!(
+        "triggered={triggered} failed={failed}"
+    )))
 }
 
 // ── Service domain ───────────────────────────────────────────────────

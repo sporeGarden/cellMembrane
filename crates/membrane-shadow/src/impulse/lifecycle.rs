@@ -86,8 +86,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     std::fs::create_dir_all(&active).map_err(ShadowError::Io)?;
 
     let filepath = active.join(&filename);
-    let toml_str = toml::to_string_pretty(&impulse)
-        .map_err(|e| ShadowError::Parse(format!("serialize impulse: {e}")))?;
+    let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
     std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");
@@ -241,8 +240,7 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
     let ack_filename = format!("{}_{}.toml", impulse_id, gate_id.name);
     let ack_path = acks_dir.join(&ack_filename);
 
-    let ack_toml = toml::to_string_pretty(&ack_entry)
-        .map_err(|e| ShadowError::Parse(format!("serialize ack: {e}")))?;
+    let ack_toml = toml::to_string_pretty(&ack_entry).map_err(ShadowError::Serialize)?;
     std::fs::write(&ack_path, &ack_toml).map_err(ShadowError::Io)?;
 
     // Also append to in-memory representation for return value

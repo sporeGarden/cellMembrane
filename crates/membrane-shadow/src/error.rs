@@ -33,6 +33,18 @@ pub enum ShadowError {
     #[error("parse: {0}")]
     Parse(String),
 
+    /// TOML deserialization error.
+    #[error("toml: {0}")]
+    Toml(#[from] toml::de::Error),
+
+    /// TOML serialization error.
+    #[error("serialize: {0}")]
+    Serialize(#[from] toml::ser::Error),
+
+    /// Git command failure.
+    #[error("git: {0}")]
+    Git(String),
+
     /// IO error (file read, process spawn).
     #[error("io: {0}")]
     Io(#[from] std::io::Error),

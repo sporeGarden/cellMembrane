@@ -77,8 +77,7 @@ pub async fn publish_freshness_toml(
         writeln!(content, "{name} = \"{sha}\"").ok();
     }
 
-    std::fs::write(&freshness_path, &content)
-        .map_err(|e| ShadowError::Parse(format!("failed to write freshness.toml: {e}")))?;
+    std::fs::write(&freshness_path, &content).map_err(ShadowError::Io)?;
 
     Ok(())
 }
@@ -130,22 +129,28 @@ pub fn check_installed_freshness() -> Result<String> {
 
         let source_head = resolve_source_head(&root, &prov.source_path);
 
+        let age = prov.installed_at.as_deref().unwrap_or("?");
+        let hash_short = prov
+            .binary_blake3
+            .as_deref()
+            .map_or_else(|| "-".to_string(), |h| h[..8.min(h.len())].to_string());
+
         let status = match &source_head {
             Some(head) if head == &prov.build_commit => {
                 fresh += 1;
-                "FRESH"
+                format!("FRESH (b3={hash_short}) [{age}]")
             }
             Some(head) => {
                 stale += 1;
-                &format!(
-                    "STALE (installed={}, HEAD={})",
+                format!(
+                    "STALE (installed={}, HEAD={}, b3={hash_short}) [{age}]",
                     &prov.build_commit[..8.min(prov.build_commit.len())],
                     &head[..8.min(head.len())]
                 )
             }
             None => {
                 unknown += 1;
-                "UNKNOWN (source not found)"
+                format!("UNKNOWN (source not found, b3={hash_short}) [{age}]")
             }
         };
 
@@ -202,9 +207,7 @@ fn chrono_today() -> String {
 struct ProvenanceSidecar {
     build_commit: String,
     source_path: String,
-    #[allow(dead_code)]
     installed_at: Option<String>,
-    #[allow(dead_code)]
     binary_blake3: Option<String>,
 }
 

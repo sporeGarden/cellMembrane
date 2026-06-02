@@ -14,7 +14,7 @@
 mod cascade;
 pub mod types;
 
-pub use cascade::cascade;
+pub use cascade::{cascade, cascade_with_opts, CascadeMode, CascadeOpts};
 pub use types::*;
 
 use crate::error::Result;
@@ -79,7 +79,6 @@ async fn detect_tree_parity(
 ///
 /// Fetches all remotes, measures ahead/behind per remote relative to
 /// local HEAD, and classifies as `Parity`, `Converge`, or `Diverge`.
-#[allow(clippy::too_many_lines)]
 pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMatrix> {
     let local_path = workspace_root.join(repo_path);
 
@@ -159,27 +158,7 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         });
     }
 
-    // Divergence: check if multiple remotes have unique commits relative to each other
-    let mut diverge_count = 0u32;
-    for pos_a in &positions {
-        let ref_a = format!("{}/{branch}", pos_a.remote);
-        let mut is_ahead_of_any = false;
-        for pos_b in &positions {
-            if pos_a.remote == pos_b.remote {
-                continue;
-            }
-            let ref_b = format!("{}/{branch}", pos_b.remote);
-            let cross_range = format!("{ref_b}..{ref_a}");
-            let cross = rev_list_count(&local_path, &cross_range).await;
-            if cross > 0 {
-                is_ahead_of_any = true;
-                break;
-            }
-        }
-        if is_ahead_of_any {
-            diverge_count += 1;
-        }
-    }
+    let diverge_count = count_divergent_remotes(&local_path, &positions, &branch).await;
 
     let (classification, action) = if diverge_count > 1 {
         // Check if trees are actually identical (rebase artifact — history diverges
@@ -216,6 +195,34 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
     })
 }
 
+/// Count how many remotes have unique commits relative to others (divergence indicator).
+async fn count_divergent_remotes(
+    local_path: &Path,
+    positions: &[RemotePosition],
+    branch: &str,
+) -> u32 {
+    let mut count = 0u32;
+    for pos_a in positions {
+        let ref_a = format!("{}/{branch}", pos_a.remote);
+        let mut is_ahead_of_any = false;
+        for pos_b in positions {
+            if pos_a.remote == pos_b.remote {
+                continue;
+            }
+            let ref_b = format!("{}/{branch}", pos_b.remote);
+            let cross_range = format!("{ref_b}..{ref_a}");
+            if rev_list_count(local_path, &cross_range).await > 0 {
+                is_ahead_of_any = true;
+                break;
+            }
+        }
+        if is_ahead_of_any {
+            count += 1;
+        }
+    }
+    count
+}
+
 /// Execute temporal sync on a single repo: pull from leader, push to followers.
 ///
 /// Shadow for: `waterFall temporal.sync`
@@ -239,7 +246,6 @@ pub async fn sync_with_target(
 }
 
 /// Temporal sync with optional manifest for divergence policy resolution.
-#[allow(clippy::too_many_lines)]
 pub async fn sync_with_policy(
     workspace_root: &Path,
     repo_path: &str,
@@ -268,164 +274,13 @@ pub async fn sync_with_policy(
             pulled_from: None,
             pushed_to: vec![],
         }),
-
         SyncClassification::Converge => {
-            let branch = &matrix.branch;
-            let mut pulled_from = None;
-            let mut pushed_to = Vec::new();
-
-            match &matrix.action {
-                SyncAction::Pull { leader } => {
-                    if git_ok(
-                        &local_path,
-                        &["pull", leader, branch, "--ff-only", "--quiet"],
-                    )
-                    .await
-                    {
-                        pulled_from = Some(leader.clone());
-                    } else {
-                        return Ok(TemporalSyncResult {
-                            repo_path: repo_path.to_string(),
-                            ok: false,
-                            summary: format!("pull {leader} failed (ff-only)"),
-                            pulled_from: None,
-                            pushed_to: vec![],
-                        });
-                    }
-                }
-                SyncAction::Push | SyncAction::None => {}
-                SyncAction::Flag | SyncAction::TreeParity { .. } => {
-                    return Ok(TemporalSyncResult {
-                        repo_path: repo_path.to_string(),
-                        ok: false,
-                        summary: "unexpected Flag/TreeParity action on Converge classification"
-                            .to_string(),
-                        pulled_from: None,
-                        pushed_to: vec![],
-                    });
-                }
-            }
-
-            // Push to follower remotes, filtered by push_target.
-            // "forgejo" = only push to the forgejo remote (VPS mediator handles GitHub).
-            // "all" = push to every remote that is behind (legacy dual-push).
-            for pos in &matrix.positions {
-                if pulled_from.as_deref() == Some(&pos.remote) {
-                    continue;
-                }
-                if push_target == "forgejo" && pos.remote != "forgejo" {
-                    continue;
-                }
-                let remote_ref = format!("{}/{branch}", pos.remote);
-                let ahead_range = format!("{remote_ref}..HEAD");
-                let ahead = rev_list_count(&local_path, &ahead_range).await;
-                if ahead > 0 && git_ok(&local_path, &["push", &pos.remote, branch, "--quiet"]).await
-                {
-                    pushed_to.push(pos.remote.clone());
-                }
-            }
-
-            let summary = match (&pulled_from, pushed_to.is_empty()) {
-                (Some(l), false) => format!("pull {l}, push {}", pushed_to.join(" ")),
-                (Some(l), true) => format!("pull {l}"),
-                (None, false) => format!("push {}", pushed_to.join(" ")),
-                (None, true) => "parity".to_string(),
-            };
-
-            Ok(TemporalSyncResult {
-                repo_path: repo_path.to_string(),
-                ok: true,
-                summary,
-                pulled_from,
-                pushed_to,
-            })
+            sync_converge(&local_path, repo_path, &matrix, push_target).await
         }
-
         SyncClassification::Diverge => {
-            if let SyncAction::TreeParity { leader, followers } = &matrix.action {
-                let branch = &matrix.branch;
-                // Reset local to leader ref, then force-push followers
-                if !git_ok(
-                    &local_path,
-                    &["reset", "--hard", &format!("{leader}/{branch}")],
-                )
+            sync_diverge(workspace_root, &local_path, repo_path, &matrix, push_target, manifest)
                 .await
-                {
-                    return Ok(TemporalSyncResult {
-                        repo_path: repo_path.to_string(),
-                        ok: false,
-                        summary: format!("tree-parity reset to {leader} failed"),
-                        pulled_from: None,
-                        pushed_to: vec![],
-                    });
-                }
-
-                let mut pushed_to = Vec::new();
-                for follower in followers {
-                    if git_ok(
-                        &local_path,
-                        &["push", "--force-with-lease", follower, branch],
-                    )
-                    .await
-                    {
-                        pushed_to.push(follower.clone());
-                    }
-                }
-
-                Ok(TemporalSyncResult {
-                    repo_path: repo_path.to_string(),
-                    ok: true,
-                    summary: format!("tree-parity resolved: {leader} → {}", pushed_to.join(", ")),
-                    pulled_from: Some(leader.clone()),
-                    pushed_to,
-                })
-            } else {
-                // Real divergence — apply policy if manifest is available
-                if let Some(m) = manifest {
-                    let entry = m.repos.values().find(|e| e.local_path == repo_path);
-                    let policy = entry.map_or_else(
-                        || m.sync.divergence_policy.as_str(),
-                        |e| m.divergence_policy_for(e),
-                    );
-                    let positions: Vec<(String, u32, u32)> = matrix
-                        .positions
-                        .iter()
-                        .map(|p| (p.remote.clone(), p.ahead, p.behind))
-                        .collect();
-                    let args = crate::impulse::SyncDivergeArgs {
-                        repo_path: repo_path.to_string(),
-                        positions,
-                        repo_policy: policy.to_string(),
-                    };
-
-                    // Fire divergence impulse for visibility
-                    let _ = crate::impulse::post_sync_diverge(workspace_root, &args).await;
-
-                    // Apply graduated merge strategy based on policy
-                    let resolved =
-                        apply_divergence_policy(&local_path, &matrix, policy, push_target).await;
-
-                    if let Some(summary) = resolved {
-                        return Ok(TemporalSyncResult {
-                            repo_path: repo_path.to_string(),
-                            ok: true,
-                            summary,
-                            pulled_from: None,
-                            pushed_to: vec![],
-                        });
-                    }
-                }
-
-                Ok(TemporalSyncResult {
-                    repo_path: repo_path.to_string(),
-                    ok: false,
-                    summary: format!("DIVERGE — {matrix}"),
-                    pulled_from: None,
-                    pushed_to: vec![],
-                })
-            }
         }
-
         SyncClassification::Missing | SyncClassification::NoRemote => Ok(TemporalSyncResult {
             repo_path: repo_path.to_string(),
             ok: false,
@@ -434,6 +289,158 @@ pub async fn sync_with_policy(
             pushed_to: vec![],
         }),
     }
+}
+
+async fn sync_converge(
+    local_path: &Path,
+    repo_path: &str,
+    matrix: &TemporalMatrix,
+    push_target: &str,
+) -> Result<TemporalSyncResult> {
+    let branch = &matrix.branch;
+    let mut pulled_from = None;
+    let mut pushed_to = Vec::new();
+
+    match &matrix.action {
+        SyncAction::Pull { leader } => {
+            if git_ok(local_path, &["pull", leader, branch, "--ff-only", "--quiet"]).await {
+                pulled_from = Some(leader.clone());
+            } else {
+                return Ok(TemporalSyncResult {
+                    repo_path: repo_path.to_string(),
+                    ok: false,
+                    summary: format!("pull {leader} failed (ff-only)"),
+                    pulled_from: None,
+                    pushed_to: vec![],
+                });
+            }
+        }
+        SyncAction::Push | SyncAction::None => {}
+        SyncAction::Flag | SyncAction::TreeParity { .. } => {
+            return Ok(TemporalSyncResult {
+                repo_path: repo_path.to_string(),
+                ok: false,
+                summary: "unexpected Flag/TreeParity action on Converge classification".to_string(),
+                pulled_from: None,
+                pushed_to: vec![],
+            });
+        }
+    }
+
+    for pos in &matrix.positions {
+        if pulled_from.as_deref() == Some(&pos.remote) {
+            continue;
+        }
+        if push_target == "forgejo" && pos.remote != "forgejo" {
+            continue;
+        }
+        let remote_ref = format!("{}/{branch}", pos.remote);
+        let ahead_range = format!("{remote_ref}..HEAD");
+        let ahead = rev_list_count(local_path, &ahead_range).await;
+        if ahead > 0 && git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await {
+            pushed_to.push(pos.remote.clone());
+        }
+    }
+
+    let summary = match (&pulled_from, pushed_to.is_empty()) {
+        (Some(l), false) => format!("pull {l}, push {}", pushed_to.join(" ")),
+        (Some(l), true) => format!("pull {l}"),
+        (None, false) => format!("push {}", pushed_to.join(" ")),
+        (None, true) => "parity".to_string(),
+    };
+
+    Ok(TemporalSyncResult {
+        repo_path: repo_path.to_string(),
+        ok: true,
+        summary,
+        pulled_from,
+        pushed_to,
+    })
+}
+
+async fn sync_diverge(
+    workspace_root: &Path,
+    local_path: &Path,
+    repo_path: &str,
+    matrix: &TemporalMatrix,
+    push_target: &str,
+    manifest: Option<&crate::manifest::EcosystemManifest>,
+) -> Result<TemporalSyncResult> {
+    if let SyncAction::TreeParity { leader, followers } = &matrix.action {
+        return resolve_tree_parity(local_path, repo_path, &matrix.branch, leader, followers).await;
+    }
+
+    if let Some(m) = manifest {
+        let entry = m.repos.values().find(|e| e.local_path == repo_path);
+        let policy = entry.map_or_else(
+            || m.sync.divergence_policy.as_str(),
+            |e| m.divergence_policy_for(e),
+        );
+        let positions: Vec<(String, u32, u32)> = matrix
+            .positions
+            .iter()
+            .map(|p| (p.remote.clone(), p.ahead, p.behind))
+            .collect();
+        let args = crate::impulse::SyncDivergeArgs {
+            repo_path: repo_path.to_string(),
+            positions,
+            repo_policy: policy.to_string(),
+        };
+
+        let _ = crate::impulse::post_sync_diverge(workspace_root, &args).await;
+
+        let resolved = apply_divergence_policy(local_path, matrix, policy, push_target).await;
+        if let Some(summary) = resolved {
+            return Ok(TemporalSyncResult {
+                repo_path: repo_path.to_string(),
+                ok: true,
+                summary,
+                pulled_from: None,
+                pushed_to: vec![],
+            });
+        }
+    }
+
+    Ok(TemporalSyncResult {
+        repo_path: repo_path.to_string(),
+        ok: false,
+        summary: format!("DIVERGE — {matrix}"),
+        pulled_from: None,
+        pushed_to: vec![],
+    })
+}
+
+async fn resolve_tree_parity(
+    local_path: &Path,
+    repo_path: &str,
+    branch: &str,
+    leader: &str,
+    followers: &[String],
+) -> Result<TemporalSyncResult> {
+    if !git_ok(local_path, &["reset", "--hard", &format!("{leader}/{branch}")]).await {
+        return Ok(TemporalSyncResult {
+            repo_path: repo_path.to_string(),
+            ok: false,
+            summary: format!("tree-parity reset to {leader} failed"),
+            pulled_from: None,
+            pushed_to: vec![],
+        });
+    }
+
+    let mut pushed_to = Vec::new();
+    for follower in followers {
+        if git_ok(local_path, &["push", "--force-with-lease", follower, branch]).await {
+            pushed_to.push(follower.clone());
+        }
+    }
+
+    Ok(TemporalSyncResult {
+        repo_path: repo_path.to_string(),
+        ok: true,
+        summary: format!("tree-parity resolved: {leader} → {}", pushed_to.join(", ")),
+        pulled_from: Some(leader.to_string()),
+        pushed_to,
+    })
 }
 
 /// Check temporal position for multiple repos, returning an aggregate report.

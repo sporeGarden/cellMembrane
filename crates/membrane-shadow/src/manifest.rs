@@ -184,7 +184,7 @@ impl EcosystemManifest {
     /// `ShadowError::Parse` if the TOML is malformed.
     pub fn load(path: &Path) -> Result<Self> {
         let contents = std::fs::read_to_string(path).map_err(ShadowError::Io)?;
-        toml::from_str(&contents).map_err(|e| ShadowError::Parse(format!("manifest parse: {e}")))
+        toml::from_str(&contents).map_err(ShadowError::Toml)
     }
 
     /// Find the manifest file relative to a workspace root.

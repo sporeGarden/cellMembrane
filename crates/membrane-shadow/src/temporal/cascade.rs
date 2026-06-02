@@ -2,15 +2,42 @@
 //! Full cascade sync — reads manifest, syncs all gate repos, reports parity.
 
 use crate::error::Result;
+use std::path::Path;
 
 use super::types::SyncClassification;
 use super::{check, resolve_workspace_root, sync_with_policy};
+
+/// Cascade execution mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CascadeMode {
+    /// Sync repos (pull leader, push followers).
+    Sync,
+    /// Only check temporal position — no mutations.
+    CheckOnly,
+    /// Dry run — show what would be done.
+    DryRun,
+}
+
+/// Options for a cascade operation.
+#[derive(Debug, Clone)]
+pub struct CascadeOpts<'a> {
+    /// Gate name to cascade (e.g. "golgiBody").
+    pub gate: &'a str,
+    /// Source preference (e.g. "forgejo").
+    pub source: &'a str,
+    /// Cascade execution mode.
+    pub mode: CascadeMode,
+    /// If true, clone repos not yet present locally.
+    pub clone_missing: bool,
+    /// If true, write freshness.toml after cascade.
+    pub publish_freshness: bool,
+}
 
 /// Execute a full cascade sync — the Rust evolution of `cascade-pull.sh`.
 ///
 /// Reads the gate profile from `ecosystem_manifest.toml`, resolves temporal
 /// position for each repo, pulls from leader, and reports parity.
-#[allow(clippy::too_many_lines, clippy::fn_params_excessive_bools)]
+#[allow(clippy::fn_params_excessive_bools)]
 pub async fn cascade(
     gate_name: &str,
     source: &str,
@@ -19,19 +46,40 @@ pub async fn cascade(
     dry_run: bool,
     publish_freshness: bool,
 ) -> Result<crate::ShadowOutcome> {
+    let mode = if dry_run {
+        CascadeMode::DryRun
+    } else if check_only {
+        CascadeMode::CheckOnly
+    } else {
+        CascadeMode::Sync
+    };
+    cascade_with_opts(&CascadeOpts {
+        gate: gate_name,
+        source,
+        mode,
+        clone_missing,
+        publish_freshness,
+    })
+    .await
+}
+
+/// Execute cascade with typed options.
+pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOutcome> {
     let root = resolve_workspace_root()?;
     let m = crate::manifest::load_from_workspace(&root)?;
 
-    let repos: Vec<(&str, &crate::manifest::RepoEntry)> = m.gate_repos(gate_name);
+    let repos: Vec<(&str, &crate::manifest::RepoEntry)> = m.gate_repos(opts.gate);
     let total = repos.len() as u32;
 
-    if dry_run {
+    if opts.mode == CascadeMode::DryRun {
         let lines: Vec<String> = repos
             .iter()
             .map(|(name, e)| format!("  {:<25} {}", name, e.local_path))
             .collect();
         return Ok(crate::ShadowOutcome::ok(format!(
-            "DRY RUN: {total} repos for {gate_name} (source={source})\n{}",
+            "DRY RUN: {total} repos for {} (source={})\n{}",
+            opts.gate,
+            opts.source,
             lines.join("\n"),
         )));
     }
@@ -43,86 +91,45 @@ pub async fn cascade(
     let mut lines = Vec::with_capacity(repos.len());
 
     for (name, entry) in &repos {
-        let repo_path = &entry.local_path;
-        let full_path = std::path::Path::new(&root).join(repo_path);
-
-        if !full_path.join(".git").exists() {
-            if clone_missing {
-                let forgejo_url = m.forgejo_clone_url(entry);
-                let clone_result = tokio::process::Command::new("git")
-                    .args(["clone", &forgejo_url, &full_path.to_string_lossy()])
-                    .output()
-                    .await;
-                match clone_result {
-                    Ok(out) if out.status.success() => {
-                        cloned += 1;
-                        lines.push(format!("  {name:<35} CLONED"));
-                    }
-                    _ => {
-                        failed += 1;
-                        lines.push(format!("  {name:<35} CLONE FAILED"));
-                    }
-                }
-            } else {
-                lines.push(format!("  {name:<35} SKIP (not cloned)"));
+        let result = process_repo(
+            &root,
+            name,
+            entry,
+            opts.mode,
+            opts.clone_missing,
+            &push_target,
+            &m,
+        )
+        .await;
+        match result {
+            RepoResult::Synced(msg) => {
+                synced += 1;
+                lines.push(msg);
             }
-            continue;
-        }
-
-        if check_only {
-            match check(&root, repo_path).await {
-                Ok(matrix) => {
-                    let status = match matrix.classification {
-                        SyncClassification::Parity | SyncClassification::Converge => {
-                            synced += 1;
-                            if matrix.classification == SyncClassification::Parity {
-                                "OK parity"
-                            } else {
-                                "OK converge"
-                            }
-                        }
-                        _ => {
-                            failed += 1;
-                            "DIVERGE"
-                        }
-                    };
-                    lines.push(format!("  {name:<35} {status}"));
-                }
-                Err(e) => {
-                    failed += 1;
-                    lines.push(format!("  {name:<35} FAIL {e}"));
-                }
+            RepoResult::Failed(msg) => {
+                failed += 1;
+                lines.push(msg);
             }
-        } else {
-            match sync_with_policy(&root, repo_path, &push_target, Some(&m)).await {
-                Ok(r) => {
-                    let status = if r.ok {
-                        synced += 1;
-                        format!("OK {}", r.summary)
-                    } else {
-                        failed += 1;
-                        format!("FAIL {}", r.summary)
-                    };
-                    lines.push(format!("  {name:<35} {status}"));
-                }
-                Err(e) => {
-                    failed += 1;
-                    lines.push(format!("  {name:<35} FAIL {e}"));
-                }
+            RepoResult::Cloned(msg) => {
+                cloned += 1;
+                lines.push(msg);
             }
+            RepoResult::Skipped(msg) => lines.push(msg),
         }
     }
 
-    if publish_freshness && !check_only {
-        let freshness_result = crate::freshness::publish_freshness_toml(&root, &m, &repos).await;
-        if let Err(e) = &freshness_result {
-            lines.push(format!("  [freshness] FAIL: {e}"));
-        } else {
-            lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
+    if opts.publish_freshness && opts.mode == CascadeMode::Sync {
+        match crate::freshness::publish_freshness_toml(&root, &m, &repos).await {
+            Ok(()) => lines.push("  [freshness] PUBLISHED freshness.toml".to_string()),
+            Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
         }
     }
 
-    let action = if check_only { "checked" } else { "synced" };
+    let action = if opts.mode == CascadeMode::CheckOnly {
+        "checked"
+    } else {
+        "synced"
+    };
     let clone_info = if cloned > 0 {
         format!(" cloned={cloned}")
     } else {
@@ -131,23 +138,103 @@ pub async fn cascade(
     let header = format!(
         "=== WaterFall Cascade ({action}) ===\n\
          Manifest: v{} wave {} ({} repos)\n\
-         Gate:    {gate_name}\n\
-         Source:  {source}\n\
+         Gate:    {}\n\
+         Source:  {}\n\
          Repos:   {total}\n\
          \n\
          {action}={synced} failed={failed}{clone_info}",
-        m.meta.version, m.meta.wave, m.meta.total_repos,
+        m.meta.version, m.meta.wave, m.meta.total_repos, opts.gate, opts.source,
     );
 
     Ok(crate::ShadowOutcome::ok_with(
         format!("{header}\n{}", lines.join("\n")),
         serde_json::json!({
-            "gate": gate_name,
-            "source": source,
+            "gate": opts.gate,
+            "source": opts.source,
             "total": total,
             "synced": synced,
             "failed": failed,
             "cloned": cloned,
         }),
     ))
+}
+
+enum RepoResult {
+    Synced(String),
+    Failed(String),
+    Cloned(String),
+    Skipped(String),
+}
+
+async fn process_repo(
+    root: &Path,
+    name: &str,
+    entry: &crate::manifest::RepoEntry,
+    mode: CascadeMode,
+    clone_missing: bool,
+    push_target: &str,
+    manifest: &crate::manifest::EcosystemManifest,
+) -> RepoResult {
+    let repo_path = &entry.local_path;
+    let full_path = root.join(repo_path);
+
+    if !full_path.join(".git").exists() {
+        if clone_missing {
+            return clone_repo(name, manifest, entry, &full_path).await;
+        }
+        return RepoResult::Skipped(format!("  {name:<35} SKIP (not cloned)"));
+    }
+
+    if mode == CascadeMode::CheckOnly {
+        check_repo(root, name, repo_path).await
+    } else {
+        sync_repo(root, name, repo_path, push_target, manifest).await
+    }
+}
+
+async fn clone_repo(
+    name: &str,
+    manifest: &crate::manifest::EcosystemManifest,
+    entry: &crate::manifest::RepoEntry,
+    full_path: &Path,
+) -> RepoResult {
+    let forgejo_url = manifest.forgejo_clone_url(entry);
+    let clone_result = tokio::process::Command::new("git")
+        .args(["clone", &forgejo_url, &full_path.to_string_lossy()])
+        .output()
+        .await;
+    match clone_result {
+        Ok(out) if out.status.success() => {
+            RepoResult::Cloned(format!("  {name:<35} CLONED"))
+        }
+        _ => RepoResult::Failed(format!("  {name:<35} CLONE FAILED")),
+    }
+}
+
+async fn check_repo(root: &Path, name: &str, repo_path: &str) -> RepoResult {
+    match check(root, repo_path).await {
+        Ok(matrix) => {
+            let status = match matrix.classification {
+                SyncClassification::Parity => "OK parity",
+                SyncClassification::Converge => "OK converge",
+                _ => return RepoResult::Failed(format!("  {name:<35} DIVERGE")),
+            };
+            RepoResult::Synced(format!("  {name:<35} {status}"))
+        }
+        Err(e) => RepoResult::Failed(format!("  {name:<35} FAIL {e}")),
+    }
+}
+
+async fn sync_repo(
+    root: &Path,
+    name: &str,
+    repo_path: &str,
+    push_target: &str,
+    manifest: &crate::manifest::EcosystemManifest,
+) -> RepoResult {
+    match sync_with_policy(root, repo_path, push_target, Some(manifest)).await {
+        Ok(r) if r.ok => RepoResult::Synced(format!("  {name:<35} OK {}", r.summary)),
+        Ok(r) => RepoResult::Failed(format!("  {name:<35} FAIL {}", r.summary)),
+        Err(e) => RepoResult::Failed(format!("  {name:<35} FAIL {e}")),
+    }
 }
