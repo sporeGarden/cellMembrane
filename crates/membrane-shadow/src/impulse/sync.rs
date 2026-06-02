@@ -105,12 +105,15 @@ pub async fn post_sync_diverge(
     std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");
-    crate::git_ops::add_commit_push(
+    let push = crate::git_ops::add_commit_push(
         &wh_dir,
         &format!("impulses/active/{filename}"),
         &format!("impulse sync: {subject}"),
     )
     .await?;
+    if !push.failed.is_empty() {
+        eprintln!("⚠ sync impulse push partial failure: {:?}", push.failed);
+    }
 
     Ok(impulse)
 }

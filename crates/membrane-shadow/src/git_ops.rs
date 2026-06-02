@@ -26,32 +26,51 @@ fn resolve_push_remotes() -> Vec<String> {
         .collect()
 }
 
+/// Outcome of a multi-remote push operation.
+pub struct PushResult {
+    /// Number of remotes that accepted the push.
+    pub succeeded: u32,
+    /// Remote names that rejected or failed.
+    pub failed: Vec<String>,
+}
+
 /// Stage a specific file, commit, and push to all remotes.
-pub async fn add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
+///
+/// Returns the push result so callers can surface partial failures.
+pub async fn add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<PushResult> {
     run_git(repo_dir, &["add", file_path]).await?;
     run_git(repo_dir, &["commit", "-m", message]).await?;
-    push_all_remotes(repo_dir).await;
-    Ok(())
+    Ok(push_all_remotes(repo_dir).await)
 }
 
 /// Stage all changes in a subdirectory, commit, and push.
-pub async fn add_all_commit_push(repo_dir: &Path, subdir: &str, message: &str) -> Result<()> {
+pub async fn add_all_commit_push(repo_dir: &Path, subdir: &str, message: &str) -> Result<PushResult> {
     run_git(repo_dir, &["add", "-A", subdir]).await?;
     run_git(repo_dir, &["commit", "-m", message]).await?;
-    push_all_remotes(repo_dir).await;
-    Ok(())
+    Ok(push_all_remotes(repo_dir).await)
 }
 
-/// Push to all configured remotes (best-effort, non-fatal).
-pub async fn push_all_remotes(repo_dir: &Path) {
+/// Push to all configured remotes, returning per-remote results.
+pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
     let remotes = resolve_push_remotes();
+    let mut result = PushResult {
+        succeeded: 0,
+        failed: Vec::new(),
+    };
     for remote in &remotes {
-        let _ = tokio::process::Command::new("git")
+        let ok = tokio::process::Command::new("git")
             .args(["push", remote, "main", "--quiet"])
             .current_dir(repo_dir)
             .status()
-            .await;
+            .await
+            .is_ok_and(|s| s.success());
+        if ok {
+            result.succeeded += 1;
+        } else {
+            result.failed.push(remote.clone());
+        }
     }
+    result
 }
 
 /// Run a git command, returning an error on non-zero exit.

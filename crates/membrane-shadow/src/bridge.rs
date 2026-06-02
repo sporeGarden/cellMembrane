@@ -155,13 +155,11 @@ impl NeuralBridge {
 
 /// Try routing through the Neural API, falling back to shadow execution.
 ///
-/// Usage in dispatch:
-/// ```ignore
-/// if let Some(result) = try_bridge("coordination", "impulse.post", params).await {
-///     return result;  // primal handled it
-/// }
-/// // fall through to shadow implementation
-/// ```
+/// Returns `Some(result)` if a primal handled the request, or `None` to
+/// indicate the shadow implementation should proceed.
+///
+/// This is the core graduated composition primitive: as primals come online,
+/// they handle capabilities natively; when unavailable, shadow code runs.
 pub async fn try_bridge(
     domain: &str,
     method: &str,
@@ -171,5 +169,25 @@ pub async fn try_bridge(
     match bridge.capability_call(domain, method, params).await {
         BridgeResult::Handled(result) => Some(result),
         BridgeResult::Fallthrough => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn discover_returns_none_without_socket() {
+        let result = NeuralBridge::discover();
+        assert!(result.is_none(), "should fall through when no socket exists");
+    }
+
+    #[tokio::test]
+    async fn try_bridge_falls_through_when_unavailable() {
+        let result = try_bridge("gate", "gate.info", serde_json::json!({})).await;
+        assert!(
+            result.is_none(),
+            "bridge should fall through to shadow when no primal is running"
+        );
     }
 }

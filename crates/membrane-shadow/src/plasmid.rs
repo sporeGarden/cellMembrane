@@ -14,7 +14,10 @@ use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// NUCLEUS primals — discovered from manifest when available, fallback inventory.
+/// Compiled fallback primal inventory for binary fetching.
+///
+/// Used when manifest is unavailable. Must stay in sync with
+/// `cellmembrane-types::MembraneService::ALL_SERVICES` primal entries.
 const NUCLEUS_PRIMALS: &[&str] = &[
     "beardog",
     "songbird",

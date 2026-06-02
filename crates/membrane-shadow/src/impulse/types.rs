@@ -253,14 +253,17 @@ pub struct PotentialHealth {
     pub current_wave: u32,
 }
 
+#[must_use]
 pub fn impulses_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("infra/wateringHole/impulses")
 }
 
+#[must_use]
 pub fn active_dir(workspace_root: &Path) -> PathBuf {
     impulses_dir(workspace_root).join("active")
 }
 
+#[must_use]
 pub fn current_wave(workspace_root: &Path) -> u32 {
     let freshness = workspace_root.join("infra/wateringHole/freshness.toml");
     if let Ok(contents) = std::fs::read_to_string(&freshness) {
@@ -275,6 +278,7 @@ pub fn current_wave(workspace_root: &Path) -> u32 {
     0
 }
 
+#[must_use]
 pub fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
     if project.is_empty() {
         return String::new();

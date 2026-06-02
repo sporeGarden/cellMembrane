@@ -11,8 +11,14 @@ use chrono::Local;
 
 use super::types::{ImpulseFile, ImpulseSignature};
 
+/// Default socket name for the mesh relay primal (`Songbird`).
+const RELAY_SOCKET_NAME: &str = "songbird-default.sock";
+
+/// Default socket name for the crypto signing primal (`BearDog`).
+const SIGNER_SOCKET_NAME: &str = "beardog-default.sock";
+
 pub fn try_relay_impulse(impulse: &ImpulseFile) {
-    let Some(socket_path) = discover_socket("songbird-default.sock") else {
+    let Some(socket_path) = discover_socket(RELAY_SOCKET_NAME) else {
         return;
     };
 
@@ -40,8 +46,9 @@ pub fn try_relay_impulse(impulse: &ImpulseFile) {
     uds_send(&socket_path, &request_str);
 }
 
+#[must_use]
 pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
-    let socket_path = discover_socket("beardog-default.sock")?;
+    let socket_path = discover_socket(SIGNER_SOCKET_NAME)?;
 
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -69,6 +76,7 @@ pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<Impu
 ///   1. `MEMBRANE_SOCKET_{NAME}` env var (e.g. `MEMBRANE_SOCKET_SONGBIRD`)
 ///   2. `$XDG_RUNTIME_DIR/biomeos/{socket_name}`
 ///   3. `/tmp/biomeos/{socket_name}` (last-resort fallback)
+#[must_use]
 pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     let env_key = format!(
         "MEMBRANE_SOCKET_{}",

@@ -3,6 +3,7 @@
 use super::types::{ImpulseAck, ImpulseFile};
 use std::path::Path;
 
+#[must_use]
 pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
     let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
     let behind_remotes: Vec<_> = positions.iter().filter(|(_, _, b)| *b > 0).collect();
@@ -17,6 +18,7 @@ pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
     }
 }
 
+#[must_use]
 pub fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
     match repo_policy {
         "merge-ff" => "pull_leader_push_followers".to_string(),
@@ -31,6 +33,7 @@ pub fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
     }
 }
 
+#[must_use]
 pub fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
     if expires.is_empty() {
         return false;
@@ -44,6 +47,7 @@ pub fn is_fully_acked(impulse: &ImpulseFile) -> bool {
 }
 
 /// Check if impulse is fully acked, considering both inline acks and external ack files.
+#[must_use]
 pub fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[ImpulseAck]) -> bool {
     if !impulse.meta.ack_required || impulse.to.gates.is_empty() {
         return false;

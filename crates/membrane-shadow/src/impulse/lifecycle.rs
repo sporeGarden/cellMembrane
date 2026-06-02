@@ -91,7 +91,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");
-    crate::git_ops::add_commit_push(
+    let push = crate::git_ops::add_commit_push(
         &wh_dir,
         &format!("impulses/active/{filename}"),
         &format!(
@@ -102,6 +102,9 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
         ),
     )
     .await?;
+    if !push.failed.is_empty() {
+        eprintln!("⚠ impulse push partial failure: {:?}", push.failed);
+    }
 
     try_relay_impulse(&impulse);
 
@@ -246,12 +249,15 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
     impulse.acks.push(ack_entry);
 
     let wh_dir = workspace_root.join("infra/wateringHole");
-    crate::git_ops::add_commit_push(
+    let push = crate::git_ops::add_commit_push(
         &wh_dir,
         &format!("impulses/acks/{ack_filename}"),
         &format!("impulse ack: {} ← {}", impulse.impulse.id, gate_id.name),
     )
     .await?;
+    if !push.failed.is_empty() {
+        eprintln!("⚠ ack push partial failure: {:?}", push.failed);
+    }
 
     Ok(impulse)
 }
@@ -308,7 +314,10 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
             "impulse archive: {} discharged → wave{wave}",
             archived.len()
         );
-        crate::git_ops::add_all_commit_push(&wh_dir, "impulses/", &msg).await?;
+        let push = crate::git_ops::add_all_commit_push(&wh_dir, "impulses/", &msg).await?;
+        if !push.failed.is_empty() {
+            eprintln!("⚠ archive push partial failure: {:?}", push.failed);
+        }
     }
 
     Ok(archived)

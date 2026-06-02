@@ -450,9 +450,27 @@ fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> boo
 }
 
 async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
-    crate::git_ops::add_commit_push(repo_dir, file_path, message).await
+    let push = crate::git_ops::add_commit_push(repo_dir, file_path, message).await?;
+    if !push.failed.is_empty() {
+        eprintln!(
+            "⚠ context push: {}/{} remotes succeeded (failed: {:?})",
+            push.succeeded,
+            push.succeeded + push.failed.len() as u32,
+            push.failed,
+        );
+    }
+    Ok(())
 }
 
 async fn git_add_all_commit_push(repo_dir: &Path, message: &str) -> Result<()> {
-    crate::git_ops::add_all_commit_push(repo_dir, "context/", message).await
+    let push = crate::git_ops::add_all_commit_push(repo_dir, "context/", message).await?;
+    if !push.failed.is_empty() {
+        eprintln!(
+            "⚠ context push: {}/{} remotes succeeded (failed: {:?})",
+            push.succeeded,
+            push.succeeded + push.failed.len() as u32,
+            push.failed,
+        );
+    }
+    Ok(())
 }

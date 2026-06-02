@@ -29,6 +29,21 @@ pub enum IdentitySource {
     GateFile,
 }
 
+impl std::fmt::Display for GateIdentity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", self.name, self.source)
+    }
+}
+
+impl std::fmt::Display for IdentitySource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Environment => f.write_str("env"),
+            Self::GateFile => f.write_str(".gate file"),
+        }
+    }
+}
+
 /// Resolve the gate identity for a workspace.
 ///
 /// # Errors

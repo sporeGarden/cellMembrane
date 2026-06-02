@@ -59,6 +59,7 @@ pub struct ShadowOutcome {
 
 impl ShadowOutcome {
     /// Successful outcome with message.
+    #[must_use]
     pub fn ok(message: impl Into<String>) -> Self {
         Self {
             ok: true,
@@ -68,6 +69,7 @@ impl ShadowOutcome {
     }
 
     /// Successful outcome with message and structured data.
+    #[must_use]
     pub fn ok_with(message: impl Into<String>, data: serde_json::Value) -> Self {
         Self {
             ok: true,
@@ -77,6 +79,7 @@ impl ShadowOutcome {
     }
 
     /// Failed outcome.
+    #[must_use]
     pub fn fail(message: impl fmt::Display) -> Self {
         Self {
             ok: false,

@@ -19,7 +19,7 @@ pub struct GateInfo {
     pub hostname: String,
     /// Human-readable uptime (e.g. `up 2 weeks, 3 hours`).
     pub uptime: String,
-    /// Gate identity from `/opt/ecoPrimals/.gate`.
+    /// Gate identity from `{vps_root}/.gate`.
     pub gate_identity: String,
     /// Load average (1/5/15 min).
     pub load: String,
@@ -130,10 +130,12 @@ systemctl list-units --type=service --state=running --no-pager --no-legend | \
     Ok(info)
 }
 
-/// Run cascade-pull on the VPS.
+/// Run cascade sync on the VPS via the `membrane` binary.
 ///
 /// Shadow for: `biomeOS gate.pull`
-/// Gate identity is read from `$VPS_ROOT/.gate` — no hardcoded gate names.
+/// Uses the Rust `membrane temporal.cascade` command if installed on the VPS,
+/// falling back to `cascade-pull.sh` if the binary is not yet deployed.
+/// Gate identity is resolved from `$VPS_ROOT/.gate` — no hardcoded gate names.
 ///
 /// # Errors
 /// Returns `ShadowError::Ssh` if the SSH connection or remote command fails.
@@ -141,7 +143,11 @@ pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
     let root = &config.vps_root;
     let cmd = format!(
         "cd {root} && GATE=$(cat {root}/.gate 2>/dev/null || echo auto) && \
-         infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal",
+         if command -v membrane >/dev/null 2>&1; then \
+           membrane temporal.cascade --source forgejo 2>&1; \
+         else \
+           infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal; \
+         fi",
     );
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
@@ -150,7 +156,8 @@ pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
 /// Run parity check on the VPS workspace.
 ///
 /// Shadow for: `biomeOS gate.check`
-/// Gate identity is read from `$VPS_ROOT/.gate` — no hardcoded gate names.
+/// Uses `membrane temporal.check-all` if installed, falls back to bash.
+/// Gate identity is resolved from `$VPS_ROOT/.gate` — no hardcoded gate names.
 ///
 /// # Errors
 /// Returns `ShadowError::Ssh` if the SSH connection or remote command fails.
@@ -158,7 +165,11 @@ pub async fn check(config: &ShadowConfig) -> Result<SyncResult> {
     let root = &config.vps_root;
     let cmd = format!(
         "cd {root} && GATE=$(cat {root}/.gate 2>/dev/null || echo auto) && \
-         infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal --check",
+         if command -v membrane >/dev/null 2>&1; then \
+           membrane temporal.check 2>&1; \
+         else \
+           infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal --check; \
+         fi",
     );
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
