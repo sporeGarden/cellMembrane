@@ -1,12 +1,14 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-06-01 (Wave 67)
+**Last updated:** 2026-06-02 (Wave 69+)
 **Deployed composition:** Full NUCLEUS (Wave 61) — 13 primals + 4 symbiotic + federation + standard workspace
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
-**VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade-pull enabled
-**Deployment model:** Standard NUCLEUS — `nucleus_launcher.sh` + `cascade-pull.sh --gate golgiBody`
+**VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust membrane binary
+**Deployment model:** Standard NUCLEUS — `membrane temporal.cascade` (Rust-native, replaces cascade-pull.sh)
 **VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
+**Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02)
+**Disk:** 60% (cleaned Wave 69)
 
 ---
 
@@ -138,7 +140,7 @@
 | `/etc/membrane/family/` | MitoBeacon seeds: `.beacon.seed`, `family.key`, `nodes/*.lineage.seed` |
 | `/opt/ecoPrimals/` | Standard ecoPrimals workspace (17 repos from Forgejo) |
 | `/opt/ecoPrimals/infra/plasmidBin/` | Deployment tooling (fetch.sh, nucleus_launcher.sh, start_primal.sh) |
-| `/opt/ecoPrimals/infra/wateringHole/` | Ecosystem standards + cascade-pull.sh |
+| `/opt/ecoPrimals/infra/wateringHole/` | Ecosystem standards + membrane temporal.cascade |
 | `/opt/ecoPrimals/primals/` | 13 primal source repos (cloned from sovereign Forgejo) |
 | `/opt/ecoPrimals/gardens/` | cellMembrane + projectNUCLEUS |
 | `/opt/membrane/nucleus_launcher.sh` | Symlink → plasmidBin launcher |
@@ -190,7 +192,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Provenance trio pipeline | 10/10 PASS | 2026-05-22 |
 | Shadow orchestrator | 6/6 PASS | 2026-05-22 |
 | `deploy_membrane.sh status` | All 19 services RUNNING | 2026-05-28 |
-| `cascade-pull.sh --gate golgiBody` | 17/17 repos synced from sovereign Forgejo | 2026-05-29 |
+| `membrane temporal.cascade` | 17/17 repos synced from sovereign Forgejo | 2026-06-02 |
 | `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |

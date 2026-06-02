@@ -292,7 +292,7 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
 // The K-Derm diderm relay chain handles actual GitHub propagation:
 // inner (covalent) → peptidoglycan (metallic) → golgiBody-ext (ionic) → GitHub (weak).
 // GitHub SSH write credentials live on golgiBody-ext (trans/shipping face).
-// See hooks/forgejo/pepti-sync-relay.sh + ext-github-push.sh for the relay.
+// See relay.rs for the Rust-native K-Derm relay chain (replaces bash scripts).
 
 /// Create a push mirror from Forgejo to an external remote (typically GitHub).
 /// Uses SSH authentication — Forgejo generates and manages the keypair.

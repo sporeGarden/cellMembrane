@@ -2,7 +2,14 @@
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-06-02
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, membrane deployed to VPS, relay Rust-native
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, membrane deployed to VPS, relay Rust-native, deep debt zero
+**Wave 69+ update:** Deep debt evolution — all `#[allow(clippy::too_many_lines)]` eliminated from codebase.
+`plasmid.rs::fetch()` decomposed into staged pipeline. `temporal/mod.rs` extracted 4 helpers (sync_converge,
+sync_diverge, resolve_tree_parity, count_divergent_remotes). `cascade.rs` evolved: `CascadeMode` enum
+replaces 3 bools, `CascadeOpts` struct, extracted process_repo/clone_repo/check_repo/sync_repo.
+`freshness.rs` dead_code wired (binary_blake3 + installed_at now in report). `FetchSource` Display impl.
+NUCLEUS tests relocated from coverage.rs (903L→743L) to composition.rs (canonical home). All files <800L.
+Zero clippy (pedantic+nursery). 209 tests.
 **Wave 69 update:** Sovereignty graduation sprint — membrane binary deployed to VPS (6.1M musl static,
 `/usr/local/bin/membrane`). Full K-Derm relay validated in Rust (relay.run, relay.mediate, relay.ship all
 operational, bash scripts archived). S4 auth formal 7-day gate ACTIVATED (`BEARDOG_AUTH_MODE=enforced`,
@@ -303,7 +310,7 @@ Forgejo inner membrane mirror healthy (25 native pull mirrors + 6 timer-synced, 
 | S1 TLS | BearDog :8443 | Cloudflare | p95 ≤ 1.5× commercial | Shadow live, **NOT cut over** |
 | S2 NAT | Songbird :3478 | cloudflared | 100% reachable | **LIVE — tracking 7-day window** |
 | S3 Content | NestGate + petalTongue | GitHub Pages | TTFB parity | **LIVE — 68ms vs 89ms** |
-| S4 Auth | BearDog BTSP | OAuth2/PAM | p95 < 50ms | Ready, **incomplete** |
+| S4 Auth | BearDog BTSP | OAuth2/PAM (disabled) | p95 < 50ms | **ENFORCED** — 7-day formal gate active |
 
 **Cutover sequence:** S2 → S3 → S4 → S1 (S1 last because it requires Cloudflare removal)
 

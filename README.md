@@ -59,6 +59,15 @@ cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsa
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
+**Wave 69+ (Deep Debt Evolution):** All `#[allow(clippy::too_many_lines)]` eliminated.
+`plasmid.rs::fetch()` decomposed into staged pipeline (dry-run, fetch loop, summary).
+`temporal/mod.rs` extracted `sync_converge()`, `sync_diverge()`, `resolve_tree_parity()`,
+`count_divergent_remotes()`. `cascade.rs` evolved: `CascadeMode` enum replaces 3 bools,
+`CascadeOpts` struct, extracted `process_repo()`/`clone_repo()`/`check_repo()`/`sync_repo()`.
+`freshness.rs` dead_code wired (binary_blake3 + installed_at in report). `FetchSource`
+implements `Display`. NUCLEUS tests relocated to `composition.rs`. All files <800L.
+Zero clippy (pedantic+nursery). 209 tests.
+
 **Wave 69 (Sovereignty Graduation):** Membrane binary deployed to VPS
 (`x86_64-musl`, 6.1M static). Full K-Derm relay validated in Rust (zero bash
 dependencies for relay chain). S4 auth gate activated (`BEARDOG_AUTH_MODE=enforced`).
@@ -179,6 +188,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Cascade evolution sprint (Wave 67+): dispatch split, tree-parity, freshness, ack safety, capability paths | DONE |
 | Graduated composition (Wave 68): Neural Bridge in dispatch, gate bash→Rust, PushResult, #[must_use] sweep | DONE |
 | Sovereignty graduation (Wave 69): membrane deployed to VPS, S4 auth enforced, relay Rust-native, disk 60% | DONE |
+| Deep debt evolution (Wave 69+): all too_many_lines eliminated, CascadeMode enum, freshness wired, all files <800L | DONE |
 
 ---
 
@@ -272,8 +282,8 @@ gardens/cellMembrane/
         validation.rs         # Report pattern (pass/fail/warn) + doc-tests
       tests/
         channels.rs           # Channel trust, ports, crypto, serde (4 tests)
-        composition.rs        # Ladder ordering, specs, serde (6 tests)
-        coverage.rs           # Deep coverage expansion (78 tests)
+        composition.rs        # Ladder ordering, specs, NUCLEUS, serde (21 tests)
+        coverage.rs           # Deep coverage expansion (63 tests)
         envelope.rs           # K-Derm topology, layers, bonding, policies (27 tests)
         firewall.rs           # UFW derivation per composition (5 tests)
         service.rs            # Registry, binary integrity, credentials (15 tests)

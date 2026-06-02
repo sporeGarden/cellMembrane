@@ -1,14 +1,14 @@
 #!/bin/bash
-# golgi-post-receive-relay.sh — Server-side Forgejo post-receive hook
+# golgi-post-receive-relay.sh — Rust-native K-Derm relay hook
 # Installed in each repo's hooks/post-receive.d/ on golgiBody-inner.
-# Triggers pepti-sync-relay.sh on peptidoglycan via SSH (metallic bond).
+# Triggers membrane relay.run (Rust binary) instead of bash SSH chain.
 #
 # Forgejo cd's into the bare repo dir and sets GIT_DIR=. before running
 # hooks, so we resolve via pwd to get the actual repo path.
 
 set -uo pipefail
 
-LOG_TAG="golgi-relay"
+LOG_TAG="golgi-relay-rust"
 log() { logger -t "$LOG_TAG" "$@" 2>/dev/null || echo "[$LOG_TAG] $*"; }
 
 REPO_BARE="$(cd "${GIT_DIR:-.}" 2>/dev/null && pwd)"
@@ -26,11 +26,9 @@ if [[ -z "${LOCAL_PATH}" ]]; then
     exit 0
 fi
 
-log "Post-receive relay: $REPO_NAME -> peptidoglycan ($LOCAL_PATH)"
+log "Post-receive relay (Rust): $REPO_NAME -> $LOCAL_PATH"
 
-ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
-    peptidoglycan \
-    "/opt/ecoPrimals/infra/wateringHole/hooks/forgejo/pepti-sync-relay.sh $LOCAL_PATH" \
+ECOPRIMALS_ROOT=/opt/ecoPrimals /usr/local/bin/membrane relay.run "$LOCAL_PATH" \
     </dev/null >/dev/null 2>&1 &
 
 log "Relay triggered for $LOCAL_PATH (background)"
