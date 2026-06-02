@@ -82,6 +82,14 @@ pub enum SyncAction {
     },
     /// Push to remotes that are behind local HEAD.
     Push,
+    /// Trees are identical but history diverged (rebase artifact).
+    /// Force-push follower to match leader — safe because content is the same.
+    TreeParity {
+        /// Remote whose ref to adopt as the canonical history.
+        leader: String,
+        /// Remote(s) to force-push to match.
+        followers: Vec<String>,
+    },
     /// Diverged — flag for human review, do not modify.
     Flag,
 }
@@ -92,6 +100,9 @@ impl std::fmt::Display for SyncAction {
             Self::None => write!(f, "ok"),
             Self::Pull { leader } => write!(f, "pull {leader}"),
             Self::Push => write!(f, "push followers"),
+            Self::TreeParity { leader, followers } => {
+                write!(f, "tree-parity: {leader} → {}", followers.join(", "))
+            }
             Self::Flag => write!(f, "FLAG: human review"),
         }
     }
@@ -189,6 +200,53 @@ async fn rev_list_count(repo_path: &Path, range: &str) -> u32 {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(0)
+}
+
+/// Detect tree-parity: history diverges but tree content is identical.
+///
+/// Picks the remote with the most commits as the canonical leader (preserves
+/// richer history). Returns `Some((leader, followers))` if all remote trees
+/// produce an empty `git diff`, meaning the working trees are identical.
+async fn detect_tree_parity(
+    local_path: &Path,
+    positions: &[RemotePosition],
+    branch: &str,
+) -> Option<(String, Vec<String>)> {
+    if positions.len() < 2 {
+        return None;
+    }
+
+    // Leader = remote with most total commits (behind + ahead gives a rough measure
+    // of "richest history"; in practice, the one with behind=0 is the true leader).
+    let leader = positions
+        .iter()
+        .min_by_key(|p| p.behind)
+        .map(|p| p.remote.clone())?;
+
+    let leader_ref = format!("{leader}/{branch}");
+    let mut followers = Vec::new();
+
+    for pos in positions {
+        if pos.remote == leader {
+            continue;
+        }
+        let follower_ref = format!("{}/{branch}", pos.remote);
+        let diff_output = git(local_path, &["diff", "--stat", &leader_ref, &follower_ref])
+            .await
+            .unwrap_or_default();
+        if diff_output.trim().is_empty() {
+            followers.push(pos.remote.clone());
+        } else {
+            // Trees actually differ — this is a real divergence, not a rebase artifact
+            return None;
+        }
+    }
+
+    if followers.is_empty() {
+        return None;
+    }
+
+    Some((leader, followers))
 }
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -302,7 +360,18 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
     }
 
     let (classification, action) = if diverge_count > 1 {
-        (SyncClassification::Diverge, SyncAction::Flag)
+        // Check if trees are actually identical (rebase artifact — history diverges
+        // but content is the same). Use `git diff --stat` between the two most common
+        // remotes — if empty, trees are at parity and we can safely force-align.
+        let tree_parity = detect_tree_parity(&local_path, &positions, &branch).await;
+        if let Some((leader, followers)) = tree_parity {
+            (
+                SyncClassification::Diverge,
+                SyncAction::TreeParity { leader, followers },
+            )
+        } else {
+            (SyncClassification::Diverge, SyncAction::Flag)
+        }
     } else if has_leader {
         (
             SyncClassification::Converge,
@@ -343,6 +412,17 @@ pub async fn sync_with_target(
     workspace_root: &Path,
     repo_path: &str,
     push_target: &str,
+) -> Result<TemporalSyncResult> {
+    sync_with_policy(workspace_root, repo_path, push_target, None).await
+}
+
+/// Temporal sync with optional manifest for divergence policy resolution.
+#[allow(clippy::too_many_lines)]
+pub async fn sync_with_policy(
+    workspace_root: &Path,
+    repo_path: &str,
+    push_target: &str,
+    manifest: Option<&crate::manifest::EcosystemManifest>,
 ) -> Result<TemporalSyncResult> {
     let local_path = workspace_root.join(repo_path);
 
@@ -392,11 +472,12 @@ pub async fn sync_with_target(
                     }
                 }
                 SyncAction::Push | SyncAction::None => {}
-                SyncAction::Flag => {
+                SyncAction::Flag | SyncAction::TreeParity { .. } => {
                     return Ok(TemporalSyncResult {
                         repo_path: repo_path.to_string(),
                         ok: false,
-                        summary: "unexpected Flag action on Converge classification".to_string(),
+                        summary: "unexpected Flag/TreeParity action on Converge classification"
+                            .to_string(),
                         pulled_from: None,
                         pushed_to: vec![],
                     });
@@ -438,13 +519,90 @@ pub async fn sync_with_target(
             })
         }
 
-        SyncClassification::Diverge => Ok(TemporalSyncResult {
-            repo_path: repo_path.to_string(),
-            ok: false,
-            summary: format!("DIVERGE — {matrix}"),
-            pulled_from: None,
-            pushed_to: vec![],
-        }),
+        SyncClassification::Diverge => {
+            if let SyncAction::TreeParity { leader, followers } = &matrix.action {
+                let branch = &matrix.branch;
+                // Reset local to leader ref, then force-push followers
+                if !git_ok(
+                    &local_path,
+                    &["reset", "--hard", &format!("{leader}/{branch}")],
+                )
+                .await
+                {
+                    return Ok(TemporalSyncResult {
+                        repo_path: repo_path.to_string(),
+                        ok: false,
+                        summary: format!("tree-parity reset to {leader} failed"),
+                        pulled_from: None,
+                        pushed_to: vec![],
+                    });
+                }
+
+                let mut pushed_to = Vec::new();
+                for follower in followers {
+                    if git_ok(
+                        &local_path,
+                        &["push", "--force-with-lease", follower, branch],
+                    )
+                    .await
+                    {
+                        pushed_to.push(follower.clone());
+                    }
+                }
+
+                Ok(TemporalSyncResult {
+                    repo_path: repo_path.to_string(),
+                    ok: true,
+                    summary: format!("tree-parity resolved: {leader} → {}", pushed_to.join(", ")),
+                    pulled_from: Some(leader.clone()),
+                    pushed_to,
+                })
+            } else {
+                // Real divergence — apply policy if manifest is available
+                if let Some(m) = manifest {
+                    let entry = m.repos.values().find(|e| e.local_path == repo_path);
+                    let policy = entry.map_or_else(
+                        || m.sync.divergence_policy.as_str(),
+                        |e| m.divergence_policy_for(e),
+                    );
+                    let positions: Vec<(String, u32, u32)> = matrix
+                        .positions
+                        .iter()
+                        .map(|p| (p.remote.clone(), p.ahead, p.behind))
+                        .collect();
+                    let args = crate::impulse::SyncDivergeArgs {
+                        repo_path: repo_path.to_string(),
+                        positions,
+                        repo_policy: policy.to_string(),
+                    };
+
+                    // Fire divergence impulse for visibility
+                    let _ = crate::impulse::post_sync_diverge(workspace_root, &args).await;
+
+                    // Apply graduated merge strategy based on policy
+                    let resolved =
+                        apply_divergence_policy(&local_path, &matrix, policy, push_target).await;
+
+                    if let Some(summary) = resolved {
+                        return Ok(TemporalSyncResult {
+                            repo_path: repo_path.to_string(),
+                            ok: true,
+                            summary,
+                            pulled_from: None,
+                            pushed_to: vec![],
+                        });
+                    }
+                }
+
+                Ok(TemporalSyncResult {
+                    repo_path: repo_path.to_string(),
+                    ok: false,
+                    summary: format!("DIVERGE — {matrix}"),
+                    pulled_from: None,
+                    pushed_to: vec![],
+                })
+            }
+        }
 
         SyncClassification::Missing | SyncClassification::NoRemote => Ok(TemporalSyncResult {
             repo_path: repo_path.to_string(),
@@ -508,17 +666,96 @@ pub fn resolve_workspace_root() -> Result<PathBuf> {
     ))
 }
 
+/// Apply graduated merge strategy based on divergence policy from manifest.
+///
+/// Returns `Some(summary)` if the policy was applied successfully (repo converged),
+/// or `None` if the policy is `impulse-only` or resolution failed.
+async fn apply_divergence_policy(
+    local_path: &Path,
+    matrix: &TemporalMatrix,
+    policy: &str,
+    push_target: &str,
+) -> Option<String> {
+    let branch = &matrix.branch;
+
+    // Find leader (least behind) and followers
+    let leader = matrix
+        .positions
+        .iter()
+        .min_by_key(|p| p.behind)
+        .map(|p| &p.remote)?;
+
+    match policy {
+        "merge-ff" => {
+            // Pull from leader with --ff-only, push to followers
+            if !git_ok(
+                local_path,
+                &["pull", leader, branch, "--ff-only", "--quiet"],
+            )
+            .await
+            {
+                return None;
+            }
+            let mut pushed = Vec::new();
+            for pos in &matrix.positions {
+                if &pos.remote == leader {
+                    continue;
+                }
+                if push_target == "forgejo" && pos.remote != "forgejo" {
+                    continue;
+                }
+                if git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await {
+                    pushed.push(pos.remote.clone());
+                }
+            }
+            Some(format!(
+                "policy:merge-ff pull {leader}, push {}",
+                pushed.join(" ")
+            ))
+        }
+        "merge-rebase" => {
+            // Rebase onto leader, then push
+            if !git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
+                return None;
+            }
+            let mut pushed = Vec::new();
+            for pos in &matrix.positions {
+                if &pos.remote == leader {
+                    continue;
+                }
+                if push_target == "forgejo" && pos.remote != "forgejo" {
+                    continue;
+                }
+                if git_ok(
+                    local_path,
+                    &["push", "--force-with-lease", &pos.remote, branch],
+                )
+                .await
+                {
+                    pushed.push(pos.remote.clone());
+                }
+            }
+            Some(format!(
+                "policy:merge-rebase rebase {leader}, push {}",
+                pushed.join(" ")
+            ))
+        }
+        _ => None,
+    }
+}
+
 /// Execute a full cascade sync — the Rust evolution of `cascade-pull.sh`.
 ///
 /// Reads the gate profile from `ecosystem_manifest.toml`, resolves temporal
 /// position for each repo, pulls from leader, and reports parity.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::fn_params_excessive_bools)]
 pub async fn cascade(
     gate_name: &str,
     source: &str,
     check_only: bool,
     clone_missing: bool,
     dry_run: bool,
+    publish_freshness: bool,
 ) -> Result<crate::ShadowOutcome> {
     let root = resolve_workspace_root()?;
     let m = crate::manifest::load_from_workspace(&root)?;
@@ -595,7 +832,7 @@ pub async fn cascade(
                 }
             }
         } else {
-            match sync_with_target(&root, repo_path, &push_target).await {
+            match sync_with_policy(&root, repo_path, &push_target, Some(&m)).await {
                 Ok(r) => {
                     let status = if r.ok {
                         synced += 1;
@@ -611,6 +848,16 @@ pub async fn cascade(
                     lines.push(format!("  {name:<35} FAIL {e}"));
                 }
             }
+        }
+    }
+
+    // Publish freshness snapshot if requested
+    if publish_freshness && !check_only {
+        let freshness_result = crate::freshness::publish_freshness_toml(&root, &m, &repos).await;
+        if let Err(e) = &freshness_result {
+            lines.push(format!("  [freshness] FAIL: {e}"));
+        } else {
+            lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
         }
     }
 
@@ -643,3 +890,6 @@ pub async fn cascade(
         }),
     ))
 }
+
+/// Re-export freshness tracking functions (for backward compat from dispatch).
+pub use crate::freshness::check_installed_freshness;

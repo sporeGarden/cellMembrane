@@ -6,7 +6,7 @@ use chrono::{Local, Utc};
 use std::path::Path;
 
 use super::parse::{find_impulse_by_id, parse_impulse_or_signal};
-use super::policy::{is_expired, is_fully_acked};
+use super::policy::{is_expired, is_fully_acked_with_externals, load_external_acks};
 use super::primal::{try_relay_impulse, try_sign_impulse};
 use super::types::{
     ImpulseAck, ImpulseContent, ImpulseFile, ImpulseFrom, ImpulseMeta, ImpulseOpMeta, ImpulseTo,
@@ -133,7 +133,15 @@ pub fn sense(
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "toml") {
             let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
-            if let Ok(imp) = parse_impulse_or_signal(&contents) {
+            if let Ok(mut imp) = parse_impulse_or_signal(&contents) {
+                // Merge external acks from separate ack files
+                let ext_acks = load_external_acks(workspace_root, &imp.impulse.id);
+                for ack in ext_acks {
+                    if !imp.acks.iter().any(|a| a.gate == ack.gate) {
+                        imp.acks.push(ack);
+                    }
+                }
+
                 let dominated = if let Some(ref gate) = local_gate {
                     imp.to.gates.contains(&"*".to_string())
                         || imp.to.gates.iter().any(|g| g == gate)
@@ -185,7 +193,9 @@ pub fn check(workspace_root: &Path) -> Result<PotentialHealth> {
             if let Ok(imp) = parse_impulse_or_signal(&contents) {
                 total += 1;
                 *by_wave.entry(imp.impulse.wave).or_insert(0) += 1;
-                if imp.meta.ack_required && imp.acks.is_empty() {
+                let ext_acks = load_external_acks(workspace_root, &imp.impulse.id);
+                let all_acks_empty = imp.acks.is_empty() && ext_acks.is_empty();
+                if imp.meta.ack_required && all_acks_empty {
                     needs_ack += 1;
                 }
                 if is_expired(&imp.meta.expires, &now) {
@@ -205,33 +215,40 @@ pub fn check(workspace_root: &Path) -> Result<PotentialHealth> {
 }
 
 /// Acknowledge an impulse — rootPulse ACTION + waterFall SYNC.
+///
+/// Writes a separate ack file to `impulses/acks/{impulse-id}_{gate}.toml`
+/// instead of appending to the original impulse TOML. This prevents ack loss
+/// during rebase operations (Wave 67 safety evolution).
 pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<ImpulseFile> {
     let gate_id = identity::resolve(workspace_root)?;
     let active = active_dir(workspace_root);
 
-    let (filepath, mut impulse) = find_impulse_by_id(&active, impulse_id)?;
+    let (_filepath, mut impulse) = find_impulse_by_id(&active, impulse_id)?;
 
     let ack_entry = ImpulseAck {
         gate: gate_id.name.clone(),
         timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
         note: note.to_string(),
     };
+
+    // Write separate ack file — safe under rebase
+    let acks_dir = impulses_dir(workspace_root).join("acks");
+    std::fs::create_dir_all(&acks_dir).map_err(ShadowError::Io)?;
+
+    let ack_filename = format!("{}_{}.toml", impulse_id, gate_id.name);
+    let ack_path = acks_dir.join(&ack_filename);
+
+    let ack_toml = toml::to_string_pretty(&ack_entry)
+        .map_err(|e| ShadowError::Parse(format!("serialize ack: {e}")))?;
+    std::fs::write(&ack_path, &ack_toml).map_err(ShadowError::Io)?;
+
+    // Also append to in-memory representation for return value
     impulse.acks.push(ack_entry);
-
-    let toml_str = toml::to_string_pretty(&impulse)
-        .map_err(|e| ShadowError::Parse(format!("serialize impulse: {e}")))?;
-    std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
-
-    let rel_path = filepath
-        .strip_prefix(workspace_root.join("infra/wateringHole"))
-        .unwrap_or(&filepath)
-        .to_string_lossy()
-        .to_string();
 
     let wh_dir = workspace_root.join("infra/wateringHole");
     crate::git_ops::add_commit_push(
         &wh_dir,
-        &rel_path,
+        &format!("impulses/acks/{ack_filename}"),
         &format!("impulse ack: {} ← {}", impulse.impulse.id, gate_id.name),
     )
     .await?;
@@ -269,7 +286,9 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
             Err(_) => continue,
         };
 
-        let should_archive = is_expired(&impulse.meta.expires, &now) || is_fully_acked(&impulse);
+        let ext_acks = load_external_acks(workspace_root, &impulse.impulse.id);
+        let should_archive = is_expired(&impulse.meta.expires, &now)
+            || is_fully_acked_with_externals(&impulse, &ext_acks);
 
         if should_archive {
             let fname = path

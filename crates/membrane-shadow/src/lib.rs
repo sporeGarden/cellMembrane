@@ -65,6 +65,7 @@ pub mod context;
 pub mod dispatch;
 pub mod error;
 pub mod forgejo;
+pub mod freshness;
 pub mod gate;
 pub mod git_ops;
 pub mod identity;

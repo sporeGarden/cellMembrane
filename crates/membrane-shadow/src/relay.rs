@@ -25,15 +25,6 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tokio::process::Command;
 
-/// Default ecoPrimals root path on relay nodes.
-const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";
-
-/// Default Forgejo remote name (sovereign primary).
-const REMOTE_FORGEJO: &str = "forgejo";
-
-/// Default SSH host alias for golgiBody-ext (trans face / outer membrane).
-const DEFAULT_GOLGI_EXT_HOST: &str = "golgi-ext";
-
 /// Result of a full relay run.
 #[derive(Debug, Serialize)]
 pub struct RelayResult {
@@ -51,30 +42,90 @@ pub struct RelayResult {
     pub push_failures: Vec<String>,
 }
 
-/// Configuration for the relay chain, resolved from environment.
+/// Configuration for the relay chain, resolved from environment + config.
 #[derive(Debug, Clone)]
 pub struct RelayConfig {
     /// Root of the ecoPrimals workspace on this node.
     pub ecoprimals_root: PathBuf,
+    /// Forgejo remote name for pull operations.
+    pub forgejo_remote: String,
     /// SSH host alias for golgiBody-ext (outer membrane).
     pub golgi_ext_host: String,
 }
 
 impl RelayConfig {
-    /// Resolve configuration from environment variables, with defaults.
+    /// Resolve configuration from membrane.toml, environment variables, then defaults.
+    ///
+    /// Priority: membrane.toml [relay] > environment > built-in defaults.
     #[must_use]
     pub fn from_env() -> Self {
-        let ecoprimals_root = std::env::var("ECOPRIMALS_ROOT")
-            .unwrap_or_else(|_| DEFAULT_ECOPRIMALS_ROOT.to_string());
+        let membrane_config = load_relay_from_membrane_toml();
 
-        let golgi_ext_host =
-            std::env::var("GOLGI_EXT_HOST").unwrap_or_else(|_| DEFAULT_GOLGI_EXT_HOST.to_string());
+        let ecoprimals_root = std::env::var("ECOPRIMALS_ROOT")
+            .ok()
+            .or_else(|| {
+                membrane_config
+                    .as_ref()
+                    .and_then(|c| c.ecoprimals_root.clone())
+            })
+            .unwrap_or_else(|| "/opt/ecoPrimals".to_string());
+
+        let forgejo_remote = std::env::var("RELAY_FORGEJO_REMOTE")
+            .ok()
+            .or_else(|| {
+                membrane_config
+                    .as_ref()
+                    .and_then(|c| c.forgejo_remote.clone())
+            })
+            .unwrap_or_else(|| "forgejo".to_string());
+
+        let golgi_ext_host = std::env::var("GOLGI_EXT_HOST")
+            .ok()
+            .or_else(|| {
+                membrane_config
+                    .as_ref()
+                    .and_then(|c| c.golgi_ext_host.clone())
+            })
+            .unwrap_or_else(|| "golgi-ext".to_string());
 
         Self {
             ecoprimals_root: PathBuf::from(ecoprimals_root),
+            forgejo_remote,
             golgi_ext_host,
         }
     }
+}
+
+/// Optional [relay] section from membrane.toml.
+#[derive(Debug, serde::Deserialize)]
+struct MembraneRelayConfig {
+    ecoprimals_root: Option<String>,
+    forgejo_remote: Option<String>,
+    golgi_ext_host: Option<String>,
+}
+
+/// Top-level membrane.toml structure (for relay config extraction).
+#[derive(serde::Deserialize)]
+struct MembraneToml {
+    relay: Option<MembraneRelayConfig>,
+}
+
+/// Attempt to load [relay] config from membrane.toml (XDG config path).
+fn load_relay_from_membrane_toml() -> Option<MembraneRelayConfig> {
+    let config_path = resolve_membrane_toml_path()?;
+    let contents = std::fs::read_to_string(config_path).ok()?;
+    let parsed: MembraneToml = toml::from_str(&contents).ok()?;
+    parsed.relay
+}
+
+/// Resolve `membrane.toml` location: `XDG_CONFIG_HOME`/ecoPrimals/membrane.toml.
+fn resolve_membrane_toml_path() -> Option<PathBuf> {
+    let config_home = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        format!("{home}/.config")
+    });
+    let path = PathBuf::from(config_home).join("ecoPrimals/membrane.toml");
+    if path.exists() { Some(path) } else { None }
 }
 
 /// Full relay chain: pull → impulse sense → ship extracellular.
@@ -138,7 +189,13 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
         }
 
         let status = Command::new("git")
-            .args(["pull", "--ff-only", REMOTE_FORGEJO, "main", "--quiet"])
+            .args([
+                "pull",
+                "--ff-only",
+                &config.forgejo_remote,
+                "main",
+                "--quiet",
+            ])
             .current_dir(&local_path)
             .status()
             .await;
@@ -279,10 +336,12 @@ mod tests {
     #[test]
     fn relay_config_respects_defaults() {
         let config = RelayConfig {
-            ecoprimals_root: PathBuf::from(DEFAULT_ECOPRIMALS_ROOT),
-            golgi_ext_host: DEFAULT_GOLGI_EXT_HOST.to_string(),
+            ecoprimals_root: PathBuf::from("/opt/ecoPrimals"),
+            forgejo_remote: "forgejo".to_string(),
+            golgi_ext_host: "golgi-ext".to_string(),
         };
         assert_eq!(config.ecoprimals_root, PathBuf::from("/opt/ecoPrimals"));
+        assert_eq!(config.forgejo_remote, "forgejo");
         assert_eq!(config.golgi_ext_host, "golgi-ext");
     }
 
@@ -290,23 +349,19 @@ mod tests {
     fn relay_config_custom_values() {
         let config = RelayConfig {
             ecoprimals_root: PathBuf::from("/tmp/test-eco"),
+            forgejo_remote: "forgejo".to_string(),
             golgi_ext_host: "custom-ext".to_string(),
         };
         assert_eq!(config.ecoprimals_root, PathBuf::from("/tmp/test-eco"));
+        assert_eq!(config.forgejo_remote, "forgejo");
         assert_eq!(config.golgi_ext_host, "custom-ext");
-    }
-
-    #[test]
-    fn default_constants() {
-        assert_eq!(DEFAULT_ECOPRIMALS_ROOT, "/opt/ecoPrimals");
-        assert_eq!(REMOTE_FORGEJO, "forgejo");
-        assert_eq!(DEFAULT_GOLGI_EXT_HOST, "golgi-ext");
     }
 
     #[tokio::test]
     async fn mediate_skips_nonexistent_repos() {
         let config = RelayConfig {
             ecoprimals_root: PathBuf::from("/tmp/nonexistent-relay-test"),
+            forgejo_remote: "forgejo".to_string(),
             golgi_ext_host: "test".to_string(),
         };
         let (pulled, failures) = mediate(&config, &["no/such/repo"]).await;

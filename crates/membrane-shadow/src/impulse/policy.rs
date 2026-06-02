@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use super::types::ImpulseFile;
+use super::types::{ImpulseAck, ImpulseFile};
+use std::path::Path;
 
 pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
     let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
@@ -37,18 +38,52 @@ pub fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
     chrono::DateTime::parse_from_str(expires, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|exp| now > &exp)
 }
 
+#[cfg(test)]
 pub fn is_fully_acked(impulse: &ImpulseFile) -> bool {
+    is_fully_acked_with_externals(impulse, &[])
+}
+
+/// Check if impulse is fully acked, considering both inline acks and external ack files.
+pub fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[ImpulseAck]) -> bool {
     if !impulse.meta.ack_required || impulse.to.gates.is_empty() {
         return false;
     }
     if impulse.to.gates.contains(&"*".to_string()) {
         return false;
     }
-    impulse
-        .to
-        .gates
-        .iter()
-        .all(|g| impulse.acks.iter().any(|a| &a.gate == g))
+    impulse.to.gates.iter().all(|g| {
+        impulse.acks.iter().any(|a| &a.gate == g) || external_acks.iter().any(|a| &a.gate == g)
+    })
+}
+
+/// Load external ack files for a given impulse ID from `impulses/acks/`.
+pub fn load_external_acks(workspace_root: &Path, impulse_id: &str) -> Vec<ImpulseAck> {
+    let acks_dir = workspace_root.join("infra/wateringHole/impulses/acks");
+    if !acks_dir.exists() {
+        return vec![];
+    }
+
+    let prefix = format!("{impulse_id}_");
+    let Ok(entries) = std::fs::read_dir(&acks_dir) else {
+        return vec![];
+    };
+
+    let mut acks = Vec::new();
+    for entry in entries.flatten() {
+        let fname = entry.file_name().to_string_lossy().to_string();
+        if fname.starts_with(&prefix)
+            && std::path::Path::new(&fname)
+                .extension()
+                .is_some_and(|e| e == "toml")
+        {
+            if let Ok(contents) = std::fs::read_to_string(entry.path()) {
+                if let Ok(ack) = toml::from_str::<ImpulseAck>(&contents) {
+                    acks.push(ack);
+                }
+            }
+        }
+    }
+    acks
 }
 
 #[cfg(test)]

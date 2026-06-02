@@ -8,8 +8,23 @@
 use crate::error::{Result, ShadowError};
 use std::path::Path;
 
-/// Default remote push order: sovereign first, then extracellular shadow.
-const PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
+/// Fallback remote push order when manifest is unavailable.
+const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
+
+/// Resolve push remotes from manifest `[sync]` config, falling back to defaults.
+fn resolve_push_remotes() -> Vec<String> {
+    if let Ok(root) = crate::temporal::resolve_workspace_root() {
+        if let Ok(m) = crate::manifest::load_from_workspace(&root) {
+            if !m.sync.push_remotes.is_empty() {
+                return m.sync.push_remotes;
+            }
+        }
+    }
+    DEFAULT_PUSH_REMOTES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
+}
 
 /// Stage a specific file, commit, and push to all remotes.
 pub async fn add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
@@ -29,7 +44,8 @@ pub async fn add_all_commit_push(repo_dir: &Path, subdir: &str, message: &str) -
 
 /// Push to all configured remotes (best-effort, non-fatal).
 pub async fn push_all_remotes(repo_dir: &Path) {
-    for remote in PUSH_REMOTES {
+    let remotes = resolve_push_remotes();
+    for remote in &remotes {
         let _ = tokio::process::Command::new("git")
             .args(["push", remote, "main", "--quiet"])
             .current_dir(repo_dir)
@@ -82,9 +98,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn push_remotes_order() {
-        assert_eq!(PUSH_REMOTES[0], "forgejo");
-        assert_eq!(PUSH_REMOTES[1], "origin");
+    fn default_push_remotes_order() {
+        assert_eq!(DEFAULT_PUSH_REMOTES[0], "forgejo");
+        assert_eq!(DEFAULT_PUSH_REMOTES[1], "origin");
     }
 
     #[test]

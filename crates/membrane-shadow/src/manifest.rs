@@ -112,6 +112,10 @@ pub struct SyncConfig {
     /// Auto-fire a SYNC impulse when divergence is detected.
     #[serde(default)]
     pub diverge_impulse: bool,
+    /// Ordered list of remotes to push to (replaces hardcoded `PUSH_REMOTES`).
+    /// Defaults to empty (falls back to `["forgejo", "origin"]`).
+    #[serde(default)]
+    pub push_remotes: Vec<String>,
 }
 
 fn default_push_target() -> String {
