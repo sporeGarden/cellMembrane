@@ -14,7 +14,6 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tokio::process::Command;
 
 /// Per-remote temporal position relative to local HEAD.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,38 +168,9 @@ pub struct TemporalReport {
     pub repos: Vec<TemporalMatrix>,
 }
 
-// ── Git helpers (local, no SSH) ──────────────────────────────────────
+// ── Git helpers (delegated to git_ops) ───────────────────────────────
 
-async fn git(repo_path: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
-        .args(args)
-        .output()
-        .await?;
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-async fn git_ok(repo_path: &Path, args: &[&str]) -> bool {
-    Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|s| s.success())
-}
-
-async fn rev_list_count(repo_path: &Path, range: &str) -> u32 {
-    git(repo_path, &["rev-list", "--count", range])
-        .await
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0)
-}
+use crate::git_ops::{git_output as git, git_success as git_ok, rev_list_count};
 
 /// Detect tree-parity: history diverges but tree content is identical.
 ///
@@ -639,31 +609,9 @@ pub async fn check_all(workspace_root: &Path, repo_paths: &[&str]) -> Result<Tem
     Ok(report)
 }
 
-/// Resolve workspace root from `ECOPRIMALS_ROOT` env or by walking
-/// up from the current binary's location to find a `primals/` directory.
-/// Returns an error if no valid workspace can be found.
+/// Resolve workspace root. Delegates to [`crate::resolve_workspace_root`].
 pub fn resolve_workspace_root() -> Result<PathBuf> {
-    if let Ok(root) = std::env::var("ECOPRIMALS_ROOT") {
-        let path = PathBuf::from(&root);
-        if path.join("primals").exists() {
-            return Ok(path);
-        }
-    }
-
-    // Walk up from current exe looking for a workspace with primals/
-    if let Ok(exe) = std::env::current_exe() {
-        let mut dir = exe.parent().map(Path::to_path_buf);
-        while let Some(d) = dir {
-            if d.join("primals").exists() {
-                return Ok(d);
-            }
-            dir = d.parent().map(Path::to_path_buf);
-        }
-    }
-
-    Err(crate::error::ShadowError::Parse(
-        "cannot resolve ecoPrimals workspace root — set ECOPRIMALS_ROOT".into(),
-    ))
+    crate::resolve_workspace_root()
 }
 
 /// Apply graduated merge strategy based on divergence policy from manifest.

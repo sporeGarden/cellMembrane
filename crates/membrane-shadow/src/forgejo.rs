@@ -391,14 +391,42 @@ pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<
 
 // ── Token operations (bearDog auth.token.*) ─────────────────────────
 
-/// Forgejo data directory on the VPS. Resolved from config; falls back
-/// to the standard Forgejo package layout.
+/// Default Forgejo data directory (standard package layout).
+const DEFAULT_FORGEJO_DATA_DIR: &str = "/opt/forgejo/data";
+/// Default Forgejo working directory.
+const DEFAULT_FORGEJO_WORK_DIR: &str = "/opt/forgejo";
+
+/// Forgejo data directory on the VPS. Resolution chain:
+/// 1. `ShadowConfig.forgejo_data_dir` (from `FORGEJO_DATA_DIR` env)
+/// 2. `{forgejo_work_dir}/data` (derived from work dir)
+/// 3. Compiled default
 fn forgejo_db_path(config: &ShadowConfig) -> String {
-    config
-        .forgejo_data_dir
-        .as_deref()
-        .unwrap_or("/opt/forgejo/data")
-        .to_string()
+    if let Some(ref data_dir) = config.forgejo_data_dir {
+        return data_dir.clone();
+    }
+    if let Some(ref work_dir) = config.forgejo_work_dir {
+        return format!("{work_dir}/data");
+    }
+    DEFAULT_FORGEJO_DATA_DIR.to_string()
+}
+
+/// Forgejo working directory on the VPS. Resolution chain:
+/// 1. `ShadowConfig.forgejo_work_dir` (from `FORGEJO_WORK_DIR` env)
+/// 2. Parent of `forgejo_data_dir` (if data dir ends with `/data`)
+/// 3. Compiled default
+fn forgejo_work_path(config: &ShadowConfig) -> String {
+    if let Some(ref work_dir) = config.forgejo_work_dir {
+        return work_dir.clone();
+    }
+    if let Some(ref data_dir) = config.forgejo_data_dir {
+        if let Some(parent) = data_dir.strip_suffix("/data") {
+            return parent.to_string();
+        }
+        return data_dir
+            .rsplit_once('/')
+            .map_or_else(|| data_dir.clone(), |(parent, _)| parent.to_string());
+    }
+    DEFAULT_FORGEJO_WORK_DIR.to_string()
 }
 
 /// List all Forgejo API tokens (via VPS database).
@@ -437,13 +465,7 @@ pub async fn token_create(config: &ShadowConfig, name: &str, scopes: &str) -> Re
     validate_shell_safe(name, "token name")?;
     validate_shell_safe(scopes, "token scopes")?;
 
-    let forgejo_dir = config.forgejo_data_dir.as_deref().map_or_else(
-        || "/opt/forgejo".to_string(),
-        |d| {
-            d.rsplit_once('/')
-                .map_or_else(|| d.to_string(), |(parent, _)| parent.to_string())
-        },
-    );
+    let forgejo_dir = forgejo_work_path(config);
     let admin_user = config.forgejo_admin_user.as_deref().unwrap_or("golgiAdmin");
 
     let cmd = format!(

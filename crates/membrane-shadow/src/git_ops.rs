@@ -93,6 +93,43 @@ pub fn resolve_head_ref(project_path: &Path) -> String {
         .unwrap_or_default()
 }
 
+// ── Async git utilities (used by temporal, dispatch, etc.) ───────────
+
+/// Run a git command in a repo directory, returning stdout as a trimmed string.
+pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
+    let output = tokio::process::Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(args)
+        .output()
+        .await
+        .map_err(ShadowError::Io)?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Run a git command, returning true if it exits successfully.
+pub async fn git_success(repo_path: &Path, args: &[&str]) -> bool {
+    tokio::process::Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+        .is_ok_and(|s| s.success())
+}
+
+/// Count commits in a rev-list range (e.g. `"origin/main..HEAD"`).
+pub async fn rev_list_count(repo_path: &Path, range: &str) -> u32 {
+    git_output(repo_path, &["rev-list", "--count", range])
+        .await
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

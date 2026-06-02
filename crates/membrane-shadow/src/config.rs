@@ -22,8 +22,10 @@ pub struct ShadowConfig {
     pub vps_root: String,
     /// SSH connect timeout in seconds.
     pub ssh_timeout: u32,
-    /// Forgejo data directory on VPS.
+    /// Forgejo data directory on VPS (e.g. `/opt/forgejo/data`).
     pub forgejo_data_dir: Option<String>,
+    /// Forgejo working directory on VPS (e.g. `/opt/forgejo`).
+    pub forgejo_work_dir: Option<String>,
     /// Forgejo admin username for token ops.
     pub forgejo_admin_user: Option<String>,
     /// Grep filter for systemd service discovery.
@@ -48,6 +50,7 @@ impl Default for ShadowConfig {
             vps_root: "/opt/ecoPrimals".into(),
             ssh_timeout: 10,
             forgejo_data_dir: None,
+            forgejo_work_dir: None,
             forgejo_admin_user: None,
             service_filter: "membrane|forgejo|caddy|knot|hbb|fail2ban".into(),
         }
@@ -82,6 +85,7 @@ impl ShadowConfig {
                 .unwrap_or(10),
             forgejo_token: None,
             forgejo_data_dir: std::env::var("FORGEJO_DATA_DIR").ok(),
+            forgejo_work_dir: std::env::var("FORGEJO_WORK_DIR").ok(),
             forgejo_admin_user: std::env::var("FORGEJO_ADMIN_USER")
                 .ok()
                 .or(toml_overrides.forgejo_admin_user),

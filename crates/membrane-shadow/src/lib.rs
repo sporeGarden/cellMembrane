@@ -79,3 +79,35 @@ pub mod temporal;
 
 pub use config::ShadowConfig;
 pub use error::{Result, ShadowError, ShadowOutcome};
+
+/// Resolve the ecoPrimals workspace root directory.
+///
+/// Resolution chain:
+/// 1. `ECOPRIMALS_ROOT` env var (validated by checking `primals/` subdir)
+/// 2. Walk up from current executable looking for workspace markers
+///
+/// Returns an error if no workspace can be found.
+pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
+    use std::path::{Path, PathBuf};
+
+    if let Ok(root) = std::env::var("ECOPRIMALS_ROOT") {
+        let path = PathBuf::from(&root);
+        if path.join("primals").exists() {
+            return Ok(path);
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent().map(Path::to_path_buf);
+        while let Some(d) = dir {
+            if d.join("primals").exists() {
+                return Ok(d);
+            }
+            dir = d.parent().map(Path::to_path_buf);
+        }
+    }
+
+    Err(ShadowError::Parse(
+        "cannot resolve ecoPrimals workspace root — set ECOPRIMALS_ROOT".into(),
+    ))
+}
