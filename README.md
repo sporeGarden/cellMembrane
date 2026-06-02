@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 66, 2026-05-31) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 67, 2026-06-01) |
 
 ---
 
@@ -54,16 +54,22 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 204 tests — pedantic clippy clean
+cargo test                  # 207 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 67+ (Cascade Evolution Sprint):** dispatch.rs split into 5 domain
+submodules (all <340L). Tree-parity divergence auto-resolution. `--publish-freshness`
+wired. `post_sync_diverge()` + graduated merge strategies. Impulse ack safety
+(separate ack files). Binary freshness tracking (`--check-installed`). All
+hardcoded paths evolved to capability-based discovery. rsync eliminated
+(SSH+cat). `ServicePaths` + `CredentialPaths` runtime resolvers. 207 tests.
 
 **Wave 66 (Deep Debt Evolution):** Eliminated 3 external tool dependencies
 (socat→native UDS, curl→reqwest, b3sum→blake3 crate). Removed deprecated
 signal.rs. Real BLAKE3 verification via checksums.toml. K-Derm relay chain
 implemented in Rust (relay.rs). `FetchSource` implements `FromStr` trait.
-204 tests.
 
 **Wave 65 (K-Derm Relay):** New `relay.rs` module — full peptidoglycan
 relay chain in Rust: `relay::mediate()`, `relay::ship_extracellular()`,
@@ -157,7 +163,8 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Deep debt sprint (Wave 57): 95.8% coverage, pedantic clean, typed errors | DONE |
 | NUCLEUS composition typed (Wave 59): 13 primals, 17 services in registry | DONE |
 | K-Derm relay chain in Rust (Wave 65): relay.rs replaces bash scripts | DONE |
-| Deep debt evolution (Wave 66): socat/curl/b3sum → native Rust, 204 tests | DONE |
+| Deep debt evolution (Wave 66): socat/curl/b3sum → native Rust | DONE |
+| Cascade evolution sprint (Wave 67+): dispatch split, tree-parity, freshness, ack safety, capability paths | DONE |
 
 ---
 
@@ -180,7 +187,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
 | 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
-| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 66, 2026-05-31) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 67, 2026-06-01) |
 | 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
@@ -252,7 +259,7 @@ gardens/cellMembrane/
       tests/
         channels.rs           # Channel trust, ports, crypto, serde (4 tests)
         composition.rs        # Ladder ordering, specs, serde (6 tests)
-        coverage.rs           # Deep coverage expansion (63 tests)
+        coverage.rs           # Deep coverage expansion (78 tests)
         envelope.rs           # K-Derm topology, layers, bonding, policies (27 tests)
         firewall.rs           # UFW derivation per composition (5 tests)
         service.rs            # Registry, binary integrity, credentials (15 tests)
@@ -260,11 +267,17 @@ gardens/cellMembrane/
         integration.rs        # Cross-module: config parsing, validation, topology (23 tests)
     membrane-shadow/          # Sovereign shadow functions CLI (#![forbid(unsafe_code)])
       src/
-        relay.rs              # K-Derm relay chain (pepti-sync + ext-github-push → Rust)
-        impulse.rs            # Inter-gate impulse coordination (native UDS JSON-RPC)
-        temporal.rs           # Manifest-driven temporal cascade sync
-        plasmid.rs            # Primal binary fetch (reqwest + blake3, no curl/b3sum)
-        dispatch.rs           # CLI command router
+        dispatch/             # CLI command router (5 domain submodules, all <340L)
+          mod.rs              # Top-level run() router
+          temporal.rs         # cascade, check, sync dispatch
+          impulse.rs          # impulse + potential sense dispatch
+          infra.rs            # repo, mirror, service, gate, token
+          data.rs             # manifest, identity, context, plasmid, relay
+        relay.rs              # K-Derm relay chain (SSH+cat, no rsync)
+        impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)
+        temporal.rs           # Manifest-driven temporal cascade + tree-parity
+        freshness.rs          # Wave freshness publishing + binary drift detection
+        plasmid.rs            # Primal binary fetch (reqwest + blake3, SSH for VPS)
         forgejo.rs            # Forgejo REST API (native reqwest)
         config.rs / ssh.rs    # Config resolution + SSH transport
   specs/                      # Formal architecture specs (5 documents)

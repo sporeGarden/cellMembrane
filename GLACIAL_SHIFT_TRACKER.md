@@ -1,8 +1,14 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-05-31
-**Overall status:** PROGRESSING — golgiBody Phase A live, WaterFall 33/36 validated, NS cutover remaining
+**Last updated:** 2026-06-01
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, 7-item cascade evolution complete, golgiBody Phase A live
+**Wave 67+ update:** Cascade evolution sprint — dispatch.rs split into 5 domain submodules (all <340L).
+Tree-parity divergence auto-resolution (SyncAction::TreeParity). `--publish-freshness` wired into cascade.
+`post_sync_diverge()` + graduated merge strategies (merge-ff, merge-rebase, impulse-only). Impulse ack
+safety evolved (separate ack files prevent rebase loss). Binary freshness tracking (`--check-installed`).
+All hardcoded paths evolved to capability-based discovery (ServicePaths, CredentialPaths). rsync eliminated
+(SSH+cat). 207 tests. Zero clippy warnings. S1 TLS graduated OPERATIONAL (13+ days clean).
 **Wave 66 update:** Deep debt evolution sprint — eliminated 3 external tool dependencies
 (socat→native UnixStream, curl→reqwest, b3sum→blake3 crate). Removed deprecated signal.rs.
 K-Derm relay chain fully in Rust (relay.rs: mediate + ship_extracellular + run). Real BLAKE3
