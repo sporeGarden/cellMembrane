@@ -48,6 +48,7 @@ Formal architecture for deployable membrane infrastructure:
 | `FIELDMOUSE_CONTRACT.md` | Deployment contract for third-party membrane operators |
 | `MULTI_MEMBRANE_DEPLOYMENT.md` | Multi-provider, multi-region parameterization model |
 | `K_DERM_TOPOLOGY.md` | K-Derm cell envelope model — monoderm/diderm, periplasm, bonding per layer |
+| `RELAY_TRUST_BOUNDARY.md` | Cross-gate relay security audit — BTSP opacity, trust levels per channel |
 
 ### Rust Types (`crates/cellmembrane-types/`)
 
