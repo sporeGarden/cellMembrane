@@ -1,8 +1,13 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-03 (Wave 73)
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, relay Rust-native, S3 VPS READY, **MESH VALIDATED** (2-gate discovery), ironGate mesh join prepped
+**Last updated:** 2026-06-03 (Wave 74)
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, relay Rust-native, S3 VPS READY, **MESH OPERATIONAL** (3-gate plasmodium collective: eastGate + strandGate + ironGate)
+**Wave 74 update:** ironGate **JOINED MESH** as 3rd plasmodium gate. BearDog + Songbird running locally
+with SONGBIRD_PEERS pointing to eastGate + strandGate. `discovery.peers` shows both peers,
+`mesh.health_check` all_healthy. `capability.call` cross-gate validated (Songbird fix `d6a6f714`
+landed — TCP→HTTP POST for JSON-RPC). Deep debt sprint: all `#[allow]` eliminated from production,
+`HardeningConfig` evolved to `HardeningStep` enum, `plasmid.rs::fetch()` decomposed. Zero clippy.
 **Wave 73 update:** westGate onboarding prep (manifest entry, GATE_SETUP_STANDARD updated). ironGate
 mesh join documented (SONGBIRD_PEERS config, capability symlinks, startup sequence, verification).
 strandGate deploy graph upgraded to `strand_heavy_compute.toml` (10 primals). Live mesh validated
@@ -77,7 +82,7 @@ All six criteria must be satisfied before glacial shift.
 | # | Criterion | Status | cellMembrane Role | Blocker Owner |
 |---|-----------|--------|-------------------|---------------|
 | 1 | All 4 sovereignty shadows cut over (7-day gates) | S1 **OPERATIONAL** (13d clean), S2 LIVE, S3 LIVE, S4 formal gate pending | Operate shadow infrastructure | Shared |
-| 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **UNBLOCKED** — 2-gate discovery PASS, capability.call fixed (Wave 73), ironGate = 3rd gate | Provide TURN rendezvous | Gate teams |
+| 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **OPERATIONAL** — 3-gate plasmodium (eastGate + strandGate + ironGate), discovery.peers + mesh.health_check PASS | Provide TURN rendezvous | Gate teams |
 | 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38, 2026-05-22) — 21/0/1 darkforest, 10/10 trio | Operate Nest Atomic | **RESOLVED** |
 | 4 | Remote covalent node (flockGate) validated over WAN | flockGate not deployed | Provide WAN rendezvous | Shared |
 | 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** with DNSSEC — zone has lab/git/membrane A records, NS cutover pending (registrar) | Complete registrar NS record change | **cellMembrane** |
@@ -124,30 +129,10 @@ configured, UFW :53 open. Remaining step is the registrar NS delegation update.
 - ICANN registrar cooperation (permanently external)
 - Current commercial DNS must remain available during transition
 
-### Blocker: Deploy biomeOS v3.84 to VPS (P0 — Critical Path)
+### ~~Blocker: Deploy biomeOS to VPS (P0)~~ — RESOLVED
 
-**What:** Deploy the full NUCLEUS composition (13 primals) including biomeOS v3.84.
-This unblocks all spring emissions and column U progression.
-
-**Current state:** biomeOS binary available in plasmidBin (`primals/x86_64-unknown-linux-musl/biomeos`).
-`deploy_membrane.sh deploy --composition nucleus --uds-only` ready. Cell graphs ready in primalSpring.
-`cellmembrane-types` NUCLEUS composition typed (17 services, 175 tests).
-
-**Checklist:**
-- [x] biomeOS binary harvested in plasmidBin ecoBin
-- [x] `deploy_membrane.sh` supports `--composition nucleus --uds-only`
-- [x] `spring-overlay` mode implemented in deploy script
-- [x] Cell graphs available: `hotspring_cell.toml` (6 VPS-standard springs)
-- [x] `cellmembrane-types` models NUCLEUS composition (13 primals, 6 new services)
-- [x] `membrane.toml` updated to `composition = "nucleus"`
-- [ ] Execute: `deploy_membrane.sh deploy root@$VPS_IP --composition nucleus --uds-only`
-- [ ] Verify: all 13 primals healthy via UDS sockets
-- [ ] Test: `deploy_membrane.sh spring-overlay root@$VPS_IP --cell hotspring`
-- [ ] Verify: hotSpring column U pass
-
-**Dependencies:**
-- SSH access to VPS (available)
-- DNS resolution working (currently intermittent — see CI note)
+**Deployed:** Wave 59 (2026-05-28). Full NUCLEUS composition (13 primals) running on VPS.
+biomeOS v0.1.0 active, all primals healthy via UDS sockets. See VPS_STATE.md for live status.
 
 ### Observation: CI Sovereignty Gap (S4)
 
@@ -306,7 +291,8 @@ scope expansion for `content.*`. When unblocked: `publish_sporeprint.sh` → Nes
 
 Gate teams deploying NUCLEUS compositions on LAN. cellMembrane provides TURN rendezvous via Songbird :3478. At least one remote covalent node (flockGate) must validate over WAN for criterion #4.
 
-**cellMembrane readiness:** TURN relay operational. 4 gates running as of Wave 50.
+**cellMembrane readiness:** TURN relay operational. **3-gate plasmodium mesh OPERATIONAL** (Wave 74):
+eastGate + strandGate + ironGate. `discovery.peers` + `mesh.health_check` validated.
 Forgejo inner membrane mirror healthy (25 native pull mirrors + 6 timer-synced, all current).
 
 ---
@@ -315,7 +301,7 @@ Forgejo inner membrane mirror healthy (25 native pull mirrors + 6 timer-synced, 
 
 | Track | Sovereign | Shadow | 7-Day Gate | Status |
 |-------|-----------|--------|------------|--------|
-| S1 TLS | BearDog :8443 | Cloudflare | p95 ≤ 1.5× commercial | Shadow live, **NOT cut over** |
+| S1 TLS | Caddy + LE | Cloudflare (INACTIVE) | p95 ≤ 1.5× commercial | **OPERATIONAL** — 13+ days clean, Caddy sole TLS provider |
 | S2 NAT | Songbird :3478 | cloudflared | 100% reachable | **LIVE — tracking 7-day window** |
 | S3 Content | NestGate + petalTongue | GitHub Pages | TTFB parity | **VPS READY** — awaiting DNS flip (Caddyfile configured, 67ms TTFB) |
 | S4 Auth | BearDog BTSP | OAuth2/PAM (disabled) | p95 < 50ms | **ENFORCED** — 7-day formal gate active |

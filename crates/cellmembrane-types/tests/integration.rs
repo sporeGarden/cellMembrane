@@ -105,7 +105,7 @@ fn hardening_defaults_include_journald() {
     "#,
     )
     .unwrap();
-    assert!(config.membrane.hardening.journald_persistent);
+    assert!(config.membrane.hardening.journald_persistent());
 }
 
 #[test]

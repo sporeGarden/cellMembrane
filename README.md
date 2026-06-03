@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 73, 2026-06-03) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 74, 2026-06-03) |
 
 ---
 
@@ -58,6 +58,15 @@ cargo test                  # 210 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 74+ (Evolution Sprint):** All remaining `#[allow]` annotations eliminated from
+production code. `HardeningConfig` evolved from 5 bools (with `struct_excessive_bools`)
+to `HardeningStep` enum + `disabled_steps` vector — capability-driven, extensible.
+`plasmid.rs::fetch()` decomposed further into `fetch_primals()`, `format_dry_run()`,
+`format_fetch_outcome()`. `FetchResult` now `Clone`, `FetchSource` implements `Display`.
+NestGate content path evolved to `NESTGATE_CONTENT_PATH` env-driven. ironGate joined
+mesh as 3rd plasmodium gate (BearDog + Songbird, 2-peer discovery validated).
+210 tests, zero clippy (pedantic+nursery), zero `#[allow]` in production.
 
 **Wave 71 (Capability Expansion + Deprecation):** Legacy `cascade()` removed —
 all callers migrated to `cascade_with_opts(CascadeOpts)`. `#[allow(fn_params_excessive_bools)]`
@@ -197,6 +206,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Sovereignty graduation (Wave 69): membrane deployed to VPS, S4 auth enforced, relay Rust-native, disk 60% | DONE |
 | Deep debt evolution (Wave 69+): all too_many_lines eliminated, CascadeMode enum, freshness wired, all files <800L | DONE |
 | Capability expansion (Wave 71): legacy cascade() removed, relay.status/gate.health/content.verify, S3 VPS READY | DONE |
+| Evolution sprint (Wave 74+): zero #[allow], HardeningStep enum, fetch decomposed, mesh join (3rd gate) | DONE |
 
 ---
 

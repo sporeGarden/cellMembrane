@@ -676,7 +676,7 @@ fn validate_journald_disabled_warns() {
         name = "test"
         composition = "relay"
         [membrane.hardening]
-        journald_persistent = false
+        disabled_steps = ["journald_persistent"]
     "#;
     let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
     let report = file.membrane.validate();

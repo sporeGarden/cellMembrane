@@ -325,9 +325,11 @@ pub(super) async fn dispatch_content(
                 crate::ssh::exec_raw(config, "systemctl is-active nestgate-membrane").await?;
             let nestgate_active = nestgate_code == 0;
 
+            let content_path = std::env::var("NESTGATE_CONTENT_PATH")
+                .unwrap_or_else(|_| "/opt/membrane/nestgate/content".into());
             let (content_count_out, _) = crate::ssh::exec_raw(
                 config,
-                "find /opt/membrane/nestgate/content -type f 2>/dev/null | wc -l",
+                &format!("find {content_path} -type f 2>/dev/null | wc -l"),
             )
             .await?;
             let content_files: u32 = content_count_out.trim().parse().unwrap_or(0);

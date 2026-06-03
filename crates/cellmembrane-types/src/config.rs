@@ -162,39 +162,91 @@ pub struct ChannelOverrides {
 ///
 /// Maps to MEM-01 (SSH), MEM-02 (fail2ban), MEM-06 (services), MEM-07 (journald)
 /// in `darkforest_membrane.sh`.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[allow(clippy::struct_excessive_bools)]
+///
+/// All steps are enabled by default. Disable individual steps via TOML:
+/// ```toml
+/// [hardening]
+/// disabled_steps = ["remove_provider_agent"]
+/// ```
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct HardeningConfig {
-    /// Install and enable fail2ban (MEM-02).
-    #[serde(default = "default_true")]
-    pub fail2ban: bool,
-    /// Enable unattended security updates.
-    #[serde(default = "default_true")]
-    pub unattended_upgrades: bool,
-    /// Remove mail transfer agent — exim4, postfix (MEM-06).
-    #[serde(default = "default_true")]
-    pub remove_mail_agent: bool,
-    /// Remove provider-specific agents — droplet-agent, snapd (MEM-06).
-    #[serde(default = "default_true")]
-    pub remove_provider_agent: bool,
-    /// Enable persistent journald storage at `/var/log/journal/` (MEM-07).
-    #[serde(default = "default_true")]
-    pub journald_persistent: bool,
+    /// Steps explicitly disabled by the operator. All others are active.
+    #[serde(default)]
+    pub disabled_steps: Vec<HardeningStep>,
 }
 
-impl Default for HardeningConfig {
-    fn default() -> Self {
-        Self {
-            fail2ban: true,
-            unattended_upgrades: true,
-            remove_mail_agent: true,
-            remove_provider_agent: true,
-            journald_persistent: true,
-        }
-    }
+/// Individual hardening steps that can be toggled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HardeningStep {
+    /// Install and enable fail2ban (MEM-02).
+    Fail2ban,
+    /// Enable unattended security updates.
+    UnattendedUpgrades,
+    /// Remove mail transfer agent — exim4, postfix (MEM-06).
+    RemoveMailAgent,
+    /// Remove provider-specific agents — droplet-agent, snapd (MEM-06).
+    RemoveProviderAgent,
+    /// Enable persistent journald storage at `/var/log/journal/` (MEM-07).
+    JournaldPersistent,
 }
 
 impl HardeningConfig {
+    /// All hardening steps in canonical order.
+    pub const ALL_STEPS: &[HardeningStep] = &[
+        HardeningStep::Fail2ban,
+        HardeningStep::UnattendedUpgrades,
+        HardeningStep::RemoveMailAgent,
+        HardeningStep::RemoveProviderAgent,
+        HardeningStep::JournaldPersistent,
+    ];
+
+    /// Check if a hardening step is enabled (i.e., not in the disabled list).
+    #[must_use]
+    pub fn is_enabled(&self, step: HardeningStep) -> bool {
+        !self.disabled_steps.contains(&step)
+    }
+
+    /// Returns the set of active hardening steps.
+    #[must_use]
+    pub fn active_steps(&self) -> Vec<HardeningStep> {
+        Self::ALL_STEPS
+            .iter()
+            .copied()
+            .filter(|s| self.is_enabled(*s))
+            .collect()
+    }
+
+    /// Legacy compatibility: check fail2ban enabled.
+    #[must_use]
+    pub fn fail2ban(&self) -> bool {
+        self.is_enabled(HardeningStep::Fail2ban)
+    }
+
+    /// Legacy compatibility: check `unattended_upgrades` enabled.
+    #[must_use]
+    pub fn unattended_upgrades(&self) -> bool {
+        self.is_enabled(HardeningStep::UnattendedUpgrades)
+    }
+
+    /// Legacy compatibility: check `remove_mail_agent` enabled.
+    #[must_use]
+    pub fn remove_mail_agent(&self) -> bool {
+        self.is_enabled(HardeningStep::RemoveMailAgent)
+    }
+
+    /// Legacy compatibility: check `remove_provider_agent` enabled.
+    #[must_use]
+    pub fn remove_provider_agent(&self) -> bool {
+        self.is_enabled(HardeningStep::RemoveProviderAgent)
+    }
+
+    /// Legacy compatibility: check `journald_persistent` enabled.
+    #[must_use]
+    pub fn journald_persistent(&self) -> bool {
+        self.is_enabled(HardeningStep::JournaldPersistent)
+    }
+
     /// Services that must NOT be running (MEM-06).
     #[must_use]
     pub const fn prohibited_services() -> &'static [&'static str] {
@@ -550,7 +602,7 @@ impl MembraneConfig {
     }
 
     fn validate_hardening(&self, report: &mut Report) {
-        if !self.hardening.journald_persistent {
+        if !self.hardening.journald_persistent() {
             report.warn(
                 "hardening.journald",
                 "journald_persistent is false — volatile logging, no post-mortem forensics",
