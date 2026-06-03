@@ -498,21 +498,19 @@ ln -sf $SOCKET_DIR/songbird.sock $SOCKET_DIR/orchestration.sock
 
 1. Start BearDog (needs `FAMILY_ID`, `NODE_ID`)
 2. Create security symlinks
-3. Start Songbird (needs `SECURITY_ENDPOINT`, `SONGBIRD_FEDERATION_PORT`)
+3. Start Songbird (needs `SECURITY_ENDPOINT`, `SONGBIRD_FEDERATION_PORT`, `SONGBIRD_PEERS`)
 4. Create discovery/orchestration symlinks
-5. Initialize mesh (until auto-seed is fixed in Songbird):
+5. Mesh auto-bootstraps from `SONGBIRD_PEERS` on startup (Wave 73 fix: `spawn_mesh_seed()`)
 
 ```bash
-# Manual mesh.init (required in Songbird v0.2.1 — mesh_seed not auto-wired)
+# Songbird auto-bootstraps peers on boot via SONGBIRD_PEERS env var.
+# Manual mesh.init is only needed if adding peers AFTER startup:
 curl -s -X POST http://127.0.0.1:7700/jsonrpc -H "Content-Type: application/json" -d '{
   "jsonrpc": "2.0",
   "method": "mesh.init",
   "params": {
     "node_id": "iron-gate",
-    "bootstrap_peers": [
-      {"node_id": "east-gate", "address": "192.168.1.144:7700"},
-      {"node_id": "strand-gate", "address": "192.168.1.132:7700"}
-    ]
+    "bootstrap_peers": ["east-gate@192.168.1.144:7700", "strand-gate@192.168.1.132:7700"]
   },
   "id": 1
 }'
@@ -532,10 +530,15 @@ curl -s http://127.0.0.1:7700/jsonrpc -H "Content-Type: application/json" -d '{
 }' | jq '.result.all_healthy'
 ```
 
-### Known Limitations (Wave 73)
+### Known Limitations (Wave 74)
 
-- `capability.call` cross-gate dispatch is broken (Songbird sends raw TCP,
-  needs HTTP POST — FRAGO `wave72-songbird-remote-dispatch-fix` filed)
-- `SONGBIRD_PEERS` env var not consumed on startup (requires manual `mesh.init`)
-- `latency_ms` not populated in `discovery.peers` response
-- ironGate becomes 3rd plasmodium gate AFTER Songbird dispatch fix lands
+- Cross-subnet southGate (192.168.4.x) unreachable from 192.168.1.x — needs
+  Eero inter-VLAN routing or TURN relay via cellMembrane VPS
+- ironGate joins as 3rd plasmodium gate on same subnet (192.168.1.238)
+
+### Resolved (Wave 73 Songbird fix, commit d6a6f714)
+
+- `capability.call` cross-gate — now uses HTTP POST to `/jsonrpc` (was raw TCP)
+- `SONGBIRD_PEERS` auto-bootstraps on startup (was requiring manual `mesh.init`)
+- `mesh.init` accepts string format `"node@host:port"` (was object-only)
+- `latency_ms` populated via periodic health probes (~2 min interval)
