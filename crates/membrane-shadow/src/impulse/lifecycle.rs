@@ -145,8 +145,7 @@ pub fn sense(
                 }
 
                 let dominated = if let Some(ref gate) = local_gate {
-                    imp.to.gates.contains(&"*".to_string())
-                        || imp.to.gates.iter().any(|g| g == gate)
+                    imp.to.gates.iter().any(|g| g == "*") || imp.to.gates.iter().any(|g| g == gate)
                 } else {
                     true
                 };

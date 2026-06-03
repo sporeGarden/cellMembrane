@@ -52,7 +52,7 @@ pub fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[Imp
     if !impulse.meta.ack_required || impulse.to.gates.is_empty() {
         return false;
     }
-    if impulse.to.gates.contains(&"*".to_string()) {
+    if impulse.to.gates.iter().any(|g| g == "*") {
         return false;
     }
     impulse.to.gates.iter().all(|g| {
