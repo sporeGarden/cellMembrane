@@ -453,3 +453,89 @@ cargo build -p plasmidbin --release --target aarch64-unknown-linux-musl
 Only `validate.yml` can run during a full GitHub codeload outage. Other workflows
 still need `actions/checkout@v4` and `actions/upload-artifact@v4` downloaded from
 GitHub. Evolving these to raw git + direct upload is future work.
+
+---
+
+## 12. Mesh Join — ironGate as Plasmodium Gate
+
+### Prerequisites
+
+- All 13 NUCLEUS primal UDS sockets active under `/run/user/1000/biomeos/`
+- BearDog running with TCP endpoint (`:9900` or UDS)
+- Songbird federation port configured (`:7700`)
+- Remote mesh partner operational (eastGate, strandGate)
+
+### Environment Variables
+
+```bash
+# ironGate mesh configuration
+export SONGBIRD_NODE_ID=iron-gate
+export SONGBIRD_PEERS=east-gate@192.168.1.144:7700,strand-gate@192.168.1.132:7700
+export SONGBIRD_FEDERATION_PORT=7700
+export SONGBIRD_FEDERATION_ENABLED=true
+export SECURITY_ENDPOINT=http://127.0.0.1:9900
+export FAMILY_ID=irongate
+```
+
+### Capability Symlinks
+
+Songbird and biomeOS discover capabilities via socket symlinks:
+
+```bash
+SOCKET_DIR=/run/user/1000/biomeos
+
+# BearDog provides security capabilities
+ln -sf $SOCKET_DIR/beardog-irongate.sock $SOCKET_DIR/security.sock
+ln -sf $SOCKET_DIR/beardog-irongate.sock $SOCKET_DIR/btsp.sock
+ln -sf $SOCKET_DIR/beardog-irongate.sock $SOCKET_DIR/crypto.sock
+
+# Songbird provides mesh capabilities
+ln -sf $SOCKET_DIR/songbird.sock $SOCKET_DIR/discovery.sock
+ln -sf $SOCKET_DIR/songbird.sock $SOCKET_DIR/orchestration.sock
+```
+
+### Startup Sequence
+
+1. Start BearDog (needs `FAMILY_ID`, `NODE_ID`)
+2. Create security symlinks
+3. Start Songbird (needs `SECURITY_ENDPOINT`, `SONGBIRD_FEDERATION_PORT`)
+4. Create discovery/orchestration symlinks
+5. Initialize mesh (until auto-seed is fixed in Songbird):
+
+```bash
+# Manual mesh.init (required in Songbird v0.2.1 — mesh_seed not auto-wired)
+curl -s -X POST http://127.0.0.1:7700/jsonrpc -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "method": "mesh.init",
+  "params": {
+    "node_id": "iron-gate",
+    "bootstrap_peers": [
+      {"node_id": "east-gate", "address": "192.168.1.144:7700"},
+      {"node_id": "strand-gate", "address": "192.168.1.132:7700"}
+    ]
+  },
+  "id": 1
+}'
+```
+
+### Verification
+
+```bash
+# Check peer discovery
+curl -s http://127.0.0.1:7700/jsonrpc -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0", "method": "discovery.peers", "params": {}, "id": 1
+}' | jq '.result.total_count'
+
+# Check mesh health
+curl -s http://127.0.0.1:7700/jsonrpc -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0", "method": "mesh.health_check", "params": {}, "id": 1
+}' | jq '.result.all_healthy'
+```
+
+### Known Limitations (Wave 73)
+
+- `capability.call` cross-gate dispatch is broken (Songbird sends raw TCP,
+  needs HTTP POST — FRAGO `wave72-songbird-remote-dispatch-fix` filed)
+- `SONGBIRD_PEERS` env var not consumed on startup (requires manual `mesh.init`)
+- `latency_ms` not populated in `discovery.peers` response
+- ironGate becomes 3rd plasmodium gate AFTER Songbird dispatch fix lands

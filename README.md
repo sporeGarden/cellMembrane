@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 71, 2026-06-02) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 73, 2026-06-03) |
 
 ---
 

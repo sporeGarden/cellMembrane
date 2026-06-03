@@ -1,8 +1,13 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-02 (Wave 71)
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, membrane deployed to VPS, relay Rust-native, deep debt zero, S3 VPS READY
+**Last updated:** 2026-06-03 (Wave 73)
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, relay Rust-native, S3 VPS READY, **MESH VALIDATED** (2-gate discovery), ironGate mesh join prepped
+**Wave 73 update:** westGate onboarding prep (manifest entry, GATE_SETUP_STANDARD updated). ironGate
+mesh join documented (SONGBIRD_PEERS config, capability symlinks, startup sequence, verification).
+strandGate deploy graph upgraded to `strand_heavy_compute.toml` (10 primals). Live mesh validated
+by eastGate (discovery.peers + mesh.health_check 2-gate PASS). `capability.call` cross-gate blocked
+on Songbird remote dispatch fix (raw TCP → HTTP POST). ironGate = 3rd plasmodium gate after fix lands.
 **Wave 71 update:** Legacy `cascade()` removed (all callers migrated to `cascade_with_opts`). New commands:
 `relay.status`, `gate.health`, `content.verify`. S3 content cutover documented — VPS READY, awaiting
 DNS flip only. 210 tests. Zero clippy (pedantic+nursery).
