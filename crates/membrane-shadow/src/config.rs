@@ -47,7 +47,7 @@ struct TomlOverrides {
 impl Default for ShadowConfig {
     fn default() -> Self {
         Self {
-            ssh_host: "golgi".into(),
+            ssh_host: std::env::var("MEMBRANE_SSH_HOST").unwrap_or_else(|_| "golgi".into()),
             forgejo_api: String::new(),
             forgejo_token: None,
             vps_root: "/opt/ecoPrimals".into(),

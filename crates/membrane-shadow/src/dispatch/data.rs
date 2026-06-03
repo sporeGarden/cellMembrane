@@ -334,9 +334,15 @@ pub(super) async fn dispatch_content(
             .await?;
             let content_files: u32 = content_count_out.trim().parse().unwrap_or(0);
 
+            let nestgate_port = std::env::var("NESTGATE_PORT")
+                .ok()
+                .and_then(|v| v.parse::<u16>().ok())
+                .unwrap_or(9500);
+            let bind = std::env::var("NUCLEUS_BIND_ADDRESS")
+                .unwrap_or_else(|_| "127.0.0.1".into());
             let (curl_out, curl_code) = crate::ssh::exec_raw(
                 config,
-                "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9500/health 2>/dev/null",
+                &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{nestgate_port}/health 2>/dev/null"),
             )
             .await?;
             let nestgate_http = curl_out.trim().to_string();
@@ -353,7 +359,7 @@ pub(super) async fn dispatch_content(
                  Status:         {status}\n\
                  Caddy TLS:      {} ({})\n\
                  NestGate:       {} ({})\n\
-                 NestGate HTTP:  {} (localhost:9500/health)\n\
+                 NestGate HTTP:  {} ({bind}:{nestgate_port}/health)\n\
                  Content files:  {content_files}",
                 if caddy_active { "active" } else { "inactive" },
                 caddy_out.trim(),
