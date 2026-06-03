@@ -99,14 +99,21 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     let publish_freshness = args.contains(&"--publish-freshness");
     let check_installed = args.contains(&"--check-installed");
 
-    let mut outcome = temporal::cascade(
-        &gate_name,
+    let mode = if dry_run {
+        temporal::CascadeMode::DryRun
+    } else if check_only {
+        temporal::CascadeMode::CheckOnly
+    } else {
+        temporal::CascadeMode::Sync
+    };
+
+    let mut outcome = temporal::cascade_with_opts(&temporal::CascadeOpts {
+        gate: &gate_name,
         source,
-        check_only,
+        mode,
         clone_missing,
-        dry_run,
         publish_freshness,
-    )
+    })
     .await?;
 
     if check_installed {

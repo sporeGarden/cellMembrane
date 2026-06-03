@@ -35,6 +35,22 @@ pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
     }
 }
 
+/// Quick SSH connectivity check — returns true if the host is reachable.
+pub async fn check_connectivity(host: &str) -> bool {
+    Command::new("ssh")
+        .args([
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "BatchMode=yes",
+            host,
+            "true",
+        ])
+        .output()
+        .await
+        .is_ok_and(|o| o.status.success())
+}
+
 /// Execute a command and return both stdout and exit code (non-fatal on failure).
 pub async fn exec_raw(config: &ShadowConfig, command: &str) -> Result<(String, i32)> {
     let output = Command::new("ssh")

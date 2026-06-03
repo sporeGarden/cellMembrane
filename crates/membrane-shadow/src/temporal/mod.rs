@@ -14,7 +14,7 @@
 mod cascade;
 pub mod types;
 
-pub use cascade::{CascadeMode, CascadeOpts, cascade, cascade_with_opts};
+pub use cascade::{CascadeMode, CascadeOpts, cascade_with_opts};
 pub use types::*;
 
 use crate::error::Result;

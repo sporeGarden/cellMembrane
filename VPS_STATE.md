@@ -196,7 +196,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellMembrane workspace) | 208 PASS, 0 FAIL | 2026-06-01 |
+| `cargo test` (cellMembrane workspace) | 210 PASS, 0 FAIL | 2026-06-02 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

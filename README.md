@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 69, 2026-06-02) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 71, 2026-06-02) |
 
 ---
 
@@ -54,10 +54,17 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 209 tests — pedantic clippy clean
+cargo test                  # 210 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 71 (Capability Expansion + Deprecation):** Legacy `cascade()` removed —
+all callers migrated to `cascade_with_opts(CascadeOpts)`. `#[allow(fn_params_excessive_bools)]`
+eliminated. New commands: `membrane relay.status` (relay chain health), `membrane gate.health`
+(aggregate service + disk), `membrane content.verify` (S3 sporePrint integrity check).
+`ssh::check_connectivity()` for non-blocking SSH probe. S3 content cutover documented —
+VPS READY, cutover is a single DNS flip. 210 tests, zero clippy.
 
 **Wave 69+ (Deep Debt Evolution):** All `#[allow(clippy::too_many_lines)]` eliminated.
 `plasmid.rs::fetch()` decomposed into staged pipeline (dry-run, fetch loop, summary).
@@ -189,6 +196,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Graduated composition (Wave 68): Neural Bridge in dispatch, gate bash→Rust, PushResult, #[must_use] sweep | DONE |
 | Sovereignty graduation (Wave 69): membrane deployed to VPS, S4 auth enforced, relay Rust-native, disk 60% | DONE |
 | Deep debt evolution (Wave 69+): all too_many_lines eliminated, CascadeMode enum, freshness wired, all files <800L | DONE |
+| Capability expansion (Wave 71): legacy cascade() removed, relay.status/gate.health/content.verify, S3 VPS READY | DONE |
 
 ---
 

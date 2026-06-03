@@ -73,6 +73,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,
         c if c.starts_with("plasmid.") => data::dispatch_plasmid(config, cmd, args).await,
         c if c.starts_with("relay.") => data::dispatch_relay(cmd, args).await,
+        c if c.starts_with("content.") => data::dispatch_content(config, cmd, args).await,
         "forgejo.version" => {
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))

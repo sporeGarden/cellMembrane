@@ -33,36 +33,6 @@ pub struct CascadeOpts<'a> {
     pub publish_freshness: bool,
 }
 
-/// Execute a full cascade sync — the Rust evolution of `cascade-pull.sh`.
-///
-/// Reads the gate profile from `ecosystem_manifest.toml`, resolves temporal
-/// position for each repo, pulls from leader, and reports parity.
-#[allow(clippy::fn_params_excessive_bools)]
-pub async fn cascade(
-    gate_name: &str,
-    source: &str,
-    check_only: bool,
-    clone_missing: bool,
-    dry_run: bool,
-    publish_freshness: bool,
-) -> Result<crate::ShadowOutcome> {
-    let mode = if dry_run {
-        CascadeMode::DryRun
-    } else if check_only {
-        CascadeMode::CheckOnly
-    } else {
-        CascadeMode::Sync
-    };
-    cascade_with_opts(&CascadeOpts {
-        gate: gate_name,
-        source,
-        mode,
-        clone_missing,
-        publish_freshness,
-    })
-    .await
-}
-
 /// Execute cascade with typed options.
 pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOutcome> {
     let root = resolve_workspace_root()?;

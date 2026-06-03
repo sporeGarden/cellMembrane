@@ -286,8 +286,70 @@ pub(super) async fn dispatch_gate(
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
+        "gate.health" => gate_health(config).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
     }
+}
+
+async fn gate_health(config: &ShadowConfig) -> crate::Result<ShadowOutcome> {
+    let services = service::list(config).await?;
+    let total = services.len();
+    let healthy = services.iter().filter(|s| s.sub_state == "running").count();
+    let degraded: Vec<&str> = services
+        .iter()
+        .filter(|s| s.sub_state != "running")
+        .map(|s| s.unit.as_str())
+        .collect();
+
+    let disk = crate::ssh::exec(config, "df --output=pcent / | tail -1")
+        .await
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    let status = if degraded.is_empty() {
+        "HEALTHY"
+    } else {
+        "DEGRADED"
+    };
+
+    let msg = format!(
+        "=== Gate Health ===\n\
+         Status:   {status}\n\
+         Services: {healthy}/{total} running\n\
+         Disk:     {disk}\n\
+         {}",
+        if degraded.is_empty() {
+            String::new()
+        } else {
+            format!("Degraded: {}", degraded.join(", "))
+        }
+    );
+
+    let ok = degraded.is_empty();
+    Ok(if ok {
+        ShadowOutcome::ok_with(
+            msg,
+            serde_json::json!({
+                "status": status,
+                "services_total": total,
+                "services_healthy": healthy,
+                "disk": disk,
+            }),
+        )
+    } else {
+        ShadowOutcome {
+            ok: false,
+            message: msg,
+            data: Some(serde_json::json!({
+                "status": status,
+                "services_total": total,
+                "services_healthy": healthy,
+                "degraded": degraded,
+                "disk": disk,
+            })),
+        }
+    })
 }
 
 // ── Token domain ─────────────────────────────────────────────────────

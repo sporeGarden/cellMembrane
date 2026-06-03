@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Data domain dispatch — manifest, identity, context, plasmid, relay.
+//! Data domain dispatch — manifest, identity, context, plasmid, relay, content.
 //!
 //! These domains handle local data operations (manifest reading, context braids,
-//! binary fetching, K-Derm relay chain).
+//! binary fetching, K-Derm relay chain, content verification).
 
 use crate::cli;
 use crate::{ShadowConfig, ShadowOutcome, context, identity, manifest, plasmid, relay, temporal};
@@ -255,6 +255,147 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
                 }),
             ))
         }
+        "relay.status" => relay_status().await,
         _ => Ok(ShadowOutcome::fail(format!("unknown relay command: {cmd}"))),
+    }
+}
+
+async fn relay_status() -> crate::Result<ShadowOutcome> {
+    let relay_cfg = relay::RelayConfig::from_env();
+    let root = temporal::resolve_workspace_root()?;
+    let m = manifest::load_from_workspace(&root)?;
+
+    let ext_host = &relay_cfg.golgi_ext_host;
+    let ssh_ok_ext = crate::ssh::check_connectivity(ext_host).await;
+
+    let repo_count = m.repos.len();
+    let topology = m.topology.as_ref().map_or("unknown", |t| t.model.as_str());
+
+    let msg = format!(
+        "=== Relay Chain Status ===\n\
+         Topology:      {topology}\n\
+         Ext host:      {ext_host} (SSH: {})\n\
+         Forgejo remote: {}\n\
+         Workspace:     {}\n\
+         Repos:         {repo_count}\n\
+         Relay mode:    Rust-native (membrane relay.run)",
+        if ssh_ok_ext { "OK" } else { "FAIL" },
+        relay_cfg.forgejo_remote,
+        relay_cfg.ecoprimals_root.display(),
+    );
+
+    Ok(if ssh_ok_ext {
+        ShadowOutcome::ok_with(
+            msg,
+            serde_json::json!({
+                "ext_host": ext_host,
+                "ext_ssh": ssh_ok_ext,
+                "forgejo_remote": relay_cfg.forgejo_remote,
+                "workspace": relay_cfg.ecoprimals_root.to_string_lossy(),
+                "repo_count": repo_count,
+                "topology": topology,
+            }),
+        )
+    } else {
+        ShadowOutcome {
+            ok: false,
+            message: msg,
+            data: Some(serde_json::json!({
+                "ext_host": ext_host,
+                "ext_ssh": ssh_ok_ext,
+            })),
+        }
+    })
+}
+
+// ── Content domain (S3 sporePrint content integrity) ─────────────────
+
+pub(super) async fn dispatch_content(
+    config: &ShadowConfig,
+    cmd: &str,
+    _args: &[&str],
+) -> crate::Result<ShadowOutcome> {
+    match cmd {
+        "content.verify" => {
+            let (caddy_out, caddy_code) =
+                crate::ssh::exec_raw(config, "systemctl is-active caddy-tls").await?;
+            let caddy_active = caddy_code == 0;
+
+            let (nestgate_out, nestgate_code) =
+                crate::ssh::exec_raw(config, "systemctl is-active nestgate-membrane").await?;
+            let nestgate_active = nestgate_code == 0;
+
+            let (content_count_out, _) = crate::ssh::exec_raw(
+                config,
+                "find /opt/membrane/nestgate/content -type f 2>/dev/null | wc -l",
+            )
+            .await?;
+            let content_files: u32 = content_count_out.trim().parse().unwrap_or(0);
+
+            let (curl_out, curl_code) = crate::ssh::exec_raw(
+                config,
+                "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9500/health 2>/dev/null",
+            )
+            .await?;
+            let nestgate_http = curl_out.trim().to_string();
+            let nestgate_responding = curl_code == 0 && nestgate_http == "200";
+
+            let status = if caddy_active && nestgate_active && nestgate_responding {
+                "READY"
+            } else {
+                "NOT READY"
+            };
+
+            let msg = format!(
+                "=== S3 Content Verification ===\n\
+                 Status:         {status}\n\
+                 Caddy TLS:      {} ({})\n\
+                 NestGate:       {} ({})\n\
+                 NestGate HTTP:  {} (localhost:9500/health)\n\
+                 Content files:  {content_files}",
+                if caddy_active { "active" } else { "inactive" },
+                caddy_out.trim(),
+                if nestgate_active {
+                    "active"
+                } else {
+                    "inactive"
+                },
+                nestgate_out.trim(),
+                if nestgate_responding {
+                    "200 OK"
+                } else {
+                    &nestgate_http
+                },
+            );
+
+            let ok = caddy_active && nestgate_active && nestgate_responding;
+            Ok(if ok {
+                ShadowOutcome::ok_with(
+                    msg,
+                    serde_json::json!({
+                        "status": status,
+                        "caddy": caddy_active,
+                        "nestgate": nestgate_active,
+                        "nestgate_http": nestgate_http,
+                        "content_files": content_files,
+                    }),
+                )
+            } else {
+                ShadowOutcome {
+                    ok: false,
+                    message: msg,
+                    data: Some(serde_json::json!({
+                        "status": status,
+                        "caddy": caddy_active,
+                        "nestgate": nestgate_active,
+                        "nestgate_http": nestgate_http,
+                        "content_files": content_files,
+                    })),
+                }
+            })
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown content command: {cmd}"
+        ))),
     }
 }

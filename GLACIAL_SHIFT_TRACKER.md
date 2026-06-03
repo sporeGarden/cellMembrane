@@ -1,8 +1,11 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-02
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, membrane deployed to VPS, relay Rust-native, deep debt zero
+**Last updated:** 2026-06-02 (Wave 71)
+**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, membrane deployed to VPS, relay Rust-native, deep debt zero, S3 VPS READY
+**Wave 71 update:** Legacy `cascade()` removed (all callers migrated to `cascade_with_opts`). New commands:
+`relay.status`, `gate.health`, `content.verify`. S3 content cutover documented — VPS READY, awaiting
+DNS flip only. 210 tests. Zero clippy (pedantic+nursery).
 **Wave 69+ update:** Deep debt evolution — all `#[allow(clippy::too_many_lines)]` eliminated from codebase.
 `plasmid.rs::fetch()` decomposed into staged pipeline. `temporal/mod.rs` extracted 4 helpers (sync_converge,
 sync_diverge, resolve_tree_parity, count_divergent_remotes). `cascade.rs` evolved: `CascadeMode` enum
@@ -309,7 +312,7 @@ Forgejo inner membrane mirror healthy (25 native pull mirrors + 6 timer-synced, 
 |-------|-----------|--------|------------|--------|
 | S1 TLS | BearDog :8443 | Cloudflare | p95 ≤ 1.5× commercial | Shadow live, **NOT cut over** |
 | S2 NAT | Songbird :3478 | cloudflared | 100% reachable | **LIVE — tracking 7-day window** |
-| S3 Content | NestGate + petalTongue | GitHub Pages | TTFB parity | **LIVE — 68ms vs 89ms** |
+| S3 Content | NestGate + petalTongue | GitHub Pages | TTFB parity | **VPS READY** — awaiting DNS flip (Caddyfile configured, 67ms TTFB) |
 | S4 Auth | BearDog BTSP | OAuth2/PAM (disabled) | p95 < 50ms | **ENFORCED** — 7-day formal gate active |
 
 **Cutover sequence:** S2 → S3 → S4 → S1 (S1 last because it requires Cloudflare removal)
