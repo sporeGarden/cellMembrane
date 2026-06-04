@@ -76,6 +76,10 @@ pub struct MembraneConfig {
     #[serde(default)]
     pub hardening: HardeningConfig,
 
+    /// Trust barrier configuration (peptidoglycan composition only).
+    #[serde(default)]
+    pub trust_barrier: Option<TrustBarrierConfig>,
+
     /// Telemetry and shadow validation configuration.
     #[serde(default)]
     pub telemetry: TelemetryConfig,
@@ -252,6 +256,31 @@ impl HardeningConfig {
     pub const fn prohibited_services() -> &'static [&'static str] {
         &["exim4", "droplet-agent", "snapd"]
     }
+}
+
+/// Trust barrier configuration for peptidoglycan composition.
+///
+/// Defines the relationship between outer and inner membranes,
+/// and the opacity guarantees this relay provides.
+///
+/// ```toml
+/// [membrane.trust_barrier]
+/// inner_domain = "primal.eco"
+/// outer_domain = "primals.eco"
+/// opaque_relay = true
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TrustBarrierConfig {
+    /// Domain of the inner membrane (sovereign, full trust).
+    pub inner_domain: String,
+    /// Domain of the outer membrane (world-facing, untrusted by inner).
+    pub outer_domain: String,
+    /// Whether BTSP tokens must be opaque in transit through this barrier.
+    #[serde(default = "default_true")]
+    pub opaque_relay: bool,
+    /// Content domain for CAS objects (optional, e.g. `nestgate.io`).
+    #[serde(default)]
+    pub content_domain: Option<String>,
 }
 
 /// Shadow validation mode — whether telemetry runs in permanent shadow,

@@ -351,3 +351,63 @@ fn validate_monoderm_vps_warns() {
         "Monoderm with VPS should warn"
     );
 }
+
+#[test]
+fn peptidoglycan_composition_parses() {
+    let toml = r#"
+    [membrane]
+    name = "peptidoglycan-nyc1"
+    composition = "peptidoglycan"
+
+    [membrane.trust_barrier]
+    inner_domain = "primal.eco"
+    outer_domain = "primals.eco"
+    opaque_relay = true
+    content_domain = "nestgate.io"
+    "#;
+    let file: cellmembrane_types::config::MembraneConfigFile = toml::from_str(toml).unwrap();
+    assert_eq!(
+        file.membrane.composition,
+        MembraneComposition::Peptidoglycan
+    );
+    assert!(file.membrane.composition.is_trust_barrier());
+    assert!(!file.membrane.composition.is_ladder());
+    assert!(!file.membrane.composition.stores_data());
+    assert!(file.membrane.composition.requires_tower_env());
+    assert!(!file.membrane.composition.has_btsp());
+
+    let barrier = file
+        .membrane
+        .trust_barrier
+        .expect("trust_barrier should be present");
+    assert_eq!(barrier.inner_domain, "primal.eco");
+    assert_eq!(barrier.outer_domain, "primals.eco");
+    assert!(barrier.opaque_relay);
+    assert_eq!(barrier.content_domain.as_deref(), Some("nestgate.io"));
+}
+
+#[test]
+fn peptidoglycan_channels_are_relay_only() {
+    let comp = MembraneComposition::Peptidoglycan;
+    let channels = comp.active_channels();
+    assert_eq!(channels.len(), 1);
+    assert_eq!(
+        channels[0],
+        cellmembrane_types::channels::MembraneChannel::Relay
+    );
+}
+
+#[test]
+fn peptidoglycan_not_in_ladder_ordering() {
+    let relay = MembraneComposition::Relay;
+    let pepti = MembraneComposition::Peptidoglycan;
+    assert!(pepti.partial_cmp(&relay).is_none());
+    assert!(relay.partial_cmp(&pepti).is_none());
+}
+
+#[test]
+fn ladder_ordering_preserved() {
+    assert!(MembraneComposition::Relay < MembraneComposition::Tower);
+    assert!(MembraneComposition::Tower < MembraneComposition::Nest);
+    assert!(MembraneComposition::Nest < MembraneComposition::Nucleus);
+}

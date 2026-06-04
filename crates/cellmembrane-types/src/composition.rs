@@ -12,9 +12,13 @@ use std::fmt;
 
 /// Membrane composition tier.
 ///
-/// Each composition is a strict superset of the one below:
+/// The ladder compositions form a monotonic superset chain:
 /// `relay < rustdesk < tower < nest < nucleus`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+///
+/// The `Peptidoglycan` composition is a **role variant** outside the ladder —
+/// a specialized relay that serves as the diderm trust barrier between inner
+/// and outer membranes. It is disposable, stores nothing, and relays opaquely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MembraneComposition {
     /// Tier 1: Songbird TURN relay only.
@@ -30,10 +34,43 @@ pub enum MembraneComposition {
     ///
     /// Full 13-primal NUCLEUS runtime. Springs overlay onto this via `biomeOS` deploy.
     Nucleus,
+    /// Role variant: Diderm trust barrier — relays between outer and inner membranes.
+    ///
+    /// Not part of the monotonic ladder. Minimal relay (Songbird TURN + temporal sync).
+    /// Stores nothing beyond `tower.env`. Disposable and replicable.
+    /// BTSP tokens are opaque in transit.
+    Peptidoglycan,
+}
+
+impl PartialOrd for MembraneComposition {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self.ladder_rank(), other.ladder_rank()) {
+            (Some(a), Some(b)) => Some(a.cmp(&b)),
+            _ => None,
+        }
+    }
 }
 
 impl MembraneComposition {
-    /// Returns all composition variants in ladder order.
+    /// Rank within the monotonic ladder (None for role variants like Peptidoglycan).
+    const fn ladder_rank(self) -> Option<u8> {
+        match self {
+            Self::Relay => Some(0),
+            Self::RustDesk => Some(1),
+            Self::Tower => Some(2),
+            Self::Nest => Some(3),
+            Self::Nucleus => Some(4),
+            Self::Peptidoglycan => None,
+        }
+    }
+
+    /// Whether this composition is a ladder tier (vs. a role variant).
+    #[must_use]
+    pub const fn is_ladder(&self) -> bool {
+        self.ladder_rank().is_some()
+    }
+
+    /// Returns all composition variants in ladder order (excludes role variants).
     #[must_use]
     pub const fn all() -> &'static [Self] {
         &[
@@ -42,6 +79,19 @@ impl MembraneComposition {
             Self::Tower,
             Self::Nest,
             Self::Nucleus,
+        ]
+    }
+
+    /// All compositions including role variants.
+    #[must_use]
+    pub const fn all_variants() -> &'static [Self] {
+        &[
+            Self::Relay,
+            Self::RustDesk,
+            Self::Tower,
+            Self::Nest,
+            Self::Nucleus,
+            Self::Peptidoglycan,
         ]
     }
 
@@ -54,7 +104,10 @@ impl MembraneComposition {
     /// Whether this composition requires a `tower.env` identity file.
     #[must_use]
     pub const fn requires_tower_env(&self) -> bool {
-        self.has_btsp()
+        matches!(
+            self,
+            Self::Tower | Self::Nest | Self::Nucleus | Self::Peptidoglycan
+        )
     }
 
     /// Whether this composition satisfies Dark Forest full compliance.
@@ -69,11 +122,23 @@ impl MembraneComposition {
         matches!(self, Self::Nucleus)
     }
 
+    /// Whether this composition is a trust barrier (opaque relay between membranes).
+    #[must_use]
+    pub const fn is_trust_barrier(&self) -> bool {
+        matches!(self, Self::Peptidoglycan)
+    }
+
+    /// Whether this composition stores primary data (false for relay/peptidoglycan).
+    #[must_use]
+    pub const fn stores_data(&self) -> bool {
+        matches!(self, Self::Tower | Self::Nest | Self::Nucleus)
+    }
+
     /// Active channels for this composition.
     #[must_use]
     pub fn active_channels(&self) -> Vec<MembraneChannel> {
         match self {
-            Self::Relay | Self::RustDesk | Self::Tower => {
+            Self::Relay | Self::RustDesk | Self::Tower | Self::Peptidoglycan => {
                 vec![MembraneChannel::Relay]
             }
             Self::Nest | Self::Nucleus => {
@@ -103,6 +168,7 @@ impl fmt::Display for MembraneComposition {
             Self::Tower => write!(f, "tower"),
             Self::Nest => write!(f, "nest"),
             Self::Nucleus => write!(f, "nucleus"),
+            Self::Peptidoglycan => write!(f, "peptidoglycan"),
         }
     }
 }

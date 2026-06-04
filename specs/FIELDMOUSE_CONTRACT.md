@@ -27,11 +27,12 @@ A fieldMouse is:
 
 ## Deployment Classes
 
-| Class         | Substrate         | biomeOS | Composition    | Example              |
-|---------------|-------------------|---------|----------------|----------------------|
-| **fieldMouse**| External VPS/cloud| No      | Tower or Nest  | `membrane.primals.eco` |
-| **gate**      | Owned hardware    | Yes     | Full NUCLEUS   | ironGate, eastGate   |
-| **niche**     | Gate-local        | Yes     | Domain spring  | wetSpring on southGate |
+| Class             | Substrate         | biomeOS | Composition      | Example                |
+|-------------------|-------------------|---------|------------------|------------------------|
+| **fieldMouse**    | External VPS/cloud| No      | Tower or Nest    | `membrane.primals.eco` |
+| **peptidoglycan** | External VPS/cloud| No      | Peptidoglycan    | `peptidoglycan-nyc1`   |
+| **gate**          | Owned hardware    | Yes     | Full NUCLEUS     | ironGate, eastGate     |
+| **niche**         | Gate-local        | Yes     | Domain spring    | wetSpring on southGate |
 
 This contract applies to fieldMouse deployments only. Gates and niches
 have their own deployment standards (see `DESKTOP_NUCLEUS_DEPLOYMENT.md`
@@ -216,3 +217,99 @@ To deploy your own membrane:
 
 No ecoPrimals account, API key, or coordination is required. The membrane
 is self-contained. Binaries are fetched from public GitHub Releases.
+
+---
+
+## Peptidoglycan Composition — Trust Barrier Contract
+
+**Added**: Wave 77b (2026-06-04)  
+**Reference**: `DIDERM_DOMAIN_ARCHITECTURE.md` in wateringHole
+
+The `peptidoglycan` composition is a role variant of the fieldMouse contract.
+It specializes the fieldMouse as the trust barrier between outer and inner
+membranes in a diderm envelope.
+
+### Configuration
+
+```toml
+[membrane]
+name = "peptidoglycan-nyc1"
+composition = "peptidoglycan"
+
+[membrane.channels.relay]
+enabled = true       # Songbird TURN — primary role
+port = 3478
+
+[membrane.channels.sync]
+enabled = true       # Temporal sync / Forgejo SSH relay
+port = 2222
+
+[membrane.channels.surface]
+enabled = false      # NO public web surface
+
+[membrane.trust_barrier]
+inner_domain = "primal.eco"
+outer_domain = "primals.eco"
+opaque_relay = true
+content_domain = "nestgate.io"
+```
+
+### What It Relays
+
+| Channel | Protocol | Direction | Purpose |
+|---------|----------|-----------|---------|
+| Songbird TURN | UDP/TCP 3478 | Bidirectional | Mesh relay between gates |
+| Temporal sync | TCP 2222 | Inner pulls from outer | Git object transport (Forgejo SSH) |
+| K-Derm relay | TCP (SSH) | Push chain | `golgi → pepti → ext → GitHub` |
+
+### What It CANNOT See
+
+| Data Class | Visibility | Guarantee |
+|-----------|-----------|-----------|
+| BTSP tokens | **Opaque** | End-to-end encrypted; relay cannot forge, read, or modify |
+| Inner membrane identity | **Hidden** | Gate IDs, family seeds never transit the barrier |
+| Capability surface | **Hidden** | UDS sockets are gate-local; relay has no path to them |
+| Content payloads | **Opaque** | NestGate CAS objects are BLAKE3-addressed, encrypted in transit |
+| Mesh topology | **Partially visible** | Connection metadata (IPs, timing) visible; content opaque |
+
+### What It Stores
+
+**NOTHING** beyond:
+- `tower.env` — relay identity credentials (0600, root-owned)
+- Systemd unit files
+- Binary artifacts (stateless, replaceable)
+
+No primary data. No user data. No caches. No logs beyond journald.
+
+### Invariants
+
+1. **Disposable**: Tear down and reprovision from `membrane.toml` + `tower.env`
+   backup yields an identical functional relay. Zero data loss.
+2. **Replicable**: `deploy_membrane.sh --composition peptidoglycan --provider <any>`
+   produces a working trust barrier on any VPS provider.
+3. **Provider-as-adversary**: VPS provider sees encrypted relay traffic volume
+   and timing. Cannot read content, forge identity, or impersonate a gate.
+4. **Unidirectional flow**: Outer membrane pushes TO peptidoglycan.
+   Inner membrane pulls FROM peptidoglycan. Neither reaches the other directly.
+5. **Zero storage**: If the peptidoglycan is seized, captured, or compromised,
+   no primary data is exposed. The relay has nothing to give.
+
+### Discovery
+
+Inner membrane gates discover peptidoglycan instances via:
+1. `SONGBIRD_PEERS` environment variable (explicit configuration)
+2. Songbird TURN peer registration (runtime discovery)
+
+Adding a new peptidoglycan requires only:
+1. Deploy `membrane.toml` with `composition = "peptidoglycan"`
+2. Start Songbird TURN on the instance
+3. Inner membrane gates add it to `SONGBIRD_PEERS`
+
+### Validation
+
+A peptidoglycan passes validation when:
+- [ ] Songbird TURN allocate succeeds from an external client
+- [ ] Temporal sync (git fetch) works through the relay
+- [ ] No content is stored locally after relay operations
+- [ ] `tower.env` is the only persistent state file
+- [ ] UFW shows only TURN + SSH + sync ports open
