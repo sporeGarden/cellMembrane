@@ -5,7 +5,7 @@
 //! Resolution priority (highest to lowest):
 //! 1. Environment variables (`GOLGI_HOST`, `FORGEJO_API`, etc.)
 //! 2. `membrane.toml` in the workspace or `/etc/membrane/membrane.toml`
-//! 3. Compiled defaults (agnostic — no hardcoded hostnames)
+//! 3. Compiled defaults (host aliases as last-resort fallbacks)
 
 use crate::error::{Result, ShadowError};
 

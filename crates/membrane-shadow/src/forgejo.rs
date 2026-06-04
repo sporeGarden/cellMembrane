@@ -466,7 +466,7 @@ pub async fn token_create(config: &ShadowConfig, name: &str, scopes: &str) -> Re
     validate_shell_safe(scopes, "token scopes")?;
 
     let forgejo_dir = forgejo_work_path(config);
-    let admin_user = config.forgejo_admin_user.as_deref().unwrap_or("golgiAdmin");
+    let admin_user = config.forgejo_admin_user.as_deref().unwrap_or("admin");
 
     let cmd = format!(
         "sudo -u git FORGEJO_WORK_DIR='{forgejo_dir}' HOME='{forgejo_dir}' \
