@@ -338,8 +338,7 @@ pub(super) async fn dispatch_content(
                 .ok()
                 .and_then(|v| v.parse::<u16>().ok())
                 .unwrap_or(9500);
-            let bind = std::env::var("NUCLEUS_BIND_ADDRESS")
-                .unwrap_or_else(|_| "127.0.0.1".into());
+            let bind = std::env::var("NUCLEUS_BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
             let (curl_out, curl_code) = crate::ssh::exec_raw(
                 config,
                 &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{nestgate_port}/health 2>/dev/null"),
