@@ -26,8 +26,9 @@ blake3 = { workspace = true }
 cellmembrane-types = { path = "../cellmembrane-types" }
 
 [features]
-default = ["http"]
+default = ["http", "cloudflare"]
 http = ["reqwest/rustls-tls"]
+cloudflare = ["http"]
 
 [lints]
 workspace = true

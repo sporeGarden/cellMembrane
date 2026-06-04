@@ -78,6 +78,8 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))
         }
+        #[cfg(feature = "cloudflare")]
+        c if c.starts_with("cloudflare.") => crate::cloudflare::dispatch(cmd, args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
     }
 }
