@@ -59,6 +59,7 @@
 )]
 
 pub mod bridge;
+pub mod caddy;
 pub mod cli;
 #[cfg(feature = "cloudflare")]
 pub mod cloudflare;
