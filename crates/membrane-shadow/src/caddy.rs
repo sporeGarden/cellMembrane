@@ -14,10 +14,9 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
-/// SSH host for Caddy operations. Defaults to `golgi-ext` (outer membrane).
-fn caddy_host(_config: &ShadowConfig) -> String {
-    std::env::var("CADDY_SSH_HOST")
-        .unwrap_or_else(|_| std::env::var("GOLGI_EXT_HOST").unwrap_or_else(|_| "golgi-ext".into()))
+/// SSH host for Caddy operations. Resolved from `ShadowConfig::ssh_host_ext`.
+fn caddy_host(config: &ShadowConfig) -> String {
+    config.ssh_host_ext.clone()
 }
 
 // ── Types ───────────────────────────────────────────────────────────

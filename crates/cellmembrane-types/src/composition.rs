@@ -293,17 +293,12 @@ impl CompositionSpec {
 
     /// UDS socket paths for services in UDS-only mode (VPS standard).
     /// Returns `(binary, socket_path)` pairs for all primals that use UDS transport.
-    /// UDS socket paths using static defaults (backward compat).
+    /// Resolves paths using default `ServicePaths`.
     ///
     /// Prefer [`uds_socket_paths_resolved`] for runtime-resolved paths.
     #[must_use]
-    pub fn uds_socket_paths(&self) -> Vec<(&'static str, &'static str)> {
-        let services = MembraneService::for_composition(self.composition);
-        services
-            .iter()
-            .filter(|s| s.is_uds_only())
-            .filter_map(|s| s.socket_path.map(|path| (s.binary, path)))
-            .collect()
+    pub fn uds_socket_paths(&self) -> Vec<(&'static str, String)> {
+        self.uds_socket_paths_resolved(&crate::service::ServicePaths::from_env())
     }
 
     /// UDS socket paths resolved via `ServicePaths` configuration.
@@ -319,7 +314,7 @@ impl CompositionSpec {
         let services = MembraneService::for_composition(self.composition);
         services
             .iter()
-            .filter(|s| s.is_uds_only() && s.socket_path.is_some())
+            .filter(|s| s.is_uds_only() && s.has_socket)
             .filter_map(|s| s.resolved_socket_path(paths).map(|p| (s.binary, p)))
             .collect()
     }

@@ -21,9 +21,9 @@ tokio = { version = "1", features = ["process", "fs", "io-util", "macros", "net"
 reqwest = { version = "0.12", features = ["json"], default-features = false, optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 blake3 = { workspace = true }
+cellmembrane-types = { path = "../cellmembrane-types" }
 
 [dev-dependencies]
-cellmembrane-types = { path = "../cellmembrane-types" }
 
 [features]
 default = ["http", "cloudflare"]

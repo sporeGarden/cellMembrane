@@ -162,7 +162,7 @@ fn nucleus_compute_primals_are_uds_only() {
     for name in &["toadstool", "barracuda", "coralreef", "biomeos", "squirrel"] {
         let svc = MembraneService::for_binary(name).unwrap_or_else(|| panic!("{name} not found"));
         assert!(svc.is_uds_only(), "{name} should be UDS-only");
-        assert!(svc.socket_path.is_some(), "{name} should have socket_path");
+        assert!(svc.has_socket, "{name} should have socket");
     }
 }
 

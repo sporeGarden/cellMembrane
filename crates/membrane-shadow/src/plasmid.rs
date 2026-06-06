@@ -14,25 +14,18 @@ use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Compiled fallback primal inventory for binary fetching.
+/// Primal binary names derived from the service registry at compile time.
 ///
-/// Used when manifest is unavailable. Must stay in sync with
-/// `cellmembrane-types::MembraneService::ALL_SERVICES` primal entries.
-const NUCLEUS_PRIMALS: &[&str] = &[
-    "beardog",
-    "songbird",
-    "toadstool",
-    "barracuda",
-    "coralreef",
-    "nestgate",
-    "rhizocrypt",
-    "loamspine",
-    "sweetgrass",
-    "biomeos",
-    "squirrel",
-    "skunkbat",
-    "petaltongue",
-];
+/// Previously a hand-maintained `const` list — now sourced directly from
+/// `cellmembrane-types::MembraneService::all()` so additions/removals to the
+/// registry propagate automatically with zero manual sync.
+fn nucleus_primals() -> Vec<&'static str> {
+    cellmembrane_types::MembraneService::all()
+        .iter()
+        .filter(|s| s.is_primal)
+        .map(|s| s.binary)
+        .collect()
+}
 
 /// Source backend for binary downloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -372,10 +365,11 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     let bin_dir = dest_root.join("primals").join(&arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
-    let primals: Vec<&str> = args
-        .primal
-        .as_deref()
-        .map_or_else(|| NUCLEUS_PRIMALS.to_vec(), |p| vec![p]);
+    #[allow(clippy::option_if_let_else)]
+    let primals: Vec<&str> = match args.primal.as_deref() {
+        Some(p) => vec![p],
+        None => nucleus_primals(),
+    };
 
     if args.dry_run {
         return Ok(format_dry_run(&primals, &arch, &tag, &bin_dir, args.source));
@@ -553,29 +547,18 @@ mod tests {
 
     #[test]
     fn nucleus_has_13_primals() {
-        assert_eq!(NUCLEUS_PRIMALS.len(), 13);
+        assert_eq!(nucleus_primals().len(), 13);
     }
 
     #[test]
-    fn nucleus_primals_match_membrane_service_registry() {
-        let service_primals: Vec<&str> = cellmembrane_types::MembraneService::all()
+    fn nucleus_primals_derived_from_registry() {
+        let derived = nucleus_primals();
+        let registry: Vec<&str> = cellmembrane_types::MembraneService::all()
             .iter()
             .filter(|s| s.is_primal)
             .map(|s| s.binary)
             .collect();
-        assert_eq!(
-            service_primals.len(),
-            NUCLEUS_PRIMALS.len(),
-            "MembraneService has {} primals but NUCLEUS_PRIMALS has {} — add/remove entries to sync",
-            service_primals.len(),
-            NUCLEUS_PRIMALS.len(),
-        );
-        for slug in NUCLEUS_PRIMALS {
-            assert!(
-                service_primals.contains(slug),
-                "NUCLEUS_PRIMALS contains '{slug}' but MembraneService::all() does not — sync required",
-            );
-        }
+        assert_eq!(derived, registry, "nucleus_primals() must match registry");
     }
 
     #[test]

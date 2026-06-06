@@ -35,7 +35,7 @@ fn service_lookup_symbiotic() {
 #[test]
 fn beardog_is_uds_only() {
     let svc = MembraneService::for_binary("beardog").unwrap();
-    assert!(svc.socket_path.is_some());
+    assert!(svc.has_socket);
     assert!(svc.port.is_none());
     assert!(!svc.is_externally_reachable());
 }

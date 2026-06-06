@@ -17,6 +17,8 @@ const DEFAULT_SERVICE_FILTER: &str = "membrane|forgejo|caddy|knot|hbb|fail2ban";
 pub struct ShadowConfig {
     /// SSH host alias (resolved from env → membrane.toml → default "golgi").
     pub ssh_host: String,
+    /// SSH host alias for the outer membrane (ext). Defaults to "golgi-ext".
+    pub ssh_host_ext: String,
     /// Forgejo API base URL.
     pub forgejo_api: String,
     /// Forgejo API token (resolved lazily).
@@ -48,6 +50,9 @@ impl Default for ShadowConfig {
     fn default() -> Self {
         Self {
             ssh_host: std::env::var("MEMBRANE_SSH_HOST").unwrap_or_else(|_| "golgi".into()),
+            ssh_host_ext: std::env::var("MEMBRANE_SSH_HOST_EXT")
+                .or_else(|_| std::env::var("GOLGI_EXT_HOST"))
+                .unwrap_or_else(|_| "golgi-ext".into()),
             forgejo_api: String::new(),
             forgejo_token: None,
             vps_root: "/opt/ecoPrimals".into(),
@@ -74,6 +79,7 @@ impl ShadowConfig {
                 .ok()
                 .or(toml_overrides.ssh_host)
                 .unwrap_or_else(|| "golgi".into()),
+            ssh_host_ext: std::env::var("GOLGI_EXT_HOST").unwrap_or_else(|_| "golgi-ext".into()),
             forgejo_api: std::env::var("FORGEJO_API")
                 .ok()
                 .or(toml_overrides.forgejo_api)

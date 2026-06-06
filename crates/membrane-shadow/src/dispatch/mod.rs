@@ -173,12 +173,19 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
         format!("{ufw_rules} ALLOW rules"),
     ));
 
-    // Check 6: No NestGate or biomeOS running (relay only)
-    let (services_out, _) = crate::ssh::exec_raw(
-        &pepti_config,
-        "systemctl is-active nestgate-membrane biomeos-membrane 2>/dev/null | grep -c active || echo 0",
-    )
-    .await?;
+    // Check 6: No services above Relay composition running (peptidoglycan is relay-tier)
+    let higher_services: Vec<&str> = cellmembrane_types::MembraneService::all()
+        .iter()
+        .filter(|s| {
+            s.is_primal && s.min_composition > cellmembrane_types::MembraneComposition::Relay
+        })
+        .map(|s| s.systemd_unit)
+        .collect();
+    let check_cmd = format!(
+        "systemctl is-active {} 2>/dev/null | grep -c active || echo 0",
+        higher_services.join(" ")
+    );
+    let (services_out, _) = crate::ssh::exec_raw(&pepti_config, &check_cmd).await?;
     let inner_services: u32 = services_out.trim().parse().unwrap_or(0);
     let no_inner_services = inner_services == 0;
     checks.push((

@@ -165,8 +165,8 @@ impl ServicePaths {
     #[must_use]
     pub fn socket_path(&self, service: &MembraneService) -> Option<String> {
         service
-            .socket_path
-            .map(|_| format!("{}/{}.sock", self.socket_base, service.binary))
+            .has_socket
+            .then(|| format!("{}/{}.sock", self.socket_base, service.binary))
     }
 }
 
@@ -190,8 +190,9 @@ pub struct MembraneService {
     pub port: Option<u16>,
     /// Protocol for the port.
     pub protocol: Protocol,
-    /// Socket path for UDS-based services.
-    pub socket_path: Option<&'static str>,
+    /// Whether this service provides a UDS socket.
+    /// The actual path is resolved via [`ServicePaths::socket_path`].
+    pub has_socket: bool,
     /// Bind address.
     pub bind: &'static str,
     /// Health check strategy for this service.
@@ -214,7 +215,7 @@ const BEARDOG: MembraneService = MembraneService {
     systemd_unit: "beardog-membrane.service",
     port: None,
     protocol: Protocol::Uds,
-    socket_path: Some("/run/membrane/beardog.sock"),
+    has_socket: true,
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -229,7 +230,7 @@ const SONGBIRD: MembraneService = MembraneService {
     systemd_unit: "songbird-relay.service",
     port: Some(3478),
     protocol: Protocol::TcpAndUdp,
-    socket_path: None,
+    has_socket: false,
     bind: BIND_ALL,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -244,7 +245,7 @@ const SKUNKBAT: MembraneService = MembraneService {
     systemd_unit: "skunkbat-membrane.service",
     port: Some(9140),
     protocol: Protocol::Tcp,
-    socket_path: Some("/run/membrane/skunkbat.sock"),
+    has_socket: true,
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -259,7 +260,7 @@ const NESTGATE: MembraneService = MembraneService {
     systemd_unit: "nestgate-membrane.service",
     port: Some(9500),
     protocol: Protocol::Tcp,
-    socket_path: Some("/run/membrane/nestgate.sock"),
+    has_socket: true,
     bind: BIND_ALL,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -274,7 +275,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     systemd_unit: "rhizocrypt-membrane.service",
     port: Some(9601),
     protocol: Protocol::Tcp,
-    socket_path: Some("/run/membrane/rhizocrypt.sock"),
+    has_socket: true,
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -289,7 +290,7 @@ const LOAMSPINE: MembraneService = MembraneService {
     systemd_unit: "loamspine-membrane.service",
     port: Some(9700),
     protocol: Protocol::Tcp,
-    socket_path: Some("/run/membrane/loamspine.sock"),
+    has_socket: true,
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -304,7 +305,7 @@ const SWEETGRASS: MembraneService = MembraneService {
     systemd_unit: "sweetgrass-membrane.service",
     port: Some(9850),
     protocol: Protocol::Tcp,
-    socket_path: Some("/run/membrane/sweetgrass.sock"),
+    has_socket: true,
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -321,7 +322,7 @@ const TOADSTOOL: MembraneService = MembraneService {
     systemd_unit: "toadstool-membrane.service",
     port: None,
     protocol: Protocol::Uds,
-    socket_path: Some("/run/membrane/toadstool.sock"),
+    has_socket: true,
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -336,7 +337,7 @@ const BARRACUDA: MembraneService = MembraneService {
     systemd_unit: "barracuda-membrane.service",
     port: None,
     protocol: Protocol::Uds,
-    socket_path: Some("/run/membrane/barracuda.sock"),
+    has_socket: true,
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -351,7 +352,7 @@ const CORALREEF: MembraneService = MembraneService {
     systemd_unit: "coralreef-membrane.service",
     port: None,
     protocol: Protocol::Uds,
-    socket_path: Some("/run/membrane/coralreef.sock"),
+    has_socket: true,
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -368,7 +369,7 @@ const BIOMEOS: MembraneService = MembraneService {
     systemd_unit: "biomeos-membrane.service",
     port: None,
     protocol: Protocol::Uds,
-    socket_path: Some("/run/membrane/biomeos.sock"),
+    has_socket: true,
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -383,7 +384,7 @@ const SQUIRREL: MembraneService = MembraneService {
     systemd_unit: "squirrel-membrane.service",
     port: None,
     protocol: Protocol::Uds,
-    socket_path: Some("/run/membrane/squirrel.sock"),
+    has_socket: true,
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -398,7 +399,7 @@ const PETALTONGUE: MembraneService = MembraneService {
     systemd_unit: "petaltongue-membrane.service",
     port: Some(8080),
     protocol: Protocol::Tcp,
-    socket_path: Some("/run/membrane/petaltongue.sock"),
+    has_socket: true,
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
@@ -415,7 +416,7 @@ const HBBS: MembraneService = MembraneService {
     systemd_unit: "hbbs-membrane.service",
     port: Some(21116),
     protocol: Protocol::TcpAndUdp,
-    socket_path: None,
+    has_socket: false,
     bind: BIND_ALL,
     health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
@@ -430,7 +431,7 @@ const HBBR: MembraneService = MembraneService {
     systemd_unit: "hbbr-membrane.service",
     port: Some(21117),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    has_socket: false,
     bind: BIND_ALL,
     health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
@@ -445,7 +446,7 @@ const CADDY: MembraneService = MembraneService {
     systemd_unit: "caddy-tls.service",
     port: Some(443),
     protocol: Protocol::Tcp,
-    socket_path: None,
+    has_socket: false,
     bind: BIND_ALL,
     health_method: HealthCheckMethod::HttpsProbe,
     is_primal: false,
@@ -460,7 +461,7 @@ const KNOTDNS: MembraneService = MembraneService {
     systemd_unit: "knot.service",
     port: Some(53),
     protocol: Protocol::TcpAndUdp,
-    socket_path: None,
+    has_socket: false,
     bind: BIND_ALL,
     health_method: HealthCheckMethod::DnsProbe,
     is_primal: false,
@@ -547,7 +548,7 @@ impl MembraneService {
     /// Primals with UDS-only transport use socket existence checks instead of TCP probes.
     #[must_use]
     pub const fn uds_health_check(&self) -> HealthCheckMethod {
-        if self.is_uds_only() && self.socket_path.is_some() {
+        if self.is_uds_only() && self.has_socket {
             return HealthCheckMethod::SocketExists;
         }
         self.health_method

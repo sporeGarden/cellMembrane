@@ -72,10 +72,11 @@ pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<Impu
 
 /// Discover a primal UDS socket by name.
 ///
-/// Resolution chain (mirrors `NeuralBridge::discover()`):
+/// Resolution chain (production → development):
 ///   1. `MEMBRANE_SOCKET_{NAME}` env var (e.g. `MEMBRANE_SOCKET_SONGBIRD`)
-///   2. `$XDG_RUNTIME_DIR/biomeos/{socket_name}`
-///   3. `/tmp/biomeos/{socket_name}` (last-resort fallback)
+///   2. `$MEMBRANE_SOCKET_BASE/{socket_name}` (VPS standard, default `/run/membrane/`)
+///   3. `$XDG_RUNTIME_DIR/membrane/{socket_name}` (user session)
+///   4. `/tmp/membrane/{socket_name}` (last-resort dev fallback)
 #[must_use]
 pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     let env_key = format!(
@@ -92,15 +93,22 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
         }
     }
 
+    let socket_base =
+        std::env::var("MEMBRANE_SOCKET_BASE").unwrap_or_else(|_| "/run/membrane".into());
+    let vps_path = PathBuf::from(&socket_base).join(socket_name);
+    if vps_path.exists() {
+        return Some(vps_path);
+    }
+
     let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
     if !xdg.is_empty() {
-        let p = PathBuf::from(format!("{xdg}/biomeos/{socket_name}"));
+        let p = PathBuf::from(format!("{xdg}/membrane/{socket_name}"));
         if p.exists() {
             return Some(p);
         }
     }
 
-    let fallback = PathBuf::from(format!("/tmp/biomeos/{socket_name}"));
+    let fallback = PathBuf::from(format!("/tmp/membrane/{socket_name}"));
     if fallback.exists() {
         return Some(fallback);
     }

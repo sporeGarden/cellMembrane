@@ -121,16 +121,17 @@ fn all_uds_primals_have_socket_paths() {
     ] {
         let svc = MembraneService::for_binary(name).unwrap();
         assert!(
-            svc.socket_path.is_some(),
-            "{name} should declare a socket_path for UDS transport"
+            svc.has_socket,
+            "{name} should declare socket capability for UDS transport"
         );
-        let path = svc.socket_path.unwrap();
+        let paths = cellmembrane_types::service::ServicePaths::from_env();
+        let path = paths.socket_path(svc).unwrap();
         assert!(
             path.starts_with("/run/membrane/"),
             "{name} socket path should be under /run/membrane/, got: {path}"
         );
         assert!(
-            std::path::Path::new(path)
+            std::path::Path::new(&path)
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("sock")),
             "{name} socket path should end with .sock, got: {path}"

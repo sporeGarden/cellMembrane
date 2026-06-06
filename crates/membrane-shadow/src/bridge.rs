@@ -20,6 +20,11 @@ use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
+/// Default socket name for the Neural API (biomeOS convention).
+const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
+/// Directory component under XDG and /tmp for biomeOS runtime sockets.
+const NEURAL_API_NAMESPACE: &str = "biomeos";
+
 /// Lightweight JSON-RPC 2.0 client for biomeOS Neural API.
 ///
 /// Zero compile-time coupling to biomeOS — communicates via UDS JSON-RPC
@@ -51,15 +56,28 @@ impl NeuralBridge {
             }
         }
 
+        let socket_base =
+            std::env::var("MEMBRANE_SOCKET_BASE").unwrap_or_else(|_| "/run/membrane".into());
+        let vps_path = PathBuf::from(&socket_base).join(NEURAL_API_SOCKET_NAME);
+        if vps_path.exists() {
+            return Some(Self {
+                socket_path: vps_path,
+            });
+        }
+
         let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
         if !xdg.is_empty() {
-            let p = PathBuf::from(&xdg).join("biomeos/neural-api-default.sock");
+            let p = PathBuf::from(&xdg)
+                .join(NEURAL_API_NAMESPACE)
+                .join(NEURAL_API_SOCKET_NAME);
             if p.exists() {
                 return Some(Self { socket_path: p });
             }
         }
 
-        let fallback = PathBuf::from("/tmp/biomeos/neural-api-default.sock");
+        let fallback = PathBuf::from(format!(
+            "/tmp/{NEURAL_API_NAMESPACE}/{NEURAL_API_SOCKET_NAME}"
+        ));
         if fallback.exists() {
             return Some(Self {
                 socket_path: fallback,
