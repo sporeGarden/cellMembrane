@@ -122,30 +122,51 @@ pub fn resolve_head_ref(project_path: &Path) -> String {
 
 // ── Async git utilities (used by temporal, dispatch, etc.) ───────────
 
-/// Run a git command in a repo directory, returning stdout as a trimmed string.
-pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
-    let output = tokio::process::Command::new("git")
-        .arg("-C")
+const GIT_OP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+const SSH_CMD_WITH_TIMEOUT: &str =
+    "ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o BatchMode=yes";
+
+fn git_command(repo_path: &Path, args: &[&str]) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new("git");
+    cmd.arg("-C")
         .arg(repo_path)
-        .args(args)
-        .output()
+        .env("GIT_SSH_COMMAND", SSH_CMD_WITH_TIMEOUT)
+        .args(args);
+    cmd
+}
+
+/// Run a git command in a repo directory, returning stdout as a trimmed string.
+///
+/// Enforces a 60-second timeout to prevent cascade hangs on unreachable remotes.
+pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
+    let child = git_command(repo_path, args)
+        .output();
+
+    let output = tokio::time::timeout(GIT_OP_TIMEOUT, child)
         .await
+        .map_err(|_| ShadowError::Parse(format!(
+            "git {:?} timed out after {}s",
+            args.first().unwrap_or(&"?"),
+            GIT_OP_TIMEOUT.as_secs(),
+        )))?
         .map_err(ShadowError::Io)?;
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// Run a git command, returning true if it exits successfully.
+///
+/// Enforces a 60-second timeout — returns `false` on timeout.
 pub async fn git_success(repo_path: &Path, args: &[&str]) -> bool {
-    tokio::process::Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
-        .args(args)
+    let child = git_command(repo_path, args)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()
+        .status();
+
+    tokio::time::timeout(GIT_OP_TIMEOUT, child)
         .await
-        .is_ok_and(|s| s.success())
+        .is_ok_and(|r| r.is_ok_and(|s| s.success()))
 }
 
 /// Count commits in a rev-list range (e.g. `"origin/main..HEAD"`).

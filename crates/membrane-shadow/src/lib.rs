@@ -108,6 +108,18 @@ pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
         }
     }
 
+    // Walk up from CWD (handles running membrane from within the workspace)
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut dir: Option<PathBuf> = Some(cwd);
+        while let Some(d) = dir {
+            if is_workspace(&d) {
+                return Ok(d);
+            }
+            dir = d.parent().map(Path::to_path_buf);
+        }
+    }
+
+    // Walk up from executable location (VPS deployments where binary is inside workspace)
     if let Ok(exe) = std::env::current_exe() {
         let mut dir = exe.parent().map(Path::to_path_buf);
         while let Some(d) = dir {
