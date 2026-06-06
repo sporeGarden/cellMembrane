@@ -70,6 +70,8 @@ Plasmid (primal binary bootstrap):
   plasmid.fetch [--source github] [--primal NAME] [--release TAG]
                 [--force] [--dry-run] [--dest DIR]
                                    Fetch primal binaries with BLAKE3 verification
+  plasmid.refresh [--primal NAME] [--source-dir DIR] [--dry-run]
+                                   Push local binaries to VPS (atomic replace + restart)
 
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)

@@ -186,6 +186,14 @@ pub(super) async fn dispatch_plasmid(
             };
             plasmid::fetch(config, &fetch_args).await
         }
+        "plasmid.refresh" => {
+            let refresh_args = plasmid::RefreshArgs {
+                primal: cli::extract_flag_value(args, "--primal").map(Into::into),
+                dry_run: args.contains(&"--dry-run"),
+                source_dir: cli::extract_flag_value(args, "--source-dir").map(Into::into),
+            };
+            plasmid::refresh(config, &refresh_args).await
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),

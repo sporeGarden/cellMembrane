@@ -69,3 +69,31 @@ pub async fn exec_raw(config: &ShadowConfig, command: &str) -> Result<(String, i
     let code = output.status.code().unwrap_or(-1);
     Ok((stdout, code))
 }
+
+/// Transfer a local file to the VPS via SCP.
+pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) -> Result<()> {
+    let dest = format!("{}:{}", config.ssh_host, remote_path);
+    let output = Command::new("scp")
+        .args([
+            "-o",
+            &format!("ConnectTimeout={}", config.ssh_timeout),
+            "-o",
+            "BatchMode=yes",
+            "-q",
+            local_path,
+            &dest,
+        ])
+        .output()
+        .await?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(ShadowError::Ssh(format!(
+            "scp failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        )))
+    }
+}
