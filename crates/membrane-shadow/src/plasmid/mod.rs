@@ -57,3 +57,61 @@ pub(crate) fn resolve_path(
     }
     default_fn()
 }
+
+/// `plasmid.pipeline` — Full zero-touch harvest → refresh cycle.
+///
+/// Detects upstream changes, rebuilds, checksums, pushes to VPS,
+/// and reports aggregated outcome. This is the end-to-end command
+/// that replaces manual harvest+refresh cycles.
+pub async fn pipeline(
+    config: &crate::ShadowConfig,
+    primal: Option<&str>,
+    dry_run: bool,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    let harvest_args = HarvestArgs {
+        primal: primal.map(Into::into),
+        force: false,
+        dry_run,
+        depot_dir: None,
+    };
+
+    let harvest_outcome = harvest(&harvest_args).await?;
+
+    if dry_run || !harvest_outcome.ok {
+        return Ok(harvest_outcome);
+    }
+
+    let built_any = harvest_outcome
+        .data
+        .as_ref()
+        .and_then(|d| d.as_array())
+        .is_some_and(|arr| {
+            arr.iter().any(|r| {
+                r.get("status")
+                    .and_then(|s| s.as_str())
+                    .is_some_and(|s| s == "Built")
+            })
+        });
+
+    if !built_any {
+        return Ok(crate::ShadowOutcome {
+            ok: true,
+            message: format!("{} — no new binaries to push", harvest_outcome.message),
+            data: harvest_outcome.data,
+        });
+    }
+
+    let refresh_args = RefreshArgs {
+        primal: primal.map(Into::into),
+        dry_run: false,
+        source_dir: None,
+    };
+
+    let refresh_outcome = refresh(config, &refresh_args).await?;
+
+    Ok(crate::ShadowOutcome {
+        ok: harvest_outcome.ok && refresh_outcome.ok,
+        message: format!("{} | {}", harvest_outcome.message, refresh_outcome.message),
+        data: refresh_outcome.data,
+    })
+}

@@ -203,6 +203,11 @@ pub(super) async fn dispatch_plasmid(
             };
             plasmid::harvest(&harvest_args).await
         }
+        "plasmid.pipeline" => {
+            let primal = cli::extract_flag_value(args, "--primal");
+            let dry_run = args.contains(&"--dry-run");
+            plasmid::pipeline(config, primal, dry_run).await
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),

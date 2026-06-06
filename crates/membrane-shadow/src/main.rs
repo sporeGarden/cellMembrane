@@ -74,6 +74,8 @@ Plasmid (primal binary bootstrap):
                                    Push local binaries to VPS (atomic replace + restart)
   plasmid.harvest [--primal NAME] [--depot DIR] [--force] [--dry-run]
                                    Build from source, checksum, stage to depot
+  plasmid.pipeline [--primal NAME] [--dry-run]
+                                   Zero-touch: harvest → refresh → alive (full cycle)
 
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)
