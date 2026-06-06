@@ -1,8 +1,13 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-03 (Wave 74)
-**Overall status:** PROGRESSING — S1 TLS OPERATIONAL, S4 auth ENFORCED, relay Rust-native, S3 VPS READY, **MESH OPERATIONAL** (3-gate plasmodium collective: eastGate + strandGate + ironGate)
+**Last updated:** 2026-06-06 (Wave 82c)
+**Overall status:** PROGRESSING — 13/13 primals ALIVE, 5-domain sovereign TLS, plasmidBin ownership transferred, mesh operational (3-gate), S4 auth ENFORCED
+**Wave 82c update:** plasmidBin ownership transferred from primalSpring → cellMembrane. `plasmid.refresh`
+implemented (atomic binary push to VPS). Cloudflare module evolved (`ShadowError::CloudflareApi`,
+`CfResponse::into_result()` deduplication). Caddy wired: 5 domains sovereign TLS + reverse proxy,
+`socat` bridges for UDS→private-network. All deep debt targets met: 226 tests, zero clippy, zero
+`#[allow]`, zero TODOs in source, zero unsafe, all files <800L, zero mocks in production.
 **Wave 74 update:** ironGate **JOINED MESH** as 3rd plasmodium gate. BearDog + Songbird running locally
 with SONGBIRD_PEERS pointing to eastGate + strandGate. `discovery.peers` shows both peers,
 `mesh.health_check` all_healthy. `capability.call` cross-gate validated (Songbird fix `d6a6f714`

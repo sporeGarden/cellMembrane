@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 74, 2026-06-03) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 82c, 2026-06-06) |
 
 ---
 
@@ -55,19 +55,18 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 210 tests — pedantic clippy clean
+cargo test                  # 226 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 74+ (Evolution Sprint):** All remaining `#[allow]` annotations eliminated from
-production code. `HardeningConfig` evolved from 5 bools (with `struct_excessive_bools`)
-to `HardeningStep` enum + `disabled_steps` vector — capability-driven, extensible.
-`plasmid.rs::fetch()` decomposed further into `fetch_primals()`, `format_dry_run()`,
-`format_fetch_outcome()`. `FetchResult` now `Clone`, `FetchSource` implements `Display`.
-NestGate content path evolved to `NESTGATE_CONTENT_PATH` env-driven. ironGate joined
-mesh as 3rd plasmodium gate (BearDog + Songbird, 2-peer discovery validated).
-210 tests, zero clippy (pedantic+nursery), zero `#[allow]` in production.
+**Wave 82c (Ownership + Evolution):** plasmidBin ownership transferred from primalSpring →
+cellMembrane. `plasmid.refresh` command added (atomic binary push + restart). plasmid module
+split into `plasmid/mod.rs` + `fetch.rs` + `refresh.rs`. SCP transport (`scp_to`). Cloudflare
+module: `ShadowError::CloudflareApi` replaces semantic misuse of `::Ssh`, `CfResponse::into_result()`
+eliminates 7 duplicated error-handling blocks. All Caddy reverse proxies wired (5 domains sovereign TLS).
+`socat` bridges for UDS→TCP on private network. UDS health probe diagnosis documented upstream.
+226 tests, zero clippy, zero `#[allow]`, zero TODOs in source.
 
 **Wave 71 (Capability Expansion + Deprecation):** Legacy `cascade()` removed —
 all callers migrated to `cascade_with_opts(CascadeOpts)`. `#[allow(fn_params_excessive_bools)]`
@@ -126,7 +125,7 @@ Wave 56: `TransportMode` enum (UDS-only / TCP default / TCP opt-in).
 `HealthCheckMethod::SocketExists` for UDS socket checks.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
-validate it with `cellmembrane-types`, and deploy with `deploy_membrane.sh`.
+validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
 
 ### Operational Docs
 
@@ -147,6 +146,7 @@ membrane temporal.cascade                 # Manifest-driven cascade sync (Rust)
 membrane mirror.sync-all                  # Trigger Forgejo mirror sync for all repos
 membrane impulse.ack <id>                 # Acknowledge inter-gate impulse
 membrane plasmid.fetch                    # Download primal binaries with BLAKE3 verification
+membrane plasmid.refresh                  # Push local binaries to VPS (atomic replace + restart)
 ```
 
 ---
@@ -155,8 +155,14 @@ membrane plasmid.fetch                    # Download primal binaries with BLAKE3
 
 ```bash
 # Check cellMembrane status (all channels + services)
-cd ../../infra/plasmidBin
-./deploy_membrane.sh status root@$VPS_IP
+membrane gate.health
+
+# Deploy / refresh primal binaries on VPS
+membrane plasmid.refresh --primal beardog
+membrane plasmid.refresh                    # All nucleus primals
+
+# Cascade sync (manifest-driven, Rust-native)
+membrane temporal.cascade
 
 # SSH to VPS
 ssh root@$VPS_IP
@@ -166,14 +172,6 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-relay -u skunkbat-m
 
 # View Nest Atomic logs (provenance trio)
 ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loamspine-membrane -u sweetgrass-membrane -f"
-
-# View RustDesk logs
-ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
-
-# Manage SSH keys for multi-gate access
-./deploy_membrane.sh keys list root@$VPS_IP
-./deploy_membrane.sh keys add root@$VPS_IP --name "friend-gate" --pubkey "ssh-ed25519 AAAA..."
-./deploy_membrane.sh keys revoke root@$VPS_IP --name "friend-gate"
 ```
 
 ---
@@ -208,6 +206,7 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 | Deep debt evolution (Wave 69+): all too_many_lines eliminated, CascadeMode enum, freshness wired, all files <800L | DONE |
 | Capability expansion (Wave 71): legacy cascade() removed, relay.status/gate.health/content.verify, S3 VPS READY | DONE |
 | Evolution sprint (Wave 74+): zero #[allow], HardeningStep enum, fetch decomposed, mesh join (3rd gate) | DONE |
+| NUCLEUS full parity (Wave 82c): 13/13 ALIVE, Caddy 5-domain TLS, plasmidBin owned, 226 tests | DONE |
 
 ---
 
@@ -247,12 +246,15 @@ ssh root@$VPS_IP "journalctl -u hbbs-membrane -u hbbr-membrane -f"
 - Sovereign DNS (knot-dns on VPS, replacing commercial DNS)
 - RustDesk self-hosted remote access
 - Multi-gate expansion (westGate, northGate provisioning)
+- plasmidBin — binary harvesting, checksums, `sources.toml`, CI workflows
+- VPS deployment ops — systemd units, `socat` bridges, firewall, refresh cycles
+- Peptidoglycan self-refresh timer and auto-fetch evolution
 
 **cellMembrane team does NOT own:**
 - sporePrint (primalSpring, transferred Wave 46)
 - Gate-level validation (projectNUCLEUS — Dark Forest + sovereignty checks)
-- Deployment pipeline software (projectNUCLEUS ships `deploy_membrane.sh`; we operate it)
 - biomeOS substrate
+- Upstream primal blurb generation (wateringHole overwatch)
 
 **Signal flow:** `primalSpring → upstream primals → biomeOS → projectNUCLEUS → cellMembrane`
 
@@ -320,9 +322,14 @@ gardens/cellMembrane/
         impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)
         temporal.rs           # Manifest-driven temporal cascade + tree-parity
         freshness.rs          # Wave freshness publishing + binary drift detection
-        plasmid.rs            # Primal binary fetch (reqwest + blake3, SSH for VPS)
+        plasmid/              # Primal binary lifecycle
+          mod.rs              # Registry-derived primal list, target triple, shared utils
+          fetch.rs            # Fetch from Forgejo/GitHub releases + BLAKE3 verify
+          refresh.rs          # Atomic push to VPS via SCP + service restart
+        cloudflare.rs         # Cloudflare API v4 (DNS, cache, SSL, zones)
         forgejo.rs            # Forgejo REST API (native reqwest)
-        config.rs / ssh.rs    # Config resolution + SSH transport
+        bridge.rs             # Neural API bridge (UDS discovery)
+        config.rs / ssh.rs    # Config resolution + SSH/SCP transport
   specs/                      # Formal architecture specs (5 documents)
   experiments/                # Validated experiment records
   README.md
@@ -356,7 +363,7 @@ plasmidBin remote dir centralized via `ECOPRIMALS_PLASMID_BIN` env var, stale so
 
 | Resource | Location | Relationship |
 |----------|----------|-------------|
-| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Primary operational tool (1199 lines) |
+| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Operational tool (being absorbed into Rust CLI) |
 | Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
 | fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
 | K-NOME programming | `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md` | K-Derm topology parallels K-NOME methodology |

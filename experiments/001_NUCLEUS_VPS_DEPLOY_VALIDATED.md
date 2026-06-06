@@ -1,7 +1,7 @@
 # Experiment 001: NUCLEUS Full Deploy to VPS — Validated
 
 **Date:** May 28, 2026 (Wave 59)
-**VPS:** membrane-relay, 157.230.3.183, DigitalOcean nyc1
+**VPS:** membrane-relay, $VPS_IP, DigitalOcean nyc1
 **Composition:** NUCLEUS (13 primals + RustDesk + Caddy + knot-dns = 17 services)
 **Predecessor:** Nest Atomic deploy (Wave 38, 7 primals)
 
@@ -28,7 +28,7 @@ Added `MembraneComposition::Nucleus` tier to `cellmembrane-types`:
 ### Step 2: Deploy (operational)
 
 ```bash
-./deploy_membrane.sh deploy root@157.230.3.183 --composition nucleus
+./deploy_membrane.sh deploy root@$VPS_IP --composition nucleus
 ```
 
 Deploy executed tier-by-tier (Tower → RustDesk → Node → Nest → Meta):
@@ -66,7 +66,7 @@ Capability symlinks created by primals at runtime:
 ### Step 4: Spring Overlay Test
 
 ```bash
-./deploy_membrane.sh spring-overlay root@157.230.3.183 --cell hotspring
+./deploy_membrane.sh spring-overlay root@$VPS_IP --cell hotspring
 ```
 
 Result:
