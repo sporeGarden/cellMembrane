@@ -254,7 +254,9 @@ async fn harvest_one(
         .output()
         .await;
 
-    if clone_result.is_err() || !clone_result.as_ref().unwrap().status.success() {
+    let clone_ok = clone_result.as_ref().is_ok_and(|o| o.status.success());
+
+    if !clone_ok {
         if source.private {
             return HarvestResult {
                 binary: primal.into(),
@@ -291,7 +293,9 @@ async fn harvest_one(
     }
 
     let build_output = build_cmd.output().await;
-    if build_output.is_err() || !build_output.as_ref().unwrap().status.success() {
+    let build_ok = build_output.as_ref().is_ok_and(|o| o.status.success());
+
+    if !build_ok {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,

@@ -31,14 +31,19 @@ license-files = [{ path = "LICENSE-UNICODE", hash = 0xb1e81de4 }]
 multiple-versions = "warn"
 wildcards = "deny"
 deny = [
-    # ecoBin: zero application C — no native TLS, no openssl, no ring
+    # ecoBin: zero application C — no native TLS, no openssl
     { name = "openssl-sys" },
     { name = "openssl" },
     { name = "native-tls" },
-    { name = "ring" },
     # No vendor SDKs
     { name = "aws-sdk-core" },
     { name = "azure_core" },
+]
+skip = [
+    # ring is pulled by rustls 0.23 (crypto provider). reqwest does not yet
+    # expose a feature flag to select aws-lc-rs instead of ring on all platforms.
+    # Track: https://github.com/seanmonstar/reqwest/issues — migrate when available.
+    { name = "ring" },
 ]
 
 [sources]
