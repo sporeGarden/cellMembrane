@@ -4,12 +4,12 @@
 Description=Plasmid Pipeline — harvest upstream, rebuild drifted, push to VPS
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=/opt/membrane/bin/membrane
+ConditionPathExists=/opt/membrane/membrane
 
 [Service]
 Type=oneshot
-ExecStart=/opt/membrane/bin/membrane plasmid.pipeline
-Environment=PLASMIDBIN_DEPOT=/opt/membrane/depot
+ExecStart=/opt/membrane/membrane plasmid.pipeline
+Environment=PLASMIDBIN_DEPOT=/opt/plasmidBin
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
 TimeoutStartSec=900
 StandardOutput=journal
