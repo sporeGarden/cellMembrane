@@ -9,9 +9,11 @@
 //! BLAKE3 checksums are verified in-process using the `blake3` crate.
 
 mod fetch;
+mod harvest;
 mod refresh;
 
 pub use fetch::*;
+pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
 pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
 use std::path::PathBuf;

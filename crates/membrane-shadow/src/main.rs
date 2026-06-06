@@ -72,6 +72,8 @@ Plasmid (primal binary bootstrap):
                                    Fetch primal binaries with BLAKE3 verification
   plasmid.refresh [--primal NAME] [--source-dir DIR] [--dry-run]
                                    Push local binaries to VPS (atomic replace + restart)
+  plasmid.harvest [--primal NAME] [--depot DIR] [--force] [--dry-run]
+                                   Build from source, checksum, stage to depot
 
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)

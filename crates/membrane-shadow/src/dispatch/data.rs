@@ -194,6 +194,15 @@ pub(super) async fn dispatch_plasmid(
             };
             plasmid::refresh(config, &refresh_args).await
         }
+        "plasmid.harvest" => {
+            let harvest_args = plasmid::HarvestArgs {
+                primal: cli::extract_flag_value(args, "--primal").map(Into::into),
+                force: args.contains(&"--force"),
+                dry_run: args.contains(&"--dry-run"),
+                depot_dir: cli::extract_flag_value(args, "--depot").map(Into::into),
+            };
+            plasmid::harvest(&harvest_args).await
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),
