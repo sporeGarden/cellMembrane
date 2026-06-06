@@ -1,0 +1,13 @@
+# plasmid-pipeline.timer — Periodic zero-touch binary refresh
+# Runs harvest every 30 minutes; only rebuilds if upstream drift detected.
+[Unit]
+Description=Plasmid Pipeline Timer — periodic upstream harvest cycle
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

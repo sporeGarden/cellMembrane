@@ -208,6 +208,7 @@ pub(super) async fn dispatch_plasmid(
             let dry_run = args.contains(&"--dry-run");
             plasmid::pipeline(config, primal, dry_run).await
         }
+        "plasmid.status" => plasmid::status().await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),

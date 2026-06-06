@@ -491,7 +491,7 @@ async fn rustc_version() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
+pub(super) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
     let path = resolve_path(override_dir, "PLASMIDBIN_DEPOT", || {
         let eco_root = std::env::var("ECOPRIMALS_ROOT")
             .unwrap_or_else(|_| "/home/irongate/Development/ecoPrimals".into());
@@ -506,7 +506,7 @@ fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn load_sources(depot_dir: &Path) -> Result<BTreeMap<String, SourceEntry>> {
+pub(super) fn load_sources(depot_dir: &Path) -> Result<BTreeMap<String, SourceEntry>> {
     let path = depot_dir.join("sources.toml");
     let content = std::fs::read_to_string(&path)
         .map_err(|e| ShadowError::Parse(format!("cannot read sources.toml: {e}")))?;
@@ -515,7 +515,7 @@ fn load_sources(depot_dir: &Path) -> Result<BTreeMap<String, SourceEntry>> {
     Ok(parsed.sources)
 }
 
-fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
+pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
     let path = depot_dir.join("provenance.toml");
     let content = std::fs::read_to_string(path).ok()?;
     toml::from_str(&content).ok()
@@ -547,4 +547,14 @@ fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
         message: msg,
         data: serde_json::to_value(results).ok(),
     }
+}
+
+/// Public wrapper to check upstream changes for a primal — used by `status`.
+pub(super) async fn has_upstream_changes_pub(
+    primal: &str,
+    source: &SourceEntry,
+    provenance: Option<&ProvenanceFile>,
+    depot_dir: &Path,
+) -> bool {
+    has_upstream_changes(primal, source, provenance, depot_dir).await
 }

@@ -76,6 +76,7 @@ Plasmid (primal binary bootstrap):
                                    Build from source, checksum, stage to depot
   plasmid.pipeline [--primal NAME] [--dry-run]
                                    Zero-touch: harvest → refresh → alive (full cycle)
+  plasmid.status                   Report depot freshness and upstream drift
 
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Plasmid binary lifecycle — fetch, refresh, and deploy primal binaries.
+//! Plasmid binary lifecycle — fetch, refresh, harvest, and deploy primal binaries.
 //!
 //! Manages the binary supply chain for membrane services:
 //! - `fetch` — Download binaries from sovereign or external sources (GitHub, VPS, Forgejo)
+//! - `harvest` — Build from source, detect changes, checksum, stage to depot
 //! - `refresh` — Push local pre-built binaries to VPS with atomic replacement
+//! - `pipeline` — End-to-end zero-touch: harvest → refresh → alive
+//! - `status` — Report depot freshness and drift against upstream
 //!
 //! BLAKE3 checksums are verified in-process using the `blake3` crate.
 
@@ -114,4 +117,122 @@ pub async fn pipeline(
         message: format!("{} | {}", harvest_outcome.message, refresh_outcome.message),
         data: refresh_outcome.data,
     })
+}
+
+/// `plasmid.status` — Report depot freshness and upstream drift.
+///
+/// Reads provenance.toml for last build timestamp, then checks each
+/// primal's HEAD against the recorded commit to identify drift.
+pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
+    let depot_dir = harvest::resolve_depot(None)?;
+    let sources = harvest::load_sources(&depot_dir)?;
+    let provenance = harvest::load_provenance(&depot_dir);
+
+    let generated = provenance
+        .as_ref()
+        .and_then(|p| p.generated.clone())
+        .unwrap_or_else(|| "unknown".into());
+
+    let target = provenance
+        .as_ref()
+        .and_then(|p| p.target.clone())
+        .unwrap_or_else(|| "unknown".into());
+
+    let registry_primals = nucleus_primals();
+    let total = registry_primals.len();
+
+    let mut drifted: Vec<String> = Vec::new();
+    let mut current = 0usize;
+
+    for &primal in &registry_primals {
+        if let Some(source) = sources.get(primal) {
+            let changed =
+                harvest::has_upstream_changes_pub(primal, source, provenance.as_ref(), &depot_dir)
+                    .await;
+            if changed {
+                drifted.push(primal.to_string());
+            } else {
+                current += 1;
+            }
+        }
+    }
+
+    let msg = format!(
+        "depot: {current}/{total} current, {} drifted | built: {generated} | target: {target}",
+        drifted.len()
+    );
+
+    let data = serde_json::json!({
+        "total": total,
+        "current": current,
+        "drifted": drifted,
+        "generated": generated,
+        "target": target,
+    });
+
+    Ok(crate::ShadowOutcome {
+        ok: drifted.is_empty(),
+        message: msg,
+        data: Some(data),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nucleus_primals_returns_13() {
+        let primals = nucleus_primals();
+        assert_eq!(primals.len(), 13, "expected 13 nucleus primals");
+        assert!(primals.contains(&"beardog"));
+        assert!(primals.contains(&"songbird"));
+        assert!(primals.contains(&"squirrel"));
+    }
+
+    #[test]
+    fn detect_target_triple_contains_musl() {
+        let triple = detect_target_triple();
+        assert!(
+            triple.ends_with("-unknown-linux-musl"),
+            "expected musl target, got: {triple}"
+        );
+    }
+
+    #[test]
+    fn resolve_path_explicit_overrides_env() {
+        let result = resolve_path(Some("/explicit"), "NONEXISTENT_VAR_XYZ", || {
+            PathBuf::from("/default")
+        });
+        assert_eq!(result, PathBuf::from("/explicit"));
+    }
+
+    #[test]
+    fn resolve_path_uses_default_when_no_env() {
+        let result = resolve_path(None, "NONEXISTENT_VAR_XYZ_ABC", || {
+            PathBuf::from("/fallback")
+        });
+        assert_eq!(result, PathBuf::from("/fallback"));
+    }
+
+    #[tokio::test]
+    async fn status_reports_depot_state() {
+        let result = status().await;
+        match result {
+            Ok(outcome) => {
+                assert!(outcome.message.contains("depot:"));
+                assert!(outcome.message.contains("current"));
+                let data = outcome.data.unwrap();
+                assert!(data.get("total").is_some());
+                assert!(data.get("drifted").is_some());
+            }
+            Err(e) => {
+                let msg = format!("{e}");
+                assert!(
+                    msg.contains("depot not found") || msg.contains("cannot read"),
+                    "unexpected error: {msg}"
+                );
+            }
+        }
+    }
 }

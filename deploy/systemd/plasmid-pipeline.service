@@ -1,0 +1,17 @@
+# plasmid-pipeline.service — Zero-touch binary harvest → refresh cycle
+# Triggered by plasmid-pipeline.timer or manually via systemctl start
+[Unit]
+Description=Plasmid Pipeline — harvest upstream, rebuild drifted, push to VPS
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/membrane/bin/membrane
+
+[Service]
+Type=oneshot
+ExecStart=/opt/membrane/bin/membrane plasmid.pipeline
+Environment=PLASMIDBIN_DEPOT=/opt/membrane/depot
+Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
+TimeoutStartSec=900
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plasmid-pipeline
