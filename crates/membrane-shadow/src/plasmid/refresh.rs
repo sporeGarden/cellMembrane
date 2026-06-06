@@ -68,7 +68,10 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
 
     let mut results: Vec<RefreshResult> = Vec::new();
 
-    for &primal in &primals_to_refresh {
+    for (i, &primal) in primals_to_refresh.iter().enumerate() {
+        if i > 0 && !args.dry_run {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
         results.push(refresh_one(config, primal, &source_dir, &install_dir, args.dry_run).await);
     }
 
