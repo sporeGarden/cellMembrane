@@ -137,13 +137,14 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
     checks.push(("songbird.turn", turn_ok, "port 3478".into()));
 
     // Check 3: tower.env exists (identity)
+    let tower_env_path = format!("{}/tower.env", config.vps_root.trim_end_matches('/'));
     let (tower_out, tower_code) = crate::ssh::exec_raw(
         &pepti_config,
-        "test -f /opt/membrane/tower.env && echo OK || echo MISSING",
+        &format!("test -f {tower_env_path} && echo OK || echo MISSING"),
     )
     .await?;
     let tower_ok = tower_code == 0 && tower_out.contains("OK");
-    checks.push(("tower.env", tower_ok, "/opt/membrane/tower.env".into()));
+    checks.push(("tower.env", tower_ok, tower_env_path));
 
     // Check 4: No primary data stored (nothing in content dirs)
     let (data_out, _) = crate::ssh::exec_raw(
