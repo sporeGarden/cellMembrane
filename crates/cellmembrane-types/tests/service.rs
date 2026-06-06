@@ -118,13 +118,15 @@ fn binary_integrity_grows_with_composition() {
 
 #[test]
 fn binary_integrity_install_path_matches_service_registry() {
+    let paths = cellmembrane_types::service::ServicePaths::from_env();
     for comp in MembraneComposition::all() {
         let bins = cellmembrane_types::service::binary_integrity_for(*comp);
         for entry in &bins {
             let svc = MembraneService::for_binary(entry.binary)
                 .unwrap_or_else(|| panic!("No service for {}", entry.binary));
             assert_eq!(
-                entry.install_path, svc.install_path,
+                entry.install_path,
+                paths.install_path(svc),
                 "BinaryIntegrity path should match service registry for {}",
                 entry.binary,
             );

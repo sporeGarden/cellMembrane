@@ -126,13 +126,13 @@ impl Default for DeployPaths {
 
 impl DeployPaths {
     fn default_install_base() -> String {
-        "/opt/membrane".to_string()
+        crate::service::DEFAULT_INSTALL_BASE.to_string()
     }
     fn default_socket_base() -> String {
-        "/run/membrane".to_string()
+        crate::service::DEFAULT_SOCKET_BASE.to_string()
     }
     fn default_credential_base() -> String {
-        "/opt/membrane".to_string()
+        crate::service::DEFAULT_INSTALL_BASE.to_string()
     }
 
     /// Resolve the install path for a binary given the configured base.

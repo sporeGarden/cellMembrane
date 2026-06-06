@@ -96,7 +96,7 @@ impl CredentialPaths {
     pub fn from_env() -> Self {
         Self {
             membrane_base: std::env::var("MEMBRANE_INSTALL_BASE")
-                .unwrap_or_else(|_| "/opt/membrane".to_string()),
+                .unwrap_or_else(|_| crate::service::DEFAULT_INSTALL_BASE.to_string()),
             songbird_config: std::env::var("SONGBIRD_CONFIG_PATH")
                 .unwrap_or_else(|_| "/etc/songbird".to_string()),
         }

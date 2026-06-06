@@ -150,15 +150,14 @@ impl ServicePaths {
 
     /// Resolve install path for a service.
     ///
-    /// Primals: `{install_base}/{binary}`
-    /// Symbiotic with system paths: uses the static path from registry.
+    /// Services with `system_install_path` use that (e.g. `/usr/bin/caddy`).
+    /// All others derive from `{install_base}/{binary}`.
     #[must_use]
     pub fn install_path(&self, service: &MembraneService) -> String {
-        if service.is_primal {
-            format!("{}/{}", self.install_base, service.binary)
-        } else {
-            service.install_path.to_string()
-        }
+        service.system_install_path.map_or_else(
+            || format!("{}/{}", self.install_base, service.binary),
+            Into::into,
+        )
     }
 
     /// Resolve socket path for a service.
@@ -199,8 +198,9 @@ pub struct MembraneService {
     pub health_method: HealthCheckMethod,
     /// Whether this is an ecoPrimals primal (vs symbiotic partner).
     pub is_primal: bool,
-    /// Install path on the membrane host.
-    pub install_path: &'static str,
+    /// Static install path override for system-installed services (caddy, knotd).
+    /// `None` means the path is derived at runtime from `ServicePaths::install_path()`.
+    pub system_install_path: Option<&'static str>,
     /// Supplementary ports beyond the primary (e.g. hbbs ID server on 21115).
     /// Each entry is `(port, protocol, comment)`.
     pub extra_ports: &'static [(u16, Protocol, &'static str)],
@@ -219,7 +219,7 @@ const BEARDOG: MembraneService = MembraneService {
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/beardog",
+    system_install_path: None,
     extra_ports: &[(8443, Protocol::Tcp, "beardog-tls-shadow")],
     min_composition: MembraneComposition::Tower,
     vps_transport: TransportMode::UdsOnly,
@@ -234,7 +234,7 @@ const SONGBIRD: MembraneService = MembraneService {
     bind: BIND_ALL,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/songbird",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Relay,
     vps_transport: TransportMode::TcpOptIn,
@@ -249,7 +249,7 @@ const SKUNKBAT: MembraneService = MembraneService {
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/skunkbat",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Tower,
     vps_transport: TransportMode::UdsOnly,
@@ -264,7 +264,7 @@ const NESTGATE: MembraneService = MembraneService {
     bind: BIND_ALL,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/nestgate",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
@@ -279,7 +279,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/rhizocrypt",
+    system_install_path: None,
     extra_ports: &[(9602, Protocol::Tcp, "rhizocrypt-jsonrpc")],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
@@ -294,7 +294,7 @@ const LOAMSPINE: MembraneService = MembraneService {
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/loamspine",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
@@ -309,7 +309,7 @@ const SWEETGRASS: MembraneService = MembraneService {
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/sweetgrass",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
@@ -326,7 +326,7 @@ const TOADSTOOL: MembraneService = MembraneService {
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/toadstool",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
@@ -341,7 +341,7 @@ const BARRACUDA: MembraneService = MembraneService {
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/barracuda",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
@@ -356,7 +356,7 @@ const CORALREEF: MembraneService = MembraneService {
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/coralreef",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
@@ -373,7 +373,7 @@ const BIOMEOS: MembraneService = MembraneService {
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/biomeos",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
@@ -388,7 +388,7 @@ const SQUIRREL: MembraneService = MembraneService {
     bind: "",
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/squirrel",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
@@ -403,7 +403,7 @@ const PETALTONGUE: MembraneService = MembraneService {
     bind: BIND_LOOPBACK,
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
-    install_path: "/opt/membrane/petaltongue",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
@@ -420,7 +420,7 @@ const HBBS: MembraneService = MembraneService {
     bind: BIND_ALL,
     health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
-    install_path: "/opt/membrane/hbbs",
+    system_install_path: None,
     extra_ports: &[(21115, Protocol::Tcp, "hbbs-id")],
     min_composition: MembraneComposition::RustDesk,
     vps_transport: TransportMode::TcpDefault,
@@ -435,7 +435,7 @@ const HBBR: MembraneService = MembraneService {
     bind: BIND_ALL,
     health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
-    install_path: "/opt/membrane/hbbr",
+    system_install_path: None,
     extra_ports: &[],
     min_composition: MembraneComposition::RustDesk,
     vps_transport: TransportMode::TcpDefault,
@@ -450,7 +450,7 @@ const CADDY: MembraneService = MembraneService {
     bind: BIND_ALL,
     health_method: HealthCheckMethod::HttpsProbe,
     is_primal: false,
-    install_path: "/usr/bin/caddy",
+    system_install_path: Some("/usr/bin/caddy"),
     extra_ports: &[(80, Protocol::Tcp, "caddy-acme")],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::TcpDefault,
@@ -465,7 +465,7 @@ const KNOTDNS: MembraneService = MembraneService {
     bind: BIND_ALL,
     health_method: HealthCheckMethod::DnsProbe,
     is_primal: false,
-    install_path: "/usr/sbin/knotd",
+    system_install_path: Some("/usr/sbin/knotd"),
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::TcpDefault,
@@ -531,8 +531,8 @@ impl MembraneService {
 
     /// Resolve install path using configurable `ServicePaths` (capability-based).
     ///
-    /// Prefer this over reading `self.install_path` directly — it respects
-    /// runtime configuration and removes the `/opt/membrane/` assumption.
+    /// Uses `system_install_path` for system services, otherwise derives
+    /// from the configured install base. Removes the `/opt/membrane/` assumption.
     #[must_use]
     pub fn resolved_install_path(&self, paths: &ServicePaths) -> String {
         paths.install_path(self)
