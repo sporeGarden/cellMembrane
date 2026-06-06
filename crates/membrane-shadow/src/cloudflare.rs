@@ -70,6 +70,41 @@ struct CfResponse<T> {
     result: Option<T>,
 }
 
+impl<T> CfResponse<T> {
+    /// Extract the result or return a formatted Cloudflare API error.
+    fn into_result(self) -> Result<T> {
+        if self.success {
+            self.result
+                .ok_or_else(|| ShadowError::CloudflareApi("empty result".into()))
+        } else {
+            Err(ShadowError::CloudflareApi(format_cf_errors(&self.errors)))
+        }
+    }
+
+    /// Extract the result, defaulting to `T::default()` if result is None but success is true.
+    fn into_result_or_default(self) -> Result<T>
+    where
+        T: Default,
+    {
+        if self.success {
+            Ok(self.result.unwrap_or_default())
+        } else {
+            Err(ShadowError::CloudflareApi(format_cf_errors(&self.errors)))
+        }
+    }
+}
+
+fn format_cf_errors(errors: &[CfError]) -> String {
+    if errors.is_empty() {
+        return "unknown error".into();
+    }
+    errors
+        .iter()
+        .map(|e| format!("[{}] {}", e.code, e.message))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 #[derive(Debug, Deserialize)]
 struct CfError {
     #[serde(default)]
@@ -149,29 +184,17 @@ pub async fn dns_list(
         url.push_str(name);
     }
 
-    let resp = client
+    let body: CfResponse<Vec<DnsRecord>> = client
         .get(&url)
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
-
-    let body: CfResponse<Vec<DnsRecord>> = resp
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse DNS records: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!("Cloudflare API error: {msg}")));
-    }
-
-    Ok(body.result.unwrap_or_default())
+    body.into_result_or_default()
 }
 
 /// Create a DNS record.
@@ -202,25 +225,14 @@ pub async fn dns_create(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
 
     let body: CfResponse<DnsRecord> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse create response: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!("DNS create failed: {msg}")));
-    }
-
-    body.result
-        .ok_or_else(|| ShadowError::Parse("No record in create response".into()))
+    body.into_result()
 }
 
 /// Parameters for DNS record mutation (create or update).
@@ -265,25 +277,14 @@ pub async fn dns_update(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
 
     let body: CfResponse<DnsRecord> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse update response: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!("DNS update failed: {msg}")));
-    }
-
-    body.result
-        .ok_or_else(|| ShadowError::Parse("No record in update response".into()))
+    body.into_result()
 }
 
 /// Delete a DNS record by ID.
@@ -299,24 +300,14 @@ pub async fn dns_delete(cf: &CloudflareConfig, zone: &str, record_id: &str) -> R
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
 
     let body: CfResponse<serde_json::Value> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse delete response: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!("DNS delete failed: {msg}")));
-    }
-
-    Ok(())
+    body.into_result().map(|_: serde_json::Value| ())
 }
 
 // ── Cache Operations ────────────────────────────────────────────────
@@ -348,22 +339,14 @@ pub async fn cache_purge(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
 
     let body: CfResponse<serde_json::Value> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse purge response: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!("Cache purge failed: {msg}")));
-    }
+    body.into_result().map(|_: serde_json::Value| ())?;
 
     if purge_everything {
         Ok("cache purged (all)".into())
@@ -388,27 +371,14 @@ pub async fn ssl_settings(cf: &CloudflareConfig, zone: &str) -> Result<SslSettin
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
 
     let body: CfResponse<SslSettings> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse SSL settings: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!(
-            "SSL settings query failed: {msg}"
-        )));
-    }
-
-    body.result
-        .ok_or_else(|| ShadowError::Parse("No SSL settings in response".into()))
+    body.into_result()
 }
 
 // ── Zone Settings ───────────────────────────────────────────────────
@@ -424,26 +394,14 @@ pub async fn zone_settings(cf: &CloudflareConfig, zone: &str) -> Result<Vec<Zone
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Cloudflare API request failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
 
     let body: CfResponse<Vec<ZoneSetting>> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse zone settings: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!(
-            "Zone settings query failed: {msg}"
-        )));
-    }
-
-    Ok(body.result.unwrap_or_default())
+    body.into_result_or_default()
 }
 
 // ── Zone ID Resolution ──────────────────────────────────────────────
@@ -462,25 +420,17 @@ async fn resolve_zone_id(cf: &CloudflareConfig, zone_name: &str) -> Result<Strin
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::Ssh(format!("Zone lookup failed: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("zone lookup failed: {e}")))?;
 
     let body: CfResponse<Vec<ZoneInfo>> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::Parse(format!("Failed to parse zone list: {e}")))?;
+        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
 
-    if !body.success {
-        let msg = body
-            .errors
-            .iter()
-            .map(|e| format!("[{}] {}", e.code, e.message))
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(ShadowError::Parse(format!("Zone lookup failed: {msg}")));
-    }
-
-    body.result
-        .and_then(|zones| zones.into_iter().find(|z| z.name == zone_name))
+    let zones = body.into_result_or_default()?;
+    zones
+        .into_iter()
+        .find(|z| z.name == zone_name)
         .map(|z| z.id)
         .ok_or_else(|| {
             ShadowError::Parse(format!(

@@ -7,6 +7,10 @@ use std::fmt;
 /// Errors from shadow function execution.
 #[derive(Debug, thiserror::Error)]
 pub enum ShadowError {
+    /// Cloudflare API returned an error response.
+    #[error("cloudflare: {0}")]
+    CloudflareApi(String),
+
     /// SSH transport failure (connection, timeout, command rejection).
     #[error("ssh: {0}")]
     Ssh(String),
