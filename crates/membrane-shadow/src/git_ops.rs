@@ -140,16 +140,17 @@ fn git_command(repo_path: &Path, args: &[&str]) -> tokio::process::Command {
 ///
 /// Enforces a 60-second timeout to prevent cascade hangs on unreachable remotes.
 pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
-    let child = git_command(repo_path, args)
-        .output();
+    let child = git_command(repo_path, args).output();
 
     let output = tokio::time::timeout(GIT_OP_TIMEOUT, child)
         .await
-        .map_err(|_| ShadowError::Parse(format!(
-            "git {:?} timed out after {}s",
-            args.first().unwrap_or(&"?"),
-            GIT_OP_TIMEOUT.as_secs(),
-        )))?
+        .map_err(|_| {
+            ShadowError::Parse(format!(
+                "git {:?} timed out after {}s",
+                args.first().unwrap_or(&"?"),
+                GIT_OP_TIMEOUT.as_secs(),
+            ))
+        })?
         .map_err(ShadowError::Io)?;
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())

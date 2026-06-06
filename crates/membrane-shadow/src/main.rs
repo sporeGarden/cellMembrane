@@ -41,8 +41,8 @@ Gate (biomeOS gate.*):
 Temporal (waterFall temporal.*):
   temporal.check [repo_path...]    Temporal position matrix (local, all remotes)
   temporal.sync  [repo_path...]    Pull leader, push followers (ff-only)
-  temporal.cascade [--gate auto] [--source temporal] [--check] [--clone-missing]
-                                   Full manifest-driven cascade sync (Rust)
+  temporal.cascade [--gate auto] [--source temporal] [--check] [--clone-missing] [--no-freshness]
+                                   Full manifest-driven cascade sync (parallel, publishes freshness)
 
 Manifest (ecosystem manifest):
   manifest.info                    Show manifest metadata + sync config

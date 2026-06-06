@@ -54,39 +54,47 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
         )));
     }
 
-    let push_target = m.sync.push_target.clone();
-    let mut synced = 0u32;
-    let mut failed = 0u32;
-    let mut cloned = 0u32;
-    let mut lines = Vec::with_capacity(repos.len());
+    let owned_repos: Vec<(String, crate::manifest::RepoEntry)> = repos
+        .iter()
+        .map(|(name, entry)| ((*name).to_string(), (*entry).clone()))
+        .collect();
 
-    for (name, entry) in &repos {
-        let result = process_repo(
-            &root,
-            name,
-            entry,
-            opts.mode,
-            opts.clone_missing,
-            &push_target,
-            &m,
-        )
-        .await;
-        match result {
-            RepoResult::Synced(msg) => {
-                synced += 1;
-                lines.push(msg);
-            }
-            RepoResult::Failed(msg) => {
-                failed += 1;
-                lines.push(msg);
-            }
-            RepoResult::Cloned(msg) => {
-                cloned += 1;
-                lines.push(msg);
-            }
-            RepoResult::Skipped(msg) => lines.push(msg),
+    let push_target = m.sync.push_target.clone();
+
+    let mut join_set = tokio::task::JoinSet::new();
+
+    for (name, entry) in owned_repos {
+        let root = root.clone();
+        let push_target = push_target.clone();
+        let manifest = m.clone();
+        let mode = opts.mode;
+        let clone_missing = opts.clone_missing;
+
+        join_set.spawn(async move {
+            let result = process_repo(
+                &root,
+                &name,
+                &entry,
+                mode,
+                clone_missing,
+                &push_target,
+                &manifest,
+            )
+            .await;
+            (name, result)
+        });
+    }
+
+    let mut results: Vec<(String, RepoResult)> = Vec::with_capacity(repos.len());
+    while let Some(join_result) = join_set.join_next().await {
+        if let Ok(item) = join_result {
+            results.push(item);
         }
     }
+
+    results.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let (synced, failed, cloned, mut lines) = tally_results(results);
 
     if opts.publish_freshness && opts.mode == CascadeMode::Sync {
         match crate::freshness::publish_freshness_toml(&root, &m, &repos).await {
@@ -134,6 +142,33 @@ enum RepoResult {
     Failed(String),
     Cloned(String),
     Skipped(String),
+}
+
+fn tally_results(results: Vec<(String, RepoResult)>) -> (u32, u32, u32, Vec<String>) {
+    let mut synced = 0u32;
+    let mut failed = 0u32;
+    let mut cloned = 0u32;
+    let mut lines = Vec::with_capacity(results.len());
+
+    for (_, result) in results {
+        match result {
+            RepoResult::Synced(msg) => {
+                synced += 1;
+                lines.push(msg);
+            }
+            RepoResult::Failed(msg) => {
+                failed += 1;
+                lines.push(msg);
+            }
+            RepoResult::Cloned(msg) => {
+                cloned += 1;
+                lines.push(msg);
+            }
+            RepoResult::Skipped(msg) => lines.push(msg),
+        }
+    }
+
+    (synced, failed, cloned, lines)
 }
 
 async fn process_repo(
