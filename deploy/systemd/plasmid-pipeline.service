@@ -16,6 +16,7 @@ ExecStart=/opt/membrane/membrane plasmid.refresh
 Environment=PLASMIDBIN_DEPOT=/opt/plasmidBin
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
 Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
+Environment=FORGEJO_SSH_HOST=git.primals.eco:2222
 Environment=HOME=/root
 SuccessExitStatus=1
 TimeoutStartSec=300
