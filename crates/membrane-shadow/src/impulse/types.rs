@@ -285,3 +285,114 @@ pub fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
     }
     crate::git_ops::resolve_head_ref(&workspace_root.join(project))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn impulse_type_display() {
+        assert_eq!(ImpulseType::Frago.to_string(), "FRAGO");
+        assert_eq!(ImpulseType::Status.to_string(), "STATUS");
+        assert_eq!(ImpulseType::Request.to_string(), "REQUEST");
+        assert_eq!(ImpulseType::Announce.to_string(), "ANNOUNCE");
+        assert_eq!(ImpulseType::Sync.to_string(), "SYNC");
+    }
+
+    #[test]
+    fn priority_display() {
+        assert_eq!(Priority::Routine.to_string(), "routine");
+        assert_eq!(Priority::Priority.to_string(), "PRIORITY");
+        assert_eq!(Priority::Flash.to_string(), "FLASH");
+    }
+
+    #[test]
+    fn impulse_type_serde_roundtrip() {
+        let json = serde_json::to_string(&ImpulseType::Frago).unwrap();
+        assert_eq!(json, "\"frago\"");
+        let parsed: ImpulseType = serde_json::from_str("\"announce\"").unwrap();
+        assert_eq!(parsed, ImpulseType::Announce);
+    }
+
+    #[test]
+    fn priority_serde_roundtrip() {
+        let json = serde_json::to_string(&Priority::Flash).unwrap();
+        assert_eq!(json, "\"flash\"");
+        let parsed: Priority = serde_json::from_str("\"routine\"").unwrap();
+        assert_eq!(parsed, Priority::Routine);
+    }
+
+    #[test]
+    fn impulse_file_toml_roundtrip() {
+        let impulse = ImpulseFile {
+            impulse: ImpulseMeta {
+                id: "IMP-089-001".into(),
+                impulse_type: ImpulseType::Status,
+                priority: Priority::Routine,
+                wave: 89,
+            },
+            from: ImpulseFrom {
+                gate: "eastGate".into(),
+                team: "cellMembrane".into(),
+                project: "gardens/cellMembrane".into(),
+                git_ref: "ba71a81".into(),
+            },
+            to: ImpulseTo {
+                gates: vec!["*".into()],
+                teams: vec![],
+            },
+            content: ImpulseContent {
+                subject: "Wave 88 sprint complete".into(),
+                body: String::new(),
+            },
+            meta: ImpulseOpMeta {
+                created: "2026-06-07T12:00:00-04:00".into(),
+                expires: String::new(),
+                ack_required: false,
+            },
+            signature: None,
+            acks: vec![],
+        };
+        let serialized = toml::to_string_pretty(&impulse).unwrap();
+        let deserialized: ImpulseFile = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.impulse.id, "IMP-089-001");
+        assert_eq!(deserialized.impulse.impulse_type, ImpulseType::Status);
+        assert_eq!(deserialized.from.gate, "eastGate");
+    }
+
+    #[test]
+    fn sync_payload_serde() {
+        let payload = SyncPayload {
+            repo: "primals/toadStool".into(),
+            diverge_type: "mutual".into(),
+            merge_base: String::new(),
+            remotes: [("forgejo".into(), "abc123".into())].into(),
+            ahead: [("forgejo".into(), 13)].into(),
+            repo_policy: "flag".into(),
+            suggested_action: "human review".into(),
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+        let parsed: SyncPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.repo, "primals/toadStool");
+        assert_eq!(parsed.ahead["forgejo"], 13);
+    }
+
+    #[test]
+    fn impulses_dir_path() {
+        let root = Path::new("/opt/eco");
+        assert_eq!(
+            impulses_dir(root),
+            PathBuf::from("/opt/eco/infra/wateringHole/impulses")
+        );
+        assert_eq!(
+            active_dir(root),
+            PathBuf::from("/opt/eco/infra/wateringHole/impulses/active")
+        );
+    }
+
+    #[test]
+    fn resolve_head_ref_empty_project() {
+        let result = resolve_head_ref(Path::new("/tmp"), "");
+        assert_eq!(result, "");
+    }
+}
