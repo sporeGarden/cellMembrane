@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn push_mirror_deserializes_with_defaults() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let mirror: PushMirror = serde_json::from_str(json).unwrap();
         assert_eq!(mirror.remote_name, "");
         assert!(!mirror.sync_on_commit);

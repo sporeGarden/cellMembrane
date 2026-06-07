@@ -419,11 +419,20 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write;
+
+    fn to_hex(bytes: &[u8]) -> String {
+        let mut s = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            write!(s, "{b:02x}").unwrap();
+        }
+        s
+    }
 
     #[test]
     fn sha256_empty() {
         let hash = sha256(b"");
-        let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+        let hex = to_hex(&hash);
         assert_eq!(
             hex,
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -433,7 +442,7 @@ mod tests {
     #[test]
     fn sha256_hello() {
         let hash = sha256(b"hello");
-        let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+        let hex = to_hex(&hash);
         assert_eq!(
             hex,
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
@@ -447,7 +456,7 @@ mod tests {
         let data = b"Hi There";
         let hmac_key = hmac_sha256_key(&key);
         let mac = hmac_sha256(&hmac_key, data);
-        let hex: String = mac.iter().map(|b| format!("{b:02x}")).collect();
+        let hex = to_hex(&mac);
         assert_eq!(
             hex,
             "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
@@ -460,7 +469,7 @@ mod tests {
         let body = b"{\"ref\":\"refs/heads/main\"}";
         let key = hmac_sha256_key(secret);
         let mac = hmac_sha256(&key, body);
-        let sig: String = mac.iter().map(|b| format!("{b:02x}")).collect();
+        let sig = to_hex(&mac);
         assert!(verify_signature(secret, body, &sig).is_ok());
     }
 
@@ -479,7 +488,7 @@ mod tests {
         let body = b"payload";
         let key = hmac_sha256_key(wrong_secret);
         let mac = hmac_sha256(&key, body);
-        let sig: String = mac.iter().map(|b| format!("{b:02x}")).collect();
+        let sig = to_hex(&mac);
         assert!(verify_signature(secret, body, &sig).is_err());
     }
 
