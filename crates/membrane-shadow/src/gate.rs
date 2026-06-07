@@ -198,7 +198,8 @@ fn parse_sync_output(output: &str) -> SyncResult {
             }
         }
         if trimmed.contains("In sync:") || trimmed.contains("Parity:") {
-            if let Some(n) = trimmed.split_whitespace().nth(2) {
+            let n_pos = if trimmed.contains("In sync:") { 2 } else { 1 };
+            if let Some(n) = trimmed.split_whitespace().nth(n_pos) {
                 result.synced = n.parse().unwrap_or(0);
             }
         }
@@ -220,4 +221,83 @@ fn parse_sync_output(output: &str) -> SyncResult {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_sync_output_full() {
+        let output = "Gate: eastGate\nRepos: 22\nIn sync: 20\nDrifted: 1\nNot cloned: 1\n";
+        let r = parse_sync_output(output);
+        assert_eq!(r.gate, "eastGate");
+        assert_eq!(r.total, 22);
+        assert_eq!(r.synced, 20);
+        assert_eq!(r.drifted, 1);
+        assert_eq!(r.missing, 1);
+    }
+
+    #[test]
+    fn parse_sync_output_parity_variant() {
+        let output = "Gate: golgiBody\nRepos: 38\nParity: 38\nDrifted: 0\n";
+        let r = parse_sync_output(output);
+        assert_eq!(r.gate, "golgiBody");
+        assert_eq!(r.total, 38);
+        assert_eq!(r.synced, 38);
+        assert_eq!(r.drifted, 0);
+    }
+
+    #[test]
+    fn parse_sync_output_pulled_variant() {
+        let output = "Gate: strandGate\nRepos: 10\nPulled: 8\nDrifted: 2\n";
+        let r = parse_sync_output(output);
+        assert_eq!(r.gate, "strandGate");
+        assert_eq!(r.synced, 8);
+        assert_eq!(r.drifted, 2);
+    }
+
+    #[test]
+    fn parse_sync_output_empty() {
+        let r = parse_sync_output("");
+        assert_eq!(r.gate, "");
+        assert_eq!(r.total, 0);
+        assert_eq!(r.synced, 0);
+    }
+
+    #[test]
+    fn gate_info_serializes() {
+        let info = GateInfo {
+            hostname: "membrane-relay".into(),
+            uptime: "up 2 weeks".into(),
+            gate_identity: "golgiBody".into(),
+            load: "0.15 0.10 0.05".into(),
+            memory: "1.2G/4.0G".into(),
+            disk: "12G/50G(24%)".into(),
+            services: vec![ServiceEntry {
+                unit: "beardog-membrane.service".into(),
+                state: "running".into(),
+            }],
+            repo_count: 38,
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("membrane-relay"));
+        assert!(json.contains("beardog-membrane"));
+    }
+
+    #[test]
+    fn sync_result_serializes() {
+        let r = SyncResult {
+            gate: "eastGate".into(),
+            total: 22,
+            synced: 20,
+            drifted: 1,
+            missing: 1,
+            raw_output: "...".into(),
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        let deser: SyncResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.gate, "eastGate");
+        assert_eq!(deser.synced, 20);
+    }
 }

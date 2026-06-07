@@ -473,3 +473,104 @@ async fn git_add_all_commit_push(repo_dir: &Path, message: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_slug_normalizes() {
+        assert_eq!(project_slug("springs/hotSpring"), "springs-hotspring");
+        assert_eq!(project_slug("primals/bearDog"), "primals-beardog");
+        assert_eq!(project_slug("cellMembrane"), "cellmembrane");
+    }
+
+    #[test]
+    fn project_slug_collapses_separators() {
+        assert_eq!(project_slug("a//b--c"), "a-b-c");
+        assert_eq!(project_slug("---leading---"), "leading");
+    }
+
+    #[test]
+    fn braid_filepath_structure() {
+        let root = Path::new("/opt/eco");
+        let path = braid_filepath(root, "eastGate", "springs/hotSpring");
+        assert_eq!(
+            path,
+            PathBuf::from("/opt/eco/infra/wateringHole/context/eastGate/springs-hotspring.toml")
+        );
+    }
+
+    #[test]
+    fn focus_status_display() {
+        assert_eq!(FocusStatus::Active.to_string(), "active");
+        assert_eq!(FocusStatus::Paused.to_string(), "paused");
+        assert_eq!(FocusStatus::Blocked.to_string(), "BLOCKED");
+        assert_eq!(FocusStatus::Complete.to_string(), "complete");
+    }
+
+    #[test]
+    fn is_expired_within_ttl() {
+        let now = Utc::now();
+        let updated = (now - chrono::Duration::hours(1))
+            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .to_string();
+        assert!(!is_expired(&updated, 24, &now));
+    }
+
+    #[test]
+    fn is_expired_past_ttl() {
+        let now = Utc::now();
+        let updated = (now - chrono::Duration::hours(25))
+            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .to_string();
+        assert!(is_expired(&updated, 24, &now));
+    }
+
+    #[test]
+    fn is_expired_invalid_timestamp() {
+        let now = Utc::now();
+        assert!(!is_expired("not-a-date", 24, &now));
+    }
+
+    #[test]
+    fn context_braid_roundtrip() {
+        let braid = ContextBraid {
+            braid: BraidHeader {
+                gate: "eastGate".into(),
+                project: "cellMembrane".into(),
+                updated: "2026-06-07T12:00:00-04:00".into(),
+                updated_by: "eastGate".into(),
+                ttl_hours: 72,
+                wave: 88,
+            },
+            strands: BraidStrands {
+                focus: FocusStrand {
+                    summary: "Pipeline evolution".into(),
+                    status: FocusStatus::Active,
+                },
+                breadcrumbs: Some(BreadcrumbStrand {
+                    trail: vec!["src/plasmid/mod.rs".into()],
+                }),
+                next: None,
+                blockers: None,
+                notes: None,
+            },
+        };
+
+        let serialized = toml::to_string_pretty(&braid).unwrap();
+        let deserialized: ContextBraid = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.braid.gate, "eastGate");
+        assert_eq!(deserialized.strands.focus.status, FocusStatus::Active);
+        assert!(deserialized.strands.breadcrumbs.is_some());
+        assert!(deserialized.strands.next.is_none());
+    }
+
+    #[test]
+    fn focus_status_serde_lowercase() {
+        let json = serde_json::to_string(&FocusStatus::Blocked).unwrap();
+        assert_eq!(json, "\"blocked\"");
+        let parsed: FocusStatus = serde_json::from_str("\"complete\"").unwrap();
+        assert_eq!(parsed, FocusStatus::Complete);
+    }
+}
