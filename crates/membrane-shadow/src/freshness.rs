@@ -163,43 +163,9 @@ pub fn check_installed_freshness() -> Result<String> {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-/// Get today's date as YYYY-MM-DD (no chrono dependency — uses system time).
+/// Get today's date as YYYY-MM-DD.
 fn chrono_today() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let days = secs / 86400;
-    let mut y = 1970i32;
-    let mut remaining = i64::from(u32::try_from(days).unwrap_or(u32::MAX));
-    loop {
-        let days_in_year: i64 = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
-            366
-        } else {
-            365
-        };
-        if remaining < days_in_year {
-            break;
-        }
-        remaining -= days_in_year;
-        y += 1;
-    }
-    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let month_days: [i64; 12] = if leap {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-    let mut m = 0u32;
-    for &md in &month_days {
-        if remaining < md {
-            break;
-        }
-        remaining -= md;
-        m += 1;
-    }
-    format!("{y}-{:02}-{:02}", m + 1, remaining + 1)
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
 
 /// Provenance sidecar written by `plasmidbin install`.
@@ -262,4 +228,63 @@ async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chrono_today_format() {
+        let today = chrono_today();
+        assert_eq!(today.len(), 10);
+        assert_eq!(&today[4..5], "-");
+        assert_eq!(&today[7..8], "-");
+        let year: u32 = today[..4].parse().unwrap();
+        assert!(year >= 2024);
+    }
+
+    #[test]
+    fn dirs_provenance_uses_xdg() {
+        let dir = dirs_provenance();
+        assert!(dir.to_string_lossy().contains("ecoPrimals/provenance"));
+    }
+
+    #[test]
+    fn resolve_source_head_returns_none_for_missing() {
+        let result = resolve_source_head(Path::new("/tmp"), "nonexistent-repo-xyz");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_source_head_handles_absolute_path() {
+        let result = resolve_source_head(Path::new("/tmp"), "/tmp/no-such-dir");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn provenance_sidecar_deserializes() {
+        let toml_str = r#"
+build_commit = "abc12345"
+source_path = "primals/bearDog"
+installed_at = "2026-06-07T12:00:00Z"
+binary_blake3 = "deadbeef0123456789"
+"#;
+        let prov: ProvenanceSidecar = toml::from_str(toml_str).unwrap();
+        assert_eq!(prov.build_commit, "abc12345");
+        assert_eq!(prov.source_path, "primals/bearDog");
+        assert_eq!(prov.installed_at.as_deref(), Some("2026-06-07T12:00:00Z"));
+        assert_eq!(prov.binary_blake3.as_deref(), Some("deadbeef0123456789"));
+    }
+
+    #[test]
+    fn provenance_sidecar_optional_fields() {
+        let toml_str = r#"
+build_commit = "abc12345"
+source_path = "primals/bearDog"
+"#;
+        let prov: ProvenanceSidecar = toml::from_str(toml_str).unwrap();
+        assert!(prov.installed_at.is_none());
+        assert!(prov.binary_blake3.is_none());
+    }
 }
