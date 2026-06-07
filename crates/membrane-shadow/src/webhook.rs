@@ -138,6 +138,87 @@ pub fn classify_push(event: &PushEvent, known_primals: &[&str]) -> WebhookAction
 
 // ── HMAC-SHA256 (pure Rust, no external crate) ─────────────────────────
 
+/// Nucleus primals known to the plasmidBin pipeline.
+fn nucleus_primals() -> Vec<&'static str> {
+    vec![
+        "beardog",
+        "songbird",
+        "biomeos",
+        "nestgate",
+        "skunkbat",
+        "squirrel",
+        "rhizocrypt",
+        "loamspine",
+        "sweetgrass",
+        "toadstool",
+        "coralreef",
+        "barracuda",
+        "petaltongue",
+    ]
+}
+
+/// Handle a verified push event — trigger selective cascade + harvest.
+///
+/// Returns a `ShadowOutcome` describing what was done.
+pub async fn handle_push(
+    event: &PushEvent,
+    config: &crate::ShadowConfig,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    let primal_refs = nucleus_primals();
+    let action = classify_push(event, &primal_refs);
+
+    if !action.should_harvest {
+        return Ok(crate::ShadowOutcome::ok(format!(
+            "webhook: {} — {}",
+            event.repository.name, action.reason
+        )));
+    }
+
+    eprintln!(
+        "[webhook] {} pushed to {} — selective harvest for {}",
+        event.pusher.username, action.branch, action.repo_name
+    );
+
+    let harvest_args = crate::plasmid::HarvestArgs {
+        primal: Some(action.repo_name.to_lowercase()),
+        force: false,
+        dry_run: false,
+        depot_dir: None,
+    };
+
+    let harvest_outcome = crate::plasmid::harvest(&harvest_args).await?;
+
+    if !harvest_outcome.ok {
+        return Ok(crate::ShadowOutcome {
+            ok: false,
+            message: format!(
+                "webhook: {} harvest failed — {}",
+                action.repo_name, harvest_outcome.message
+            ),
+            data: harvest_outcome.data,
+        });
+    }
+
+    let refresh_args = crate::plasmid::RefreshArgs {
+        primal: Some(action.repo_name.to_lowercase()),
+        dry_run: false,
+        source_dir: None,
+    };
+
+    let refresh_outcome = crate::plasmid::refresh(config, &refresh_args).await?;
+
+    Ok(crate::ShadowOutcome {
+        ok: refresh_outcome.ok,
+        message: format!(
+            "webhook: {} → harvest: {} | refresh: {}",
+            action.repo_name, harvest_outcome.message, refresh_outcome.message
+        ),
+        data: refresh_outcome.data,
+    })
+}
+
+// ── HMAC-SHA256 (pure Rust, no external crate) ─────────────────────────
+
 const BLOCK_SIZE: usize = 64;
 const HASH_SIZE: usize = 32;
 
