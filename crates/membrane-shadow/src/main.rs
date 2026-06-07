@@ -84,6 +84,11 @@ Relay (K-Derm diderm relay chain):
   relay.mediate [repo_path...]     Pull from Forgejo only (metallic bond inward)
   relay.ship [repo_path...]        Push to GitHub via golgiBody-ext (ionic→weak outward)
 
+Webhook (push-driven cascade):
+  webhook.test <json_body>         Process a push event (dry-run: selective harvest)
+  webhook.verify <body> --signature <hex>
+                                   Verify HMAC-SHA256 signature (requires WEBHOOK_SECRET)
+
 Forgejo:
   forgejo.version                  Show Forgejo version
 

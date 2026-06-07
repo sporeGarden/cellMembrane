@@ -19,6 +19,8 @@ mod impulse;
 mod infra;
 mod temporal;
 
+use crate::cli;
+use crate::error::{Result, ShadowError};
 use crate::{ShadowConfig, ShadowOutcome, bridge, forgejo};
 
 /// Map a CLI command to its primal capability domain + method for bridge routing.
@@ -79,10 +81,39 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             Ok(ShadowOutcome::ok(v))
         }
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
+        c if c.starts_with("webhook.") => dispatch_webhook(config, cmd, args).await,
         c if c.starts_with("pepti.") => dispatch_pepti(config, cmd, args).await,
         #[cfg(feature = "cloudflare")]
         c if c.starts_with("cloudflare.") => crate::cloudflare::dispatch(cmd, args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
+    }
+}
+
+/// Dispatch webhook commands.
+async fn dispatch_webhook(
+    config: &ShadowConfig,
+    cmd: &str,
+    args: &[&str],
+) -> Result<ShadowOutcome> {
+    match cmd {
+        "webhook.test" => {
+            let body = cli::require_arg(args, 0, "json_body")?;
+            let event: crate::webhook::PushEvent = serde_json::from_str(body)
+                .map_err(|e| ShadowError::Parse(format!("invalid push event JSON: {e}")))?;
+            crate::webhook::handle_push(&event, config).await
+        }
+        "webhook.verify" => {
+            let secret = std::env::var("WEBHOOK_SECRET")
+                .map_err(|_| ShadowError::Parse("WEBHOOK_SECRET env var required".into()))?;
+            let body = cli::require_arg(args, 0, "body")?;
+            let sig = cli::extract_flag_value(args, "--signature")
+                .ok_or_else(|| ShadowError::Parse("--signature flag required".into()))?;
+            crate::webhook::verify_signature(secret.as_bytes(), body.as_bytes(), sig)?;
+            Ok(ShadowOutcome::ok("signature valid"))
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown webhook command: {cmd}"
+        ))),
     }
 }
 
