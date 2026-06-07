@@ -237,13 +237,81 @@ async fn harvest_one(
     let build_root = PathBuf::from("/tmp/membrane-harvest");
     let clone_dir = build_root.join(primal);
 
-    if clone_dir.exists() {
-        let _ = std::fs::remove_dir_all(&clone_dir);
+    if let Err(detail) = clone_source(primal, source, &build_root, &clone_dir).await {
+        let status = if source.private {
+            HarvestStatus::Skipped
+        } else {
+            HarvestStatus::Failed
+        };
+        return HarvestResult {
+            binary: primal.into(),
+            status,
+            detail,
+        };
     }
-    std::fs::create_dir_all(&build_root).ok();
+
+    let head_commit = get_local_head(&clone_dir).await.unwrap_or_default();
+
+    if let Err(detail) = build_binary(source, target, &clone_dir).await {
+        return HarvestResult {
+            binary: primal.into(),
+            status: HarvestStatus::Failed,
+            detail,
+        };
+    }
+
+    let binary_name = source.binary_name.as_deref().unwrap_or(primal);
+    let bin_path = clone_dir
+        .join("target")
+        .join(target)
+        .join("release")
+        .join(binary_name);
+
+    if !bin_path.exists() {
+        return HarvestResult {
+            binary: primal.into(),
+            status: HarvestStatus::Failed,
+            detail: format!("binary not found at {}", bin_path.display()),
+        };
+    }
+
+    strip_binary(&bin_path, primal).await;
+
+    match stage_to_depot(primal, &bin_path, depot_dir, target) {
+        Ok((size, blake3)) => {
+            let _ = std::fs::remove_dir_all(&clone_dir);
+            HarvestResult {
+                binary: primal.into(),
+                status: HarvestStatus::Built,
+                detail: format!(
+                    "{}KB blake3={} commit={}",
+                    size / 1024,
+                    &blake3[..16],
+                    &head_commit[..std::cmp::min(8, head_commit.len())]
+                ),
+            }
+        }
+        Err(detail) => HarvestResult {
+            binary: primal.into(),
+            status: HarvestStatus::Failed,
+            detail,
+        },
+    }
+}
+
+async fn clone_source(
+    primal: &str,
+    source: &SourceEntry,
+    build_root: &Path,
+    clone_dir: &Path,
+) -> std::result::Result<(), String> {
+    if clone_dir.exists() {
+        let _ = std::fs::remove_dir_all(clone_dir);
+    }
+    std::fs::create_dir_all(build_root).ok();
 
     let clone_url = format!("https://github.com/{}.git", source.repo);
-    let clone_result = tokio::process::Command::new("git")
+    let result = tokio::process::Command::new("git")
         .args([
             "clone",
             "--depth",
@@ -254,28 +322,23 @@ async fn harvest_one(
         .output()
         .await;
 
-    let clone_ok = clone_result.as_ref().is_ok_and(|o| o.status.success());
-
-    if !clone_ok {
-        if source.private {
-            return HarvestResult {
-                binary: primal.into(),
-                status: HarvestStatus::Skipped,
-                detail: "private repo — clone requires PAT".into(),
-            };
-        }
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: "git clone failed".into(),
-        };
+    if result.as_ref().is_ok_and(|o| o.status.success()) {
+        Ok(())
+    } else if source.private {
+        Err(format!("private repo — clone requires PAT ({primal})"))
+    } else {
+        Err("git clone failed".into())
     }
+}
 
-    let head_commit = get_local_head(&clone_dir).await.unwrap_or_default();
-
+async fn build_binary(
+    source: &SourceEntry,
+    target: &str,
+    clone_dir: &Path,
+) -> std::result::Result<(), String> {
     let target_dir = clone_dir.join("target");
-    let mut build_cmd = tokio::process::Command::new("cargo");
-    build_cmd.args([
+    let mut cmd = tokio::process::Command::new("cargo");
+    cmd.args([
         "build",
         "--release",
         "--target",
@@ -288,67 +351,43 @@ async fn harvest_one(
 
     if let Some(extra) = &source.build_args {
         for arg in extra.split_whitespace() {
-            build_cmd.arg(arg);
+            cmd.arg(arg);
         }
     }
 
-    let build_output = build_cmd.output().await;
-    let build_ok = build_output.as_ref().is_ok_and(|o| o.status.success());
-
-    if !build_ok {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: "cargo build failed".into(),
-        };
+    let output = cmd.output().await;
+    if output.as_ref().is_ok_and(|o| o.status.success()) {
+        Ok(())
+    } else {
+        Err("cargo build failed".into())
     }
+}
 
-    let binary_name = source.binary_name.as_deref().unwrap_or(primal);
-    let bin_path = target_dir.join(target).join("release").join(binary_name);
-
-    if !bin_path.exists() {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: format!("binary not found at {}", bin_path.display()),
-        };
-    }
-
-    let strip_result = tokio::process::Command::new("strip")
-        .arg(&bin_path)
+async fn strip_binary(bin_path: &Path, primal: &str) {
+    let result = tokio::process::Command::new("strip")
+        .arg(bin_path)
         .output()
         .await;
-    if strip_result.is_err() {
+    if result.is_err() {
         eprintln!("warn: strip failed for {primal} — proceeding unstripped");
     }
+}
 
+fn stage_to_depot(
+    primal: &str,
+    bin_path: &Path,
+    depot_dir: &Path,
+    target: &str,
+) -> std::result::Result<(u64, String), String> {
     let staging_dir = depot_dir.join("primals").join(target);
     std::fs::create_dir_all(&staging_dir).ok();
     let dest = staging_dir.join(primal);
 
-    if let Err(e) = std::fs::copy(&bin_path, &dest) {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: format!("copy to depot failed: {e}"),
-        };
-    }
+    std::fs::copy(bin_path, &dest).map_err(|e| format!("copy to depot failed: {e}"))?;
 
     let size = std::fs::metadata(&dest).map_or(0, |m| m.len());
     let blake3 = compute_blake3_file(&dest);
-
-    let _ = std::fs::remove_dir_all(&clone_dir);
-
-    HarvestResult {
-        binary: primal.into(),
-        status: HarvestStatus::Built,
-        detail: format!(
-            "{}KB blake3={} commit={}",
-            size / 1024,
-            &blake3[..16],
-            &head_commit[..std::cmp::min(8, head_commit.len())]
-        ),
-    }
+    Ok((size, blake3))
 }
 
 async fn get_local_head(repo_dir: &Path) -> Option<String> {
@@ -376,9 +415,19 @@ async fn update_depot_metadata(
     target: &str,
     built: &[&HarvestResult],
 ) -> Result<()> {
-    let checksums_path = depot_dir.join("checksums.toml");
-    let provenance_path = depot_dir.join("provenance.toml");
     let staging_dir = depot_dir.join("primals").join(target);
+    update_checksums(depot_dir, target, built, &staging_dir)?;
+    update_provenance(depot_dir, target, built).await?;
+    Ok(())
+}
+
+fn update_checksums(
+    depot_dir: &Path,
+    target: &str,
+    built: &[&HarvestResult],
+    staging_dir: &Path,
+) -> Result<()> {
+    let checksums_path = depot_dir.join("checksums.toml");
 
     let mut checksums: BTreeMap<String, ChecksumEntry> = BTreeMap::new();
     if checksums_path.exists() {
@@ -417,6 +466,12 @@ async fn update_depot_metadata(
         );
     }
     std::fs::write(&checksums_path, &out).map_err(ShadowError::Io)?;
+    Ok(())
+}
+
+async fn update_provenance(depot_dir: &Path, target: &str, built: &[&HarvestResult]) -> Result<()> {
+    let provenance_path = depot_dir.join("provenance.toml");
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
     let mut prov_out = format!(
         "# plasmidBin provenance — build traceability\n\
@@ -465,7 +520,6 @@ async fn update_depot_metadata(
     }
 
     std::fs::write(&provenance_path, &prov_out).map_err(ShadowError::Io)?;
-
     Ok(())
 }
 

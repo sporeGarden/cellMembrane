@@ -119,6 +119,36 @@ pub async fn pipeline(
     })
 }
 
+/// `plasmid.trigger` — Remotely trigger the VPS pipeline via SSH.
+///
+/// Kicks `systemctl start plasmid-pipeline.service` on the VPS, causing
+/// an immediate harvest→refresh cycle there. Useful when an operator wants
+/// the VPS to converge without running the full pipeline locally.
+pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate::ShadowOutcome> {
+    let cmd = "systemctl start plasmid-pipeline.service 2>&1; \
+               sleep 1; \
+               systemctl is-active plasmid-pipeline.service 2>&1 || \
+               journalctl -u plasmid-pipeline.service --no-pager -n 3 2>&1";
+
+    let (output, code) = crate::ssh::exec_raw(config, cmd).await?;
+
+    if code == 0 || output.contains("activating") || output.contains("active") {
+        Ok(crate::ShadowOutcome::ok(format!(
+            "trigger: plasmid-pipeline.service started on {}\n{output}",
+            config.ssh_host
+        )))
+    } else {
+        Ok(crate::ShadowOutcome {
+            ok: false,
+            message: format!(
+                "trigger: failed to start on {} (exit {code})\n{output}",
+                config.ssh_host
+            ),
+            data: None,
+        })
+    }
+}
+
 /// `plasmid.status` — Report depot freshness and upstream drift.
 ///
 /// Reads provenance.toml for last build timestamp, then checks each

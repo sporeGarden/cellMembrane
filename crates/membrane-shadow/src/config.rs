@@ -165,7 +165,7 @@ fn extract_overrides(parsed: &toml::Table) -> TomlOverrides {
     let ssh_host = membrane
         .get("layers")
         .and_then(|l| l.get("inner"))
-        .and_then(|i| i.get("host"))
+        .and_then(|i| i.get("ssh_alias").or_else(|| i.get("host")))
         .and_then(|h| h.as_str())
         .map(String::from);
 

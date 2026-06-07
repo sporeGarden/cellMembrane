@@ -21,7 +21,7 @@ tokio = { version = "1", features = ["process", "fs", "io-util", "macros", "net"
 reqwest = { version = "0.12", features = ["json"], default-features = false, optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 blake3 = { workspace = true }
-cellmembrane-types = { path = "../cellmembrane-types" }
+cellmembrane-types = { path = "../cellmembrane-types", version = "0.1" }
 
 [dev-dependencies]
 

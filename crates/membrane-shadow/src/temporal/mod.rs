@@ -96,7 +96,6 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         .await
         .unwrap_or_else(|_| "main".to_string());
 
-    // Fetch all remotes quietly
     let _ = git_ok(&local_path, &["fetch", "--all", "--quiet"]).await;
 
     let remotes_str = git(&local_path, &["remote"]).await?;
@@ -112,59 +111,77 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         });
     }
 
-    // Measure per-remote position
-    let mut positions = Vec::with_capacity(remotes.len());
-    let mut has_leader = false;
-    let mut leader_remote = String::new();
-    let mut leader_behind: u32 = 0;
-    let mut has_followers = false;
+    let positions = measure_remote_positions(&local_path, &remotes, &branch).await;
 
-    for remote in &remotes {
+    let (classification, action) = classify_sync_state(&local_path, &positions, &branch).await;
+
+    Ok(TemporalMatrix {
+        repo_path: repo_path.to_string(),
+        branch,
+        classification,
+        positions,
+        action,
+    })
+}
+
+async fn measure_remote_positions(
+    local_path: &Path,
+    remotes: &[&str],
+    branch: &str,
+) -> Vec<RemotePosition> {
+    let mut positions = Vec::with_capacity(remotes.len());
+
+    for remote in remotes {
         let remote_ref = format!("{remote}/{branch}");
-        if !git_ok(&local_path, &["rev-parse", &remote_ref]).await {
+        if !git_ok(local_path, &["rev-parse", &remote_ref]).await {
             continue;
         }
 
         let ahead_range = format!("{remote_ref}..HEAD");
         let behind_range = format!("HEAD..{remote_ref}");
 
-        let ahead = rev_list_count(&local_path, &ahead_range).await;
-        let behind = rev_list_count(&local_path, &behind_range).await;
+        let ahead = rev_list_count(local_path, &ahead_range).await;
+        let behind = rev_list_count(local_path, &behind_range).await;
 
         positions.push(RemotePosition {
             remote: (*remote).to_string(),
             ahead,
             behind,
         });
+    }
 
-        if behind > 0 && behind > leader_behind {
-            leader_behind = behind;
-            leader_remote = (*remote).to_string();
+    positions
+}
+
+async fn classify_sync_state(
+    local_path: &Path,
+    positions: &[RemotePosition],
+    branch: &str,
+) -> (SyncClassification, SyncAction) {
+    if positions.iter().all(RemotePosition::is_parity) {
+        return (SyncClassification::Parity, SyncAction::None);
+    }
+
+    let mut leader_remote = String::new();
+    let mut leader_behind: u32 = 0;
+    let mut has_leader = false;
+    let mut has_followers = false;
+
+    for pos in positions {
+        if pos.behind > 0 && pos.behind > leader_behind {
+            leader_behind = pos.behind;
+            leader_remote = pos.remote.clone();
             has_leader = true;
         }
-        if ahead > 0 {
+        if pos.ahead > 0 {
             has_followers = true;
         }
     }
 
-    let all_parity = positions.iter().all(RemotePosition::is_parity);
-    if all_parity {
-        return Ok(TemporalMatrix {
-            repo_path: repo_path.to_string(),
-            branch,
-            classification: SyncClassification::Parity,
-            positions,
-            action: SyncAction::None,
-        });
-    }
+    let diverge_count = count_divergent_remotes(local_path, positions, branch).await;
 
-    let diverge_count = count_divergent_remotes(&local_path, &positions, &branch).await;
-
-    let (classification, action) = if diverge_count > 1 {
-        // Check if trees are actually identical (rebase artifact — history diverges
-        // but content is the same). Use `git diff --stat` between the two most common
-        // remotes — if empty, trees are at parity and we can safely force-align.
-        let tree_parity = detect_tree_parity(&local_path, &positions, &branch).await;
+    if diverge_count > 1 {
+        let tree_parity = detect_tree_parity(local_path, positions, branch).await;
         if let Some((leader, followers)) = tree_parity {
             (
                 SyncClassification::Diverge,
@@ -184,15 +201,7 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         (SyncClassification::Converge, SyncAction::Push)
     } else {
         (SyncClassification::Parity, SyncAction::None)
-    };
-
-    Ok(TemporalMatrix {
-        repo_path: repo_path.to_string(),
-        branch,
-        classification,
-        positions,
-        action,
-    })
+    }
 }
 
 /// Count how many remotes have unique commits relative to others (divergence indicator).
@@ -507,7 +516,6 @@ async fn apply_divergence_policy(
 ) -> Option<String> {
     let branch = &matrix.branch;
 
-    // Find leader (least behind) and followers
     let leader = matrix
         .positions
         .iter()
@@ -516,7 +524,6 @@ async fn apply_divergence_policy(
 
     match policy {
         "merge-ff" => {
-            // Pull from leader with --ff-only, push to followers
             if !git_ok(
                 local_path,
                 &["pull", leader, branch, "--ff-only", "--quiet"],
@@ -525,45 +532,19 @@ async fn apply_divergence_policy(
             {
                 return None;
             }
-            let mut pushed = Vec::new();
-            for pos in &matrix.positions {
-                if &pos.remote == leader {
-                    continue;
-                }
-                if push_target == "forgejo" && pos.remote != "forgejo" {
-                    continue;
-                }
-                if git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await {
-                    pushed.push(pos.remote.clone());
-                }
-            }
+            let pushed =
+                push_to_followers(local_path, matrix, leader, push_target, branch, false).await;
             Some(format!(
                 "policy:merge-ff pull {leader}, push {}",
                 pushed.join(" ")
             ))
         }
         "merge-rebase" => {
-            // Rebase onto leader, then push
             if !git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
                 return None;
             }
-            let mut pushed = Vec::new();
-            for pos in &matrix.positions {
-                if &pos.remote == leader {
-                    continue;
-                }
-                if push_target == "forgejo" && pos.remote != "forgejo" {
-                    continue;
-                }
-                if git_ok(
-                    local_path,
-                    &["push", "--force-with-lease", &pos.remote, branch],
-                )
-                .await
-                {
-                    pushed.push(pos.remote.clone());
-                }
-            }
+            let pushed =
+                push_to_followers(local_path, matrix, leader, push_target, branch, true).await;
             Some(format!(
                 "policy:merge-rebase rebase {leader}, push {}",
                 pushed.join(" ")
@@ -582,6 +563,38 @@ async fn apply_divergence_policy(
             None
         }
     }
+}
+
+async fn push_to_followers(
+    local_path: &Path,
+    matrix: &TemporalMatrix,
+    leader: &str,
+    push_target: &str,
+    branch: &str,
+    force_lease: bool,
+) -> Vec<String> {
+    let mut pushed = Vec::new();
+    for pos in &matrix.positions {
+        if pos.remote == leader {
+            continue;
+        }
+        if push_target == "forgejo" && pos.remote != "forgejo" {
+            continue;
+        }
+        let ok = if force_lease {
+            git_ok(
+                local_path,
+                &["push", "--force-with-lease", &pos.remote, branch],
+            )
+            .await
+        } else {
+            git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await
+        };
+        if ok {
+            pushed.push(pos.remote.clone());
+        }
+    }
+    pushed
 }
 
 /// Re-export freshness tracking functions (for backward compat from dispatch).

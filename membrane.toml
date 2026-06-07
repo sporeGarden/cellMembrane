@@ -24,6 +24,7 @@ size = "s-1vcpu-2gb"
 # Inner membrane — sovereign periplasm
 [membrane.layers.inner]
 host = "golgiBody"
+ssh_alias = "golgi"
 ip = "157.230.3.183"
 size = "s-1vcpu-2gb"
 services = ["forgejo", "nucleus-primals", "knot-dns", "btsp-auth"]

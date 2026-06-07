@@ -3,27 +3,25 @@
 # Run: cargo deny check
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
+unmaintained = "workspace"
+unsound = "workspace"
 yanked = "warn"
-notice = "warn"
+ignore = []
 
 [licenses]
-unlicensed = "deny"
 allow = [
     "MIT",
     "Apache-2.0",
+    "AGPL-3.0-or-later",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
+    "CDLA-Permissive-2.0",
 ]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-]
-copyleft = "warn"
 
 [[licenses.clarify]]
-name = "unicode-ident"
+crate = "unicode-ident"
 expression = "(MIT OR Apache-2.0) AND Unicode-3.0"
 license-files = [{ path = "LICENSE-UNICODE", hash = 0xb1e81de4 }]
 
@@ -32,19 +30,14 @@ multiple-versions = "warn"
 wildcards = "deny"
 deny = [
     # ecoBin: zero application C — no native TLS, no openssl
-    { name = "openssl-sys" },
-    { name = "openssl" },
-    { name = "native-tls" },
+    { crate = "openssl-sys", use-instead = "rustls" },
+    { crate = "openssl", use-instead = "rustls" },
+    { crate = "native-tls", use-instead = "rustls" },
     # No vendor SDKs
-    { name = "aws-sdk-core" },
-    { name = "azure_core" },
+    { crate = "aws-sdk-core" },
+    { crate = "azure_core" },
 ]
-skip = [
-    # ring is pulled by rustls 0.23 (crypto provider). reqwest does not yet
-    # expose a feature flag to select aws-lc-rs instead of ring on all platforms.
-    # Track: https://github.com/seanmonstar/reqwest/issues — migrate when available.
-    { name = "ring" },
-]
+skip = []
 
 [sources]
 unknown-registry = "deny"

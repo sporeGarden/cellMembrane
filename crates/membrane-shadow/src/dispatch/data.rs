@@ -208,6 +208,7 @@ pub(super) async fn dispatch_plasmid(
             let dry_run = args.contains(&"--dry-run");
             plasmid::pipeline(config, primal, dry_run).await
         }
+        "plasmid.trigger" => plasmid::trigger(config).await,
         "plasmid.status" => plasmid::status().await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
@@ -351,8 +352,9 @@ pub(super) async fn dispatch_content(
             let content_path = std::env::var("NESTGATE_CONTENT_PATH").unwrap_or_else(|_| {
                 format!(
                     "{}/nestgate/content",
-                    std::env::var("MEMBRANE_INSTALL_BASE")
-                        .unwrap_or_else(|_| "/opt/membrane".into())
+                    std::env::var("MEMBRANE_INSTALL_BASE").unwrap_or_else(|_| {
+                        cellmembrane_types::service::DEFAULT_INSTALL_BASE.into()
+                    })
                 )
             });
             let (content_count_out, _) = crate::ssh::exec_raw(

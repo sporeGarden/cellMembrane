@@ -108,6 +108,8 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     let bin_dir = dest_root.join("primals").join(&arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
+    // Clippy nursery suggests map_or_else but it fails: nucleus_primals() returns
+    // Vec<&'static str> while the Some branch is Vec<&'a str> — lifetime mismatch.
     #[allow(clippy::option_if_let_else)]
     let primals: Vec<&str> = match args.primal.as_deref() {
         Some(p) => vec![p],

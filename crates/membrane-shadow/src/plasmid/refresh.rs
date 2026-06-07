@@ -63,8 +63,8 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
     };
 
     let source_dir = resolve_refresh_source(args.source_dir.as_deref());
-    let install_dir =
-        std::env::var("MEMBRANE_INSTALL_BASE").unwrap_or_else(|_| "/opt/membrane".into());
+    let install_dir = std::env::var("MEMBRANE_INSTALL_BASE")
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
 
     let mut results: Vec<RefreshResult> = Vec::new();
 
