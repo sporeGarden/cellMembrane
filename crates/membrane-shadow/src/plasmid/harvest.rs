@@ -612,3 +612,159 @@ pub(super) async fn has_upstream_changes_pub(
 ) -> bool {
     has_upstream_changes(primal, source, provenance, depot_dir).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_entry_deserialize() {
+        let toml_str = r#"
+[sources.beardog]
+repo = "https://git.primals.eco/ecoPrimals/bearDog.git"
+private = true
+build_args = "--features server"
+"#;
+        let parsed: SourcesFile = toml::from_str(toml_str).unwrap();
+        let entry = &parsed.sources["beardog"];
+        assert_eq!(entry.repo, "https://git.primals.eco/ecoPrimals/bearDog.git");
+        assert!(entry.private);
+        assert_eq!(entry.build_args.as_deref(), Some("--features server"));
+        assert!(entry.binary_name.is_none());
+    }
+
+    #[test]
+    fn source_entry_minimal() {
+        let toml_str = r#"
+[sources.songbird]
+repo = "https://git.primals.eco/ecoPrimals/songBird.git"
+"#;
+        let parsed: SourcesFile = toml::from_str(toml_str).unwrap();
+        let entry = &parsed.sources["songbird"];
+        assert!(!entry.private);
+        assert!(entry.build_args.is_none());
+    }
+
+    #[test]
+    fn provenance_file_roundtrip() {
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "beardog".into(),
+            ProvenanceEntry {
+                version: Some("0.9.1".into()),
+                commit: Some("abc123".into()),
+                source: Some("forgejo".into()),
+            },
+        );
+        let prov = ProvenanceFile {
+            generated: Some("2026-06-07".into()),
+            builder: Some("eastGate".into()),
+            target: Some("x86_64-unknown-linux-musl".into()),
+            rustc: Some("1.96.0".into()),
+            entries,
+        };
+        let serialized = toml::to_string_pretty(&prov).unwrap();
+        let deserialized: ProvenanceFile = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.generated.as_deref(), Some("2026-06-07"));
+        assert_eq!(
+            deserialized.entries["beardog"].commit.as_deref(),
+            Some("abc123")
+        );
+    }
+
+    #[test]
+    fn checksum_entry_serde() {
+        let entry = ChecksumEntry {
+            blake3: "deadbeef".into(),
+            size: 42_000,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        let back: ChecksumEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.blake3, "deadbeef");
+        assert_eq!(back.size, 42_000);
+    }
+
+    #[test]
+    fn harvest_result_status_display() {
+        let result = HarvestResult {
+            binary: "beardog".into(),
+            status: HarvestStatus::Built,
+            detail: "compiled OK".into(),
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["status"], "Built");
+        assert_eq!(json["binary"], "beardog");
+    }
+
+    #[test]
+    fn format_harvest_outcome_all_current() {
+        let results = vec![
+            HarvestResult {
+                binary: "a".into(),
+                status: HarvestStatus::Current,
+                detail: "no change".into(),
+            },
+            HarvestResult {
+                binary: "b".into(),
+                status: HarvestStatus::Current,
+                detail: "no change".into(),
+            },
+        ];
+        let outcome = format_harvest_outcome(&results);
+        assert!(outcome.ok);
+        assert!(outcome.message.contains("0 built"));
+        assert!(outcome.message.contains("2 current"));
+    }
+
+    #[test]
+    fn format_harvest_outcome_with_failure() {
+        let results = vec![
+            HarvestResult {
+                binary: "a".into(),
+                status: HarvestStatus::Built,
+                detail: "ok".into(),
+            },
+            HarvestResult {
+                binary: "b".into(),
+                status: HarvestStatus::Failed,
+                detail: "build error".into(),
+            },
+        ];
+        let outcome = format_harvest_outcome(&results);
+        assert!(!outcome.ok);
+        assert!(outcome.message.contains("1 built"));
+        assert!(outcome.message.contains("1 failed"));
+    }
+
+    #[test]
+    fn load_sources_from_tempdir() {
+        let tmp = std::env::temp_dir().join("harvest_test_sources");
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(
+            tmp.join("sources.toml"),
+            r#"
+[sources.beardog]
+repo = "https://example.com/beardog.git"
+[sources.songbird]
+repo = "https://example.com/songbird.git"
+private = true
+"#,
+        )
+        .unwrap();
+
+        let sources = load_sources(&tmp).unwrap();
+        assert_eq!(sources.len(), 2);
+        assert!(sources.contains_key("beardog"));
+        assert!(sources["songbird"].private);
+
+        std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn load_provenance_missing_returns_none() {
+        let tmp = std::env::temp_dir().join("harvest_test_no_prov");
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert!(load_provenance(&tmp).is_none());
+        std::fs::remove_dir_all(&tmp).ok();
+    }
+}

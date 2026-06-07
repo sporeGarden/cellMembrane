@@ -1,20 +1,24 @@
-# plasmid-pipeline.service — Zero-touch binary harvest → refresh cycle
+# plasmid-pipeline.service — Zero-touch binary refresh from depot
 # Triggered by plasmid-pipeline.timer or manually via systemctl start
+#
+# Architecture (Wave 92): VPS does NOT build from source.
+# Binaries flow: gate build → depot (plasmidBin/) → this service deploys.
+# Harvest happens on gates or peptidoglycan, not here.
 [Unit]
-Description=Plasmid Pipeline — harvest upstream, rebuild drifted, push to VPS
+Description=Plasmid Pipeline — deploy binaries from depot to install base
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=/opt/membrane/membrane
 
 [Service]
 Type=oneshot
-ExecStart=/opt/membrane/membrane plasmid.pipeline
+ExecStart=/opt/membrane/membrane plasmid.refresh
 Environment=PLASMIDBIN_DEPOT=/opt/plasmidBin
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
 Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
 Environment=HOME=/root
 SuccessExitStatus=1
-TimeoutStartSec=900
+TimeoutStartSec=300
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=plasmid-pipeline

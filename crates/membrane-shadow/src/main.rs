@@ -42,7 +42,9 @@ Temporal (waterFall temporal.*):
   temporal.check [repo_path...]    Temporal position matrix (local, all remotes)
   temporal.sync  [repo_path...]    Pull leader, push followers (ff-only)
   temporal.cascade [--gate auto] [--source temporal] [--check] [--clone-missing] [--no-freshness]
+                   [--with-harvest] [--check-installed]
                                    Full manifest-driven cascade sync (parallel, publishes freshness)
+                                   --with-harvest: build drifted primals after sync, stage to depot
 
 Manifest (ecosystem manifest):
   manifest.info                    Show manifest metadata + sync config

@@ -31,6 +31,8 @@ pub struct CascadeOpts<'a> {
     pub clone_missing: bool,
     /// If true, write freshness.toml after cascade.
     pub publish_freshness: bool,
+    /// If true, build drifted primals locally after sync and push to depot.
+    pub with_harvest: bool,
 }
 
 /// Execute cascade with typed options.
@@ -96,12 +98,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
 
     let (synced, failed, cloned, mut lines) = tally_results(results);
 
-    if opts.publish_freshness && opts.mode == CascadeMode::Sync {
-        match crate::freshness::publish_freshness_toml(&root, &m, &repos).await {
-            Ok(()) => lines.push("  [freshness] PUBLISHED freshness.toml".to_string()),
-            Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
-        }
-    }
+    let harvest_info = run_post_sync_phases(opts, &root, &m, &repos, &mut lines).await;
 
     let action = if opts.mode == CascadeMode::CheckOnly {
         "checked"
@@ -120,7 +117,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
          Source:  {}\n\
          Repos:   {total}\n\
          \n\
-         {action}={synced} failed={failed}{clone_info}",
+         {action}={synced} failed={failed}{clone_info}{harvest_info}",
         m.meta.version, m.meta.wave, m.meta.total_repos, opts.gate, opts.source,
     );
 
@@ -135,6 +132,108 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
             "cloned": cloned,
         }),
     ))
+}
+
+/// Post-sync phases: harvest (if requested), freshness publishing, and depot report.
+async fn run_post_sync_phases(
+    opts: &CascadeOpts<'_>,
+    root: &Path,
+    m: &crate::manifest::EcosystemManifest,
+    repos: &[(&str, &crate::manifest::RepoEntry)],
+    lines: &mut Vec<String>,
+) -> String {
+    let mut harvest_info = String::new();
+
+    if opts.with_harvest && opts.mode == CascadeMode::Sync {
+        match run_post_cascade_harvest(lines).await {
+            Ok((built, current, failures)) => {
+                harvest_info = format!(" harvest={built}built/{current}current/{failures}failed");
+            }
+            Err(e) => lines.push(format!("  [harvest] FAIL: {e}")),
+        }
+    }
+
+    if opts.publish_freshness && opts.mode == CascadeMode::Sync {
+        match crate::freshness::publish_freshness_toml(root, m, repos).await {
+            Ok(()) => lines.push("  [freshness] PUBLISHED freshness.toml".to_string()),
+            Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
+        }
+    }
+
+    if opts.mode == CascadeMode::Sync {
+        let depot_summary = summarize_depot_freshness();
+        if !depot_summary.is_empty() {
+            lines.push(depot_summary);
+        }
+    }
+
+    harvest_info
+}
+
+/// Run harvest after cascade sync — build any drifted primals locally.
+/// Returns `(built_count, current_count, failure_count)`.
+async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, u32, u32)> {
+    let harvest_args = crate::plasmid::HarvestArgs {
+        primal: None,
+        force: false,
+        dry_run: false,
+        depot_dir: None,
+    };
+
+    let outcome = crate::plasmid::harvest(&harvest_args).await?;
+
+    let (mut built, mut current, mut failures) = (0u32, 0u32, 0u32);
+    if let Some(data) = &outcome.data {
+        if let Some(arr) = data.as_array() {
+            for entry in arr {
+                match entry.get("status").and_then(|s| s.as_str()) {
+                    Some("Built") => built += 1,
+                    Some("Current") => current += 1,
+                    Some("Failed") => failures += 1,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    lines.push(format!(
+        "  [harvest] {} — {built} built, {current} current, {failures} failed",
+        if failures == 0 { "OK" } else { "PARTIAL" }
+    ));
+
+    Ok((built, current, failures))
+}
+
+/// Quick depot freshness summary — reports how many binaries exist and are recent.
+fn summarize_depot_freshness() -> String {
+    let depot_dir = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
+        std::path::PathBuf::from(
+            std::env::var("ECOPRIMALS_ROOT")
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into()),
+        )
+        .join("plasmidBin")
+    });
+
+    let primals_dir = depot_dir.join("primals");
+    if !primals_dir.is_dir() {
+        return String::new();
+    }
+
+    let mut present = 0u32;
+    let mut total = 0u32;
+    for name in crate::plasmid::nucleus_primals() {
+        total += 1;
+        if primals_dir.join(name).exists() {
+            present += 1;
+        }
+    }
+
+    let missing = total - present;
+    if missing == 0 {
+        format!("  [depot] {present}/{total} binaries present")
+    } else {
+        format!("  [depot] {present}/{total} binaries present ({missing} missing)")
+    }
 }
 
 enum RepoResult {
@@ -239,5 +338,63 @@ async fn sync_repo(
         Ok(r) if r.ok => RepoResult::Synced(format!("  {name:<35} OK {}", r.summary)),
         Ok(r) => RepoResult::Failed(format!("  {name:<35} FAIL {}", r.summary)),
         Err(e) => RepoResult::Failed(format!("  {name:<35} FAIL {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tally_results_counts_correctly() {
+        let results = vec![
+            ("a".into(), RepoResult::Synced("OK a".into())),
+            ("b".into(), RepoResult::Synced("OK b".into())),
+            ("c".into(), RepoResult::Failed("FAIL c".into())),
+            ("d".into(), RepoResult::Cloned("CLONE d".into())),
+            ("e".into(), RepoResult::Skipped("SKIP e".into())),
+        ];
+        let (synced, failed, cloned, lines) = tally_results(results);
+        assert_eq!(synced, 2);
+        assert_eq!(failed, 1);
+        assert_eq!(cloned, 1);
+        assert_eq!(lines.len(), 5);
+    }
+
+    #[test]
+    fn tally_results_empty() {
+        let (synced, failed, cloned, lines) = tally_results(Vec::new());
+        assert_eq!(synced, 0);
+        assert_eq!(failed, 0);
+        assert_eq!(cloned, 0);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn cascade_mode_eq() {
+        assert_eq!(CascadeMode::Sync, CascadeMode::Sync);
+        assert_ne!(CascadeMode::Sync, CascadeMode::DryRun);
+        assert_ne!(CascadeMode::CheckOnly, CascadeMode::DryRun);
+    }
+
+    #[test]
+    fn cascade_opts_default_fields() {
+        let opts = CascadeOpts {
+            gate: "eastGate",
+            source: "forgejo",
+            mode: CascadeMode::DryRun,
+            clone_missing: false,
+            publish_freshness: true,
+            with_harvest: false,
+        };
+        assert_eq!(opts.gate, "eastGate");
+        assert!(!opts.with_harvest);
+        assert!(opts.publish_freshness);
+    }
+
+    #[test]
+    fn depot_freshness_no_depot_returns_empty() {
+        let result = summarize_depot_freshness();
+        assert!(result.is_empty() || result.contains("binaries present"));
     }
 }

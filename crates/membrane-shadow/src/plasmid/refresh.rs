@@ -178,3 +178,83 @@ fn find_local_binary(source_dir: &Path, primal: &str) -> Option<String> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_result_serde_roundtrip() {
+        let result = RefreshResult {
+            binary: "beardog".into(),
+            status: RefreshStatus::Pushed,
+            detail: "transferred 4.2MB".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let back: RefreshResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.binary, "beardog");
+        assert!(matches!(back.status, RefreshStatus::Pushed));
+    }
+
+    #[test]
+    fn refresh_status_variants() {
+        let pushed = serde_json::to_value(RefreshStatus::Pushed).unwrap();
+        let skipped = serde_json::to_value(RefreshStatus::Skipped).unwrap();
+        let failed = serde_json::to_value(RefreshStatus::Failed).unwrap();
+        assert_eq!(pushed.as_str(), Some("Pushed"));
+        assert_eq!(skipped.as_str(), Some("Skipped"));
+        assert_eq!(failed.as_str(), Some("Failed"));
+    }
+
+    #[test]
+    fn format_refresh_outcome_all_pushed() {
+        let results = vec![
+            RefreshResult {
+                binary: "a".into(),
+                status: RefreshStatus::Pushed,
+                detail: "ok".into(),
+            },
+            RefreshResult {
+                binary: "b".into(),
+                status: RefreshStatus::Pushed,
+                detail: "ok".into(),
+            },
+        ];
+        let outcome = format_refresh_outcome(&results);
+        assert!(outcome.ok);
+        assert!(outcome.message.contains("2 pushed"));
+        assert!(outcome.message.contains("0 failed"));
+    }
+
+    #[test]
+    fn format_refresh_outcome_with_failures() {
+        let results = vec![
+            RefreshResult {
+                binary: "a".into(),
+                status: RefreshStatus::Pushed,
+                detail: "ok".into(),
+            },
+            RefreshResult {
+                binary: "b".into(),
+                status: RefreshStatus::Failed,
+                detail: "timeout".into(),
+            },
+            RefreshResult {
+                binary: "c".into(),
+                status: RefreshStatus::Skipped,
+                detail: "no binary".into(),
+            },
+        ];
+        let outcome = format_refresh_outcome(&results);
+        assert!(!outcome.ok);
+        assert!(outcome.message.contains("1 pushed"));
+        assert!(outcome.message.contains("1 failed"));
+        assert!(outcome.message.contains("1 skipped"));
+    }
+
+    #[test]
+    fn resolve_refresh_source_explicit_override() {
+        let path = resolve_refresh_source(Some("/explicit/path"));
+        assert_eq!(path, PathBuf::from("/explicit/path"));
+    }
+}
