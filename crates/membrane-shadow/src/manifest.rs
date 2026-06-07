@@ -276,3 +276,104 @@ pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
     })?;
     EcosystemManifest::load(&path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_manifest_toml() -> &'static str {
+        r#"
+[meta]
+version = "2.5.0"
+wave = 67
+total_repos = 39
+
+[sync]
+default_source = "temporal"
+push_target = "forgejo"
+divergence_policy = "merge-ff"
+forgejo_ssh = "ssh://git@git.primals.eco:2222"
+
+[repos.bearDog]
+org = "ecoPrimals"
+local_path = "primals/bearDog"
+github_repo = "ecoPrimals/bearDog"
+forgejo_repo = "ecoPrimals/bearDog"
+category = "primal"
+
+[repos.cellMembrane]
+org = "sporeGarden"
+local_path = "gardens/cellMembrane"
+github_repo = "sporeGarden/cellMembrane"
+forgejo_repo = "sporeGarden/cellMembrane"
+category = "garden"
+
+[gates.eastGate]
+repos = ["bearDog", "cellMembrane"]
+"#
+    }
+
+    #[test]
+    fn parse_manifest_meta() {
+        let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
+        assert_eq!(manifest.meta.version, "2.5.0");
+        assert_eq!(manifest.meta.wave, 67);
+        assert_eq!(manifest.meta.total_repos, 39);
+    }
+
+    #[test]
+    fn parse_manifest_sync_config() {
+        let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
+        assert_eq!(manifest.sync.default_source, "temporal");
+        assert_eq!(manifest.sync.push_target, "forgejo");
+        assert_eq!(manifest.sync.divergence_policy, "merge-ff");
+    }
+
+    #[test]
+    fn parse_manifest_repos() {
+        let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
+        assert_eq!(manifest.repos.len(), 2);
+
+        let bear = &manifest.repos["bearDog"];
+        assert_eq!(bear.local_path, "primals/bearDog");
+        assert_eq!(bear.category, "primal");
+        assert_eq!(bear.org, "ecoPrimals");
+
+        let cm = &manifest.repos["cellMembrane"];
+        assert_eq!(cm.local_path, "gardens/cellMembrane");
+        assert_eq!(cm.category, "garden");
+    }
+
+    #[test]
+    fn forgejo_clone_url_format() {
+        let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
+        let entry = &manifest.repos["cellMembrane"];
+        assert_eq!(
+            manifest.forgejo_clone_url(entry),
+            "ssh://git@git.primals.eco:2222/sporeGarden/cellMembrane.git"
+        );
+    }
+
+    #[test]
+    fn gate_profiles_parsed() {
+        let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
+        assert!(manifest.gates.contains_key("eastGate"));
+        let gate = &manifest.gates["eastGate"];
+        assert_eq!(gate.repos, vec!["bearDog", "cellMembrane"]);
+    }
+
+    #[test]
+    fn sync_defaults_applied() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+[gates]
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert_eq!(manifest.sync.default_source, "temporal");
+        assert_eq!(manifest.sync.default_branch, "main");
+        assert_eq!(manifest.sync.divergence_policy, "flag");
+        assert_eq!(manifest.sync.push_target, "all");
+    }
+}

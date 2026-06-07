@@ -599,3 +599,90 @@ async fn push_to_followers(
 
 /// Re-export freshness tracking functions (for backward compat from dispatch).
 pub use crate::freshness::check_installed_freshness;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_position_parity_detection() {
+        let parity = RemotePosition {
+            remote: "origin".into(),
+            ahead: 0,
+            behind: 0,
+        };
+        assert!(parity.is_parity());
+
+        let ahead = RemotePosition {
+            remote: "origin".into(),
+            ahead: 3,
+            behind: 0,
+        };
+        assert!(!ahead.is_parity());
+
+        let behind = RemotePosition {
+            remote: "forgejo".into(),
+            ahead: 0,
+            behind: 2,
+        };
+        assert!(!behind.is_parity());
+    }
+
+    #[test]
+    fn temporal_matrix_display_format() {
+        let matrix = TemporalMatrix {
+            repo_path: "primals/bearDog".into(),
+            branch: "main".into(),
+            classification: SyncClassification::Parity,
+            positions: vec![
+                RemotePosition {
+                    remote: "origin".into(),
+                    ahead: 0,
+                    behind: 0,
+                },
+                RemotePosition {
+                    remote: "forgejo".into(),
+                    ahead: 0,
+                    behind: 0,
+                },
+            ],
+            action: SyncAction::None,
+        };
+        let display = format!("{matrix:?}");
+        assert!(display.contains("bearDog"));
+        assert!(display.contains("Parity"));
+    }
+
+    #[test]
+    fn sync_classification_variants() {
+        assert_ne!(SyncClassification::Parity, SyncClassification::Converge);
+        assert_ne!(SyncClassification::Diverge, SyncClassification::Missing);
+        assert_ne!(SyncClassification::Missing, SyncClassification::NoRemote);
+    }
+
+    #[test]
+    fn sync_action_pull_carries_leader() {
+        let action = SyncAction::Pull {
+            leader: "forgejo".into(),
+        };
+        if let SyncAction::Pull { leader } = action {
+            assert_eq!(leader, "forgejo");
+        } else {
+            panic!("expected Pull variant");
+        }
+    }
+
+    #[test]
+    fn sync_action_tree_parity_carries_data() {
+        let action = SyncAction::TreeParity {
+            leader: "origin".into(),
+            followers: vec!["forgejo".into()],
+        };
+        if let SyncAction::TreeParity { leader, followers } = action {
+            assert_eq!(leader, "origin");
+            assert_eq!(followers, vec!["forgejo"]);
+        } else {
+            panic!("expected TreeParity variant");
+        }
+    }
+}

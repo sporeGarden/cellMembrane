@@ -1,0 +1,85 @@
+# cellMembrane capability registry
+# Machine-readable TOML for ecosystem tooling, deploy graph validation,
+# and DOMAIN_OWNER_MAP auto-discovery.
+#
+# Primal: cellMembrane
+# Gate: ironGate
+# Role: Inner membrane — sovereign periplasm controller
+
+[identity]
+primal = "cellMembrane"
+gate = "ironGate"
+composition = "tower"
+binary = "membrane"
+
+[provided_capabilities]
+# Temporal sync — manifest-driven ecosystem cascade
+temporal_cascade = { protocol = "cli", description = "Parallel multi-repo sync with divergence resolution" }
+temporal_check = { protocol = "cli", description = "Per-repo sync state classification (parity/converge/diverge)" }
+temporal_sync = { protocol = "cli", description = "Single-repo sync with push target policy" }
+
+# Plasmid lifecycle — binary harvest, deploy, refresh
+plasmid_harvest = { protocol = "cli", description = "Build primal from source, checksum, stage to depot" }
+plasmid_refresh = { protocol = "cli", description = "Push binaries to VPS (atomic replace + restart)" }
+plasmid_pipeline = { protocol = "cli", description = "Zero-touch harvest → refresh → alive cycle" }
+plasmid_trigger = { protocol = "ssh", description = "Remotely trigger VPS pipeline via systemctl" }
+plasmid_fetch = { protocol = "cli", description = "Download primal binaries from release/VPS" }
+plasmid_status = { protocol = "cli", description = "Report depot freshness and upstream drift" }
+
+# VPS infrastructure management
+gate_health = { protocol = "ssh", description = "13-primal health.liveness sweep via UDS" }
+gate_service = { protocol = "ssh", description = "Service lifecycle (status/restart/logs) via systemctl" }
+gate_pull = { protocol = "ssh", description = "Pull ecosystem repos on VPS" }
+
+# K-Derm relay chain
+relay_mediate = { protocol = "ssh", description = "Inner→outer membrane relay (Forgejo→GitHub sync)" }
+relay_ship = { protocol = "ssh", description = "Push repos from inner to outer membrane" }
+
+# Impulse lifecycle
+impulse_post = { protocol = "cli", description = "Create and publish impulse signals to wateringHole" }
+impulse_ack = { protocol = "cli", description = "Acknowledge received impulse" }
+impulse_archive = { protocol = "cli", description = "Archive resolved impulses" }
+
+# Context braids
+context_weave = { protocol = "cli", description = "Create/update context braid for gate" }
+context_sense = { protocol = "cli", description = "Sense current context state" }
+
+# Freshness tracking
+freshness_check = { protocol = "cli", description = "Compare installed binary ages against depot" }
+freshness_publish = { protocol = "cli", description = "Publish freshness.toml to ecosystem" }
+
+# Identity resolution
+identity_resolve = { protocol = "cli", description = "Resolve gate identity from workspace markers" }
+
+# Cloudflare DNS management
+cloudflare_dns = { protocol = "api", description = "CRUD for DNS records via Cloudflare API" }
+cloudflare_cache = { protocol = "api", description = "Cache purge operations" }
+cloudflare_ssl = { protocol = "api", description = "SSL/TLS settings inspection" }
+
+# Content verification
+content_verify = { protocol = "ssh", description = "Verify nestGate content integrity on VPS" }
+
+# Forgejo API
+forgejo_repo = { protocol = "api", description = "Repository CRUD and mirroring via Forgejo API" }
+forgejo_token = { protocol = "api", description = "API token lifecycle management" }
+
+[consumed_capabilities]
+# cellMembrane discovers these at runtime via UDS probes and SSH
+ssh_transport = { provider = "system", description = "SSH client for VPS command execution" }
+git = { provider = "system", description = "Git CLI for repository operations" }
+cargo = { provider = "system", description = "Rust toolchain for binary compilation" }
+systemctl = { provider = "vps", description = "Service lifecycle management on deployment target" }
+forgejo_api = { provider = "vps", description = "Forgejo REST API for repo/token operations" }
+cloudflare_api = { provider = "external", description = "Cloudflare API for DNS/SSL/cache management" }
+
+[discovery]
+method = "runtime"
+transport = "uds"
+socket_path = "/run/membrane/membrane.sock"
+health_check = "health.liveness"
+
+[deployment]
+install_base = "/opt/membrane"
+socket_base = "/run/membrane"
+systemd_unit = "membrane.service"
+timer_units = ["plasmid-pipeline.timer"]

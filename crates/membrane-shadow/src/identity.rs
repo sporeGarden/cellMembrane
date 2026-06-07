@@ -76,3 +76,58 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
         "cannot resolve gate identity — set GATE_NAME or create .gate file".into(),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn resolve_from_gate_file() {
+        let dir = std::env::temp_dir().join("membrane-test-identity-gate");
+        std::fs::create_dir_all(&dir).unwrap();
+        let gate_file = dir.join(".gate");
+        let mut f = std::fs::File::create(&gate_file).unwrap();
+        writeln!(f, "eastGate").unwrap();
+        drop(f);
+
+        // Only test file path when GATE_NAME is not already set
+        if std::env::var("GATE_NAME").is_err() {
+            let result = resolve(&dir);
+            let identity = result.unwrap();
+            assert_eq!(identity.name, "eastGate");
+            assert!(matches!(identity.source, IdentitySource::GateFile));
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_fails_without_identity() {
+        if std::env::var("GATE_NAME").is_err() {
+            let result = resolve(Path::new("/tmp/nonexistent-gate-identity-test"));
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn identity_display_format() {
+        let id = GateIdentity {
+            name: "ironGate".into(),
+            source: IdentitySource::Environment,
+        };
+        assert_eq!(format!("{id}"), "ironGate (env)");
+
+        let id2 = GateIdentity {
+            name: "eastGate".into(),
+            source: IdentitySource::GateFile,
+        };
+        assert_eq!(format!("{id2}"), "eastGate (.gate file)");
+    }
+
+    #[test]
+    fn identity_source_display() {
+        assert_eq!(format!("{}", IdentitySource::Environment), "env");
+        assert_eq!(format!("{}", IdentitySource::GateFile), ".gate file");
+    }
+}

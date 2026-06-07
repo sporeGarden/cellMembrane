@@ -204,3 +204,75 @@ async fn resolve_token() -> Option<String> {
     let token = token.trim().to_string();
     if token.is_empty() { None } else { Some(token) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_overrides_prefers_ssh_alias() {
+        let toml_str = r#"
+[membrane.layers.inner]
+host = "golgiBody"
+ssh_alias = "golgi"
+ip = "157.230.3.183"
+"#;
+        let parsed: toml::Table = toml_str.parse().unwrap();
+        let overrides = extract_overrides(&parsed);
+        assert_eq!(overrides.ssh_host.as_deref(), Some("golgi"));
+    }
+
+    #[test]
+    fn extract_overrides_falls_back_to_host() {
+        let toml_str = r#"
+[membrane.layers.inner]
+host = "golgiBody"
+ip = "157.230.3.183"
+"#;
+        let parsed: toml::Table = toml_str.parse().unwrap();
+        let overrides = extract_overrides(&parsed);
+        assert_eq!(overrides.ssh_host.as_deref(), Some("golgiBody"));
+    }
+
+    #[test]
+    fn extract_overrides_handles_missing_layers() {
+        let toml_str = r#"
+[membrane]
+name = "test"
+"#;
+        let parsed: toml::Table = toml_str.parse().unwrap();
+        let overrides = extract_overrides(&parsed);
+        assert_eq!(overrides.ssh_host, None);
+    }
+
+    #[test]
+    fn extract_overrides_reads_forgejo_api() {
+        let toml_str = r#"
+[membrane.layers.inner]
+host = "test"
+
+[sync]
+forgejo_base_url = "https://git.primals.eco"
+"#;
+        let parsed: toml::Table = toml_str.parse().unwrap();
+        let overrides = extract_overrides(&parsed);
+        assert_eq!(
+            overrides.forgejo_api.as_deref(),
+            Some("https://git.primals.eco/api/v1")
+        );
+    }
+
+    #[test]
+    fn default_config_uses_golgi() {
+        let cfg = ShadowConfig::default();
+        assert_eq!(cfg.ssh_host, "golgi");
+        assert_eq!(cfg.ssh_timeout, 10);
+    }
+
+    #[test]
+    fn default_service_filter_includes_expected() {
+        assert!(DEFAULT_SERVICE_FILTER.contains("membrane"));
+        assert!(DEFAULT_SERVICE_FILTER.contains("forgejo"));
+        assert!(DEFAULT_SERVICE_FILTER.contains("caddy"));
+    }
+}
