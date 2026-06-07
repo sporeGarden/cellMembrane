@@ -79,6 +79,7 @@ pub mod relay;
 pub mod service;
 pub mod ssh;
 pub mod temporal;
+pub mod webhook;
 
 pub use config::ShadowConfig;
 pub use error::{Result, ShadowError, ShadowOutcome};
