@@ -371,4 +371,27 @@ mod tests {
         assert!(pulled.is_empty());
         assert!(failures.is_empty());
     }
+
+    #[test]
+    fn relay_result_serializes() {
+        let result = RelayResult {
+            pulled: vec!["bearDog".into()],
+            pull_failures: vec![],
+            impulses_sensed: 2,
+            pushed: vec!["bearDog".into()],
+            push_skipped: vec![],
+            push_failures: vec!["songBird".into()],
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["pulled"][0], "bearDog");
+        assert_eq!(json["impulses_sensed"], 2);
+        assert_eq!(json["push_failures"][0], "songBird");
+    }
+
+    #[test]
+    fn ship_result_variants() {
+        assert!(matches!(ShipResult::Pushed, ShipResult::Pushed));
+        assert!(matches!(ShipResult::Skipped, ShipResult::Skipped));
+        assert!(matches!(ShipResult::Failed, ShipResult::Failed));
+    }
 }

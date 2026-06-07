@@ -194,4 +194,51 @@ mod tests {
         let tmp = std::env::temp_dir().join("no-git-here");
         assert!(resolve_head_ref(&tmp).is_empty());
     }
+
+    #[test]
+    fn head_ref_returns_value_for_real_repo() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = crate_dir.parent().unwrap().parent().unwrap();
+        let head = resolve_head_ref(workspace_root);
+        assert!(!head.is_empty(), "should return a commit SHA");
+        assert!(head.len() >= 7 && head.len() <= 12);
+    }
+
+    #[test]
+    fn git_op_timeout_is_60s() {
+        assert_eq!(GIT_OP_TIMEOUT.as_secs(), 60);
+    }
+
+    #[test]
+    fn push_result_fields() {
+        let r = PushResult {
+            succeeded: 2,
+            failed: vec!["upstream".into()],
+        };
+        assert_eq!(r.succeeded, 2);
+        assert_eq!(r.failed.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn git_success_on_real_repo() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        assert!(git_success(workspace, &["status"]).await);
+    }
+
+    #[tokio::test]
+    async fn git_output_status() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        let output = git_output(workspace, &["rev-parse", "--short", "HEAD"]).await;
+        assert!(output.is_ok());
+        assert!(!output.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn rev_list_count_returns_zero_for_bogus() {
+        let tmp = std::env::temp_dir().join("no-git-revlist");
+        let count = rev_list_count(&tmp, "HEAD").await;
+        assert_eq!(count, 0);
+    }
 }

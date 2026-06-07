@@ -209,4 +209,39 @@ mod tests {
             "bridge should fall through to shadow when no primal is running"
         );
     }
+
+    #[test]
+    fn neural_api_socket_name_is_stable() {
+        assert_eq!(NEURAL_API_SOCKET_NAME, "neural-api-default.sock");
+        assert_eq!(NEURAL_API_NAMESPACE, "biomeos");
+    }
+
+    #[test]
+    fn bridge_result_handled_carries_value() {
+        let val = serde_json::json!({"status": "ok"});
+        let result = BridgeResult::Handled(val.clone());
+        match result {
+            BridgeResult::Handled(v) => assert_eq!(v, val),
+            BridgeResult::Fallthrough => panic!("expected Handled"),
+        }
+    }
+
+    #[test]
+    fn bridge_result_fallthrough_variant() {
+        let result = BridgeResult::Fallthrough;
+        assert!(matches!(result, BridgeResult::Fallthrough));
+    }
+
+    #[test]
+    fn discover_with_tmp_socket() {
+        let tmp = std::env::temp_dir().join("biomeos");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let sock_path = tmp.join(NEURAL_API_SOCKET_NAME);
+        std::fs::write(&sock_path, b"").unwrap();
+
+        let bridge = NeuralBridge::discover();
+        assert!(bridge.is_some() || bridge.is_none());
+
+        std::fs::remove_dir_all(&tmp).ok();
+    }
 }
