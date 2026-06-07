@@ -68,7 +68,7 @@ impl RelayConfig {
                     .as_ref()
                     .and_then(|c| c.ecoprimals_root.clone())
             })
-            .unwrap_or_else(|| "/opt/ecoPrimals".to_string());
+            .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.to_string());
 
         let forgejo_remote = std::env::var("RELAY_FORGEJO_REMOTE")
             .ok()
@@ -336,11 +336,14 @@ mod tests {
     #[test]
     fn relay_config_respects_defaults() {
         let config = RelayConfig {
-            ecoprimals_root: PathBuf::from("/opt/ecoPrimals"),
+            ecoprimals_root: PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT),
             forgejo_remote: "forgejo".to_string(),
             golgi_ext_host: "golgi-ext".to_string(),
         };
-        assert_eq!(config.ecoprimals_root, PathBuf::from("/opt/ecoPrimals"));
+        assert_eq!(
+            config.ecoprimals_root,
+            PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
+        );
         assert_eq!(config.forgejo_remote, "forgejo");
         assert_eq!(config.golgi_ext_host, "golgi-ext");
     }

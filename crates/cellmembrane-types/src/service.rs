@@ -105,6 +105,10 @@ pub const DEFAULT_INSTALL_BASE: &str = "/opt/membrane";
 /// Default base path for primal UDS sockets.
 pub const DEFAULT_SOCKET_BASE: &str = "/run/membrane";
 
+/// Default ecoPrimals workspace root on VPS deployments.
+/// Override with `ECOPRIMALS_ROOT` env var.
+pub const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

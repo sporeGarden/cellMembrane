@@ -55,7 +55,7 @@ impl Default for ShadowConfig {
                 .unwrap_or_else(|_| "golgi-ext".into()),
             forgejo_api: String::new(),
             forgejo_token: None,
-            vps_root: "/opt/ecoPrimals".into(),
+            vps_root: cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
             ssh_timeout: 10,
             forgejo_data_dir: None,
             forgejo_work_dir: None,
@@ -87,7 +87,7 @@ impl ShadowConfig {
             vps_root: std::env::var("VPS_ECOPRIMALS_ROOT")
                 .ok()
                 .or(toml_overrides.vps_root)
-                .unwrap_or_else(|| "/opt/ecoPrimals".into()),
+                .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into()),
             ssh_timeout: std::env::var("SSH_TIMEOUT")
                 .ok()
                 .and_then(|v| v.parse().ok())

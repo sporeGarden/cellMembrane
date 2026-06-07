@@ -147,11 +147,11 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
     checks.push(("tower.env", tower_ok, tower_env_path));
 
     // Check 4: No primary data stored (nothing in content dirs)
-    let (data_out, _) = crate::ssh::exec_raw(
-        &pepti_config,
-        "find /opt/membrane -name '*.db' -o -name '*.sqlite' 2>/dev/null | wc -l",
-    )
-    .await?;
+    let find_cmd = format!(
+        "find {} -name '*.db' -o -name '*.sqlite' 2>/dev/null | wc -l",
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE
+    );
+    let (data_out, _) = crate::ssh::exec_raw(&pepti_config, &find_cmd).await?;
     let data_files: u32 = data_out.trim().parse().unwrap_or(99);
     let no_data = data_files == 0;
     checks.push((

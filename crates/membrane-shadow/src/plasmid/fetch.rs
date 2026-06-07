@@ -226,8 +226,12 @@ async fn download_asset(
             download_via_http(&url, dest).await
         }
         FetchSource::Vps => {
-            let vps_bin_dir = std::env::var("VPS_MEMBRANE_BIN_DIR")
-                .unwrap_or_else(|_| "/opt/ecoPrimals/plasmidBin/primals".into());
+            let vps_bin_dir = std::env::var("VPS_MEMBRANE_BIN_DIR").unwrap_or_else(|_| {
+                format!(
+                    "{}/plasmidBin/primals",
+                    cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+                )
+            });
             let remote_path = format!("{vps_bin_dir}/{asset}");
             download_via_ssh(&config.ssh_host, &remote_path, dest).await
         }
