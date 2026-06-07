@@ -80,7 +80,7 @@ pub async fn pipeline(
 
     let harvest_outcome = harvest(&harvest_args).await?;
 
-    if dry_run || !harvest_outcome.ok {
+    if dry_run {
         return Ok(harvest_outcome);
     }
 
@@ -98,7 +98,7 @@ pub async fn pipeline(
 
     if !built_any {
         return Ok(crate::ShadowOutcome {
-            ok: true,
+            ok: harvest_outcome.ok,
             message: format!("{} — no new binaries to push", harvest_outcome.message),
             data: harvest_outcome.data,
         });
@@ -113,7 +113,7 @@ pub async fn pipeline(
     let refresh_outcome = refresh(config, &refresh_args).await?;
 
     Ok(crate::ShadowOutcome {
-        ok: harvest_outcome.ok && refresh_outcome.ok,
+        ok: refresh_outcome.ok,
         message: format!("{} | {}", harvest_outcome.message, refresh_outcome.message),
         data: refresh_outcome.data,
     })

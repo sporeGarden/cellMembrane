@@ -11,6 +11,9 @@ Type=oneshot
 ExecStart=/opt/membrane/membrane plasmid.pipeline
 Environment=PLASMIDBIN_DEPOT=/opt/plasmidBin
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
+Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
+Environment=HOME=/root
+SuccessExitStatus=1
 TimeoutStartSec=900
 StandardOutput=journal
 StandardError=journal
