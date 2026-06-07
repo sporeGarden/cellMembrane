@@ -523,3 +523,82 @@ pub async fn version(config: &ShadowConfig) -> Result<String> {
         .map(String::from)
         .ok_or_else(|| ShadowError::Parse("missing 'version' field in response".into()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_shell_safe_accepts_clean() {
+        assert!(validate_shell_safe("ecoPrimals", "org").is_ok());
+        assert!(validate_shell_safe("cellMembrane", "repo").is_ok());
+        assert!(validate_shell_safe("sporeGarden/cellMembrane", "path").is_ok());
+        assert!(validate_shell_safe("bearDog-v0.9.0", "name").is_ok());
+    }
+
+    #[test]
+    fn validate_shell_safe_rejects_metacharacters() {
+        assert!(validate_shell_safe("foo;rm -rf /", "cmd").is_err());
+        assert!(validate_shell_safe("$(evil)", "name").is_err());
+        assert!(validate_shell_safe("foo`bar`", "repo").is_err());
+        assert!(validate_shell_safe("a|b", "path").is_err());
+        assert!(validate_shell_safe("a&b", "path").is_err());
+        assert!(validate_shell_safe("a'b", "name").is_err());
+    }
+
+    #[test]
+    fn validate_shell_safe_rejects_empty() {
+        assert!(validate_shell_safe("", "field").is_err());
+    }
+
+    #[test]
+    fn auth_header_format() {
+        assert_eq!(auth_header("abc123"), "token abc123");
+    }
+
+    #[test]
+    fn repo_info_deserializes() {
+        let json = r#"{
+            "name": "cellMembrane",
+            "full_name": "sporeGarden/cellMembrane",
+            "description": "Membrane orchestration",
+            "mirror": false,
+            "default_branch": "main",
+            "mirror_interval": "",
+            "mirror_updated": ""
+        }"#;
+        let info: RepoInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.name, "cellMembrane");
+        assert_eq!(info.full_name, "sporeGarden/cellMembrane");
+        assert!(!info.mirror);
+    }
+
+    #[test]
+    fn mirror_sync_result_serde() {
+        let result = MirrorSyncResult {
+            repo: "ecoPrimals/biomeOS".into(),
+            triggered: true,
+            http_code: 200,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let deser: MirrorSyncResult = serde_json::from_str(&json).unwrap();
+        assert!(deser.triggered);
+        assert_eq!(deser.http_code, 200);
+    }
+
+    #[test]
+    fn push_mirror_deserializes_with_defaults() {
+        let json = r#"{}"#;
+        let mirror: PushMirror = serde_json::from_str(json).unwrap();
+        assert_eq!(mirror.remote_name, "");
+        assert!(!mirror.sync_on_commit);
+    }
+
+    #[test]
+    fn token_info_serde() {
+        let json = r#"{"id": 42, "name": "deploy-token", "created": "1717776000"}"#;
+        let token: TokenInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(token.id, 42);
+        assert_eq!(token.name, "deploy-token");
+    }
+}
