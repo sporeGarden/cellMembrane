@@ -153,6 +153,23 @@ impl DeployPaths {
     pub fn socket_path(&self, binary: &str) -> String {
         format!("{}/{binary}.sock", self.socket_base)
     }
+
+    /// Produce the `TRANSPORT_ENDPOINT` env var value for a primal.
+    ///
+    /// If `transport_endpoint` is configured, returns its JSON serialization.
+    /// Otherwise, returns a default UDS endpoint derived from `socket_base`.
+    #[must_use]
+    pub fn transport_env_value(&self, binary: &str) -> String {
+        self.transport_endpoint.as_ref().map_or_else(
+            || {
+                let ep = crate::transport::TransportEndpoint::Uds {
+                    path: self.socket_path(binary),
+                };
+                serde_json::to_string(&ep).unwrap_or_default()
+            },
+            |ep| serde_json::to_string(ep).unwrap_or_default(),
+        )
+    }
 }
 
 /// Per-channel configuration overrides from `[membrane.channels]`.

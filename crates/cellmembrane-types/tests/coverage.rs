@@ -522,6 +522,46 @@ fn deploy_paths_custom_base() {
 }
 
 #[test]
+fn deploy_paths_transport_env_default_uds() {
+    use cellmembrane_types::config::DeployPaths;
+    use cellmembrane_types::TransportEndpoint;
+    let paths = DeployPaths::default();
+    let val = paths.transport_env_value("beardog");
+    let ep: TransportEndpoint = serde_json::from_str(&val).unwrap();
+    assert_eq!(
+        ep,
+        TransportEndpoint::Uds {
+            path: "/run/membrane/beardog.sock".into()
+        }
+    );
+}
+
+#[test]
+fn deploy_paths_transport_env_custom_override() {
+    use cellmembrane_types::config::DeployPaths;
+    use cellmembrane_types::TransportEndpoint;
+    let toml_str = r#"
+        install_base = "/opt/membrane"
+        socket_base = "/run/membrane"
+        credential_base = "/opt/membrane"
+        [transport_endpoint]
+        transport = "tcp"
+        host = "10.0.0.5"
+        port = 9443
+    "#;
+    let paths: DeployPaths = toml::from_str(toml_str).unwrap();
+    let val = paths.transport_env_value("anything");
+    let ep: TransportEndpoint = serde_json::from_str(&val).unwrap();
+    assert_eq!(
+        ep,
+        TransportEndpoint::Tcp {
+            host: "10.0.0.5".into(),
+            port: 9443
+        }
+    );
+}
+
+#[test]
 fn config_with_custom_paths() {
     use cellmembrane_types::config::MembraneConfig;
     use std::path::Path;

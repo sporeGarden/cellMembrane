@@ -11,6 +11,7 @@
 //!
 //! BLAKE3 checksums are verified in-process using the `blake3` crate.
 
+mod depot;
 mod fetch;
 mod harvest;
 mod refresh;
