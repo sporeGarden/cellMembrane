@@ -482,15 +482,16 @@ fn update_checksums(
     Ok(())
 }
 
-async fn update_provenance(depot_dir: &Path, target: &str, built: &[&HarvestResult]) -> Result<()> {
+async fn update_provenance(depot_dir: &Path, _target: &str, built: &[&HarvestResult]) -> Result<()> {
     let provenance_path = depot_dir.join("provenance.toml");
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let header_target = detect_target_triple();
 
     let mut prov_out = format!(
         "# plasmidBin provenance — build traceability\n\
          generated = \"{now}\"\n\
          builder = \"{}\"\n\
-         target = \"{target}\"\n\
+         target = \"{header_target}\"\n\
          rustc = \"{}\"\n\n",
         hostname(),
         rustc_version().await,
