@@ -18,56 +18,74 @@ const RELAY_SOCKET_NAME: &str = "songbird-default.sock";
 const SIGNER_SOCKET_NAME: &str = "beardog-default.sock";
 
 pub fn try_relay_impulse(impulse: &ImpulseFile) {
-    let Some(socket_path) = discover_socket(RELAY_SOCKET_NAME) else {
+    #[cfg(not(unix))]
+    {
+        let _ = impulse;
         return;
-    };
+    }
 
-    let notification = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "mesh.publish",
-        "params": {
-            "topic": format!("impulse/{}", impulse.from.gate),
-            "payload": {
-                "id": impulse.impulse.id,
-                "type": impulse.impulse.impulse_type,
-                "from": impulse.from.gate,
-                "to": impulse.to.gates,
-                "subject": impulse.content.subject,
-                "priority": impulse.impulse.priority,
+    #[cfg(unix)]
+    {
+        let Some(socket_path) = discover_socket(RELAY_SOCKET_NAME) else {
+            return;
+        };
+
+        let notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "mesh.publish",
+            "params": {
+                "topic": format!("impulse/{}", impulse.from.gate),
+                "payload": {
+                    "id": impulse.impulse.id,
+                    "type": impulse.impulse.impulse_type,
+                    "from": impulse.from.gate,
+                    "to": impulse.to.gates,
+                    "subject": impulse.content.subject,
+                    "priority": impulse.impulse.priority,
+                }
             }
-        }
-    });
+        });
 
-    let Ok(request_str) = serde_json::to_string(&notification) else {
-        return;
-    };
+        let Ok(request_str) = serde_json::to_string(&notification) else {
+            return;
+        };
 
-    uds_send(&socket_path, &request_str);
+        uds_send(&socket_path, &request_str);
+    }
 }
 
 #[must_use]
 pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
-    let socket_path = discover_socket(SIGNER_SOCKET_NAME)?;
+    #[cfg(not(unix))]
+    {
+        let _ = impulse_id;
+        return None;
+    }
 
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "crypto.sign_ed25519",
-        "params": { "data": impulse_id }
-    });
-    let request_str = serde_json::to_string(&request).ok()?;
+    #[cfg(unix)]
+    {
+        let socket_path = discover_socket(SIGNER_SOCKET_NAME)?;
 
-    let response_bytes = uds_request(&socket_path, &request_str)?;
-    let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
-    let result = response.get("result")?;
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "crypto.sign_ed25519",
+            "params": { "data": impulse_id }
+        });
+        let request_str = serde_json::to_string(&request).ok()?;
 
-    Some(ImpulseSignature {
-        algorithm: "ed25519".to_string(),
-        public_key: result.get("public_key")?.as_str()?.to_string(),
-        value: result.get("signature")?.as_str()?.to_string(),
-        signed_at: Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
-    })
+        let response_bytes = uds_request(&socket_path, &request_str)?;
+        let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
+        let result = response.get("result")?;
+
+        Some(ImpulseSignature {
+            algorithm: "ed25519".to_string(),
+            public_key: result.get("public_key")?.as_str()?.to_string(),
+            value: result.get("signature")?.as_str()?.to_string(),
+            signed_at: Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
+        })
+    }
 }
 
 /// Discover a primal UDS socket by name.
@@ -116,6 +134,7 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     None
 }
 
+#[cfg(unix)]
 fn uds_send(socket_path: &Path, request: &str) {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
@@ -127,6 +146,7 @@ fn uds_send(socket_path: &Path, request: &str) {
     let _ = writeln!(stream, "{request}");
 }
 
+#[cfg(unix)]
 fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     use std::io::{Read, Write};
     use std::os::unix::net::UnixStream;

@@ -42,6 +42,7 @@ pub mod firewall;
 pub mod identity;
 pub mod provider;
 pub mod service;
+pub mod transport;
 pub mod validation;
 
 pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TrustLevel};
@@ -56,6 +57,7 @@ pub use firewall::{FirewallRule, FirewallRuleset};
 pub use identity::MembraneIdentity;
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{BinaryIntegrity, HashAlgorithm, MembraneService, binary_integrity_for};
+pub use transport::{TransportEndpoint, ENV_TRANSPORT_ENDPOINT};
 pub use validation::{Report, ReportEntry, Severity};
 
 /// Shared serde default for boolean fields that should be `true` when omitted.

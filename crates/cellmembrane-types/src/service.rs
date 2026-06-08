@@ -52,7 +52,7 @@ pub enum TransportMode {
     UdsOnly,
     /// TCP default: service binds to a TCP port (legacy / symbiotic).
     TcpDefault,
-    /// TCP opt-in: UDS primary, TCP available via `--port` flag.
+    /// TCP opt-in: UDS primary, TCP available via `TRANSPORT_ENDPOINT` injection.
     TcpOptIn,
 }
 

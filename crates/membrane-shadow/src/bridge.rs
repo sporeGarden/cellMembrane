@@ -17,7 +17,9 @@
 
 use crate::error::{Result, ShadowError};
 use std::path::PathBuf;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(unix)]
 use tokio::net::UnixStream;
 
 /// Default socket name for the Neural API (biomeOS convention).
@@ -112,6 +114,13 @@ impl NeuralBridge {
     }
 
     /// Low-level JSON-RPC 2.0 call over UDS.
+    #[cfg(not(unix))]
+    async fn rpc_call(&self, _method: &str, _params: serde_json::Value) -> Result<serde_json::Value> {
+        Err(ShadowError::Parse("UDS not available on this platform".into()))
+    }
+
+    /// Low-level JSON-RPC 2.0 call over UDS.
+    #[cfg(unix)]
     async fn rpc_call(&self, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
         let stream = UnixStream::connect(&self.socket_path)
             .await

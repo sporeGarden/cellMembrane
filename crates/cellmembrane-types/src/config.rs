@@ -108,6 +108,12 @@ pub struct DeployPaths {
     #[serde(default = "DeployPaths::default_credential_base")]
     pub credential_base: String,
 
+    /// Default transport endpoint for service injection (JSON format).
+    /// When set, primals launched from this config receive `TRANSPORT_ENDPOINT`
+    /// env var with this value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport_endpoint: Option<crate::transport::TransportEndpoint>,
+
     /// Forward-compatible extension fields.
     #[serde(flatten)]
     pub extra: BTreeMap<String, toml::Value>,
@@ -119,6 +125,7 @@ impl Default for DeployPaths {
             install_base: Self::default_install_base(),
             socket_base: Self::default_socket_base(),
             credential_base: Self::default_credential_base(),
+            transport_endpoint: None,
             extra: BTreeMap::new(),
         }
     }
