@@ -103,7 +103,7 @@ async fn dispatch_webhook(
             crate::webhook::handle_push(&event, config).await
         }
         "webhook.verify" => {
-            let secret = std::env::var("WEBHOOK_SECRET")
+            let secret = std::env::var(cellmembrane_types::service::ENV_WEBHOOK_SECRET)
                 .map_err(|_| ShadowError::Parse("WEBHOOK_SECRET env var required".into()))?;
             let body = cli::require_arg(args, 0, "body")?;
             let sig = cli::extract_flag_value(args, "--signature")
@@ -134,7 +134,7 @@ async fn dispatch_pepti(
 
 async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let pepti_host = args.first().map_or_else(
-        || std::env::var("PEPTI_SSH_HOST").unwrap_or_else(|_| "pepti".into()),
+        || std::env::var(cellmembrane_types::service::ENV_PEPTI_SSH_HOST).unwrap_or_else(|_| "pepti".into()),
         |&h| h.to_string(),
     );
 

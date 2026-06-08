@@ -20,6 +20,14 @@ pub use fetch::*;
 pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
 pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
+pub use depot::{StalenessEntry, StalenessReport};
+
+/// Detect stale primals in the depot. Resolves depot path from env/defaults.
+pub fn detect_depot_staleness() -> crate::error::Result<StalenessReport> {
+    let depot_dir = depot::resolve_depot(None)?;
+    depot::detect_stale_primals(&depot_dir)
+}
+
 use std::path::PathBuf;
 
 /// Primal binary names derived from the service registry at compile time.

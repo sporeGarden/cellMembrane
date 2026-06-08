@@ -42,9 +42,10 @@ Temporal (waterFall temporal.*):
   temporal.check [repo_path...]    Temporal position matrix (local, all remotes)
   temporal.sync  [repo_path...]    Pull leader, push followers (ff-only)
   temporal.cascade [--gate auto] [--source temporal] [--check] [--clone-missing] [--no-freshness]
-                   [--with-harvest] [--check-installed]
+                   [--with-harvest] [--with-rebuild] [--check-installed]
                                    Full manifest-driven cascade sync (parallel, publishes freshness)
                                    --with-harvest: build drifted primals after sync, stage to depot
+                                   --with-rebuild: harvest + refresh to VPS (full rebuild cycle)
 
 Manifest (ecosystem manifest):
   manifest.info                    Show manifest metadata + sync config
@@ -80,6 +81,7 @@ Plasmid (primal binary bootstrap):
                                    Zero-touch: harvest → refresh → alive (full cycle)
   plasmid.trigger                  Remotely trigger VPS pipeline via SSH (immediate kick)
   plasmid.status                   Report depot freshness and upstream drift
+  plasmid.staleness                Detect stale primals from provenance (local, no network)
 
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)

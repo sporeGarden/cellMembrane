@@ -211,6 +211,26 @@ pub(super) async fn dispatch_plasmid(
         }
         "plasmid.trigger" => plasmid::trigger(config).await,
         "plasmid.status" => plasmid::status().await,
+        "plasmid.staleness" => match plasmid::detect_depot_staleness() {
+            Ok(report) => {
+                let stale_names: Vec<&str> = report
+                    .entries
+                    .iter()
+                    .filter(|e| e.stale)
+                    .map(|e| e.name.as_str())
+                    .collect();
+                Ok(ShadowOutcome::ok_with(
+                    report.to_string(),
+                    serde_json::json!({
+                        "total": report.total,
+                        "current": report.current_count,
+                        "stale": report.stale_count,
+                        "stale_primals": stale_names,
+                    }),
+                ))
+            }
+            Err(e) => Err(e),
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),
@@ -353,7 +373,7 @@ pub(super) async fn dispatch_content(
             let content_path = std::env::var("NESTGATE_CONTENT_PATH").unwrap_or_else(|_| {
                 format!(
                     "{}/nestgate/content",
-                    std::env::var("MEMBRANE_INSTALL_BASE").unwrap_or_else(|_| {
+                    std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE).unwrap_or_else(|_| {
                         cellmembrane_types::service::DEFAULT_INSTALL_BASE.into()
                     })
                 )
@@ -369,7 +389,7 @@ pub(super) async fn dispatch_content(
                 .ok()
                 .and_then(|v| v.parse::<u16>().ok())
                 .unwrap_or(9500);
-            let bind = std::env::var("NUCLEUS_BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
+            let bind = std::env::var(cellmembrane_types::service::ENV_NUCLEUS_BIND).unwrap_or_else(|_| "127.0.0.1".into());
             let (curl_out, curl_code) = crate::ssh::exec_raw(
                 config,
                 &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{nestgate_port}/health 2>/dev/null"),

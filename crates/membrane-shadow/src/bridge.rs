@@ -51,7 +51,7 @@ impl NeuralBridge {
     /// shadow mode.
     #[must_use]
     pub fn discover() -> Option<Self> {
-        if let Ok(path) = std::env::var("NEURAL_API_SOCKET") {
+        if let Ok(path) = std::env::var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET) {
             let p = PathBuf::from(&path);
             if p.exists() {
                 return Some(Self { socket_path: p });

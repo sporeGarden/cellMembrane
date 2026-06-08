@@ -129,6 +129,22 @@ pub const ENV_GATE_NAME: &str = "GATE_NAME";
 pub const ENV_FEDERATION_PORT: &str = "SONGBIRD_FEDERATION_PORT";
 /// Environment variable for the songbird production bind address.
 pub const ENV_PRODUCTION_BIND: &str = "SONGBIRD_PRODUCTION_BIND_ADDRESS";
+/// Environment variable for the webhook secret (HMAC-SHA256).
+pub const ENV_WEBHOOK_SECRET: &str = "WEBHOOK_SECRET";
+/// Environment variable for the `NeuralBridge` API socket path.
+pub const ENV_NEURAL_API_SOCKET: &str = "NEURAL_API_SOCKET";
+/// Environment variable for the peptidoglycan SSH host.
+pub const ENV_PEPTI_SSH_HOST: &str = "PEPTI_SSH_HOST";
+/// Environment variable for the Forgejo API token.
+pub const ENV_FORGEJO_TOKEN: &str = "FORGEJO_TOKEN";
+/// Environment variable for the Forgejo API URL.
+pub const ENV_FORGEJO_API: &str = "FORGEJO_API";
+/// Environment variable for the membrane SSH host (golgiBody).
+pub const ENV_SSH_HOST: &str = "MEMBRANE_SSH_HOST";
+/// Environment variable for the VPS ecoPrimals root directory.
+pub const ENV_VPS_ECOPRIMALS_ROOT: &str = "VPS_ECOPRIMALS_ROOT";
+/// Environment variable for NUCLEUS bind address.
+pub const ENV_NUCLEUS_BIND: &str = "NUCLEUS_BIND_ADDRESS";
 
 /// Runtime path resolver for membrane services.
 ///

@@ -49,7 +49,7 @@ struct TomlOverrides {
 impl Default for ShadowConfig {
     fn default() -> Self {
         Self {
-            ssh_host: std::env::var("MEMBRANE_SSH_HOST").unwrap_or_else(|_| "golgi".into()),
+            ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST).unwrap_or_else(|_| "golgi".into()),
             ssh_host_ext: std::env::var("MEMBRANE_SSH_HOST_EXT")
                 .or_else(|_| std::env::var("GOLGI_EXT_HOST"))
                 .unwrap_or_else(|_| "golgi-ext".into()),
@@ -80,11 +80,11 @@ impl ShadowConfig {
                 .or(toml_overrides.ssh_host)
                 .unwrap_or_else(|| "golgi".into()),
             ssh_host_ext: std::env::var("GOLGI_EXT_HOST").unwrap_or_else(|_| "golgi-ext".into()),
-            forgejo_api: std::env::var("FORGEJO_API")
+            forgejo_api: std::env::var(cellmembrane_types::service::ENV_FORGEJO_API)
                 .ok()
                 .or(toml_overrides.forgejo_api)
                 .unwrap_or_else(discover_forgejo_api),
-            vps_root: std::env::var("VPS_ECOPRIMALS_ROOT")
+            vps_root: std::env::var(cellmembrane_types::service::ENV_VPS_ECOPRIMALS_ROOT)
                 .ok()
                 .or(toml_overrides.vps_root)
                 .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into()),
@@ -192,7 +192,7 @@ fn extract_overrides(parsed: &toml::Table) -> TomlOverrides {
 
 /// Resolve Forgejo token from env or file.
 async fn resolve_token() -> Option<String> {
-    if let Ok(token) = std::env::var("FORGEJO_TOKEN") {
+    if let Ok(token) = std::env::var(cellmembrane_types::service::ENV_FORGEJO_TOKEN) {
         if !token.is_empty() {
             return Some(token);
         }

@@ -2,6 +2,7 @@
 //! Full cascade sync — reads manifest, syncs all gate repos, reports parity.
 
 use crate::error::Result;
+use std::fmt::Write;
 use std::path::Path;
 
 use super::types::SyncClassification;
@@ -20,6 +21,7 @@ pub enum CascadeMode {
 
 /// Options for a cascade operation.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct CascadeOpts<'a> {
     /// Gate name to cascade (e.g. "golgiBody").
     pub gate: &'a str,
@@ -33,6 +35,8 @@ pub struct CascadeOpts<'a> {
     pub publish_freshness: bool,
     /// If true, build drifted primals locally after sync and push to depot.
     pub with_harvest: bool,
+    /// If true, run full rebuild cycle (harvest + refresh to VPS) after sync.
+    pub with_rebuild: bool,
 }
 
 /// Execute cascade with typed options.
@@ -134,7 +138,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
     ))
 }
 
-/// Post-sync phases: harvest (if requested), freshness publishing, and depot report.
+/// Post-sync phases: harvest (if requested), rebuild (harvest+refresh), freshness, depot report.
 async fn run_post_sync_phases(
     opts: &CascadeOpts<'_>,
     root: &Path,
@@ -143,11 +147,21 @@ async fn run_post_sync_phases(
     lines: &mut Vec<String>,
 ) -> String {
     let mut harvest_info = String::new();
+    let do_harvest = (opts.with_harvest || opts.with_rebuild) && opts.mode == CascadeMode::Sync;
 
-    if opts.with_harvest && opts.mode == CascadeMode::Sync {
+    if do_harvest {
         match run_post_cascade_harvest(lines).await {
             Ok((built, current, failures)) => {
                 harvest_info = format!(" harvest={built}built/{current}current/{failures}failed");
+
+                if opts.with_rebuild && built > 0 {
+                    match run_post_cascade_refresh(lines).await {
+                        Ok(pushed) => {
+                            let _ = write!(harvest_info, " refresh={pushed}pushed");
+                        }
+                        Err(e) => lines.push(format!("  [refresh] FAIL: {e}")),
+                    }
+                }
             }
             Err(e) => lines.push(format!("  [harvest] FAIL: {e}")),
         }
@@ -203,6 +217,40 @@ async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, u32, 
     ));
 
     Ok((built, current, failures))
+}
+
+/// Push rebuilt binaries to VPS via `plasmid.refresh`.
+/// Returns count of binaries successfully pushed.
+async fn run_post_cascade_refresh(lines: &mut Vec<String>) -> Result<u32> {
+    let config = crate::ShadowConfig::from_env().await;
+    let refresh_args = crate::plasmid::RefreshArgs {
+        primal: None,
+        dry_run: false,
+        source_dir: None,
+    };
+
+    let outcome = crate::plasmid::refresh(&config, &refresh_args).await?;
+
+    let pushed = outcome
+        .data
+        .as_ref()
+        .and_then(|d| d.as_array())
+        .map_or(0u32, |arr| {
+            arr.iter()
+                .filter(|e| {
+                    e.get("status")
+                        .and_then(|s| s.as_str())
+                        .is_some_and(|s| s == "Pushed")
+                })
+                .count() as u32
+        });
+
+    lines.push(format!(
+        "  [refresh] {} — {pushed} pushed to VPS",
+        if outcome.ok { "OK" } else { "PARTIAL" }
+    ));
+
+    Ok(pushed)
 }
 
 /// Quick depot freshness summary — reports how many binaries exist and are recent.
@@ -392,9 +440,11 @@ mod tests {
             clone_missing: false,
             publish_freshness: true,
             with_harvest: false,
+            with_rebuild: false,
         };
         assert_eq!(opts.gate, "eastGate");
         assert!(!opts.with_harvest);
+        assert!(!opts.with_rebuild);
         assert!(opts.publish_freshness);
     }
 

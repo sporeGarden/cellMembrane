@@ -104,6 +104,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     let no_freshness = args.contains(&"--no-freshness");
     let check_installed = args.contains(&"--check-installed");
     let with_harvest = args.contains(&"--with-harvest");
+    let with_rebuild = args.contains(&"--with-rebuild");
 
     let mode = if dry_run {
         temporal::CascadeMode::DryRun
@@ -122,6 +123,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         clone_missing,
         publish_freshness,
         with_harvest,
+        with_rebuild,
     })
     .await?;
 

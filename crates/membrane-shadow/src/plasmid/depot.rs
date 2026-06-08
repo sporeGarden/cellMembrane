@@ -192,3 +192,217 @@ pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
     let content = std::fs::read_to_string(path).ok()?;
     toml::from_str(&content).ok()
 }
+
+/// Staleness report for a single primal in the depot.
+#[derive(Debug, Clone)]
+pub struct StalenessEntry {
+    /// Primal binary name.
+    pub name: String,
+    /// Whether the binary file exists in the depot.
+    pub binary_exists: bool,
+    /// Recorded commit from provenance (if any).
+    pub provenance_commit: Option<String>,
+    /// Whether this primal is considered stale (provenance missing or binary absent).
+    pub stale: bool,
+}
+
+/// Full staleness report across the depot.
+#[derive(Debug, Clone)]
+pub struct StalenessReport {
+    /// Per-primal staleness entries.
+    pub entries: Vec<StalenessEntry>,
+    /// Total primals evaluated.
+    pub total: usize,
+    /// Count of stale primals.
+    pub stale_count: usize,
+    /// Count of current (non-stale) primals.
+    pub current_count: usize,
+}
+
+impl std::fmt::Display for StalenessReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "depot staleness: {}/{} current, {} stale",
+            self.current_count, self.total, self.stale_count
+        )?;
+        if self.stale_count > 0 {
+            let stale_names: Vec<&str> = self
+                .entries
+                .iter()
+                .filter(|e| e.stale)
+                .map(|e| e.name.as_str())
+                .collect();
+            write!(f, " [{}]", stale_names.join(", "))?;
+        }
+        Ok(())
+    }
+}
+
+/// Detect stale primals by comparing depot binary presence and provenance records
+/// against the sources registry. A primal is stale if:
+/// - It has no provenance entry (never built)
+/// - It has no binary in the depot staging directory
+/// - Its provenance has no commit recorded
+///
+/// This is a local-only check — no network calls.
+/// If `depot_dir` is `None`, resolves depot from env/defaults.
+pub fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> {
+    let sources = load_sources(depot_dir)?;
+    let provenance = load_provenance(depot_dir);
+    let target = detect_target_triple();
+    let staging_dir = depot_dir.join("primals").join(&target);
+
+    let registry = super::nucleus_primals();
+    let mut entries = Vec::with_capacity(registry.len());
+    let mut stale_count = 0usize;
+    let mut current_count = 0usize;
+
+    for &primal in &registry {
+        if !sources.contains_key(primal) {
+            continue;
+        }
+
+        let binary_exists = staging_dir.join(primal).exists();
+        let provenance_commit = provenance
+            .as_ref()
+            .and_then(|p| p.entries.get(primal))
+            .and_then(|e| e.commit.clone());
+
+        let stale = !binary_exists || provenance_commit.is_none();
+
+        if stale {
+            stale_count += 1;
+        } else {
+            current_count += 1;
+        }
+
+        entries.push(StalenessEntry {
+            name: primal.to_string(),
+            binary_exists,
+            provenance_commit,
+            stale,
+        });
+    }
+
+    Ok(StalenessReport {
+        total: entries.len(),
+        entries,
+        stale_count,
+        current_count,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn staleness_report_display_all_current() {
+        let report = StalenessReport {
+            entries: vec![StalenessEntry {
+                name: "beardog".into(),
+                binary_exists: true,
+                provenance_commit: Some("abc123".into()),
+                stale: false,
+            }],
+            total: 1,
+            stale_count: 0,
+            current_count: 1,
+        };
+        let s = report.to_string();
+        assert!(s.contains("1/1 current"));
+        assert!(s.contains("0 stale"));
+        assert!(!s.contains('['));
+    }
+
+    #[test]
+    fn staleness_report_display_with_stale() {
+        let report = StalenessReport {
+            entries: vec![
+                StalenessEntry {
+                    name: "beardog".into(),
+                    binary_exists: true,
+                    provenance_commit: Some("abc".into()),
+                    stale: false,
+                },
+                StalenessEntry {
+                    name: "songbird".into(),
+                    binary_exists: false,
+                    provenance_commit: None,
+                    stale: true,
+                },
+            ],
+            total: 2,
+            stale_count: 1,
+            current_count: 1,
+        };
+        let s = report.to_string();
+        assert!(s.contains("1/2 current"));
+        assert!(s.contains("1 stale"));
+        assert!(s.contains("[songbird]"));
+    }
+
+    #[test]
+    fn detect_stale_primals_with_tempdir() {
+        let tmp = std::env::temp_dir().join("depot_staleness_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(
+            tmp.join("sources.toml"),
+            "[sources.beardog]\nrepo = \"x\"\n[sources.songbird]\nrepo = \"y\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.join("provenance.toml"),
+            "generated = \"2026-01-01\"\n\n[beardog]\ncommit = \"aaa\"\n",
+        )
+        .unwrap();
+
+        let target = detect_target_triple();
+        let staging = tmp.join("primals").join(&target);
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::write(staging.join("beardog"), b"binary").unwrap();
+
+        let report = detect_stale_primals(&tmp).unwrap();
+        assert_eq!(report.current_count, 1);
+        assert_eq!(report.stale_count, 1);
+        assert_eq!(report.entries[1].name, "songbird");
+        assert!(report.entries[1].stale);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn detect_stale_missing_provenance_marks_all_stale() {
+        let tmp = std::env::temp_dir().join("depot_staleness_no_prov");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(
+            tmp.join("sources.toml"),
+            "[sources.beardog]\nrepo = \"x\"\n",
+        )
+        .unwrap();
+
+        let report = detect_stale_primals(&tmp).unwrap();
+        assert_eq!(report.stale_count, 1);
+        assert!(report.entries[0].stale);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn resolve_depot_fallback_path() {
+        let result = resolve_depot(Some("/tmp/nonexistent_depot_xyz"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn compute_blake3_file_on_empty() {
+        let tmp = std::env::temp_dir().join("blake3_empty_test");
+        std::fs::write(&tmp, b"").unwrap();
+        let hash = compute_blake3_file(&tmp);
+        assert_eq!(hash.len(), 64);
+        let _ = std::fs::remove_file(&tmp);
+    }
+}
