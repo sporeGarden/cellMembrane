@@ -215,14 +215,21 @@ async fn has_upstream_changes(
         .is_none_or(|head| !head.starts_with(prev_commit) && !prev_commit.starts_with(&head))
 }
 
+/// Fetch HEAD from both outer (GitHub) and inner (Forgejo) membranes.
+///
+/// Returns the commit that is farthest ahead — if either remote has a newer
+/// commit than provenance, we should detect drift. This ensures golgiBody
+/// sees GitHub pushes and peptidoglycan sees both layers.
 async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
         .unwrap_or_else(|_| "git.primals.eco:2222".into());
-    if let Some(commit) = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await
-    {
-        return Some(commit);
-    }
-    try_ls_remote_head(&format!("https://github.com/{repo}.git")).await
+
+    let forgejo = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await;
+    let github = try_ls_remote_head(&format!("https://github.com/{repo}.git")).await;
+
+    // Prefer GitHub (outer) if available — it's where pushes land first.
+    // Forgejo mirrors from GitHub so it can lag behind.
+    github.or(forgejo)
 }
 
 async fn try_ls_remote_head(url: &str) -> Option<String> {
@@ -321,25 +328,45 @@ async fn clone_source(
     }
     std::fs::create_dir_all(build_root).ok();
 
-    let clone_url = format!("https://github.com/{}.git", source.repo);
+    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
+        .unwrap_or_else(|_| "git.primals.eco:2222".into());
+    let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
+    let github_url = format!("https://github.com/{}.git", source.repo);
+
+    // Try Forgejo SSH first (works for private repos, inner membrane)
+    if try_clone(&forgejo_url, clone_dir).await {
+        return Ok(());
+    }
+
+    // Fall back to GitHub HTTPS (outer membrane, public repos)
+    if try_clone(&github_url, clone_dir).await {
+        return Ok(());
+    }
+
+    if source.private {
+        Err(format!(
+            "private repo — neither Forgejo SSH nor GitHub accessible ({primal})"
+        ))
+    } else {
+        Err("git clone failed on both Forgejo and GitHub".into())
+    }
+}
+
+async fn try_clone(url: &str, clone_dir: &Path) -> bool {
+    if clone_dir.exists() {
+        let _ = std::fs::remove_dir_all(clone_dir);
+    }
     let result = tokio::process::Command::new("git")
         .args([
             "clone",
             "--depth",
             "1",
-            &clone_url,
+            url,
             &clone_dir.to_string_lossy(),
         ])
         .output()
         .await;
-
-    if result.as_ref().is_ok_and(|o| o.status.success()) {
-        Ok(())
-    } else if source.private {
-        Err(format!("private repo — clone requires PAT ({primal})"))
-    } else {
-        Err("git clone failed".into())
-    }
+    result.is_ok_and(|o| o.status.success())
 }
 
 async fn build_binary(
