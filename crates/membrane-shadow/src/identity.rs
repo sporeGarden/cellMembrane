@@ -50,7 +50,7 @@ impl std::fmt::Display for IdentitySource {
 /// Returns `ShadowError::Parse` if no identity can be resolved — the gate
 /// must declare itself via `GATE_NAME` or a `.gate` file.
 pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
-    if let Ok(name) = std::env::var("GATE_NAME") {
+    if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
         let name = name.trim().to_string();
         if !name.is_empty() {
             return Ok(GateIdentity {

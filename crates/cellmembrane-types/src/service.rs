@@ -109,6 +109,27 @@ pub const DEFAULT_SOCKET_BASE: &str = "/run/membrane";
 /// Override with `ECOPRIMALS_ROOT` env var.
 pub const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";
 
+// ── Standard deployment environment variables ────────────────────────
+
+/// Environment variable for the plasmidBin depot directory.
+pub const ENV_PLASMIDBIN_DEPOT: &str = "PLASMIDBIN_DEPOT";
+/// Environment variable for the security provider socket path.
+pub const ENV_SECURITY_PROVIDER: &str = "SONGBIRD_SECURITY_PROVIDER";
+/// Environment variable for the membrane install base directory.
+pub const ENV_INSTALL_BASE: &str = "MEMBRANE_INSTALL_BASE";
+/// Environment variable for the membrane socket base directory.
+pub const ENV_SOCKET_BASE: &str = "MEMBRANE_SOCKET_BASE";
+/// Environment variable for the Forgejo SSH host.
+pub const ENV_FORGEJO_SSH_HOST: &str = "FORGEJO_SSH_HOST";
+/// Environment variable for the ecoPrimals workspace root.
+pub const ENV_ECOPRIMALS_ROOT: &str = "ECOPRIMALS_ROOT";
+/// Environment variable for the gate identity.
+pub const ENV_GATE_NAME: &str = "GATE_NAME";
+/// Environment variable for the songbird federation port.
+pub const ENV_FEDERATION_PORT: &str = "SONGBIRD_FEDERATION_PORT";
+/// Environment variable for the songbird production bind address.
+pub const ENV_PRODUCTION_BIND: &str = "SONGBIRD_PRODUCTION_BIND_ADDRESS";
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

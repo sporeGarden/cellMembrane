@@ -56,7 +56,7 @@ impl NeuralBridge {
             }
         }
 
-        let socket_base = std::env::var("MEMBRANE_SOCKET_BASE")
+        let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
             .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
         let vps_path = PathBuf::from(&socket_base).join(NEURAL_API_SOCKET_NAME);
         if vps_path.exists() {

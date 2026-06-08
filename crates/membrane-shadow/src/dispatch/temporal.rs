@@ -77,7 +77,12 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     let root = temporal::resolve_workspace_root()?;
 
     let gate_name = cli::extract_flag_value(args, "--gate")
-        .or_else(|| std::env::var("GATE_NAME").ok().as_deref().map(|_| ""))
+        .or_else(|| {
+            std::env::var(cellmembrane_types::service::ENV_GATE_NAME)
+                .ok()
+                .as_deref()
+                .map(|_| "")
+        })
         .unwrap_or("auto");
 
     let gate_name = if gate_name == "auto" || gate_name.is_empty() {

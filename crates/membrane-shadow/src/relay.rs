@@ -61,7 +61,7 @@ impl RelayConfig {
     pub fn from_env() -> Self {
         let membrane_config = load_relay_from_membrane_toml();
 
-        let ecoprimals_root = std::env::var("ECOPRIMALS_ROOT")
+        let ecoprimals_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
             .ok()
             .or_else(|| {
                 membrane_config

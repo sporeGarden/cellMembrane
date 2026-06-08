@@ -206,13 +206,18 @@ async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, u32, 
 
 /// Quick depot freshness summary — reports how many binaries exist and are recent.
 fn summarize_depot_freshness() -> String {
-    let depot_dir = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
-        std::path::PathBuf::from(
-            std::env::var("ECOPRIMALS_ROOT")
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into()),
-        )
-        .join("plasmidBin")
-    });
+    let depot_dir = crate::plasmid::resolve_path(
+        None,
+        cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
+        || {
+            std::path::PathBuf::from(
+                std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT).unwrap_or_else(
+                    |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
+                ),
+            )
+            .join("plasmidBin")
+        },
+    );
 
     let primals_dir = depot_dir.join("primals");
     if !primals_dir.is_dir() {

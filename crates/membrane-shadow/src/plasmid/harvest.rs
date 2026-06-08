@@ -211,8 +211,8 @@ async fn has_upstream_changes(
 }
 
 async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
-    let forgejo_host =
-        std::env::var("FORGEJO_SSH_HOST").unwrap_or_else(|_| "git.primals.eco:2222".into());
+    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
+        .unwrap_or_else(|_| "git.primals.eco:2222".into());
     if let Some(commit) = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await
     {
         return Some(commit);
