@@ -200,6 +200,7 @@ pub(super) async fn dispatch_plasmid(
                 force: args.contains(&"--force"),
                 dry_run: args.contains(&"--dry-run"),
                 depot_dir: cli::extract_flag_value(args, "--depot").map(Into::into),
+                target: cli::extract_flag_value(args, "--target").map(Into::into),
             };
             plasmid::harvest(&harvest_args).await
         }

@@ -30,6 +30,8 @@ pub struct HarvestArgs {
     pub dry_run: bool,
     /// Override plasmidBin depot path.
     pub depot_dir: Option<String>,
+    /// Override target triple (e.g. `aarch64-unknown-linux-musl` for cross-compile).
+    pub target: Option<String>,
 }
 
 /// Outcome of harvesting a single primal.
@@ -112,7 +114,10 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     let depot_dir = resolve_depot(args.depot_dir.as_deref())?;
     let sources = load_sources(&depot_dir)?;
     let provenance = load_provenance(&depot_dir);
-    let target = detect_target_triple();
+    let target = args
+        .target
+        .clone()
+        .unwrap_or_else(detect_target_triple);
 
     let primals_to_harvest = determine_primals(args, &sources)?;
 
@@ -388,8 +393,10 @@ fn stage_to_depot(
     let staging_dir = depot_dir.join("primals").join(target);
     std::fs::create_dir_all(&staging_dir).ok();
     let dest = staging_dir.join(primal);
+    let tmp = staging_dir.join(format!(".{primal}.new"));
 
-    std::fs::copy(bin_path, &dest).map_err(|e| format!("copy to depot failed: {e}"))?;
+    std::fs::copy(bin_path, &tmp).map_err(|e| format!("copy to depot failed: {e}"))?;
+    std::fs::rename(&tmp, &dest).map_err(|e| format!("atomic rename failed: {e}"))?;
 
     let size = std::fs::metadata(&dest).map_or(0, |m| m.len());
     let blake3 = compute_blake3_file(&dest);

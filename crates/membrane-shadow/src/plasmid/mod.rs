@@ -76,6 +76,7 @@ pub async fn pipeline(
         force: false,
         dry_run,
         depot_dir: None,
+        target: None,
     };
 
     let harvest_outcome = harvest(&harvest_args).await?;

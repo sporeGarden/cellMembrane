@@ -184,6 +184,7 @@ pub async fn handle_push(
         force: false,
         dry_run: false,
         depot_dir: None,
+        target: None,
     };
 
     let harvest_outcome = crate::plasmid::harvest(&harvest_args).await?;

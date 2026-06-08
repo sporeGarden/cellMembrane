@@ -75,7 +75,31 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
         results.push(refresh_one(config, primal, &source_dir, &install_dir, args.dry_run).await);
     }
 
+    if !args.dry_run {
+        sync_depot_metadata(config).await;
+    }
+
     Ok(format_refresh_outcome(&results))
+}
+
+/// Push local depot metadata (provenance.toml, checksums.toml) to VPS depot.
+///
+/// Without this, the VPS `plasmid.status` reports stale drift because its
+/// provenance commits don't match the freshly-pushed binaries.
+async fn sync_depot_metadata(config: &crate::ShadowConfig) {
+    let Ok(local_depot) = super::harvest::resolve_depot(None) else {
+        return;
+    };
+    let remote_depot = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT)
+        .unwrap_or_else(|_| "/opt/plasmidBin".into());
+
+    for filename in ["provenance.toml", "checksums.toml"] {
+        let local = local_depot.join(filename);
+        if local.is_file() {
+            let remote = format!("{remote_depot}/{filename}");
+            let _ = crate::ssh::scp_to(config, &local.to_string_lossy(), &remote).await;
+        }
+    }
 }
 
 async fn refresh_one(
