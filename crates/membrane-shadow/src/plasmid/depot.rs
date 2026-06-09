@@ -46,44 +46,62 @@ fn update_checksums(
     built: &[&HarvestResult],
     staging_dir: &Path,
 ) -> Result<()> {
-    let checksums_path = depot_dir.join("checksums.toml");
-
-    let mut checksums: BTreeMap<String, ChecksumEntry> = BTreeMap::new();
-    if checksums_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&checksums_path) {
-            #[derive(Deserialize)]
-            struct ChecksumFile {
-                #[serde(flatten)]
-                targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>>,
-            }
-            if let Ok(parsed) = toml::from_str::<ChecksumFile>(&content) {
-                if let Some(existing) = parsed.targets.get(target) {
-                    checksums = existing.clone();
-                }
-            }
-        }
+    #[derive(Deserialize)]
+    struct ChecksumFile {
+        #[serde(flatten)]
+        targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>>,
     }
 
+    let checksums_path = depot_dir.join("checksums.toml");
+    let mut all_targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>> = BTreeMap::new();
+    let pre_existing_targets: Vec<String> = if checksums_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&checksums_path) {
+            if let Ok(parsed) = toml::from_str::<ChecksumFile>(&content) {
+                let keys = parsed.targets.keys().cloned().collect();
+                all_targets = parsed.targets;
+                keys
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    let target_checksums = all_targets.entry(target.to_string()).or_default();
     for result in built {
         let bin_path = staging_dir.join(&result.binary);
         if bin_path.exists() {
             let size = std::fs::metadata(&bin_path).map_or(0, |m| m.len());
             let hash = compute_blake3_file(&bin_path);
-            checksums.insert(result.binary.clone(), ChecksumEntry { blake3: hash, size });
+            target_checksums.insert(result.binary.clone(), ChecksumEntry { blake3: hash, size });
         }
     }
 
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let mut out = format!(
-        "# plasmidBin checksums — BLAKE3\n# Generated: {now}\n# Target: {target}\n\n[{target}]\n"
-    );
-    for (name, entry) in &checksums {
-        let _ = writeln!(
-            out,
-            "{name} = {{ blake3 = \"{}\", size = {} }}",
-            entry.blake3, entry.size
-        );
+    let mut out = format!("# plasmidBin checksums — BLAKE3\n# Generated: {now}\n\n");
+    for (tgt, entries) in &all_targets {
+        let _ = writeln!(out, "[{tgt}]");
+        for (name, entry) in entries {
+            let _ = writeln!(
+                out,
+                "{name} = {{ blake3 = \"{}\", size = {} }}",
+                entry.blake3, entry.size
+            );
+        }
+        out.push('\n');
     }
+
+    for existing_target in &pre_existing_targets {
+        if !all_targets.contains_key(existing_target) {
+            return Err(ShadowError::Parse(format!(
+                "checksums validation gate: target section [{existing_target}] would be lost"
+            )));
+        }
+    }
+
     std::fs::write(&checksums_path, &out).map_err(ShadowError::Io)?;
     Ok(())
 }
@@ -415,5 +433,49 @@ mod tests {
         let hash = compute_blake3_file(&tmp);
         assert_eq!(hash.len(), 64);
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn update_checksums_preserves_other_targets() {
+        use crate::plasmid::{HarvestResult, HarvestStatus};
+
+        let tmp = std::env::temp_dir().join("checksums_multi_target_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let target_a = "x86_64-unknown-linux-musl";
+        let target_b = "aarch64-unknown-linux-musl";
+        let staging_a = tmp.join("primals").join(target_a);
+        let staging_b = tmp.join("primals").join(target_b);
+        std::fs::create_dir_all(&staging_a).unwrap();
+        std::fs::create_dir_all(&staging_b).unwrap();
+        std::fs::write(staging_a.join("beardog"), b"x86 binary").unwrap();
+        std::fs::write(staging_b.join("beardog"), b"arm binary").unwrap();
+
+        let result_a = HarvestResult {
+            binary: "beardog".into(),
+            status: HarvestStatus::Built,
+            detail: "100KB blake3=aaa commit=abc".into(),
+        };
+        let result_b = HarvestResult {
+            binary: "beardog".into(),
+            status: HarvestStatus::Built,
+            detail: "90KB blake3=bbb commit=def".into(),
+        };
+
+        update_checksums(&tmp, target_a, &[&result_a], &staging_a).unwrap();
+        let after_a = std::fs::read_to_string(tmp.join("checksums.toml")).unwrap();
+        assert!(after_a.contains("[x86_64-unknown-linux-musl]"));
+        assert!(after_a.contains("beardog"));
+
+        update_checksums(&tmp, target_b, &[&result_b], &staging_b).unwrap();
+        let after_b = std::fs::read_to_string(tmp.join("checksums.toml")).unwrap();
+        assert!(
+            after_b.contains("[x86_64-unknown-linux-musl]"),
+            "target A section must survive after target B update"
+        );
+        assert!(after_b.contains("[aarch64-unknown-linux-musl]"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

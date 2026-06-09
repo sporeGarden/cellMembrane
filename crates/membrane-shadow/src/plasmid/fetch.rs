@@ -372,7 +372,16 @@ async fn fetch_primals(
         let _ = std::fs::remove_file(&local_path);
 
         let arch_asset = format!("{primal}-{arch}");
-        let got = download_asset(args.source, config, tag, &arch_asset, arch, primal, &local_path).await
+        let got = download_asset(
+            args.source,
+            config,
+            tag,
+            &arch_asset,
+            arch,
+            primal,
+            &local_path,
+        )
+        .await
             || download_asset(args.source, config, tag, primal, arch, primal, &local_path).await;
 
         if !got {

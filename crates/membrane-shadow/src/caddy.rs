@@ -195,8 +195,11 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
 
 /// Validate Caddyfile syntax without applying.
 pub async fn validate(config: &ShadowConfig) -> Result<String> {
-    let (out, code) =
-        caddy_exec(config, "/opt/membrane/caddy validate --config /etc/membrane/Caddyfile 2>&1").await?;
+    let (out, code) = caddy_exec(
+        config,
+        "/opt/membrane/caddy validate --config /etc/membrane/Caddyfile 2>&1",
+    )
+    .await?;
 
     if code == 0 {
         Ok("Caddyfile valid".into())
