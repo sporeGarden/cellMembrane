@@ -214,6 +214,8 @@ async fn download_asset(
     config: &crate::ShadowConfig,
     tag: &str,
     asset: &str,
+    arch: &str,
+    primal: &str,
     dest: &Path,
 ) -> bool {
     match source {
@@ -242,7 +244,7 @@ async fn download_asset(
         FetchSource::Wan => {
             let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
                 .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
-            let url = format!("{base_url}/{asset}");
+            let url = format!("{base_url}/{arch}/{primal}");
             download_via_http(&url, dest).await
         }
     }
@@ -370,8 +372,8 @@ async fn fetch_primals(
         let _ = std::fs::remove_file(&local_path);
 
         let arch_asset = format!("{primal}-{arch}");
-        let got = download_asset(args.source, config, tag, &arch_asset, &local_path).await
-            || download_asset(args.source, config, tag, primal, &local_path).await;
+        let got = download_asset(args.source, config, tag, &arch_asset, arch, primal, &local_path).await
+            || download_asset(args.source, config, tag, primal, arch, primal, &local_path).await;
 
         if !got {
             results.push(FetchResult {

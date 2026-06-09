@@ -176,8 +176,8 @@ pub const ENV_SERVICE_FILTER: &str = "MEMBRANE_SERVICE_FILTER";
 /// Environment variable for the WAN depot base URL (outer membrane HTTPS endpoint).
 pub const ENV_WAN_DEPOT_URL: &str = "WAN_DEPOT_URL";
 
-/// Default WAN depot base URL served by Caddy on the outer membrane.
-pub const DEFAULT_WAN_DEPOT_URL: &str = "https://primals.eco/depot";
+/// Default WAN depot base URL served by Caddy on the sovereign membrane surface.
+pub const DEFAULT_WAN_DEPOT_URL: &str = "https://membrane.primals.eco/depot";
 
 // ── Standard system environment variables ────────────────────────────
 
