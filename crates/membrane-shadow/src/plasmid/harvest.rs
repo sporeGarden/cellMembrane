@@ -490,9 +490,7 @@ pub(super) async fn has_upstream_changes_pub(
 
     fetch_head_commit(&source.repo, depot_dir)
         .await
-        .is_some_and(|head| {
-            !head.starts_with(prev_commit) && !prev_commit.starts_with(&head)
-        })
+        .is_some_and(|head| !head.starts_with(prev_commit) && !prev_commit.starts_with(&head))
 }
 
 #[cfg(test)]

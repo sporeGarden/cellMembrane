@@ -70,7 +70,7 @@ Context — sweetGrass-external braids (developer state weaving):
   context.clear [--project <path>] [--expired]     Clear/decay braids
 
 Plasmid (primal binary bootstrap):
-  plasmid.fetch [--source github] [--primal NAME] [--release TAG]
+  plasmid.fetch [--source github|vps|forgejo|wan] [--primal NAME] [--release TAG]
                 [--force] [--dry-run] [--dest DIR]
                                    Fetch primal binaries with BLAKE3 verification
   plasmid.refresh [--primal NAME] [--source-dir DIR] [--dry-run]
@@ -92,6 +92,15 @@ Webhook (push-driven cascade):
   webhook.test <json_body>         Process a push event (dry-run: selective harvest)
   webhook.verify <body> --signature <hex>
                                    Verify HMAC-SHA256 signature (requires WEBHOOK_SECRET)
+
+Caddy (outer membrane TLS / reverse proxy):
+  caddy.status                     Service health and vhost count
+  caddy.vhosts                     List configured vhosts
+  caddy.tls.check <domain>         TLS certificate status
+  caddy.reload                     Graceful reload
+  caddy.validate                   Syntax check without apply
+  caddy.depot.provision            Provision /depot/ file_server route (WAN binary distribution)
+  caddy.acme.log [N]              Recent ACME/TLS certificate logs
 
 Forgejo:
   forgejo.version                  Show Forgejo version

@@ -307,6 +307,41 @@ pub async fn sync_with_policy(
     }
 }
 
+/// Files that are machine-generated and safely discardable before a pull.
+/// These are always regenerable from the depot itself (hashes, provenance, timestamps).
+const REGENERABLE_METADATA: &[&str] = &["checksums.toml", "provenance.toml", "freshness.toml"];
+
+/// Discard local modifications to regenerable metadata files before pulling.
+///
+/// Returns the list of files that were discarded, so the caller can report it.
+async fn discard_regenerable_dirty_files(local_path: &Path) -> Vec<String> {
+    let status_output = git(local_path, &["status", "--porcelain"])
+        .await
+        .unwrap_or_default();
+    let mut discarded = Vec::new();
+
+    for line in status_output.lines() {
+        let trimmed = line.trim();
+        if trimmed.len() < 4 {
+            continue;
+        }
+        let xy = &trimmed[..2];
+        let file = trimmed[3..].trim();
+
+        let dominated_by_metadata = REGENERABLE_METADATA.iter().any(|m| file.ends_with(m));
+        if !dominated_by_metadata {
+            continue;
+        }
+
+        let is_unstaged_modify = xy == " M" || xy == "MM" || xy == "??" || xy == "UU";
+        if is_unstaged_modify && git_ok(local_path, &["checkout", "--", file]).await {
+            discarded.push(file.to_string());
+        }
+    }
+
+    discarded
+}
+
 async fn sync_converge(
     local_path: &Path,
     repo_path: &str,
@@ -319,6 +354,7 @@ async fn sync_converge(
 
     match &matrix.action {
         SyncAction::Pull { leader } => {
+            let discarded = discard_regenerable_dirty_files(local_path).await;
             if git_ok(
                 local_path,
                 &["pull", leader, branch, "--ff-only", "--quiet"],
@@ -326,6 +362,13 @@ async fn sync_converge(
             .await
             {
                 pulled_from = Some(leader.clone());
+                if !discarded.is_empty() {
+                    eprintln!(
+                        "temporal: auto-discarded {} regenerable file(s) in {repo_path}: {}",
+                        discarded.len(),
+                        discarded.join(", "),
+                    );
+                }
             } else {
                 return Ok(TemporalSyncResult {
                     repo_path: repo_path.to_string(),
@@ -684,5 +727,13 @@ mod tests {
         } else {
             panic!("expected TreeParity variant");
         }
+    }
+
+    #[test]
+    fn regenerable_metadata_contains_expected_files() {
+        assert!(REGENERABLE_METADATA.contains(&"checksums.toml"));
+        assert!(REGENERABLE_METADATA.contains(&"provenance.toml"));
+        assert!(REGENERABLE_METADATA.contains(&"freshness.toml"));
+        assert_eq!(REGENERABLE_METADATA.len(), 3);
     }
 }

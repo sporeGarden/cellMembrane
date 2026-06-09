@@ -242,6 +242,75 @@ pub async fn validate(config: &ShadowConfig) -> Result<String> {
     }
 }
 
+/// Provision the `/depot/` route on the outer membrane Caddyfile.
+///
+/// Adds a `file_server` block serving depot binaries over HTTPS,
+/// enabling WAN gates to fetch via `plasmid.fetch --source wan`.
+/// The route serves `{depot_root}/primals/` at `https://{outer_domain}/depot/`.
+pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
+    let host = caddy_host(config);
+    let host_config = ShadowConfig {
+        ssh_host: host,
+        ..config.clone()
+    };
+
+    let depot_root = format!(
+        "{}/plasmidBin/primals",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
+
+    let check_cmd =
+        "grep -q '/depot/' /etc/caddy/Caddyfile 2>/dev/null && echo EXISTS || echo MISSING";
+    let (check_out, _) = ssh::exec_raw(&host_config, check_cmd).await?;
+
+    if check_out.trim() == "EXISTS" {
+        return Ok("depot route already provisioned in Caddyfile".into());
+    }
+
+    let snippet = format!(
+        r"
+    handle /depot/* {{
+        uri strip_prefix /depot
+        root * {depot_root}
+        file_server browse
+    }}"
+    );
+
+    let inject_cmd = format!(
+        r"sudo sed -i '/^primals\.eco {{/a {escaped}' /etc/caddy/Caddyfile",
+        escaped = snippet
+            .replace('\n', "\\n")
+            .replace('{', "\\{")
+            .replace('}', "\\}")
+    );
+
+    let (out, code) = ssh::exec_raw(&host_config, &inject_cmd).await?;
+    if code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "Failed to inject depot route: {}",
+            out.trim()
+        )));
+    }
+
+    let (reload_out, reload_code) = ssh::exec_raw(
+        &host_config,
+        "caddy validate --config /etc/caddy/Caddyfile 2>&1 && \
+         caddy reload --config /etc/caddy/Caddyfile --force 2>&1",
+    )
+    .await?;
+
+    if reload_code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "Caddyfile validation/reload failed after depot injection: {}",
+            reload_out.trim()
+        )));
+    }
+
+    Ok(format!(
+        "depot route provisioned: https://primals.eco/depot/ → {depot_root}"
+    ))
+}
+
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
     let host = caddy_host(config);
@@ -300,6 +369,10 @@ pub async fn dispatch(
             let lines: u32 = args.first().and_then(|v| v.parse().ok()).unwrap_or(50);
             let log = acme_log(config, lines).await?;
             Ok(crate::ShadowOutcome::ok(log))
+        }
+        "caddy.depot.provision" => {
+            let msg = depot_provision(config).await?;
+            Ok(crate::ShadowOutcome::ok(msg))
         }
         _ => Ok(crate::ShadowOutcome::fail(format!(
             "unknown caddy command: {cmd}"

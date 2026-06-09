@@ -173,6 +173,11 @@ pub const ENV_FORGEJO_WORK_DIR: &str = "FORGEJO_WORK_DIR";
 pub const ENV_FORGEJO_ADMIN_USER: &str = "FORGEJO_ADMIN_USER";
 /// Environment variable for the membrane service filter (systemd unit prefix).
 pub const ENV_SERVICE_FILTER: &str = "MEMBRANE_SERVICE_FILTER";
+/// Environment variable for the WAN depot base URL (outer membrane HTTPS endpoint).
+pub const ENV_WAN_DEPOT_URL: &str = "WAN_DEPOT_URL";
+
+/// Default WAN depot base URL served by Caddy on the outer membrane.
+pub const DEFAULT_WAN_DEPOT_URL: &str = "https://primals.eco/depot";
 
 /// Runtime path resolver for membrane services.
 ///

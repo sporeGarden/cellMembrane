@@ -14,10 +14,13 @@ use super::{detect_target_triple, nucleus_primals};
 pub enum FetchSource {
     /// GitHub Releases (outer membrane, default).
     GitHub,
-    /// VPS membrane depot via SSH/rsync (sovereign).
+    /// VPS membrane depot via SSH/rsync (sovereign, LAN only).
     Vps,
     /// Forgejo releases (sovereign, inner membrane).
     Forgejo,
+    /// WAN HTTPS depot served by Caddy on the outer membrane.
+    /// Usable by any gate with internet access (no SSH required).
+    Wan,
 }
 
 impl std::fmt::Display for FetchSource {
@@ -26,6 +29,7 @@ impl std::fmt::Display for FetchSource {
             Self::GitHub => f.write_str("github"),
             Self::Vps => f.write_str("vps"),
             Self::Forgejo => f.write_str("forgejo"),
+            Self::Wan => f.write_str("wan"),
         }
     }
 }
@@ -38,8 +42,9 @@ impl std::str::FromStr for FetchSource {
             "github" => Ok(Self::GitHub),
             "vps" => Ok(Self::Vps),
             "forgejo" => Ok(Self::Forgejo),
+            "wan" => Ok(Self::Wan),
             _ => Err(ShadowError::Parse(format!(
-                "unknown source '{s}' (expected: github, vps, forgejo)"
+                "unknown source '{s}' (expected: github, vps, forgejo, wan)"
             ))),
         }
     }
@@ -164,7 +169,7 @@ async fn resolve_tag(
     }
 
     match source {
-        FetchSource::Vps => Ok("vps-live".into()),
+        FetchSource::Vps | FetchSource::Wan => Ok("vps-live".into()),
         FetchSource::GitHub => {
             let url = "https://api.github.com/repos/ecoPrimals/plasmidBin/releases/latest";
             fetch_release_tag(url).await
@@ -235,6 +240,12 @@ async fn download_asset(
                 });
             let remote_path = format!("{vps_bin_dir}/{asset}");
             download_via_ssh(&config.ssh_host, &remote_path, dest).await
+        }
+        FetchSource::Wan => {
+            let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
+            let url = format!("{base_url}/{asset}");
+            download_via_http(&url, dest).await
         }
     }
 }
@@ -495,7 +506,13 @@ mod tests {
             "forgejo".parse::<FetchSource>().unwrap(),
             FetchSource::Forgejo
         );
+        assert_eq!("wan".parse::<FetchSource>().unwrap(), FetchSource::Wan);
         assert!("invalid".parse::<FetchSource>().is_err());
+    }
+
+    #[test]
+    fn fetch_source_wan_display() {
+        assert_eq!(FetchSource::Wan.to_string(), "wan");
     }
 
     #[test]
