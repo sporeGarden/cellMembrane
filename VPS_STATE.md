@@ -1,15 +1,15 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-06-06 (Wave 82c)
-**Deployed composition:** Full NUCLEUS (Wave 61→82c) — 13 primals + 4 symbiotic + federation + standard workspace
+**Last updated:** 2026-06-09 (Wave 105)
+**Deployed composition:** Full NUCLEUS (Wave 61→105) — 13 primals + 4 symbiotic + federation + WAN depot
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust membrane binary
 **Deployment model:** Standard NUCLEUS — `membrane temporal.cascade` (Rust-native) + `membrane plasmid.refresh` (binary push)
-**VPS_IP:** Set via `nucleus_config.sh` → `MEMBRANE_VPS_IP`. All `$VPS_IP` references below resolve from there.
+**WAN depot:** `https://membrane.primals.eco/depot/` — 14 binaries browsable over HTTPS (zero SSH for WAN gates)
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
-**Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02)
+**Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02, S4 gate ending today)
 **Disk:** 60% (cleaned Wave 69)
-**Caddy:** 5 domains sovereign TLS (primals.eco, mesh.primal.eco, auth.primal.eco, api.primal.eco, nestgate.io)
+**Caddy:** sovereign TLS on `membrane.primals.eco` (Let's Encrypt E8, 64 days remaining) + `/depot/` file_server
 
 ---
 

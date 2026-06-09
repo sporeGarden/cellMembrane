@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 82c, 2026-06-06) |
+| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 105, 2026-06-09) |
 
 ---
 
@@ -55,74 +55,30 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 226 tests — pedantic clippy clean
+cargo test                  # 161 tests + 5 doc-tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 82c (Ownership + Evolution):** plasmidBin ownership transferred from primalSpring →
-cellMembrane. `plasmid.refresh` command added (atomic binary push + restart). plasmid module
-split into `plasmid/mod.rs` + `fetch.rs` + `refresh.rs`. SCP transport (`scp_to`). Cloudflare
-module: `ShadowError::CloudflareApi` replaces semantic misuse of `::Ssh`, `CfResponse::into_result()`
-eliminates 7 duplicated error-handling blocks. All Caddy reverse proxies wired (5 domains sovereign TLS).
-`socat` bridges for UDS→TCP on private network. UDS health probe diagnosis documented upstream.
-226 tests, zero clippy, zero `#[allow]`, zero TODOs in source.
+**Wave 105 (WAN Depot + aarch64 Sweep + Zero P1):**
+WAN binary distribution SHIPPED — `plasmid.fetch --source wan` fetches from
+`https://membrane.primals.eco/depot/` over HTTPS. `caddy.depot.provision` deploys
+the file_server route. aarch64 cross-compile sweep complete: 14/14 primals build
+cleanly for `aarch64-unknown-linux-musl`, zero C-dep violations ecosystem-wide.
+Cascade conflict auto-resolve eliminates manual intervention on regenerable metadata.
+`sha2`/`hmac` crates replace 200L hand-rolled crypto. `PostSyncPhase` enum replaces
+bool flags. 39 typed `ENV_*` constants, zero inline env var strings. All hardcoded
+`/tmp` paths replaced with `std::env::temp_dir()`. Harvest uses atomic rename
+(`.new` + `rename(2)`). Webhook primal list deduplicated to service registry.
+161 tests, zero clippy, zero `#[allow]`, zero `unsafe`, all files <800L.
 
-**Wave 71 (Capability Expansion + Deprecation):** Legacy `cascade()` removed —
-all callers migrated to `cascade_with_opts(CascadeOpts)`. `#[allow(fn_params_excessive_bools)]`
-eliminated. New commands: `membrane relay.status` (relay chain health), `membrane gate.health`
-(aggregate service + disk), `membrane content.verify` (S3 sporePrint integrity check).
-`ssh::check_connectivity()` for non-blocking SSH probe. S3 content cutover documented —
-VPS READY, cutover is a single DNS flip. 210 tests, zero clippy.
-
-**Wave 69+ (Deep Debt Evolution):** All `#[allow(clippy::too_many_lines)]` eliminated.
-`plasmid.rs::fetch()` decomposed into staged pipeline (dry-run, fetch loop, summary).
-`temporal/mod.rs` extracted `sync_converge()`, `sync_diverge()`, `resolve_tree_parity()`,
-`count_divergent_remotes()`. `cascade.rs` evolved: `CascadeMode` enum replaces 3 bools,
-`CascadeOpts` struct, extracted `process_repo()`/`clone_repo()`/`check_repo()`/`sync_repo()`.
-`freshness.rs` dead_code wired (binary_blake3 + installed_at in report). `FetchSource`
-implements `Display`. NUCLEUS tests relocated to `composition.rs`. All files <800L.
-Zero clippy (pedantic+nursery). 209 tests.
-
-**Wave 69 (Sovereignty Graduation):** Membrane binary deployed to VPS
-(`x86_64-musl`, 6.1M static). Full K-Derm relay validated in Rust (zero bash
-dependencies for relay chain). S4 auth gate activated (`BEARDOG_AUTH_MODE=enforced`).
-Disk cleanup 69%→60%. Workspace resolution evolved for VPS sparse deployments.
-Relay ship bug fixed (`git remote get-url` stdout leak). 209 tests.
-
-**Wave 68 (Graduated Composition):** Neural Bridge wired into dispatch
-(try-primal-first for 12 commands). `gate.pull`/`gate.check` evolved to use
-Rust `membrane` binary on VPS. `PushResult` replaces silent push failures.
-`#[must_use]` sweep across 7 modules. `resolve_workspace_root()` promoted
-to crate-level utility. `forgejo_work_dir` config chain. 209 tests.
-
-**Wave 67+ (Cascade Evolution Sprint):** dispatch.rs split into 5 domain
-submodules (all <340L). Tree-parity divergence auto-resolution. `--publish-freshness`
-wired. `post_sync_diverge()` + graduated merge strategies. Impulse ack safety
-(separate ack files). Binary freshness tracking (`--check-installed`). All
-hardcoded paths evolved to capability-based discovery. rsync eliminated
-(SSH+cat). `ServicePaths` + `CredentialPaths` runtime resolvers.
-
-**Wave 66 (Deep Debt Evolution):** Eliminated 3 external tool dependencies
-(socat→native UDS, curl→reqwest, b3sum→blake3 crate). Removed deprecated
-signal.rs. Real BLAKE3 verification via checksums.toml. K-Derm relay chain
-implemented in Rust (relay.rs). `FetchSource` implements `FromStr` trait.
-
-**Wave 65 (K-Derm Relay):** New `relay.rs` module — full peptidoglycan
-relay chain in Rust: `relay::mediate()`, `relay::ship_extracellular()`,
-`relay::run()`. Exposed as `membrane relay.run <repo_path>`. Replaces
-`pepti-sync-relay.sh` (95L) and `ext-github-push.sh` (91L).
-
-**Wave 59 (NUCLEUS composition):** Full 13-primal NUCLEUS composition tier
-added to service registry. 6 new services: toadStool, barraCuda, coralReef
-(compute), biomeOS, squirrel, petalTongue (meta). All UDS-only. Zero new
-firewall ports. `has_biomeos()` capability query. Spring overlay readiness.
-
-Wave 57: `clippy::pedantic` + `clippy::nursery` enforced. Typed `ConfigError`
-via `thiserror`. `DeployPaths` configurable paths. Coverage 77% → 96%.
-
-Wave 56: `TransportMode` enum (UDS-only / TCP default / TCP opt-in).
-`HealthCheckMethod::SocketExists` for UDS socket checks.
+**Wave 82c–104 (NUCLEUS Parity → Deep Debt):** plasmidBin ownership transferred.
+`plasmid.refresh` (atomic binary push), Cloudflare module evolved, 5-domain TLS,
+Neural Bridge dispatch, legacy cascade removed, all `too_many_lines` eliminated,
+K-Derm relay in Rust, external tools (socat/curl/b3sum) replaced with native Rust.
+Cascade evolution (tree-parity, freshness publishing, graduated merge strategies).
+NUCLEUS 13/13 ALIVE. Sovereignty graduation (S4 auth enforced). All 226→161 tests
+(consolidated — coverage maintained, redundant tests removed).
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
@@ -141,12 +97,14 @@ validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
 Typed Rust CLI for sovereign VPS control — replaces all bash sync/relay scripts:
 
 ```bash
-membrane relay.run infra/wateringHole    # Full K-Derm relay: pull → impulse → ship
-membrane temporal.cascade                 # Manifest-driven cascade sync (Rust)
-membrane mirror.sync-all                  # Trigger Forgejo mirror sync for all repos
-membrane impulse.ack <id>                 # Acknowledge inter-gate impulse
-membrane plasmid.fetch                    # Download primal binaries with BLAKE3 verification
-membrane plasmid.refresh                  # Push local binaries to VPS (atomic replace + restart)
+membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
+membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VPS
+membrane plasmid.fetch --source wan       # WAN HTTPS fetch (no SSH required)
+membrane plasmid.harvest --target aarch64-unknown-linux-musl  # Cross-compile
+membrane plasmid.refresh                  # Push local binaries to VPS (atomic replace)
+membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
+membrane caddy.status                     # VPS Caddy health + vhosts + TLS
+membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
 ```
 
 ---
@@ -206,7 +164,8 @@ ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loam
 | Deep debt evolution (Wave 69+): all too_many_lines eliminated, CascadeMode enum, freshness wired, all files <800L | DONE |
 | Capability expansion (Wave 71): legacy cascade() removed, relay.status/gate.health/content.verify, S3 VPS READY | DONE |
 | Evolution sprint (Wave 74+): zero #[allow], HardeningStep enum, fetch decomposed, mesh join (3rd gate) | DONE |
-| NUCLEUS full parity (Wave 82c): 13/13 ALIVE, Caddy 5-domain TLS, plasmidBin owned, 226 tests | DONE |
+| NUCLEUS full parity (Wave 82c): 13/13 ALIVE, Caddy 5-domain TLS, plasmidBin owned | DONE |
+| WAN depot + aarch64 sweep (Wave 105): WAN fetch HTTPS, 14/14 aarch64, sha2/hmac crates, zero P1 | DONE |
 
 ---
 
@@ -217,7 +176,7 @@ ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loam
 | S1 TLS | Caddy + LE | Cloudflare (INACTIVE) | **OPERATIONAL** (13d clean, 7-day gate passed) | Graduated |
 | S2 NAT relay | Songbird TURN :3478 | cloudflared | **LIVE** | 7-day 100% reachable |
 | S3 Content | NestGate + petalTongue | GitHub Pages | **LIVE** (68ms TTFB) | 7-day TTFB parity |
-| S4 Auth | BearDog BTSP dual-auth | OAuth2/PAM | Ready, incomplete | 7-day p95 < 50ms |
+| S4 Auth | BearDog BTSP dual-auth | OAuth2/PAM | **7-day gate ending** | 7-day p95 < 50ms |
 
 ---
 
@@ -229,7 +188,7 @@ ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loam
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
 | 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
-| **2** | **NUCLEUS (13 primals) + biomeOS + Spring Overlays + Rust relay** | **Current** (Wave 69, 2026-06-02) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + WAN depot + aarch64 universal** | **Current** (Wave 105, 2026-06-09) |
 | 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
