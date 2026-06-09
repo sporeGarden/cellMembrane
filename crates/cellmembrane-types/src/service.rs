@@ -179,6 +179,25 @@ pub const ENV_WAN_DEPOT_URL: &str = "WAN_DEPOT_URL";
 /// Default WAN depot base URL served by Caddy on the outer membrane.
 pub const DEFAULT_WAN_DEPOT_URL: &str = "https://primals.eco/depot";
 
+// ── Standard system environment variables ────────────────────────────
+
+/// XDG base directory for user data (fallback: `~/.local/share`).
+pub const ENV_XDG_DATA_HOME: &str = "XDG_DATA_HOME";
+/// XDG runtime directory (e.g. `/run/user/1000`).
+pub const ENV_XDG_RUNTIME_DIR: &str = "XDG_RUNTIME_DIR";
+/// XDG config directory (fallback: `~/.config`).
+pub const ENV_XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+/// User home directory.
+pub const ENV_HOME: &str = "HOME";
+/// System hostname.
+pub const ENV_HOSTNAME: &str = "HOSTNAME";
+/// Alternate hostname variable (some systems use HOST instead of HOSTNAME).
+pub const ENV_HOST: &str = "HOST";
+/// Cloudflare API token (alternate alias used by `wrangler`/Cloudflare tooling).
+pub const ENV_CF_API_TOKEN: &str = "CF_API_TOKEN";
+/// Cloudflare zone ID (alternate alias used by `wrangler`/Cloudflare tooling).
+pub const ENV_CF_ZONE_ID: &str = "CF_ZONE_ID";
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

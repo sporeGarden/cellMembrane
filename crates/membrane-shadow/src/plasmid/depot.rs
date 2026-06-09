@@ -144,8 +144,8 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
 }
 
 fn hostname() -> String {
-    std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("HOST"))
+    std::env::var(cellmembrane_types::service::ENV_HOSTNAME)
+        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_HOST))
         .unwrap_or_else(|_| "unknown".into())
 }
 

@@ -186,7 +186,9 @@ fn format_refresh_outcome(results: &[RefreshResult]) -> ShadowOutcome {
 fn resolve_refresh_source(override_dir: Option<&str>) -> PathBuf {
     resolve_path(override_dir, "PLASMIDBIN_STAGING", || {
         let arch = detect_target_triple();
-        PathBuf::from("/tmp/primalspring-deploy/primals").join(arch)
+        std::env::temp_dir()
+            .join("primalspring-deploy/primals")
+            .join(arch)
     })
 }
 

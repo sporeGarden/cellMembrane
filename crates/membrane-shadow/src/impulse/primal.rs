@@ -118,7 +118,7 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
         return Some(vps_path);
     }
 
-    let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+    let xdg = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR).unwrap_or_default();
     if !xdg.is_empty() {
         let p = PathBuf::from(format!("{xdg}/membrane/{socket_name}"));
         if p.exists() {
@@ -126,7 +126,7 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
         }
     }
 
-    let fallback = PathBuf::from(format!("/tmp/membrane/{socket_name}"));
+    let fallback = std::env::temp_dir().join("membrane").join(socket_name);
     if fallback.exists() {
         return Some(fallback);
     }

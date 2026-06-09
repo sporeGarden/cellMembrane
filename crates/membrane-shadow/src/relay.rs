@@ -120,8 +120,9 @@ fn load_relay_from_membrane_toml() -> Option<MembraneRelayConfig> {
 
 /// Resolve `membrane.toml` location: `XDG_CONFIG_HOME`/ecoPrimals/membrane.toml.
 fn resolve_membrane_toml_path() -> Option<PathBuf> {
-    let config_home = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    use cellmembrane_types::service::{ENV_HOME, ENV_XDG_CONFIG_HOME};
+    let config_home = std::env::var(ENV_XDG_CONFIG_HOME).unwrap_or_else(|_| {
+        let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
         format!("{home}/.config")
     });
     let path = PathBuf::from(config_home).join("ecoPrimals/membrane.toml");

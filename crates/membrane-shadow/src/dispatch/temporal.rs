@@ -103,8 +103,13 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     let dry_run = args.contains(&"--dry-run");
     let no_freshness = args.contains(&"--no-freshness");
     let check_installed = args.contains(&"--check-installed");
-    let with_harvest = args.contains(&"--with-harvest");
-    let with_rebuild = args.contains(&"--with-rebuild");
+    let post_sync = if args.contains(&"--with-rebuild") {
+        temporal::PostSyncPhase::Rebuild
+    } else if args.contains(&"--with-harvest") {
+        temporal::PostSyncPhase::Harvest
+    } else {
+        temporal::PostSyncPhase::None
+    };
 
     let mode = if dry_run {
         temporal::CascadeMode::DryRun
@@ -122,8 +127,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         mode,
         clone_missing,
         publish_freshness,
-        with_harvest,
-        with_rebuild,
+        post_sync,
     })
     .await?;
 

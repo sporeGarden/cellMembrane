@@ -35,13 +35,13 @@ impl CloudflareConfig {
     /// - `CLOUDFLARE_ZONE_ID` or `CF_ZONE_ID` (optional — resolved from zone name)
     pub fn from_env() -> Result<Self> {
         let api_token = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN)
-            .or_else(|_| std::env::var("CF_API_TOKEN"))
+            .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_API_TOKEN))
             .map_err(|_| {
                 ShadowError::Parse("CLOUDFLARE_API_TOKEN or CF_API_TOKEN required".into())
             })?;
 
         let zone_id = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_ZONE)
-            .or_else(|_| std::env::var("CF_ZONE_ID"))
+            .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_ZONE_ID))
             .ok();
 
         Ok(Self { api_token, zone_id })
@@ -600,7 +600,7 @@ mod tests {
         // We can't safely mutate env in tests, so verify the error path
         // by testing the resolution logic directly.
         let result = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN)
-            .or_else(|_| std::env::var("CF_API_TOKEN"));
+            .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_API_TOKEN));
         if result.is_err() {
             assert!(CloudflareConfig::from_env().is_err());
         }

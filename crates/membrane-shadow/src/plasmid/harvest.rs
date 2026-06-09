@@ -15,7 +15,7 @@ use crate::ShadowOutcome;
 use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::{detect_target_triple, nucleus_primals};
 
@@ -249,7 +249,7 @@ async fn harvest_one(
     target: &str,
     depot_dir: &Path,
 ) -> HarvestResult {
-    let build_root = PathBuf::from("/tmp/membrane-harvest");
+    let build_root = std::env::temp_dir().join("membrane-harvest");
     let clone_dir = build_root.join(primal);
 
     if let Err(detail) = clone_source(primal, source, &build_root, &clone_dir).await {

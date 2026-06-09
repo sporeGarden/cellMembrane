@@ -67,7 +67,8 @@ impl NeuralBridge {
             });
         }
 
-        let xdg = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+        let xdg =
+            std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR).unwrap_or_default();
         if !xdg.is_empty() {
             let p = PathBuf::from(&xdg)
                 .join(NEURAL_API_NAMESPACE)
@@ -77,9 +78,9 @@ impl NeuralBridge {
             }
         }
 
-        let fallback = PathBuf::from(format!(
-            "/tmp/{NEURAL_API_NAMESPACE}/{NEURAL_API_SOCKET_NAME}"
-        ));
+        let fallback = std::env::temp_dir()
+            .join(NEURAL_API_NAMESPACE)
+            .join(NEURAL_API_SOCKET_NAME);
         if fallback.exists() {
             return Some(Self {
                 socket_path: fallback,

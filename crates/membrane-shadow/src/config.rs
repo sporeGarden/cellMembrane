@@ -200,7 +200,7 @@ async fn resolve_token() -> Option<String> {
         }
     }
 
-    let home = std::env::var("HOME").ok()?;
+    let home = std::env::var(cellmembrane_types::service::ENV_HOME).ok()?;
     let path = format!("{home}/.config/forgejo/token");
     let token = tokio::fs::read_to_string(&path).await.ok()?;
     let token = token.trim().to_string();

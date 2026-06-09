@@ -14,9 +14,9 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
-/// SSH host for Caddy operations. Resolved from `ShadowConfig::ssh_host_ext`.
-fn caddy_host(config: &ShadowConfig) -> String {
-    config.ssh_host_ext.clone()
+/// Execute a command on the Caddy host (golgiBody-ext), returning stdout and exit code.
+async fn caddy_exec(config: &ShadowConfig, command: &str) -> Result<(String, i32)> {
+    ssh::exec_raw_on(&config.ssh_host_ext, config.ssh_timeout, command).await
 }
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -68,35 +68,29 @@ pub struct CaddyHealth {
 
 /// Check Caddy service health on golgiBody-ext.
 pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
-    let (active_out, active_code) = ssh::exec_raw(
-        &host_config,
+    let (active_out, active_code) = caddy_exec(
+        config,
         "systemctl is-active caddy 2>/dev/null || echo inactive",
     )
     .await?;
     let service_active = active_out.trim() == "active" && active_code == 0;
 
-    let (api_out, api_code) = ssh::exec_raw(
-        &host_config,
+    let (api_out, api_code) = caddy_exec(
+        config,
         "curl -sf http://localhost:2019/config/ 2>/dev/null | head -c 100 || echo FAIL",
     )
     .await?;
     let admin_api_ok = api_code == 0 && !api_out.contains("FAIL");
 
-    let (vhosts_out, _) = ssh::exec_raw(
-        &host_config,
+    let (vhosts_out, _) = caddy_exec(
+        config,
         "grep -cE '^[a-zA-Z]' /etc/caddy/Caddyfile 2>/dev/null || echo 0",
     )
     .await?;
     let vhost_count: usize = vhosts_out.trim().parse().unwrap_or(0);
 
-    let (listeners_out, _) = ssh::exec_raw(
-        &host_config,
+    let (listeners_out, _) = caddy_exec(
+        config,
         "ss -tlnp | grep caddy | awk '{print $4}' 2>/dev/null",
     )
     .await?;
@@ -117,23 +111,17 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
 
 /// Check TLS certificate status for a domain via Caddy's admin API.
 pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
     let cmd = format!(
         "curl -sf 'http://localhost:2019/id/{domain}/tls' 2>/dev/null || \
          openssl s_client -connect {domain}:443 -servername {domain} </dev/null 2>/dev/null | \
          openssl x509 -noout -dates -issuer 2>/dev/null || echo ERROR"
     );
 
-    let (out, _) = ssh::exec_raw(&host_config, &cmd).await?;
+    let (out, _) = caddy_exec(config, &cmd).await?;
 
     if out.contains("ERROR") || out.is_empty() {
-        let (err_out, _) = ssh::exec_raw(
-            &host_config,
+        let (err_out, _) = caddy_exec(
+            config,
             &format!(
                 "curl -sf https://{domain}/ 2>&1 | head -3 || \
                  echo 'TLS connection failed'"
@@ -178,14 +166,7 @@ pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus
 
 /// List configured vhosts from the Caddyfile.
 pub async fn vhosts(config: &ShadowConfig) -> Result<Vec<VhostEntry>> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
-    let (caddyfile, code) =
-        ssh::exec_raw(&host_config, "cat /etc/caddy/Caddyfile 2>/dev/null").await?;
+    let (caddyfile, code) = caddy_exec(config, "cat /etc/caddy/Caddyfile 2>/dev/null").await?;
     if code != 0 {
         return Err(ShadowError::Ssh("Failed to read Caddyfile".into()));
     }
@@ -195,14 +176,8 @@ pub async fn vhosts(config: &ShadowConfig) -> Result<Vec<VhostEntry>> {
 
 /// Reload Caddy configuration (graceful — zero downtime).
 pub async fn reload(config: &ShadowConfig) -> Result<String> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
-    let (out, code) = ssh::exec_raw(
-        &host_config,
+    let (out, code) = caddy_exec(
+        config,
         "caddy reload --config /etc/caddy/Caddyfile --force 2>&1 || \
          systemctl reload caddy 2>&1",
     )
@@ -220,17 +195,8 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
 
 /// Validate Caddyfile syntax without applying.
 pub async fn validate(config: &ShadowConfig) -> Result<String> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
-    let (out, code) = ssh::exec_raw(
-        &host_config,
-        "caddy validate --config /etc/caddy/Caddyfile 2>&1",
-    )
-    .await?;
+    let (out, code) =
+        caddy_exec(config, "caddy validate --config /etc/caddy/Caddyfile 2>&1").await?;
 
     if code == 0 {
         Ok("Caddyfile valid".into())
@@ -248,12 +214,6 @@ pub async fn validate(config: &ShadowConfig) -> Result<String> {
 /// enabling WAN gates to fetch via `plasmid.fetch --source wan`.
 /// The route serves `{depot_root}/primals/` at `https://{outer_domain}/depot/`.
 pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
     let depot_root = format!(
         "{}/plasmidBin/primals",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
@@ -261,7 +221,7 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
 
     let check_cmd =
         "grep -q '/depot/' /etc/caddy/Caddyfile 2>/dev/null && echo EXISTS || echo MISSING";
-    let (check_out, _) = ssh::exec_raw(&host_config, check_cmd).await?;
+    let (check_out, _) = caddy_exec(config, check_cmd).await?;
 
     if check_out.trim() == "EXISTS" {
         return Ok("depot route already provisioned in Caddyfile".into());
@@ -284,7 +244,7 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
             .replace('}', "\\}")
     );
 
-    let (out, code) = ssh::exec_raw(&host_config, &inject_cmd).await?;
+    let (out, code) = caddy_exec(config, &inject_cmd).await?;
     if code != 0 {
         return Err(ShadowError::Ssh(format!(
             "Failed to inject depot route: {}",
@@ -292,8 +252,8 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
         )));
     }
 
-    let (reload_out, reload_code) = ssh::exec_raw(
-        &host_config,
+    let (reload_out, reload_code) = caddy_exec(
+        config,
         "caddy validate --config /etc/caddy/Caddyfile 2>&1 && \
          caddy reload --config /etc/caddy/Caddyfile --force 2>&1",
     )
@@ -313,17 +273,11 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
 
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
-    let host = caddy_host(config);
-    let host_config = ShadowConfig {
-        ssh_host: host,
-        ..config.clone()
-    };
-
     let cmd = format!(
         "journalctl -u caddy --no-pager -n {lines} --grep='acme\\|tls\\|certificate' 2>/dev/null || \
          journalctl -u caddy --no-pager -n {lines} 2>/dev/null"
     );
-    let (out, _) = ssh::exec_raw(&host_config, &cmd).await?;
+    let (out, _) = caddy_exec(config, &cmd).await?;
     Ok(out)
 }
 

@@ -179,8 +179,9 @@ struct ProvenanceSidecar {
 
 /// Standard provenance directory (XDG data dir).
 fn dirs_provenance() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    use cellmembrane_types::service::{ENV_HOME, ENV_XDG_DATA_HOME};
+    let base = std::env::var(ENV_XDG_DATA_HOME).unwrap_or_else(|_| {
+        let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
         format!("{home}/.local/share")
     });
     PathBuf::from(base).join("ecoPrimals/provenance")

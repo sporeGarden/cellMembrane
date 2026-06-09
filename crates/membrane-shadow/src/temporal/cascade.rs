@@ -19,9 +19,19 @@ pub enum CascadeMode {
     DryRun,
 }
 
+/// Post-sync phase to run after cascade completes repo synchronization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostSyncPhase {
+    /// No post-sync building.
+    None,
+    /// Build drifted primals locally, stage to depot.
+    Harvest,
+    /// Harvest + refresh (push rebuilt binaries to VPS).
+    Rebuild,
+}
+
 /// Options for a cascade operation.
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct CascadeOpts<'a> {
     /// Gate name to cascade (e.g. "golgiBody").
     pub gate: &'a str,
@@ -33,10 +43,8 @@ pub struct CascadeOpts<'a> {
     pub clone_missing: bool,
     /// If true, write freshness.toml after cascade.
     pub publish_freshness: bool,
-    /// If true, build drifted primals locally after sync and push to depot.
-    pub with_harvest: bool,
-    /// If true, run full rebuild cycle (harvest + refresh to VPS) after sync.
-    pub with_rebuild: bool,
+    /// Post-sync phase: none, harvest-only, or full rebuild cycle.
+    pub post_sync: PostSyncPhase,
 }
 
 /// Execute cascade with typed options.
@@ -147,14 +155,14 @@ async fn run_post_sync_phases(
     lines: &mut Vec<String>,
 ) -> String {
     let mut harvest_info = String::new();
-    let do_harvest = (opts.with_harvest || opts.with_rebuild) && opts.mode == CascadeMode::Sync;
+    let do_harvest = opts.post_sync != PostSyncPhase::None && opts.mode == CascadeMode::Sync;
 
     if do_harvest {
         match run_post_cascade_harvest(lines).await {
             Ok((built, current, failures)) => {
                 harvest_info = format!(" harvest={built}built/{current}current/{failures}failed");
 
-                if opts.with_rebuild && built > 0 {
+                if opts.post_sync == PostSyncPhase::Rebuild && built > 0 {
                     match run_post_cascade_refresh(lines).await {
                         Ok(pushed) => {
                             let _ = write!(harvest_info, " refresh={pushed}pushed");
@@ -449,13 +457,18 @@ mod tests {
             mode: CascadeMode::DryRun,
             clone_missing: false,
             publish_freshness: true,
-            with_harvest: false,
-            with_rebuild: false,
+            post_sync: PostSyncPhase::None,
         };
         assert_eq!(opts.gate, "eastGate");
-        assert!(!opts.with_harvest);
-        assert!(!opts.with_rebuild);
+        assert_eq!(opts.post_sync, PostSyncPhase::None);
         assert!(opts.publish_freshness);
+    }
+
+    #[test]
+    fn post_sync_phase_eq() {
+        assert_eq!(PostSyncPhase::None, PostSyncPhase::None);
+        assert_ne!(PostSyncPhase::Harvest, PostSyncPhase::Rebuild);
+        assert_ne!(PostSyncPhase::None, PostSyncPhase::Rebuild);
     }
 
     #[test]

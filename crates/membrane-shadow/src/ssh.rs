@@ -53,13 +53,21 @@ pub async fn check_connectivity(host: &str) -> bool {
 
 /// Execute a command and return both stdout and exit code (non-fatal on failure).
 pub async fn exec_raw(config: &ShadowConfig, command: &str) -> Result<(String, i32)> {
+    exec_raw_on(&config.ssh_host, config.ssh_timeout, command).await
+}
+
+/// Execute a command on a specific host, returning stdout and exit code.
+///
+/// Use this when the target host differs from `config.ssh_host` (e.g. outer membrane)
+/// to avoid cloning the full `ShadowConfig` just to swap the host field.
+pub async fn exec_raw_on(host: &str, timeout: u32, command: &str) -> Result<(String, i32)> {
     let output = Command::new("ssh")
         .args([
             "-o",
-            &format!("ConnectTimeout={}", config.ssh_timeout),
+            &format!("ConnectTimeout={timeout}"),
             "-o",
             "BatchMode=yes",
-            &config.ssh_host,
+            host,
             command,
         ])
         .output()

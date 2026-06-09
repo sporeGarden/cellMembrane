@@ -113,9 +113,6 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     let bin_dir = dest_root.join("primals").join(&arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
-    // Clippy nursery suggests map_or_else but it fails: nucleus_primals() returns
-    // Vec<&'static str> while the Some branch is Vec<&'a str> — lifetime mismatch.
-    #[allow(clippy::option_if_let_else)]
     let primals: Vec<&str> = match args.primal.as_deref() {
         Some(p) => vec![p],
         None => nucleus_primals(),
@@ -142,9 +139,10 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 // ── Path resolution ──────────────────────────────────────────────────────────
 
 fn resolve_dest(override_dest: Option<&str>) -> PathBuf {
+    use cellmembrane_types::service::{ENV_HOME, ENV_XDG_DATA_HOME};
     super::resolve_path(override_dest, "ECOPRIMALS_PLASMID_BIN", || {
-        let data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        let data_home = std::env::var(ENV_XDG_DATA_HOME).unwrap_or_else(|_| {
+            let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
             format!("{home}/.local/share")
         });
         PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
