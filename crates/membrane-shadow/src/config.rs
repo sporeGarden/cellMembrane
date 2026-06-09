@@ -90,17 +90,17 @@ impl ShadowConfig {
                 .ok()
                 .or(toml_overrides.vps_root)
                 .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into()),
-            ssh_timeout: std::env::var("SSH_TIMEOUT")
+            ssh_timeout: std::env::var(cellmembrane_types::service::ENV_SSH_TIMEOUT)
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(10),
             forgejo_token: None,
-            forgejo_data_dir: std::env::var("FORGEJO_DATA_DIR").ok(),
-            forgejo_work_dir: std::env::var("FORGEJO_WORK_DIR").ok(),
-            forgejo_admin_user: std::env::var("FORGEJO_ADMIN_USER")
+            forgejo_data_dir: std::env::var(cellmembrane_types::service::ENV_FORGEJO_DATA_DIR).ok(),
+            forgejo_work_dir: std::env::var(cellmembrane_types::service::ENV_FORGEJO_WORK_DIR).ok(),
+            forgejo_admin_user: std::env::var(cellmembrane_types::service::ENV_FORGEJO_ADMIN_USER)
                 .ok()
                 .or(toml_overrides.forgejo_admin_user),
-            service_filter: std::env::var("MEMBRANE_SERVICE_FILTER")
+            service_filter: std::env::var(cellmembrane_types::service::ENV_SERVICE_FILTER)
                 .unwrap_or_else(|_| DEFAULT_SERVICE_FILTER.into()),
         };
 

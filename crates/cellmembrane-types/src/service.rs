@@ -163,6 +163,16 @@ pub const ENV_NESTGATE_PORT: &str = "NESTGATE_PORT";
 pub const ENV_VPS_BIN_DIR: &str = "VPS_MEMBRANE_BIN_DIR";
 /// Environment variable for the songbird configuration path.
 pub const ENV_SONGBIRD_CONFIG: &str = "SONGBIRD_CONFIG_PATH";
+/// Environment variable for SSH connection timeout (seconds).
+pub const ENV_SSH_TIMEOUT: &str = "SSH_TIMEOUT";
+/// Environment variable for the Forgejo data directory path.
+pub const ENV_FORGEJO_DATA_DIR: &str = "FORGEJO_DATA_DIR";
+/// Environment variable for the Forgejo work directory path.
+pub const ENV_FORGEJO_WORK_DIR: &str = "FORGEJO_WORK_DIR";
+/// Environment variable for the Forgejo admin username.
+pub const ENV_FORGEJO_ADMIN_USER: &str = "FORGEJO_ADMIN_USER";
+/// Environment variable for the membrane service filter (systemd unit prefix).
+pub const ENV_SERVICE_FILTER: &str = "MEMBRANE_SERVICE_FILTER";
 
 /// Runtime path resolver for membrane services.
 ///

@@ -91,8 +91,7 @@ mod tests {
         writeln!(f, "eastGate").unwrap();
         drop(f);
 
-        // Only test file path when GATE_NAME is not already set
-        if std::env::var("GATE_NAME").is_err() {
+        if std::env::var(cellmembrane_types::service::ENV_GATE_NAME).is_err() {
             let result = resolve(&dir);
             let identity = result.unwrap();
             assert_eq!(identity.name, "eastGate");
@@ -104,7 +103,7 @@ mod tests {
 
     #[test]
     fn resolve_fails_without_identity() {
-        if std::env::var("GATE_NAME").is_err() {
+        if std::env::var(cellmembrane_types::service::ENV_GATE_NAME).is_err() {
             let result = resolve(Path::new("/tmp/nonexistent-gate-identity-test"));
             assert!(result.is_err());
         }
