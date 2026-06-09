@@ -179,6 +179,16 @@ async fn run_post_sync_phases(
         if !depot_summary.is_empty() {
             lines.push(depot_summary);
         }
+        if !do_harvest {
+            if let Ok(report) = crate::plasmid::detect_depot_staleness() {
+                if report.stale_count > 0 {
+                    lines.push(format!(
+                        "  [depot] {}/{} stale — run with --with-rebuild to auto-fix",
+                        report.stale_count, report.total
+                    ));
+                }
+            }
+        }
     }
 
     harvest_info
