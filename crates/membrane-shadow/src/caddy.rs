@@ -70,7 +70,7 @@ pub struct CaddyHealth {
 pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     let (active_out, active_code) = caddy_exec(
         config,
-        "systemctl is-active caddy 2>/dev/null || echo inactive",
+        "systemctl is-active caddy-tls 2>/dev/null || echo inactive",
     )
     .await?;
     let service_active = active_out.trim() == "active" && active_code == 0;
@@ -272,8 +272,8 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' /etc/membrane/Ca
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
     let cmd = format!(
-        "journalctl -u caddy --no-pager -n {lines} --grep='acme\\|tls\\|certificate' 2>/dev/null || \
-         journalctl -u caddy --no-pager -n {lines} 2>/dev/null"
+        "journalctl -u caddy-tls --no-pager -n {lines} --grep='acme\\|tls\\|certificate' 2>/dev/null || \
+         journalctl -u caddy-tls --no-pager -n {lines} 2>/dev/null"
     );
     let (out, _) = caddy_exec(config, &cmd).await?;
     Ok(out)
