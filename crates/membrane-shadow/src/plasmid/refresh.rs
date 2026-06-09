@@ -77,6 +77,7 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
 
     if !args.dry_run {
         sync_depot_metadata(config).await;
+        sync_depot_binaries(config).await;
     }
 
     Ok(format_refresh_outcome(&results))
@@ -90,8 +91,12 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
     let Ok(local_depot) = super::harvest::resolve_depot(None) else {
         return;
     };
+    let default_remote_depot = format!(
+        "{}/plasmidBin",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
     let remote_depot = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT)
-        .unwrap_or_else(|_| "/opt/plasmidBin".into());
+        .unwrap_or(default_remote_depot);
 
     for filename in ["provenance.toml", "checksums.toml"] {
         let local = local_depot.join(filename);
@@ -100,6 +105,36 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
             let _ = crate::ssh::scp_to(config, &local.to_string_lossy(), &remote).await;
         }
     }
+}
+
+/// Sync install-dir binaries to the WAN depot directory on the VPS.
+///
+/// Runs as a post-refresh step so the WAN depot always serves the same binaries
+/// that are running on the inner membrane. Failures here are non-fatal — the
+/// refresh itself already succeeded.
+async fn sync_depot_binaries(config: &crate::ShadowConfig) {
+    let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let depot_root = format!(
+        "{}/plasmidBin/primals",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
+    let arch = super::detect_target_triple();
+    let depot_dir = format!("{depot_root}/{arch}");
+
+    let primals = super::nucleus_primals();
+    let primal_list = primals.join(" ");
+
+    let cmd = format!(
+        "mkdir -p {depot_dir} && \
+         for p in {primal_list}; do \
+           src=\"{install_dir}/$p\"; \
+           dst=\"{depot_dir}/$p\"; \
+           [ -f \"$src\" ] && cp -f \"$src\" \"$dst\"; \
+         done"
+    );
+
+    let _ = crate::ssh::exec_raw(config, &cmd).await;
 }
 
 async fn refresh_one(

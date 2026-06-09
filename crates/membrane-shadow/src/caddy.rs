@@ -14,6 +14,9 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
+const CADDY_BIN: &str = "/opt/membrane/caddy";
+const CADDYFILE: &str = "/etc/membrane/Caddyfile";
+
 /// Execute a command on the Caddy host (golgiBody inner membrane), returning stdout and exit code.
 async fn caddy_exec(config: &ShadowConfig, command: &str) -> Result<(String, i32)> {
     ssh::exec_raw_on(&config.ssh_host, config.ssh_timeout, command).await
@@ -103,7 +106,7 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     Ok(CaddyHealth {
         service_active,
         admin_api_ok,
-        config_path: "/etc/membrane/Caddyfile".into(),
+        config_path: CADDYFILE.into(),
         vhost_count,
         listeners,
     })
@@ -176,12 +179,11 @@ pub async fn vhosts(config: &ShadowConfig) -> Result<Vec<VhostEntry>> {
 
 /// Reload Caddy configuration (graceful — zero downtime).
 pub async fn reload(config: &ShadowConfig) -> Result<String> {
-    let (out, code) = caddy_exec(
-        config,
-        "/opt/membrane/caddy reload --config /etc/membrane/Caddyfile --force 2>&1 || \
-         systemctl reload caddy-tls 2>&1",
-    )
-    .await?;
+    let cmd = format!(
+        "{CADDY_BIN} reload --config {CADDYFILE} --force 2>&1 || \
+         systemctl reload caddy-tls 2>&1"
+    );
+    let (out, code) = caddy_exec(config, &cmd).await?;
 
     if code == 0 || out.contains("reloaded") {
         Ok("Caddy reloaded successfully".into())
@@ -195,11 +197,8 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
 
 /// Validate Caddyfile syntax without applying.
 pub async fn validate(config: &ShadowConfig) -> Result<String> {
-    let (out, code) = caddy_exec(
-        config,
-        "/opt/membrane/caddy validate --config /etc/membrane/Caddyfile 2>&1",
-    )
-    .await?;
+    let cmd = format!("{CADDY_BIN} validate --config {CADDYFILE} 2>&1");
+    let (out, code) = caddy_exec(config, &cmd).await?;
 
     if code == 0 {
         Ok("Caddyfile valid".into())
@@ -223,8 +222,8 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
     );
 
     let check_cmd =
-        "grep -q '/depot/' /etc/membrane/Caddyfile 2>/dev/null && echo EXISTS || echo MISSING";
-    let (check_out, _) = caddy_exec(config, check_cmd).await?;
+        format!("grep -q '/depot/' {CADDYFILE} 2>/dev/null && echo EXISTS || echo MISSING");
+    let (check_out, _) = caddy_exec(config, &check_cmd).await?;
 
     if check_out.trim() == "EXISTS" {
         return Ok("depot route already provisioned in Caddyfile".into());
@@ -238,7 +237,7 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
         file_server browse
     }}
 SNIPPET
-sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' /etc/membrane/Caddyfile && rm -f /tmp/depot-snippet.caddy"
+sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && rm -f /tmp/depot-snippet.caddy"
     );
 
     let (out, code) = caddy_exec(config, &inject_cmd).await?;
@@ -249,18 +248,20 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' /etc/membrane/Ca
         )));
     }
 
-    let (reload_out, reload_code) = caddy_exec(
-        config,
-        "/opt/membrane/caddy validate --config /etc/membrane/Caddyfile 2>&1 && \
-         /opt/membrane/caddy reload --config /etc/membrane/Caddyfile --force 2>&1",
-    )
-    .await?;
+    let validate_reload = format!(
+        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
+         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+    );
+    let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
     if reload_code != 0 {
-        let rollback_cmd = "cd /opt/ecoPrimals/infra/plasmidBin && \
-             git checkout -- /etc/membrane/Caddyfile 2>/dev/null; \
-             /opt/membrane/caddy reload --config /etc/membrane/Caddyfile --force 2>/dev/null";
-        let _ = caddy_exec(config, rollback_cmd).await;
+        let rollback_cmd = format!(
+            "cd {}/infra/plasmidBin && \
+             git checkout -- {CADDYFILE} 2>/dev/null; \
+             {CADDY_BIN} reload --config {CADDYFILE} --force 2>/dev/null",
+            cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+        );
+        let _ = caddy_exec(config, &rollback_cmd).await;
         return Err(ShadowError::Ssh(format!(
             "Caddyfile validation/reload failed (rolled back): {}",
             reload_out.trim()

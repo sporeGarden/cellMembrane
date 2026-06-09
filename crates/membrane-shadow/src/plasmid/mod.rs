@@ -159,6 +159,76 @@ pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate
     }
 }
 
+/// `plasmid.depot_sync` — Sync inner membrane binaries to the WAN depot directory.
+///
+/// After `plasmid.refresh` pushes binaries to the install dir (e.g. `/opt/membrane/`),
+/// the WAN depot directory (`/opt/ecoPrimals/plasmidBin/primals/{arch}/`) may be stale.
+/// This command ensures the depot serves the same binaries that are running, by
+/// hard-linking (or copying) from install dir to depot dir on the VPS.
+pub async fn depot_sync(
+    config: &crate::ShadowConfig,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let depot_root = format!(
+        "{}/plasmidBin/primals",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
+    let arch = detect_target_triple();
+    let depot_dir = format!("{depot_root}/{arch}");
+
+    let primals = nucleus_primals();
+    let primal_list = primals.join(" ");
+
+    let cmd = format!(
+        "mkdir -p {depot_dir} && \
+         synced=0; failed=0; \
+         for p in {primal_list}; do \
+           src=\"{install_dir}/$p\"; \
+           dst=\"{depot_dir}/$p\"; \
+           if [ -f \"$src\" ]; then \
+             cp -f \"$src\" \"$dst\" && synced=$((synced+1)) || failed=$((failed+1)); \
+           fi; \
+         done; \
+         echo \"synced=$synced failed=$failed\""
+    );
+
+    let (output, code) = crate::ssh::exec_raw(config, &cmd).await?;
+
+    if code != 0 {
+        return Ok(crate::ShadowOutcome {
+            ok: false,
+            message: format!("depot_sync failed (exit {code}): {}", output.trim()),
+            data: None,
+        });
+    }
+
+    let synced = output
+        .split("synced=")
+        .nth(1)
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(0);
+    let failed = output
+        .split("failed=")
+        .nth(1)
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(0);
+
+    Ok(crate::ShadowOutcome {
+        ok: failed == 0,
+        message: format!("depot_sync: {synced} binaries synced to {depot_dir}, {failed} failed"),
+        data: Some(serde_json::json!({
+            "synced": synced,
+            "failed": failed,
+            "depot_dir": depot_dir,
+            "install_dir": install_dir,
+            "arch": arch,
+        })),
+    })
+}
+
 /// `plasmid.status` — Report depot freshness and upstream drift.
 ///
 /// Reads provenance.toml for last build timestamp, then checks each

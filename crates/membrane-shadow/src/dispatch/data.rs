@@ -210,6 +210,7 @@ pub(super) async fn dispatch_plasmid(
             plasmid::pipeline(config, primal, dry_run).await
         }
         "plasmid.trigger" => plasmid::trigger(config).await,
+        "plasmid.depot_sync" => plasmid::depot_sync(config).await,
         "plasmid.status" => plasmid::status().await,
         "plasmid.staleness" => match plasmid::detect_depot_staleness() {
             Ok(report) => {
