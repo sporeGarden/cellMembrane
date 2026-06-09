@@ -143,26 +143,9 @@ pub fn classify_push(event: &PushEvent, known_primals: &[&str]) -> WebhookAction
     }
 }
 
-// ── HMAC-SHA256 (pure Rust, no external crate) ─────────────────────────
+// ── Primal registry ─────────────────────────────────────────────────────
 
-/// Nucleus primals known to the plasmidBin pipeline.
-fn nucleus_primals() -> Vec<&'static str> {
-    vec![
-        "beardog",
-        "songbird",
-        "biomeos",
-        "nestgate",
-        "skunkbat",
-        "squirrel",
-        "rhizocrypt",
-        "loamspine",
-        "sweetgrass",
-        "toadstool",
-        "coralreef",
-        "barracuda",
-        "petaltongue",
-    ]
-}
+use crate::plasmid::nucleus_primals;
 
 /// Handle a verified push event — trigger selective cascade + harvest.
 ///
