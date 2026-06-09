@@ -469,13 +469,30 @@ fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
 }
 
 /// Public wrapper to check upstream changes for a primal — used by `status`.
+///
+/// Uses lenient mode: if remote HEAD cannot be fetched (network failure),
+/// assume current rather than reporting false drift.
 pub(super) async fn has_upstream_changes_pub(
     primal: &str,
     source: &SourceEntry,
     provenance: Option<&ProvenanceFile>,
     depot_dir: &Path,
 ) -> bool {
-    has_upstream_changes(primal, source, provenance, depot_dir).await
+    let Some(prov) = provenance else {
+        return true;
+    };
+    let Some(entry) = prov.entries.get(primal) else {
+        return true;
+    };
+    let Some(prev_commit) = entry.commit.as_deref() else {
+        return true;
+    };
+
+    fetch_head_commit(&source.repo, depot_dir)
+        .await
+        .is_some_and(|head| {
+            !head.starts_with(prev_commit) && !prev_commit.starts_with(&head)
+        })
 }
 
 #[cfg(test)]
