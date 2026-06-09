@@ -523,8 +523,8 @@ fn deploy_paths_custom_base() {
 
 #[test]
 fn deploy_paths_transport_env_default_uds() {
-    use cellmembrane_types::config::DeployPaths;
     use cellmembrane_types::TransportEndpoint;
+    use cellmembrane_types::config::DeployPaths;
     let paths = DeployPaths::default();
     let val = paths.transport_env_value("beardog");
     let ep: TransportEndpoint = serde_json::from_str(&val).unwrap();
@@ -538,8 +538,8 @@ fn deploy_paths_transport_env_default_uds() {
 
 #[test]
 fn deploy_paths_transport_env_custom_override() {
-    use cellmembrane_types::config::DeployPaths;
     use cellmembrane_types::TransportEndpoint;
+    use cellmembrane_types::config::DeployPaths;
     let toml_str = r#"
         install_base = "/opt/membrane"
         socket_base = "/run/membrane"

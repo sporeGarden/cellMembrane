@@ -15,7 +15,9 @@ use serde::Deserialize;
 
 use super::{detect_target_triple, resolve_path};
 use crate::error::{Result, ShadowError};
-use crate::plasmid::harvest::{ChecksumEntry, HarvestResult, ProvenanceEntry, ProvenanceFile, SourceEntry};
+use crate::plasmid::harvest::{
+    ChecksumEntry, HarvestResult, ProvenanceEntry, ProvenanceFile, SourceEntry,
+};
 
 #[derive(Deserialize)]
 pub(super) struct SourcesFile {
@@ -168,14 +170,13 @@ pub(super) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
         override_dir,
         cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
         || {
-            let eco_root =
-                std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
-                    .ok()
-                    .map(PathBuf::from)
-                    .or_else(|| crate::resolve_workspace_root().ok())
-                    .unwrap_or_else(|| {
-                        PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
-                    });
+            let eco_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+                .ok()
+                .map(PathBuf::from)
+                .or_else(|| crate::resolve_workspace_root().ok())
+                .unwrap_or_else(|| {
+                    PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
+                });
             eco_root.join("infra/plasmidBin")
         },
     );

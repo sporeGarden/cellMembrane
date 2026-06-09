@@ -114,10 +114,7 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     let depot_dir = resolve_depot(args.depot_dir.as_deref())?;
     let sources = load_sources(&depot_dir)?;
     let provenance = load_provenance(&depot_dir);
-    let target = args
-        .target
-        .clone()
-        .unwrap_or_else(detect_target_triple);
+    let target = args.target.clone().unwrap_or_else(detect_target_triple);
 
     let primals_to_harvest = determine_primals(args, &sources)?;
 
@@ -357,13 +354,7 @@ async fn try_clone(url: &str, clone_dir: &Path) -> bool {
         let _ = std::fs::remove_dir_all(clone_dir);
     }
     let result = tokio::process::Command::new("git")
-        .args([
-            "clone",
-            "--depth",
-            "1",
-            url,
-            &clone_dir.to_string_lossy(),
-        ])
+        .args(["clone", "--depth", "1", url, &clone_dir.to_string_lossy()])
         .output()
         .await;
     result.is_ok_and(|o| o.status.success())

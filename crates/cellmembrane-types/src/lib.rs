@@ -57,7 +57,7 @@ pub use firewall::{FirewallRule, FirewallRuleset};
 pub use identity::MembraneIdentity;
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{BinaryIntegrity, HashAlgorithm, MembraneService, binary_integrity_for};
-pub use transport::{TransportEndpoint, ENV_TRANSPORT_ENDPOINT};
+pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 
 /// Shared serde default for boolean fields that should be `true` when omitted.

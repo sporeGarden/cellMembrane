@@ -134,7 +134,10 @@ async fn dispatch_pepti(
 
 async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let pepti_host = args.first().map_or_else(
-        || std::env::var(cellmembrane_types::service::ENV_PEPTI_SSH_HOST).unwrap_or_else(|_| "pepti".into()),
+        || {
+            std::env::var(cellmembrane_types::service::ENV_PEPTI_SSH_HOST)
+                .unwrap_or_else(|_| "pepti".into())
+        },
         |&h| h.to_string(),
     );
 

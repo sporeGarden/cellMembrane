@@ -56,9 +56,7 @@ impl TransportEndpoint {
     pub fn is_local(&self) -> bool {
         match self {
             Self::Uds { .. } => true,
-            Self::Tcp { host, .. } => {
-                host == "127.0.0.1" || host == "::1" || host == "localhost"
-            }
+            Self::Tcp { host, .. } => host == "127.0.0.1" || host == "::1" || host == "localhost",
             Self::MeshRelay { .. } => false,
         }
     }

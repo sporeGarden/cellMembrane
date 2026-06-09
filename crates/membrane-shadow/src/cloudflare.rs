@@ -599,8 +599,8 @@ mod tests {
         // Without env vars set, from_env should fail.
         // We can't safely mutate env in tests, so verify the error path
         // by testing the resolution logic directly.
-        let result =
-            std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN).or_else(|_| std::env::var("CF_API_TOKEN"));
+        let result = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN)
+            .or_else(|_| std::env::var("CF_API_TOKEN"));
         if result.is_err() {
             assert!(CloudflareConfig::from_env().is_err());
         }

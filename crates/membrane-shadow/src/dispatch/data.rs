@@ -230,7 +230,7 @@ pub(super) async fn dispatch_plasmid(
                 ))
             }
             Err(e) => Err(e),
-        }
+        },
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),
@@ -370,14 +370,17 @@ pub(super) async fn dispatch_content(
                 crate::ssh::exec_raw(config, "systemctl is-active nestgate-membrane").await?;
             let nestgate_active = nestgate_code == 0;
 
-            let content_path = std::env::var(cellmembrane_types::service::ENV_NESTGATE_CONTENT_PATH).unwrap_or_else(|_| {
-                format!(
-                    "{}/nestgate/content",
-                    std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE).unwrap_or_else(|_| {
-                        cellmembrane_types::service::DEFAULT_INSTALL_BASE.into()
-                    })
-                )
-            });
+            let content_path =
+                std::env::var(cellmembrane_types::service::ENV_NESTGATE_CONTENT_PATH)
+                    .unwrap_or_else(|_| {
+                        format!(
+                            "{}/nestgate/content",
+                            std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+                                .unwrap_or_else(|_| {
+                                    cellmembrane_types::service::DEFAULT_INSTALL_BASE.into()
+                                })
+                        )
+                    });
             let (content_count_out, _) = crate::ssh::exec_raw(
                 config,
                 &format!("find {content_path} -type f 2>/dev/null | wc -l"),
@@ -389,7 +392,8 @@ pub(super) async fn dispatch_content(
                 .ok()
                 .and_then(|v| v.parse::<u16>().ok())
                 .unwrap_or(9500);
-            let bind = std::env::var(cellmembrane_types::service::ENV_NUCLEUS_BIND).unwrap_or_else(|_| "127.0.0.1".into());
+            let bind = std::env::var(cellmembrane_types::service::ENV_NUCLEUS_BIND)
+                .unwrap_or_else(|_| "127.0.0.1".into());
             let (curl_out, curl_code) = crate::ssh::exec_raw(
                 config,
                 &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{nestgate_port}/health 2>/dev/null"),

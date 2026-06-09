@@ -115,8 +115,14 @@ impl NeuralBridge {
 
     /// Low-level JSON-RPC 2.0 call over UDS.
     #[cfg(not(unix))]
-    async fn rpc_call(&self, _method: &str, _params: serde_json::Value) -> Result<serde_json::Value> {
-        Err(ShadowError::Parse("UDS not available on this platform".into()))
+    async fn rpc_call(
+        &self,
+        _method: &str,
+        _params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        Err(ShadowError::Parse(
+            "UDS not available on this platform".into(),
+        ))
     }
 
     /// Low-level JSON-RPC 2.0 call over UDS.
