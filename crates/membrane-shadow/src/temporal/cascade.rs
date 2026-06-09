@@ -197,6 +197,10 @@ async fn run_post_sync_phases(
                 }
             }
         }
+
+        if plasmidbin_was_pulled(lines) {
+            run_auto_fetch(lines).await;
+        }
     }
 
     harvest_info
@@ -269,6 +273,50 @@ async fn run_post_cascade_refresh(lines: &mut Vec<String>) -> Result<u32> {
     ));
 
     Ok(pushed)
+}
+
+/// Check if plasmidBin was pulled during this cascade (indicating depot update).
+fn plasmidbin_was_pulled(lines: &[String]) -> bool {
+    lines
+        .iter()
+        .any(|l| l.contains("plasmidBin") && l.contains("pull"))
+}
+
+/// Auto-fetch binaries from WAN depot when checksums.toml was updated via cascade.
+async fn run_auto_fetch(lines: &mut Vec<String>) {
+    let config = crate::config::ShadowConfig::from_env().await;
+
+    let fetch_args = crate::plasmid::FetchArgs {
+        source: crate::plasmid::FetchSource::Wan,
+        primal: None,
+        release_tag: None,
+        force: false,
+        dry_run: false,
+        dest: None,
+    };
+
+    match crate::plasmid::fetch(&config, &fetch_args).await {
+        Ok(outcome) => {
+            if let Some(data) = &outcome.data {
+                let downloaded = data
+                    .get("downloaded")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                let failed = data
+                    .get("failed")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                let skipped = data
+                    .get("skipped")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                lines.push(format!(
+                    "  [auto-fetch] {downloaded} downloaded, {skipped} current, {failed} failed"
+                ));
+            }
+        }
+        Err(e) => lines.push(format!("  [auto-fetch] FAIL: {e}")),
+    }
 }
 
 /// Quick depot freshness summary — reports how many binaries exist and are recent.

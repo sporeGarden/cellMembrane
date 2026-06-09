@@ -224,7 +224,7 @@ pub(super) async fn dispatch_service(
 pub(super) async fn dispatch_gate(
     config: &ShadowConfig,
     cmd: &str,
-    _args: &[&str],
+    args: &[&str],
 ) -> crate::Result<ShadowOutcome> {
     match cmd {
         "gate.info" => {
@@ -287,6 +287,18 @@ pub(super) async fn dispatch_gate(
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
         "gate.health" => gate_health(config).await,
+        "gate.bootstrap" => {
+            let gate_name = cli::require_arg(args, 0, "gate-name")?;
+            let result = gate::bootstrap(config, gate_name).await?;
+            let msg = format!(
+                "bootstrap {}: {}/{} phases passed{}",
+                result.gate_name,
+                result.phases.iter().filter(|p| p.ok).count(),
+                result.phases.len(),
+                if result.all_pass { " — ENROLLED" } else { "" },
+            );
+            Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
+        }
         _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
     }
 }

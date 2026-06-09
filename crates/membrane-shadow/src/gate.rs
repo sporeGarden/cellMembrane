@@ -223,6 +223,385 @@ fn parse_sync_output(output: &str) -> SyncResult {
     result
 }
 
+// ── Bootstrap ───────────────────────────────────────────────────────
+
+/// Result of a single bootstrap phase.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootstrapPhase {
+    /// Phase identifier (e.g. "depot.fetch").
+    pub name: String,
+    /// Whether this phase succeeded.
+    pub ok: bool,
+    /// Human-readable outcome detail.
+    pub detail: String,
+}
+
+/// Full result of a `gate.bootstrap` run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootstrapResult {
+    /// Name of the gate being enrolled.
+    pub gate_name: String,
+    /// Detected architecture triple.
+    pub arch: String,
+    /// Per-phase results.
+    pub phases: Vec<BootstrapPhase>,
+    /// Whether all phases passed (gate is enrolled).
+    pub all_pass: bool,
+}
+
+/// Orchestrate full gate enrollment in one command.
+///
+/// Phases: detect arch → fetch depot → verify checksums → configure mesh → start NUCLEUS → health sweep.
+pub async fn bootstrap(config: &ShadowConfig, gate_name: &str) -> Result<BootstrapResult> {
+    use std::fmt::Write;
+    let arch = crate::plasmid::detect_target_triple();
+    let mut phases: Vec<BootstrapPhase> = Vec::new();
+
+    // Phase 1: Detect architecture
+    phases.push(BootstrapPhase {
+        name: "arch.detect".into(),
+        ok: true,
+        detail: arch.clone(),
+    });
+
+    // Phase 2: Fetch all primals from WAN depot
+    let fetch_args = crate::plasmid::FetchArgs {
+        source: crate::plasmid::FetchSource::Wan,
+        primal: None,
+        release_tag: None,
+        force: true,
+        dry_run: false,
+        dest: None,
+    };
+    let fetch_result = crate::plasmid::fetch(config, &fetch_args).await;
+    let (fetch_ok, fetch_detail) = match &fetch_result {
+        Ok(outcome) => {
+            let downloaded = outcome
+                .data
+                .as_ref()
+                .and_then(|d| d.get("downloaded"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0);
+            let failed = outcome
+                .data
+                .as_ref()
+                .and_then(|d| d.get("failed"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0);
+            (
+                failed == 0,
+                format!("{downloaded} downloaded, {failed} failed"),
+            )
+        }
+        Err(e) => (false, format!("fetch error: {e}")),
+    };
+    phases.push(BootstrapPhase {
+        name: "depot.fetch".into(),
+        ok: fetch_ok,
+        detail: fetch_detail,
+    });
+
+    // Phase 3: Verify checksums (BLAKE3)
+    let verify_result = verify_local_depot(&arch);
+    phases.push(BootstrapPhase {
+        name: "checksum.verify".into(),
+        ok: verify_result.0,
+        detail: verify_result.1,
+    });
+
+    // Phase 4: Configure mesh (songbird init to VPS relay)
+    let mesh_result = configure_mesh(gate_name, &arch).await;
+    phases.push(BootstrapPhase {
+        name: "mesh.configure".into(),
+        ok: mesh_result.0,
+        detail: mesh_result.1,
+    });
+
+    // Phase 5: Start NUCLEUS primals
+    let start_result = start_nucleus_primals(&arch);
+    phases.push(BootstrapPhase {
+        name: "nucleus.start".into(),
+        ok: start_result.0,
+        detail: start_result.1,
+    });
+
+    // Phase 6: Health sweep — verify processes running
+    let health_result = health_sweep(&arch).await;
+    phases.push(BootstrapPhase {
+        name: "health.sweep".into(),
+        ok: health_result.0,
+        detail: health_result.1,
+    });
+
+    let all_pass = phases.iter().all(|p| p.ok);
+
+    // Format human-readable report
+    let mut report = format!("=== Gate Bootstrap: {gate_name} ({arch}) ===\n\n");
+    for phase in &phases {
+        let status = if phase.ok { "PASS" } else { "FAIL" };
+        let _ = writeln!(report, "  [{status}] {}: {}", phase.name, phase.detail);
+    }
+    let passed = phases.iter().filter(|p| p.ok).count();
+    let _ = write!(
+        report,
+        "\n  Result: {passed}/{} phases passed",
+        phases.len()
+    );
+    if all_pass {
+        let _ = write!(report, " — {gate_name} is ENROLLED");
+    }
+
+    Ok(BootstrapResult {
+        gate_name: gate_name.to_string(),
+        arch,
+        phases,
+        all_pass,
+    })
+}
+
+/// Verify BLAKE3 checksums of local depot binaries against checksums.toml.
+fn verify_local_depot(arch: &str) -> (bool, String) {
+    #[derive(serde::Deserialize)]
+    struct ChecksumFile {
+        #[serde(flatten)]
+        targets:
+            std::collections::BTreeMap<String, std::collections::BTreeMap<String, ChecksumEntry>>,
+    }
+    #[derive(serde::Deserialize)]
+    struct ChecksumEntry {
+        blake3: String,
+        #[allow(dead_code)]
+        size: u64,
+    }
+
+    let dest_root = resolve_plasmidbin_dir();
+    let bin_dir = dest_root.join("primals").join(arch);
+
+    let checksums_path = if dest_root.join("checksums.toml").exists() {
+        dest_root.join("checksums.toml")
+    } else if let Ok(workspace) = crate::temporal::resolve_workspace_root() {
+        let ws_path = workspace.join("infra/plasmidBin/checksums.toml");
+        if ws_path.exists() {
+            ws_path
+        } else {
+            return (false, "checksums.toml not found in depot or workspace".into());
+        }
+    } else {
+        return (false, "checksums.toml not found".into());
+    };
+
+    let Ok(content) = std::fs::read_to_string(&checksums_path) else {
+        return (false, "cannot read checksums.toml".into());
+    };
+
+    let parsed: ChecksumFile = match toml::from_str(&content) {
+        Ok(p) => p,
+        Err(e) => return (false, format!("parse error: {e}")),
+    };
+
+    let Some(entries) = parsed.targets.get(arch) else {
+        return (false, format!("no [{arch}] section in checksums.toml"));
+    };
+
+    let mut verified = 0u32;
+    let mut failed = 0u32;
+    let mut missing = 0u32;
+
+    for (name, entry) in entries {
+        let bin_path = bin_dir.join(name);
+        if !bin_path.exists() {
+            missing += 1;
+            continue;
+        }
+        let hash = crate::plasmid::compute_blake3_file(&bin_path);
+        if hash == entry.blake3 {
+            verified += 1;
+        } else {
+            failed += 1;
+        }
+    }
+
+    let ok = failed == 0 && missing == 0;
+    (
+        ok,
+        format!("{verified} verified, {failed} hash mismatch, {missing} missing"),
+    )
+}
+
+/// Configure songbird mesh — init `node_id` and peer to VPS relay.
+async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
+    let dest_root = resolve_plasmidbin_dir();
+    let songbird_bin = dest_root.join("primals").join(arch).join("songbird");
+
+    if !songbird_bin.exists() {
+        return (false, "songbird binary not found".into());
+    }
+
+    let socket_dir = std::env::var("BIOMEOS_SOCKET_DIR").unwrap_or_else(|_| {
+        let uid = std::env::var("UID")
+            .or_else(|_| std::env::var("EUID"))
+            .unwrap_or_else(|_| {
+                std::fs::read_to_string("/proc/self/loginuid")
+                    .unwrap_or_else(|_| "1000".into())
+                    .trim()
+                    .to_string()
+            });
+        format!("/run/user/{uid}/biomeos")
+    });
+    let socket_path = format!("{socket_dir}/songbird.sock");
+
+    if !std::path::Path::new(&socket_path).exists() {
+        return (
+            false,
+            format!("songbird socket not found at {socket_path} — start songbird first"),
+        );
+    }
+
+    let vps_peer =
+        std::env::var("MEMBRANE_VPS_PEER").unwrap_or_else(|_| "157.230.3.183:7700".into());
+
+    let mesh_init = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "mesh.init",
+        "params": {
+            "node_id": gate_name,
+            "peers": [vps_peer],
+        },
+        "id": 1
+    });
+
+    let output = tokio::process::Command::new("socat")
+        .args(["-", &format!("UNIX-CONNECT:{socket_path}")])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn();
+
+    let Ok(mut child) = output else {
+        return (false, "failed to spawn socat".into());
+    };
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        use tokio::io::AsyncWriteExt;
+        let payload = mesh_init.to_string();
+        if stdin.write_all(payload.as_bytes()).await.is_err() {
+            return (false, "failed to write to socat stdin".into());
+        }
+        let _ = stdin.shutdown().await;
+    }
+
+    let result =
+        tokio::time::timeout(std::time::Duration::from_secs(5), child.wait_with_output()).await;
+
+    match result {
+        Ok(Ok(out)) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if stdout.contains("\"result\"") || stdout.contains("\"ok\"") {
+                (true, format!("mesh.init sent to {vps_peer} as {gate_name}"))
+            } else {
+                (
+                    true,
+                    format!("mesh.init sent (response: {})", stdout.trim()),
+                )
+            }
+        }
+        Ok(Ok(out)) => (false, format!("socat exit {}", out.status)),
+        Ok(Err(e)) => (false, format!("socat error: {e}")),
+        Err(_) => (false, "mesh.init timed out after 5s".into()),
+    }
+}
+
+/// Start nucleus primals in background.
+fn start_nucleus_primals(arch: &str) -> (bool, String) {
+    let dest_root = resolve_plasmidbin_dir();
+    let bin_dir = dest_root.join("primals").join(arch);
+
+    let primals = crate::plasmid::nucleus_primals();
+    let mut started = 0u32;
+    let mut failed = 0u32;
+    let mut skipped = 0u32;
+
+    for primal in &primals {
+        let bin_path = bin_dir.join(primal);
+        if !bin_path.exists() {
+            failed += 1;
+            continue;
+        }
+
+        if *primal == "songbird" {
+            skipped += 1;
+            continue;
+        }
+
+        let spawn_result = tokio::process::Command::new(&bin_path)
+            .arg("server")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+
+        match spawn_result {
+            Ok(_) => started += 1,
+            Err(_) => failed += 1,
+        }
+    }
+
+    let ok = failed == 0;
+    (
+        ok,
+        format!("{started} started, {skipped} skipped (pre-running), {failed} failed"),
+    )
+}
+
+/// Health sweep — check which primals have a live process.
+async fn health_sweep(arch: &str) -> (bool, String) {
+    let dest_root = resolve_plasmidbin_dir();
+    let bin_dir = dest_root.join("primals").join(arch);
+
+    let primals = crate::plasmid::nucleus_primals();
+    let mut alive = 0u32;
+    let mut dead = 0u32;
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    for primal in &primals {
+        let bin_path = bin_dir.join(primal);
+        if !bin_path.exists() {
+            dead += 1;
+            continue;
+        }
+
+        let output = tokio::process::Command::new("pgrep")
+            .args(["-f", &format!("{primal}.*server")])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .await;
+
+        match output {
+            Ok(o) if o.status.success() => alive += 1,
+            _ => dead += 1,
+        }
+    }
+
+    let total = alive + dead;
+    let ok = dead == 0;
+    (ok, format!("{alive}/{total} primals alive"))
+}
+
+/// Resolve the local plasmidBin directory.
+fn resolve_plasmidbin_dir() -> std::path::PathBuf {
+    crate::plasmid::resolve_path(None, "ECOPRIMALS_PLASMID_BIN", || {
+        let data_home = std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME)
+            .unwrap_or_else(|_| {
+                let home = std::env::var(cellmembrane_types::service::ENV_HOME)
+                    .unwrap_or_else(|_| "/tmp".into());
+                format!("{home}/.local/share")
+            });
+        std::path::PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

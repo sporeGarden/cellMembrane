@@ -238,7 +238,7 @@ async fn download_asset(
                         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
                     )
                 });
-            let remote_path = format!("{vps_bin_dir}/{asset}");
+            let remote_path = format!("{vps_bin_dir}/{arch}/{primal}");
             download_via_ssh(&config.ssh_host, &remote_path, dest).await
         }
         FetchSource::Wan => {

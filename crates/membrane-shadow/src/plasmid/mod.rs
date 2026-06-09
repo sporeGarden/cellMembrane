@@ -22,6 +22,11 @@ pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
 pub use depot::{StalenessEntry, StalenessReport};
 
+/// Compute BLAKE3 hash of a file, returning hex string.
+pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
+    depot::compute_blake3_file(path)
+}
+
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.
 pub fn detect_depot_staleness() -> crate::error::Result<StalenessReport> {
     let depot_dir = depot::resolve_depot(None)?;
