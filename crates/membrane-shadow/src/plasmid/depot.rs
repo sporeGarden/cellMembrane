@@ -164,11 +164,21 @@ async fn rustc_version() -> String {
 }
 
 pub(super) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
-    let path = resolve_path(override_dir, "PLASMIDBIN_DEPOT", || {
-        let eco_root = std::env::var("ECOPRIMALS_ROOT")
-            .unwrap_or_else(|_| "/home/irongate/Development/ecoPrimals".into());
-        PathBuf::from(eco_root).join("infra/plasmidBin")
-    });
+    let path = resolve_path(
+        override_dir,
+        cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
+        || {
+            let eco_root =
+                std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+                    .ok()
+                    .map(PathBuf::from)
+                    .or_else(|| crate::resolve_workspace_root().ok())
+                    .unwrap_or_else(|| {
+                        PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
+                    });
+            eco_root.join("infra/plasmidBin")
+        },
+    );
     if !path.exists() {
         return Err(ShadowError::Parse(format!(
             "depot not found at {}",

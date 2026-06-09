@@ -50,8 +50,8 @@ impl Default for ShadowConfig {
     fn default() -> Self {
         Self {
             ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST).unwrap_or_else(|_| "golgi".into()),
-            ssh_host_ext: std::env::var("MEMBRANE_SSH_HOST_EXT")
-                .or_else(|_| std::env::var("GOLGI_EXT_HOST"))
+            ssh_host_ext: std::env::var(cellmembrane_types::service::ENV_SSH_HOST_EXT)
+                .or_else(|_| std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST))
                 .unwrap_or_else(|_| "golgi-ext".into()),
             forgejo_api: String::new(),
             forgejo_token: None,
@@ -75,11 +75,11 @@ impl ShadowConfig {
         let toml_overrides = load_toml_overrides().await;
 
         let mut cfg = Self {
-            ssh_host: std::env::var("GOLGI_HOST")
+            ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST)
                 .ok()
                 .or(toml_overrides.ssh_host)
                 .unwrap_or_else(|| "golgi".into()),
-            ssh_host_ext: std::env::var("GOLGI_EXT_HOST").unwrap_or_else(|_| "golgi-ext".into()),
+            ssh_host_ext: std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST).unwrap_or_else(|_| "golgi-ext".into()),
             forgejo_api: std::env::var(cellmembrane_types::service::ENV_FORGEJO_API)
                 .ok()
                 .or(toml_overrides.forgejo_api)
@@ -141,7 +141,7 @@ async fn load_toml_overrides() -> TomlOverrides {
 fn toml_search_paths() -> Vec<String> {
     let mut paths = Vec::with_capacity(4);
 
-    if let Ok(root) = std::env::var("ECOPRIMALS_ROOT") {
+    if let Ok(root) = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT) {
         paths.push(format!("{root}/gardens/cellMembrane/membrane.toml"));
     }
 

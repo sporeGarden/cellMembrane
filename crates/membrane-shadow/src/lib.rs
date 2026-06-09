@@ -102,7 +102,7 @@ pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
             || p.join(".ecoprimals").exists()
     }
 
-    if let Ok(root) = std::env::var("ECOPRIMALS_ROOT") {
+    if let Ok(root) = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT) {
         let path = PathBuf::from(&root);
         if is_workspace(&path) {
             return Ok(path);

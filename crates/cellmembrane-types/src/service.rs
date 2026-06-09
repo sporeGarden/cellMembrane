@@ -145,6 +145,24 @@ pub const ENV_SSH_HOST: &str = "MEMBRANE_SSH_HOST";
 pub const ENV_VPS_ECOPRIMALS_ROOT: &str = "VPS_ECOPRIMALS_ROOT";
 /// Environment variable for NUCLEUS bind address.
 pub const ENV_NUCLEUS_BIND: &str = "NUCLEUS_BIND_ADDRESS";
+/// Environment variable for the membrane SSH external host (golgiBody-ext).
+pub const ENV_SSH_HOST_EXT: &str = "MEMBRANE_SSH_HOST_EXT";
+/// Environment variable for the golgiBody external host (relay target).
+pub const ENV_GOLGI_EXT_HOST: &str = "GOLGI_EXT_HOST";
+/// Environment variable for the Cloudflare API token.
+pub const ENV_CLOUDFLARE_TOKEN: &str = "CLOUDFLARE_API_TOKEN";
+/// Environment variable for the Cloudflare zone ID.
+pub const ENV_CLOUDFLARE_ZONE: &str = "CLOUDFLARE_ZONE_ID";
+/// Environment variable for the relay Forgejo remote name.
+pub const ENV_RELAY_FORGEJO_REMOTE: &str = "RELAY_FORGEJO_REMOTE";
+/// Environment variable for the `nestGate` content path.
+pub const ENV_NESTGATE_CONTENT_PATH: &str = "NESTGATE_CONTENT_PATH";
+/// Environment variable for the `nestGate` HTTP port.
+pub const ENV_NESTGATE_PORT: &str = "NESTGATE_PORT";
+/// Environment variable for the VPS membrane binary directory.
+pub const ENV_VPS_BIN_DIR: &str = "VPS_MEMBRANE_BIN_DIR";
+/// Environment variable for the songbird configuration path.
+pub const ENV_SONGBIRD_CONFIG: &str = "SONGBIRD_CONFIG_PATH";
 
 /// Runtime path resolver for membrane services.
 ///
@@ -164,9 +182,9 @@ impl ServicePaths {
     #[must_use]
     pub fn from_env() -> Self {
         Self {
-            install_base: std::env::var("MEMBRANE_INSTALL_BASE")
+            install_base: std::env::var(ENV_INSTALL_BASE)
                 .unwrap_or_else(|_| DEFAULT_INSTALL_BASE.to_string()),
-            socket_base: std::env::var("MEMBRANE_SOCKET_BASE")
+            socket_base: std::env::var(ENV_SOCKET_BASE)
                 .unwrap_or_else(|_| DEFAULT_SOCKET_BASE.to_string()),
         }
     }

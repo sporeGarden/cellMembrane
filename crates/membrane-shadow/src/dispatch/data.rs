@@ -370,7 +370,7 @@ pub(super) async fn dispatch_content(
                 crate::ssh::exec_raw(config, "systemctl is-active nestgate-membrane").await?;
             let nestgate_active = nestgate_code == 0;
 
-            let content_path = std::env::var("NESTGATE_CONTENT_PATH").unwrap_or_else(|_| {
+            let content_path = std::env::var(cellmembrane_types::service::ENV_NESTGATE_CONTENT_PATH).unwrap_or_else(|_| {
                 format!(
                     "{}/nestgate/content",
                     std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE).unwrap_or_else(|_| {
@@ -385,7 +385,7 @@ pub(super) async fn dispatch_content(
             .await?;
             let content_files: u32 = content_count_out.trim().parse().unwrap_or(0);
 
-            let nestgate_port = std::env::var("NESTGATE_PORT")
+            let nestgate_port = std::env::var(cellmembrane_types::service::ENV_NESTGATE_PORT)
                 .ok()
                 .and_then(|v| v.parse::<u16>().ok())
                 .unwrap_or(9500);

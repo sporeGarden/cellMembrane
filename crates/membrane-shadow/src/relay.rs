@@ -70,7 +70,7 @@ impl RelayConfig {
             })
             .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.to_string());
 
-        let forgejo_remote = std::env::var("RELAY_FORGEJO_REMOTE")
+        let forgejo_remote = std::env::var(cellmembrane_types::service::ENV_RELAY_FORGEJO_REMOTE)
             .ok()
             .or_else(|| {
                 membrane_config
@@ -79,7 +79,7 @@ impl RelayConfig {
             })
             .unwrap_or_else(|| "forgejo".to_string());
 
-        let golgi_ext_host = std::env::var("GOLGI_EXT_HOST")
+        let golgi_ext_host = std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST)
             .ok()
             .or_else(|| {
                 membrane_config

@@ -226,7 +226,7 @@ async fn download_asset(
             download_via_http(&url, dest).await
         }
         FetchSource::Vps => {
-            let vps_bin_dir = std::env::var("VPS_MEMBRANE_BIN_DIR").unwrap_or_else(|_| {
+            let vps_bin_dir = std::env::var(cellmembrane_types::service::ENV_VPS_BIN_DIR).unwrap_or_else(|_| {
                 format!(
                     "{}/plasmidBin/primals",
                     cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
