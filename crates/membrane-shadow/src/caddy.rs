@@ -273,6 +273,59 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && r
     ))
 }
 
+/// Provision a route to serve `checksums.toml` at `/depot/checksums.toml`.
+///
+/// Enables zero-git verification: gates can fetch the authoritative checksum
+/// file directly from the WAN endpoint without cloning plasmidBin.
+pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> {
+    let checksums_path = format!(
+        "{}/plasmidBin/checksums.toml",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
+
+    let check_cmd =
+        format!("grep -q 'checksums.toml' {CADDYFILE} 2>/dev/null && echo EXISTS || echo MISSING");
+    let (check_out, _) = caddy_exec(config, &check_cmd).await?;
+
+    if check_out.trim() == "EXISTS" {
+        return Ok("checksums.toml route already provisioned".into());
+    }
+
+    let snippet = format!(
+        "    handle /depot/checksums.toml {{\n        root * /\n        rewrite * {checksums_path}\n        file_server\n    }}"
+    );
+    let inject_cmd = format!(
+        "printf '%s\\n' '{snippet}' > /tmp/checksums-snippet.caddy && \
+         sed -i '/handle \\/depot\\/\\*/r /tmp/checksums-snippet.caddy' {CADDYFILE} && \
+         rm -f /tmp/checksums-snippet.caddy"
+    );
+
+    let (out, code) = caddy_exec(config, &inject_cmd).await?;
+    if code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "Failed to inject checksums route: {}",
+            out.trim()
+        )));
+    }
+
+    let validate_reload = format!(
+        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
+         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+    );
+    let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
+
+    if reload_code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "Caddyfile validation/reload failed after checksums route: {}",
+            reload_out.trim()
+        )));
+    }
+
+    Ok(format!(
+        "checksums.toml route provisioned: https://membrane.primals.eco/depot/checksums.toml → {checksums_path}"
+    ))
+}
+
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
     let cmd = format!(
@@ -328,6 +381,10 @@ pub async fn dispatch(
         }
         "caddy.depot.provision" => {
             let msg = depot_provision(config).await?;
+            Ok(crate::ShadowOutcome::ok(msg))
+        }
+        "caddy.depot.checksums" => {
+            let msg = depot_checksums_provision(config).await?;
             Ok(crate::ShadowOutcome::ok(msg))
         }
         _ => Ok(crate::ShadowOutcome::fail(format!(

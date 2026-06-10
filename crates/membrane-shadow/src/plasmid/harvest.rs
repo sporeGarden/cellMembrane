@@ -164,6 +164,7 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             if let Err(e) = update_depot_metadata(&depot_dir, &target, &built).await {
                 eprintln!("warn: failed to update depot metadata: {e}");
             }
+            publish_depot_checksums(&depot_dir).await;
         }
     }
 
@@ -439,6 +440,37 @@ async fn get_local_head(repo_dir: &Path) -> Option<String> {
 pub(super) use super::depot::{
     compute_blake3_file, load_provenance, load_sources, resolve_depot, update_depot_metadata,
 };
+
+/// Commit and push updated checksums.toml + provenance.toml to git.
+/// Non-fatal — harvest succeeds even if git publish fails.
+async fn publish_depot_checksums(depot_dir: &std::path::Path) {
+    let git_dir = depot_dir.to_path_buf();
+    if !git_dir.join(".git").is_dir() {
+        return;
+    }
+
+    let commit_msg = format!(
+        "harvest: update checksums + provenance ({})",
+        chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
+    );
+
+    let script = format!(
+        "cd {} && git add checksums.toml provenance.toml && \
+         git diff --cached --quiet || \
+         git commit -m '{}' && \
+         git push forgejo main 2>/dev/null; \
+         git push origin main 2>/dev/null",
+        git_dir.display(),
+        commit_msg
+    );
+
+    let _ = tokio::process::Command::new("bash")
+        .args(["-c", &script])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await;
+}
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
     let built = results

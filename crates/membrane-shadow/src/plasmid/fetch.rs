@@ -124,7 +124,10 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 
     std::fs::create_dir_all(&bin_dir).map_err(ShadowError::Io)?;
 
-    let checksums = load_checksums(&bin_dir, &tag);
+    let mut checksums = load_checksums(&bin_dir, &tag);
+    if checksums.is_empty() && args.source == FetchSource::Wan {
+        checksums = fetch_wan_checksums(&arch).await;
+    }
     let results = fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
 
     Ok(format_fetch_outcome(
@@ -312,9 +315,61 @@ fn verify_blake3(path: &Path, expected: &str) -> bool {
     compute_blake3(path).is_ok_and(|actual| actual == expected)
 }
 
+/// Fetch `checksums.toml` from the WAN depot and parse it into per-primal BLAKE3 hashes.
+/// Enables zero-git verification for WAN-fetched binaries.
+#[cfg(feature = "http")]
+async fn fetch_wan_checksums(arch: &str) -> std::collections::HashMap<String, String> {
+    let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
+    let url = format!("{base_url}/checksums.toml");
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+    else {
+        return std::collections::HashMap::new();
+    };
+
+    let Ok(resp) = client.get(&url).send().await else {
+        return std::collections::HashMap::new();
+    };
+
+    if !resp.status().is_success() {
+        return std::collections::HashMap::new();
+    }
+
+    let Ok(body) = resp.text().await else {
+        return std::collections::HashMap::new();
+    };
+
+    parse_checksums_toml(&body, arch)
+}
+
+#[cfg(not(feature = "http"))]
+async fn fetch_wan_checksums(_arch: &str) -> std::collections::HashMap<String, String> {
+    std::collections::HashMap::new()
+}
+
+/// Parse the arch-keyed `checksums.toml` format into a flat primal→blake3 map.
+fn parse_checksums_toml(content: &str, arch: &str) -> std::collections::HashMap<String, String> {
+    let Ok(table) = content.parse::<toml::Table>() else {
+        return std::collections::HashMap::new();
+    };
+    let Some(arch_table) = table.get(arch).and_then(toml::Value::as_table) else {
+        return std::collections::HashMap::new();
+    };
+    let mut result = std::collections::HashMap::new();
+    for (name, entry) in arch_table {
+        if let Some(blake3) = entry.get("blake3").and_then(toml::Value::as_str) {
+            result.insert(name.clone(), blake3.to_string());
+        }
+    }
+    result
+}
+
 fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String, String> {
     #[derive(Deserialize)]
-    struct ChecksumFile {
+    struct FlatChecksumFile {
         #[serde(default)]
         checksums: std::collections::HashMap<String, String>,
     }
@@ -326,10 +381,17 @@ fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String
 
     let alt_path = bin_dir.join("checksums.toml");
 
+    let depot_root_path = bin_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|d| d.join("checksums.toml"));
+
     let path = if checksums_path.exists() {
         checksums_path
     } else if alt_path.exists() {
         alt_path
+    } else if depot_root_path.as_ref().is_some_and(|p| p.exists()) {
+        depot_root_path.unwrap_or_default()
     } else {
         return std::collections::HashMap::new();
     };
@@ -338,7 +400,13 @@ fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String
         return std::collections::HashMap::new();
     };
 
-    toml::from_str::<ChecksumFile>(&contents)
+    let arch = detect_target_triple();
+    let arch_result = parse_checksums_toml(&contents, &arch);
+    if !arch_result.is_empty() {
+        return arch_result;
+    }
+
+    toml::from_str::<FlatChecksumFile>(&contents)
         .map(|f| f.checksums)
         .unwrap_or_default()
 }

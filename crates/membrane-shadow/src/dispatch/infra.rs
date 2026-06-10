@@ -289,18 +289,45 @@ pub(super) async fn dispatch_gate(
         "gate.health" => gate_health(config).await,
         "gate.bootstrap" => {
             let gate_name = cli::require_arg(args, 0, "gate-name")?;
-            let result = gate::bootstrap(config, gate_name).await?;
+            let dry_run = args.contains(&"--dry-run");
+            let result = gate::bootstrap(config, gate_name, dry_run).await?;
             let msg = format!(
-                "bootstrap {}: {}/{} phases passed{}",
+                "bootstrap {}: {}/{} phases passed{}{}",
                 result.gate_name,
                 result.phases.iter().filter(|p| p.ok).count(),
                 result.phases.len(),
                 if result.all_pass { " — ENROLLED" } else { "" },
+                if dry_run { " (dry-run)" } else { "" },
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
+        "gate.status" => dispatch_gate_status().await,
         _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
     }
+}
+
+async fn dispatch_gate_status() -> crate::Result<ShadowOutcome> {
+    let result = gate::status().await?;
+    let probe_lines: Vec<String> = result
+        .probes
+        .iter()
+        .map(|p| {
+            let tag = if p.ok { "OK" } else { "DEGRADED" };
+            format!("  [{tag}] {}: {}", p.name, p.detail)
+        })
+        .collect();
+    let health = if result.healthy {
+        "HEALTHY"
+    } else {
+        "DEGRADED"
+    };
+    let msg = format!(
+        "{} ({}) — {health}\n{}",
+        result.gate_name,
+        result.arch,
+        probe_lines.join("\n"),
+    );
+    Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
 }
 
 async fn gate_health(config: &ShadowConfig) -> crate::Result<ShadowOutcome> {

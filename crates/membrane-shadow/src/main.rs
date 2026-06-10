@@ -37,7 +37,8 @@ Gate (biomeOS gate.*):
   gate.info                        VPS system info + service summary
   gate.pull                        Run cascade-pull on VPS
   gate.check                       Parity check on VPS workspace
-  gate.bootstrap <name>            One-command gate enrollment (fetch→verify→mesh→start→health)
+  gate.status                      Local gate health (depot, mesh, primals)
+  gate.bootstrap <name> [--dry-run]  One-command gate enrollment (fetch→verify→mesh→start→health)
 
 Temporal (waterFall temporal.*):
   temporal.check [repo_path...]    Temporal position matrix (local, all remotes)
