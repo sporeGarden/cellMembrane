@@ -326,6 +326,120 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
     ))
 }
 
+/// Switch a domain's TLS from Caddy-managed ACME to external cert files.
+///
+/// Rewrites the `tls` directive in the domain's Caddyfile block from implicit
+/// (Caddy manages ACME) to explicit file paths:
+///   `tls /etc/membrane/tls/{domain}/fullchain.pem /etc/membrane/tls/{domain}/privkey.pem`
+///
+/// `BearDog` (or any external provisioner) writes certs to that path.
+/// Caddy reads them on reload — no ACME interaction required.
+pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String> {
+    let cert_dir = cellmembrane_types::TlsProvider::default_cert_dir();
+    let fullchain = format!("{cert_dir}/{domain}/fullchain.pem");
+    let privkey = format!("{cert_dir}/{domain}/privkey.pem");
+
+    let check_cmd = format!(
+        "grep -A5 '^{domain}' {CADDYFILE} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
+    );
+    let (check_out, _) = caddy_exec(config, &check_cmd).await?;
+
+    if check_out.trim() == "EXTERNAL" {
+        return Ok(format!("{domain}: already using external TLS certs"));
+    }
+
+    let setup_cmd = format!(
+        "mkdir -p {cert_dir}/{domain} && \
+         test -f {fullchain} && test -f {privkey} || \
+         {{ echo 'MISSING_CERTS'; exit 0; }}"
+    );
+    let (setup_out, _) = caddy_exec(config, &setup_cmd).await?;
+
+    if setup_out.trim() == "MISSING_CERTS" {
+        return Err(ShadowError::Ssh(format!(
+            "cert files not found at {cert_dir}/{domain}/. \
+             BearDog must provision fullchain.pem + privkey.pem before cutover."
+        )));
+    }
+
+    let sed_cmd = format!(
+        "sed -i '/^{domain}/,/^}}/ {{ \
+            /^[[:space:]]*tls[[:space:]]/d; \
+            /^{domain}/a\\    tls {fullchain} {privkey} \
+         }}' {CADDYFILE}"
+    );
+    let (out, code) = caddy_exec(config, &sed_cmd).await?;
+    if code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "failed to rewrite TLS directive: {}",
+            out.trim()
+        )));
+    }
+
+    let validate_reload = format!(
+        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
+         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+    );
+    let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
+
+    if reload_code != 0 {
+        let rollback = format!(
+            "sed -i '/^{domain}/,/^}}/ {{ /tls \\//d; }}' {CADDYFILE}; \
+             {CADDY_BIN} reload --config {CADDYFILE} --force 2>/dev/null"
+        );
+        let _ = caddy_exec(config, &rollback).await;
+        return Err(ShadowError::Ssh(format!(
+            "Caddyfile invalid after TLS cutover (rolled back): {}",
+            reload_out.trim()
+        )));
+    }
+
+    Ok(format!(
+        "{domain}: switched to external TLS — {fullchain} + {privkey}"
+    ))
+}
+
+/// Revert a domain from external cert files back to Caddy-managed ACME.
+///
+/// Removes the explicit `tls /path/...` directive, letting Caddy resume
+/// automatic certificate management.
+pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<String> {
+    let check_cmd = format!(
+        "grep -A5 '^{domain}' {CADDYFILE} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
+    );
+    let (check_out, _) = caddy_exec(config, &check_cmd).await?;
+
+    if check_out.trim() == "ACME" {
+        return Ok(format!("{domain}: already using Caddy ACME"));
+    }
+
+    let sed_cmd = format!(
+        "sed -i '/^{domain}/,/^}}/ {{ /^[[:space:]]*tls \\//d; }}' {CADDYFILE}"
+    );
+    let (out, code) = caddy_exec(config, &sed_cmd).await?;
+    if code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "failed to remove external TLS directive: {}",
+            out.trim()
+        )));
+    }
+
+    let validate_reload = format!(
+        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
+         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+    );
+    let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
+
+    if reload_code != 0 {
+        return Err(ShadowError::Ssh(format!(
+            "Caddyfile validation/reload failed after revert: {}",
+            reload_out.trim()
+        )));
+    }
+
+    Ok(format!("{domain}: reverted to Caddy-managed ACME"))
+}
+
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
     let cmd = format!(
@@ -385,6 +499,24 @@ pub async fn dispatch(
         }
         "caddy.depot.checksums" => {
             let msg = depot_checksums_provision(config).await?;
+            Ok(crate::ShadowOutcome::ok(msg))
+        }
+        "caddy.tls.external" => {
+            let domain = args.first().ok_or_else(|| {
+                ShadowError::Parse(
+                    "domain required: membrane caddy.tls.external <domain>".into(),
+                )
+            })?;
+            let msg = tls_external(config, domain).await?;
+            Ok(crate::ShadowOutcome::ok(msg))
+        }
+        "caddy.tls.revert" => {
+            let domain = args.first().ok_or_else(|| {
+                ShadowError::Parse(
+                    "domain required: membrane caddy.tls.revert <domain>".into(),
+                )
+            })?;
+            let msg = tls_revert_acme(config, domain).await?;
             Ok(crate::ShadowOutcome::ok(msg))
         }
         _ => Ok(crate::ShadowOutcome::fail(format!(

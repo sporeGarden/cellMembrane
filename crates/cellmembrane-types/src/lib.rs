@@ -45,7 +45,7 @@ pub mod service;
 pub mod transport;
 pub mod validation;
 
-pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TrustLevel};
+pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, TrustLevel};
 pub use composition::{CompositionSpec, MembraneComposition};
 pub use config::{DeployPaths, MembraneConfig, ShadowMode};
 pub use credentials::{CredentialFile, CredentialModel, credential_files_for};

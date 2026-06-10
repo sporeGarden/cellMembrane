@@ -132,6 +132,44 @@ impl fmt::Display for CryptoLayer {
     }
 }
 
+/// Who provisions TLS certificates for the Surface channel.
+///
+/// Determines whether Caddy uses its built-in ACME client or reads
+/// externally-provisioned certificates from disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TlsProvider {
+    /// Caddy's built-in ACME client (Let's Encrypt / `ZeroSSL`).
+    #[default]
+    CaddyAcme,
+    /// `BearDog`-managed certificates written to `{cert_dir}/{domain}/`.
+    /// Caddy reads `fullchain.pem` + `privkey.pem` from that path.
+    BearDog,
+}
+
+impl fmt::Display for TlsProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CaddyAcme => write!(f, "caddy_acme"),
+            Self::BearDog => write!(f, "beardog"),
+        }
+    }
+}
+
+impl TlsProvider {
+    /// Default directory where externally-provisioned certs are stored.
+    #[must_use]
+    pub const fn default_cert_dir() -> &'static str {
+        "/etc/membrane/tls"
+    }
+
+    /// Whether this provider requires Caddy to manage its own ACME.
+    #[must_use]
+    pub const fn is_self_managed(&self) -> bool {
+        matches!(self, Self::CaddyAcme)
+    }
+}
+
 /// Configuration for a single membrane channel, as specified in `membrane.toml`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChannelConfig {
@@ -159,6 +197,10 @@ pub struct ChannelConfig {
     #[serde(default)]
     pub acme_email: Option<String>,
 
+    /// TLS certificate provider (Surface channel only).
+    #[serde(default)]
+    pub tls_provider: Option<TlsProvider>,
+
     /// Forward-compatible extension fields.
     #[serde(flatten)]
     pub extra: std::collections::BTreeMap<String, toml::Value>,
@@ -173,6 +215,7 @@ impl Default for ChannelConfig {
             dnssec: None,
             tls_domain: None,
             acme_email: None,
+            tls_provider: None,
             extra: std::collections::BTreeMap::new(),
         }
     }

@@ -100,9 +100,12 @@ Caddy (outer membrane TLS / reverse proxy):
   caddy.status                     Service health and vhost count
   caddy.vhosts                     List configured vhosts
   caddy.tls.check <domain>         TLS certificate status
+  caddy.tls.external <domain>      Switch domain to BearDog-managed certs (external files)
+  caddy.tls.revert <domain>        Revert domain to Caddy-managed ACME
   caddy.reload                     Graceful reload
   caddy.validate                   Syntax check without apply
   caddy.depot.provision            Provision /depot/ file_server route (WAN binary distribution)
+  caddy.depot.checksums            Serve checksums.toml from WAN endpoint
   caddy.acme.log [N]              Recent ACME/TLS certificate logs
 
 Forgejo:
