@@ -7,7 +7,7 @@ use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use super::{detect_target_triple, nucleus_primals, resolve_path};
+use super::{detect_target_triple, nucleus_primals};
 
 /// Parsed CLI arguments for `plasmid.refresh`.
 pub struct RefreshArgs {
@@ -187,10 +187,21 @@ async fn refresh_one(
         let _ = crate::ssh::exec_raw(config, &restart_cmd).await;
     }
 
+    let size_kb = std::fs::metadata(&local_path).map_or(0, |m| m.len() / 1024);
+    let actual_hash = super::compute_blake3_file(Path::new(&local_path));
+    let hash_short = &actual_hash[..16.min(actual_hash.len())];
+
+    let divergence_note = check_checksum_coherence(primal, &actual_hash);
+
+    let detail = match divergence_note {
+        Some(note) => format!("→ {remote_final} ({size_kb}KB blake3={hash_short}) ⚠ {note}"),
+        None => format!("→ {remote_final} ({size_kb}KB blake3={hash_short})"),
+    };
+
     RefreshResult {
         binary: primal.into(),
         status: RefreshStatus::Pushed,
-        detail: format!("→ {remote_final}"),
+        detail,
     }
 }
 
@@ -218,13 +229,50 @@ fn format_refresh_outcome(results: &[RefreshResult]) -> ShadowOutcome {
 }
 
 /// Resolve the directory containing local pre-built binaries.
+///
+/// Priority: CLI override → `PLASMIDBIN_STAGING` env → depot primals dir.
+/// Falls back to the depot's `primals/{arch}/` directory so that
+/// `plasmid.harvest` → `plasmid.refresh` always uses the same binary.
 fn resolve_refresh_source(override_dir: Option<&str>) -> PathBuf {
-    resolve_path(override_dir, "PLASMIDBIN_STAGING", || {
-        let arch = detect_target_triple();
-        std::env::temp_dir()
-            .join("primalspring-deploy/primals")
-            .join(arch)
-    })
+    if let Some(dir) = override_dir {
+        return PathBuf::from(dir);
+    }
+    if let Ok(staging) = std::env::var("PLASMIDBIN_STAGING") {
+        return PathBuf::from(staging);
+    }
+    let arch = detect_target_triple();
+    if let Ok(depot) = super::depot::resolve_depot(None) {
+        let depot_primals = depot.join("primals").join(&arch);
+        if depot_primals.is_dir() {
+            return depot_primals;
+        }
+    }
+    std::env::temp_dir()
+        .join("primalspring-deploy/primals")
+        .join(arch)
+}
+
+/// Check whether the binary hash matches what `checksums.toml` records.
+/// Returns `Some(warning)` if a divergence is detected.
+fn check_checksum_coherence(primal: &str, actual_hash: &str) -> Option<String> {
+    let depot = super::depot::resolve_depot(None).ok()?;
+    let checksums_path = depot.join("checksums.toml");
+    let content = std::fs::read_to_string(&checksums_path).ok()?;
+    let table: toml::Table = content.parse().ok()?;
+
+    let arch = detect_target_triple();
+    let entry = table.get(&arch)?.as_table()?.get(primal)?.as_table()?;
+    let expected_hash = entry.get("blake3")?.as_str()?;
+
+    if expected_hash == actual_hash {
+        None
+    } else {
+        Some(format!(
+            "DIVERGENCE: checksums.toml expects {}, pushing {}",
+            &expected_hash[..16.min(expected_hash.len())],
+            &actual_hash[..16.min(actual_hash.len())]
+        ))
+    }
 }
 
 /// Find a local binary for a primal in the source directory.

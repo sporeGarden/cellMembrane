@@ -119,10 +119,15 @@ pub async fn pipeline(
         });
     }
 
+    let depot_source = depot::resolve_depot(None).ok().map(|d| {
+        let arch = detect_target_triple();
+        d.join("primals").join(arch).to_string_lossy().into_owned()
+    });
+
     let refresh_args = RefreshArgs {
         primal: primal.map(Into::into),
         dry_run: false,
-        source_dir: None,
+        source_dir: depot_source,
     };
 
     let refresh_outcome = refresh(config, &refresh_args).await?;
