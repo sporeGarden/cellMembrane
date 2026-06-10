@@ -370,8 +370,8 @@ fn verify_local_depot(arch: &str) -> (bool, String) {
     #[derive(serde::Deserialize)]
     struct ChecksumEntry {
         blake3: String,
-        #[allow(dead_code)]
-        size: u64,
+        #[serde(rename = "size")]
+        _size: u64,
     }
 
     let dest_root = resolve_plasmidbin_dir();
@@ -384,7 +384,10 @@ fn verify_local_depot(arch: &str) -> (bool, String) {
         if ws_path.exists() {
             ws_path
         } else {
-            return (false, "checksums.toml not found in depot or workspace".into());
+            return (
+                false,
+                "checksums.toml not found in depot or workspace".into(),
+            );
         }
     } else {
         return (false, "checksums.toml not found".into());
@@ -457,8 +460,8 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
         );
     }
 
-    let vps_peer =
-        std::env::var("MEMBRANE_VPS_PEER").unwrap_or_else(|_| "157.230.3.183:7700".into());
+    let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
 
     let mesh_init = serde_json::json!({
         "jsonrpc": "2.0",
