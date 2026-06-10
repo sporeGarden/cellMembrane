@@ -8,7 +8,7 @@ use cellmembrane_types::composition::MembraneComposition;
 use cellmembrane_types::config::ShadowMode;
 use cellmembrane_types::envelope::{BraidPolicy, EnvelopeLayer, EnvelopeTopology};
 use cellmembrane_types::firewall::{FirewallProtocol, FirewallRule};
-use cellmembrane_types::identity::MembraneIdentity;
+use cellmembrane_types::identity::{GateMobility, MembraneIdentity};
 use cellmembrane_types::provider::{ProviderConfig, ProviderType, SubstrateProfile};
 use cellmembrane_types::service::{HealthCheckMethod, MembraneService, Protocol, TransportMode};
 use cellmembrane_types::validation::{Report, Severity};
@@ -63,6 +63,40 @@ fn identity_extra_fields_preserved() {
     )
     .unwrap();
     assert!(id.extra.contains_key("custom_field"));
+}
+
+#[test]
+fn identity_mobility_default_is_fixed() {
+    let id: MembraneIdentity = toml::from_str(
+        r#"
+        family_id = "eco"
+        "#,
+    )
+    .unwrap();
+    assert_eq!(id.mobility, GateMobility::Fixed);
+}
+
+#[test]
+fn identity_mobility_mobile_parse() {
+    let id: MembraneIdentity = toml::from_str(
+        r#"
+        family_id = "eco"
+        gate_id = "golgiAlpha"
+        mobility = "mobile"
+        "#,
+    )
+    .unwrap();
+    assert_eq!(id.mobility, GateMobility::Mobile);
+    assert!(id.mobility.needs_reconnect_hook());
+    assert!(!id.mobility.is_mesh_anchor());
+}
+
+#[test]
+fn identity_mobility_fixed_attributes() {
+    assert!(!GateMobility::Fixed.needs_reconnect_hook());
+    assert!(GateMobility::Fixed.is_mesh_anchor());
+    assert_eq!(GateMobility::Fixed.to_string(), "fixed");
+    assert_eq!(GateMobility::Mobile.to_string(), "mobile");
 }
 
 // === channels.rs (was 37% coverage) ===

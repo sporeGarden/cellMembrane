@@ -39,10 +39,12 @@ pub struct BootstrapResult {
 ///
 /// Phases: detect arch → fetch depot → verify checksums → configure mesh → start NUCLEUS → health sweep.
 /// With `dry_run = true`, reports what would happen without executing side effects.
+/// `mobility` controls whether this gate writes a reconnect hook for network changes.
 pub async fn bootstrap(
     config: &ShadowConfig,
     gate_name: &str,
     dry_run: bool,
+    mobility: cellmembrane_types::GateMobility,
 ) -> Result<BootstrapResult> {
     let arch = crate::plasmid::detect_target_triple();
     let mut phases: Vec<BootstrapPhase> = Vec::new();
@@ -50,7 +52,7 @@ pub async fn bootstrap(
     phases.push(BootstrapPhase {
         name: "arch.detect".into(),
         ok: true,
-        detail: arch.clone(),
+        detail: format!("{arch} ({mobility})"),
     });
 
     phases.push(bootstrap_fetch_phase(config, dry_run).await);
@@ -70,6 +72,10 @@ pub async fn bootstrap(
     phases.push(bootstrap_nucleus_phase(&arch, dry_run));
     phases.push(bootstrap_health_phase(&arch, dry_run).await);
 
+    if mobility.needs_reconnect_hook() {
+        phases.push(bootstrap_mobility_phase(gate_name, dry_run));
+    }
+
     let all_pass = phases.iter().all(|p| p.ok);
 
     Ok(BootstrapResult {
@@ -78,6 +84,38 @@ pub async fn bootstrap(
         phases,
         all_pass,
     })
+}
+
+fn bootstrap_mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
+    if dry_run {
+        return BootstrapPhase {
+            name: "mobility.configure".into(),
+            ok: true,
+            detail: "dry-run: would write gate-name + install NM dispatcher hook".into(),
+        };
+    }
+
+    let gate_name_dir = std::path::Path::new("/etc/membrane");
+    let gate_name_path = gate_name_dir.join("gate-name");
+
+    let ok = if gate_name_dir.exists() || std::fs::create_dir_all(gate_name_dir).is_ok() {
+        std::fs::write(&gate_name_path, gate_name).is_ok()
+    } else {
+        false
+    };
+
+    BootstrapPhase {
+        name: "mobility.configure".into(),
+        ok,
+        detail: if ok {
+            format!("gate-name written to {}", gate_name_path.display())
+        } else {
+            format!(
+                "failed to write {} (run with sudo or create /etc/membrane/ manually)",
+                gate_name_path.display()
+            )
+        },
+    }
 }
 
 async fn bootstrap_fetch_phase(config: &ShadowConfig, dry_run: bool) -> BootstrapPhase {

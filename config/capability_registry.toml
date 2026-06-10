@@ -31,6 +31,7 @@ gate_health = { protocol = "ssh", description = "13-primal health.liveness sweep
 gate_service = { protocol = "ssh", description = "Service lifecycle (status/restart/logs) via systemctl" }
 gate_pull = { protocol = "ssh", description = "Pull ecosystem repos on VPS" }
 gate_bootstrap = { protocol = "cli", description = "One-command gate enrollment (fetch, verify, mesh, start, health)" }
+gate_bootstrap_mobile = { protocol = "cli", description = "Gate bootstrap with --mobile flag (writes gate-name, enables NM reconnect hook)" }
 gate_status = { protocol = "cli", description = "Local gate health probe (depot, mesh, primals, freshness)" }
 
 # K-Derm relay chain

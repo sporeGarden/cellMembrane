@@ -38,7 +38,9 @@ Gate (biomeOS gate.*):
   gate.pull                        Run cascade-pull on VPS
   gate.check                       Parity check on VPS workspace
   gate.status                      Local gate health (depot, mesh, primals)
-  gate.bootstrap <name> [--dry-run]  One-command gate enrollment (fetch→verify→mesh→start→health)
+  gate.bootstrap <name> [--dry-run] [--mobile]
+                                   One-command gate enrollment (fetch→verify→mesh→start→health)
+                                   --mobile: write gate-name for NM reconnect hook
 
 Temporal (waterFall temporal.*):
   temporal.check [repo_path...]    Temporal position matrix (local, all remotes)

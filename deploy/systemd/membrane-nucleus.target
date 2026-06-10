@@ -1,0 +1,13 @@
+# membrane-nucleus.target — Aggregate target for all NUCLEUS primals
+# Enables/disables the full NUCLEUS composition as a group.
+#
+# Usage: sudo systemctl enable --now membrane-nucleus.target
+# All membrane-nucleus@*.service units with WantedBy=membrane-nucleus.target
+# will start together.
+[Unit]
+Description=NUCLEUS Full Composition — 13 primals
+After=songbird-federation.service
+Wants=songbird-federation.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,66 @@
+#!/bin/bash
+# 99-mesh-reconnect — NetworkManager dispatcher hook for mesh auto-reconnect
+#
+# When a network interface comes up, re-initialize the songbird mesh connection
+# to the VPS relay and any known LAN peers. This enables the "plug in and mesh"
+# behavior for mobile golgi NUCs.
+#
+# Install:
+#   sudo cp 99-mesh-reconnect /etc/NetworkManager/dispatcher.d/
+#   sudo chmod 755 /etc/NetworkManager/dispatcher.d/99-mesh-reconnect
+#
+# Triggered by NetworkManager on interface state changes.
+# Only acts on 'up' and 'connectivity-change' events.
+
+INTERFACE="$1"
+ACTION="$2"
+
+case "$ACTION" in
+    up|connectivity-change)
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+
+LOG_TAG="mesh-reconnect"
+log() { logger -t "$LOG_TAG" "$@" 2>/dev/null; }
+
+SONGBIRD_SOCK=""
+if [ -S "/run/membrane/songbird.sock" ]; then
+    SONGBIRD_SOCK="/run/membrane/songbird.sock"
+elif [ -S "$XDG_RUNTIME_DIR/biomeos/songbird.sock" ]; then
+    SONGBIRD_SOCK="$XDG_RUNTIME_DIR/biomeos/songbird.sock"
+elif [ -S "/run/user/$(id -u)/biomeos/songbird.sock" ]; then
+    SONGBIRD_SOCK="/run/user/$(id -u)/biomeos/songbird.sock"
+fi
+
+if [ -z "$SONGBIRD_SOCK" ]; then
+    log "songbird socket not found — skipping mesh reconnect"
+    exit 0
+fi
+
+VPS_PEER="${MEMBRANE_VPS_MESH_PEER:-157.230.3.183:7700}"
+
+GATE_NAME=""
+if [ -f /etc/membrane/gate-name ]; then
+    GATE_NAME=$(cat /etc/membrane/gate-name)
+elif [ -f "$HOME/.config/membrane/gate-name" ]; then
+    GATE_NAME=$(cat "$HOME/.config/membrane/gate-name")
+else
+    GATE_NAME=$(hostname -s)
+fi
+
+log "Network $ACTION on $INTERFACE — triggering mesh reconnect as $GATE_NAME → $VPS_PEER"
+
+MESH_INIT="{\"jsonrpc\":\"2.0\",\"method\":\"mesh.init\",\"params\":{\"node_id\":\"$GATE_NAME\",\"peers\":[\"$VPS_PEER\"]},\"id\":1}"
+
+RESPONSE=$(echo "$MESH_INIT" | timeout 5 socat - "UNIX-CONNECT:$SONGBIRD_SOCK" 2>/dev/null)
+
+if echo "$RESPONSE" | grep -q '"initialized"'; then
+    log "Mesh reconnect succeeded: $RESPONSE"
+else
+    log "Mesh reconnect attempt (may already be connected): $RESPONSE"
+fi
+
+exit 0

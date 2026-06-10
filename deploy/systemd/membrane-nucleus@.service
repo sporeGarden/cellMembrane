@@ -1,0 +1,31 @@
+# membrane-nucleus@.service — Template unit for NUCLEUS primal processes
+# Instance name (%i) is the primal binary name (e.g. beardog, biomeos).
+#
+# Usage: sudo systemctl enable --now membrane-nucleus@beardog
+#        sudo systemctl enable --now membrane-nucleus@biomeos
+#        (repeat for all 13 primals, or use membrane-nucleus-all.target)
+#
+# For mobile golgi NUCs: identical to VPS primal lifecycle but user-controllable.
+[Unit]
+Description=NUCLEUS Primal — %i
+After=songbird-federation.service
+Wants=songbird-federation.service
+ConditionPathExists=/opt/membrane/%i
+
+[Service]
+Type=simple
+ExecStart=/opt/membrane/%i server --socket /run/membrane/%i.sock
+Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
+Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
+Environment=BIOMEOS_SOCKET_DIR=/run/membrane
+Environment=HOME=/root
+Restart=always
+RestartSec=3
+RuntimeDirectory=membrane
+RuntimeDirectoryPreserve=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=membrane-%i
+
+[Install]
+WantedBy=membrane-nucleus.target

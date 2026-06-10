@@ -1,0 +1,31 @@
+# songbird-federation.service — Mesh federation with auto-reconnect
+# For mobile golgi NUCs and fixed gates alike.
+# Songbird starts with federation port, loads persisted peers, auto-meshes.
+#
+# Install: sudo cp songbird-federation.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now songbird-federation
+[Unit]
+Description=Songbird Federation — mesh relay with peer persistence
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/membrane/songbird
+
+[Service]
+Type=simple
+ExecStart=/opt/membrane/songbird server \
+    --socket /run/membrane/songbird.sock \
+    --federation-port 7700
+Environment=SONGBIRD_PRODUCTION_BIND_ADDRESS=0.0.0.0
+Environment=SONGBIRD_DATA_DIR=/var/lib/membrane/songbird
+Environment=HOME=/root
+Restart=always
+RestartSec=5
+RuntimeDirectory=membrane
+RuntimeDirectoryPreserve=yes
+StateDirectory=membrane/songbird
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=songbird-federation
+
+[Install]
+WantedBy=multi-user.target

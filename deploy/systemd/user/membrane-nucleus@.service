@@ -1,0 +1,25 @@
+# membrane-nucleus@.service (user) — NUCLEUS primal for desktop gates
+# Instance name (%i) is the primal binary name.
+# Runs under the user session, sockets in $XDG_RUNTIME_DIR/biomeos/.
+#
+# Install: cp membrane-nucleus@.service ~/.config/systemd/user/
+#          systemctl --user enable --now membrane-nucleus@beardog
+[Unit]
+Description=NUCLEUS Primal — %i (user session)
+After=songbird-federation.service
+Wants=songbird-federation.service
+
+[Service]
+Type=simple
+ExecStart=%h/Development/ecoPrimals/infra/plasmidBin/primals/x86_64-unknown-linux-musl/%i server \
+    --socket %t/biomeos/%i.sock
+Environment=ECOPRIMALS_ROOT=%h/Development/ecoPrimals
+Environment=BIOMEOS_SOCKET_DIR=%t/biomeos
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=membrane-%i
+
+[Install]
+WantedBy=default.target

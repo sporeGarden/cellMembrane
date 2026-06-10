@@ -1,0 +1,24 @@
+# songbird-federation.service (user) — Mesh federation for desktop gates
+# Runs under the user session, no root required.
+#
+# Install: cp songbird-federation.service ~/.config/systemd/user/
+#          systemctl --user daemon-reload && systemctl --user enable --now songbird-federation
+[Unit]
+Description=Songbird Federation — mesh relay (user session)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/Development/ecoPrimals/infra/plasmidBin/primals/x86_64-unknown-linux-musl/songbird server \
+    --socket %t/biomeos/songbird.sock \
+    --federation-port 7700
+Environment=SONGBIRD_PRODUCTION_BIND_ADDRESS=0.0.0.0
+Environment=SONGBIRD_DATA_DIR=%h/.local/share/songbird
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=songbird-federation
+
+[Install]
+WantedBy=default.target

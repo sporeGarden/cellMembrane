@@ -290,14 +290,25 @@ pub(super) async fn dispatch_gate(
         "gate.bootstrap" => {
             let gate_name = cli::require_arg(args, 0, "gate-name")?;
             let dry_run = args.contains(&"--dry-run");
-            let result = gate::bootstrap(config, gate_name, dry_run).await?;
+            let mobility = if args.contains(&"--mobile") {
+                cellmembrane_types::GateMobility::Mobile
+            } else {
+                cellmembrane_types::GateMobility::Fixed
+            };
+            let result =
+                gate::bootstrap(config, gate_name, dry_run, mobility).await?;
             let msg = format!(
-                "bootstrap {}: {}/{} phases passed{}{}",
+                "bootstrap {}: {}/{} phases passed{}{}{}",
                 result.gate_name,
                 result.phases.iter().filter(|p| p.ok).count(),
                 result.phases.len(),
                 if result.all_pass { " — ENROLLED" } else { "" },
                 if dry_run { " (dry-run)" } else { "" },
+                if mobility == cellmembrane_types::GateMobility::Mobile {
+                    " [mobile]"
+                } else {
+                    ""
+                },
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }

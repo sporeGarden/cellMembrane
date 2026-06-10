@@ -3,10 +3,49 @@
 //! Membrane identity types.
 //!
 //! A membrane's identity is its persistent state across redeploys:
-//! family ID, gate ID, domain, and host address.
+//! family ID, gate ID, mobility class, domain, and host address.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
+
+/// Whether a gate is physically fixed or mobile.
+///
+/// Mobile gates (NUCs, laptops) auto-mesh via VPS relay when on WAN and
+/// discover LAN peers when plugged in locally. Fixed gates have stable
+/// IPs and act as persistent mesh anchors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GateMobility {
+    /// Permanently deployed at a fixed location with stable network.
+    #[default]
+    Fixed,
+    /// Physically portable — meshes via VPS relay, LAN-peers when colocated.
+    Mobile,
+}
+
+impl GateMobility {
+    /// Whether this gate needs auto-reconnect on network change.
+    #[must_use]
+    pub const fn needs_reconnect_hook(&self) -> bool {
+        matches!(self, Self::Mobile)
+    }
+
+    /// Whether this gate should be treated as a persistent mesh anchor.
+    #[must_use]
+    pub const fn is_mesh_anchor(&self) -> bool {
+        matches!(self, Self::Fixed)
+    }
+}
+
+impl fmt::Display for GateMobility {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fixed => write!(f, "fixed"),
+            Self::Mobile => write!(f, "mobile"),
+        }
+    }
+}
 
 /// Persistent membrane identity from `[membrane.identity]` in `membrane.toml`.
 ///
@@ -22,6 +61,10 @@ pub struct MembraneIdentity {
     /// Auto-generated from hostname if not specified.
     #[serde(default)]
     pub gate_id: Option<String>,
+
+    /// Mobility class: fixed (stable location) or mobile (NUC/laptop).
+    #[serde(default)]
+    pub mobility: GateMobility,
 
     /// Forward-compatible extension fields.
     #[serde(flatten)]
