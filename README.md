@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **current** (Wave 105, 2026-06-09) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107, 2026-06-10) |
 
 ---
 
@@ -55,30 +55,26 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 161 tests + 5 doc-tests — pedantic clippy clean
+cargo test                  # 351+ tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 105 (WAN Depot + aarch64 Sweep + Zero P1):**
-WAN binary distribution SHIPPED — `plasmid.fetch --source wan` fetches from
-`https://membrane.primals.eco/depot/` over HTTPS. `caddy.depot.provision` deploys
-the file_server route. aarch64 cross-compile sweep complete: 14/14 primals build
-cleanly for `aarch64-unknown-linux-musl`, zero C-dep violations ecosystem-wide.
-Cascade conflict auto-resolve eliminates manual intervention on regenerable metadata.
-`sha2`/`hmac` crates replace 200L hand-rolled crypto. `PostSyncPhase` enum replaces
-bool flags. 39 typed `ENV_*` constants, zero inline env var strings. All hardcoded
-`/tmp` paths replaced with `std::env::temp_dir()`. Harvest uses atomic rename
-(`.new` + `rename(2)`). Webhook primal list deduplicated to service registry.
-161 tests, zero clippy, zero `#[allow]`, zero `unsafe`, all files <800L.
+**Wave 107 (Deterministic Deployment + Stadial-Ready):**
+Zero P1 blockers. Zero development debt. 4-gate mesh collective LIVE.
+`gate.bootstrap` — one-command gate enrollment (6 phases: fetch→verify→mesh→start→health).
+`gate.status` — local gate health probe (depot integrity, mesh, primals, freshness).
+`--dry-run` for bootstrap. Source divergence fix — `plasmid.refresh` reads from depot
+not stale staging. Checksum coherence — pre-push DIVERGENCE warning. WAN checksums —
+`plasmid.fetch --source wan` auto-downloads `checksums.toml` for zero-git verification.
+Atomic publish — harvest auto-commits + pushes checksums.toml + provenance.toml.
+`gate.rs` refactored to `gate/mod.rs` + `gate/local.rs`. 351 tests, zero clippy,
+zero `#[allow]`, zero `unsafe`, zero production `unwrap()`, all files <800L.
 
-**Wave 82c–104 (NUCLEUS Parity → Deep Debt):** plasmidBin ownership transferred.
-`plasmid.refresh` (atomic binary push), Cloudflare module evolved, 5-domain TLS,
-Neural Bridge dispatch, legacy cascade removed, all `too_many_lines` eliminated,
-K-Derm relay in Rust, external tools (socat/curl/b3sum) replaced with native Rust.
-Cascade evolution (tree-parity, freshness publishing, graduated merge strategies).
-NUCLEUS 13/13 ALIVE. Sovereignty graduation (S4 auth enforced). All 226→161 tests
-(consolidated — coverage maintained, redundant tests removed).
+**Wave 105–106 (WAN Depot + Cross-Topology Validation):**
+WAN depot SHIPPED. aarch64 14/14 built. 3-gate → 4-gate mesh collective. `gate.bootstrap`
+validated on strandGate + ironGate. Cascade auto-fetch. NUCLEUS supervision (biomeOS v4.17).
+TCP-only fallback shipped. Deterministic deployment standard codified (6 invariants).
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
@@ -97,12 +93,15 @@ validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
 Typed Rust CLI for sovereign VPS control — replaces all bash sync/relay scripts:
 
 ```bash
+membrane gate.status                      # Local gate health (depot, mesh, primals, freshness)
+membrane gate.bootstrap <name> [--dry-run]  # One-command gate enrollment (6 phases)
 membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
 membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VPS
-membrane plasmid.fetch --source wan       # WAN HTTPS fetch (no SSH required)
-membrane plasmid.harvest --target aarch64-unknown-linux-musl  # Cross-compile
-membrane plasmid.refresh                  # Push local binaries to VPS (atomic replace)
+membrane plasmid.fetch --source wan       # WAN HTTPS fetch + BLAKE3 verification
+membrane plasmid.harvest                  # Build + checksum + auto-publish to git
+membrane plasmid.refresh                  # Push depot binaries to VPS (atomic replace)
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
+membrane caddy.depot.checksums            # Serve checksums.toml from WAN endpoint
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
 ```
@@ -112,24 +111,26 @@ membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse 
 ## Quick Start
 
 ```bash
-# Check cellMembrane status (all channels + services)
+# Bootstrap a new gate (one command — fetch, verify, mesh, start, health)
+membrane gate.bootstrap ironGate
+
+# Check local gate health (no SSH required)
+membrane gate.status
+
+# VPS health + service summary
 membrane gate.health
 
-# Deploy / refresh primal binaries on VPS
-membrane plasmid.refresh --primal beardog
-membrane plasmid.refresh                    # All nucleus primals
-
-# Cascade sync (manifest-driven, Rust-native)
+# Cascade sync (manifest-driven, 22 repos)
 membrane temporal.cascade
 
+# Fetch all primals from WAN depot (BLAKE3 verified)
+membrane plasmid.fetch --source wan
+
+# Build + push + auto-publish checksums
+membrane plasmid.harvest && membrane plasmid.refresh
+
 # SSH to VPS
-ssh root@$VPS_IP
-
-# View Tower logs (BearDog → Songbird → SkunkBat)
-ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-relay -u skunkbat-membrane -f"
-
-# View Nest Atomic logs (provenance trio)
-ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loamspine-membrane -u sweetgrass-membrane -f"
+ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ```
 
 ---
@@ -166,6 +167,8 @@ ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loam
 | Evolution sprint (Wave 74+): zero #[allow], HardeningStep enum, fetch decomposed, mesh join (3rd gate) | DONE |
 | NUCLEUS full parity (Wave 82c): 13/13 ALIVE, Caddy 5-domain TLS, plasmidBin owned | DONE |
 | WAN depot + aarch64 sweep (Wave 105): WAN fetch HTTPS, 14/14 aarch64, sha2/hmac crates, zero P1 | DONE |
+| Cross-topology validation (Wave 106): gate.bootstrap, cascade auto-fetch, mesh persistence, 3-gate collective, deterministic deploy standard | DONE |
+| Post-stadial hardening (Wave 107): gate.status, --dry-run, WAN checksums, source divergence fix, atomic publish, checksum coherence | DONE |
 
 ---
 
@@ -176,7 +179,7 @@ ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loam
 | S1 TLS | Caddy + LE | Cloudflare (INACTIVE) | **OPERATIONAL** (13d clean, 7-day gate passed) | Graduated |
 | S2 NAT relay | Songbird TURN :3478 | cloudflared | **LIVE** | 7-day 100% reachable |
 | S3 Content | NestGate + petalTongue | GitHub Pages | **LIVE** (68ms TTFB) | 7-day TTFB parity |
-| S4 Auth | BearDog BTSP dual-auth | OAuth2/PAM | **7-day gate ending** | 7-day p95 < 50ms |
+| S4 Auth | BearDog BTSP dual-auth | OAuth2/PAM | **GRADUATED** | 7-day p95 < 50ms |
 
 ---
 
@@ -188,7 +191,7 @@ ssh root@$VPS_IP "journalctl -u nestgate-membrane -u rhizocrypt-membrane -u loam
 | 0.5 | Relay + RustDesk + multi-gate SSH | Completed May 14 |
 | 1 | Tower composition | Completed May 18 |
 | 1.5 | Nest Atomic + Channel 1 DNS + TLS + VPS Standard + Deep Debt | Completed (Wave 57) |
-| **2** | **NUCLEUS (13 primals) + biomeOS + WAN depot + aarch64 universal** | **Current** (Wave 105, 2026-06-09) |
+| **2** | **NUCLEUS (13 primals) + biomeOS + WAN depot + aarch64 + deterministic deployment** | **Stadial-ready** (Wave 107, 2026-06-10) |
 | 2.5 | Encrypted-at-rest (BearDog Vault) | Planned |
 | 3 | BingoCube zero-knowledge access | Future |
 | 3.5 | SoloKey hardware attestation | Future |
@@ -277,14 +280,19 @@ gardens/cellMembrane/
           impulse.rs          # impulse + potential sense dispatch
           infra.rs            # repo, mirror, service, gate, token
           data.rs             # manifest, identity, context, plasmid, relay
+        gate/                 # Gate operations (bootstrap, status, health)
+          mod.rs              # VPS-oriented: info, pull, check
+          local.rs            # Local-oriented: bootstrap (6-phase), status (4-probe)
         relay.rs              # K-Derm relay chain (SSH+cat, no rsync)
         impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)
         temporal.rs           # Manifest-driven temporal cascade + tree-parity
         freshness.rs          # Wave freshness publishing + binary drift detection
         plasmid/              # Primal binary lifecycle
           mod.rs              # Registry-derived primal list, target triple, shared utils
-          fetch.rs            # Fetch from Forgejo/GitHub releases + BLAKE3 verify
-          refresh.rs          # Atomic push to VPS via SCP + service restart
+          fetch.rs            # Fetch + WAN checksum verification + BLAKE3
+          harvest.rs          # Build + checksum + atomic publish to git
+          refresh.rs          # Atomic push to VPS + checksum coherence check
+        caddy.rs              # Caddy TLS + depot + checksums provisioning
         cloudflare.rs         # Cloudflare API v4 (DNS, cache, SSL, zones)
         forgejo.rs            # Forgejo REST API (native reqwest)
         bridge.rs             # Neural API bridge (UDS discovery)

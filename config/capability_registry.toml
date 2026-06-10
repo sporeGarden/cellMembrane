@@ -26,10 +26,12 @@ plasmid_trigger = { protocol = "ssh", description = "Remotely trigger VPS pipeli
 plasmid_fetch = { protocol = "cli", description = "Download primal binaries from release/VPS" }
 plasmid_status = { protocol = "cli", description = "Report depot freshness and upstream drift" }
 
-# VPS infrastructure management
+# Gate operations
 gate_health = { protocol = "ssh", description = "13-primal health.liveness sweep via UDS" }
 gate_service = { protocol = "ssh", description = "Service lifecycle (status/restart/logs) via systemctl" }
 gate_pull = { protocol = "ssh", description = "Pull ecosystem repos on VPS" }
+gate_bootstrap = { protocol = "cli", description = "One-command gate enrollment (fetch, verify, mesh, start, health)" }
+gate_status = { protocol = "cli", description = "Local gate health probe (depot, mesh, primals, freshness)" }
 
 # K-Derm relay chain
 relay_mediate = { protocol = "ssh", description = "Inner→outer membrane relay (Forgejo→GitHub sync)" }

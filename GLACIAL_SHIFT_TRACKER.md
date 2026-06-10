@@ -1,15 +1,18 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-09 (Wave 105)
-**Overall status:** ZERO P1 BLOCKERS — WAN depot LIVE, aarch64 14/14, mesh LIVE, cascade 38/38, S4 ending today
-**Wave 105 update:** WAN binary distribution deployed and validated end-to-end
-(`plasmid.fetch --source wan` over HTTPS from `membrane.primals.eco/depot/`). aarch64
-cross-compile sweep complete: 14/14 primals build cleanly for `aarch64-unknown-linux-musl`,
-zero C-dependency violations. Cascade conflict auto-resolve shipped. `sha2`/`hmac` crates
-replace hand-rolled crypto. All deep debt targets met: 161 tests, zero clippy (pedantic+nursery),
-zero `#[allow]`, zero `unsafe`, zero `todo!`/`unwrap()` in production, all files <800L.
-Harvest uses atomic rename (`.new` + `rename(2)`). WAN gates can bootstrap without SSH.
+**Last updated:** 2026-06-10 (Wave 107)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 4-gate mesh collective LIVE, deterministic deployment CODIFIED
+**Wave 107 update:** Post-stadial tooling evolution complete. `gate.status` (local health
+probe), `gate.bootstrap --dry-run`, source divergence fix, checksum coherence detection,
+WAN checksums (zero-git verification), atomic publish (harvest auto-commits checksums.toml).
+Zero development debt: 351 tests, zero clippy, zero `#[allow]`, zero `unsafe`, zero
+production `unwrap()`, all files <800L. Remaining items are purely operational (gate
+power-ons, aarch64 rebuilds).
+**Wave 106 update:** Cross-topology validation. gate.bootstrap SHIPPED + VALIDATED on
+strandGate + ironGate. Cascade auto-fetch. NUCLEUS supervision (biomeOS v4.17). 3-gate
+mesh collective (eastGate ↔ golgiBody ↔ ironGate). Deterministic deployment standard
+codified (6 invariants). TCP-only fallback shipped. Zero P1.
 **Wave 74 update:** ironGate **JOINED MESH** as 3rd plasmodium gate. BearDog + Songbird running locally
 with SONGBIRD_PEERS pointing to eastGate + strandGate. `discovery.peers` shows both peers,
 `mesh.health_check` all_healthy. `capability.call` cross-gate validated (Songbird fix `d6a6f714`

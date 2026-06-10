@@ -1,8 +1,14 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (ironGate team)
-**VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`, or `deploy_membrane.sh` resolves it.
-All `$VPS_IP` references below are the membrane relay host.
+**Last updated:** 2026-06-10 (Wave 107)
+**VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
+
+> **Note (Wave 107):** The `membrane` Rust CLI now replaces most `deploy_membrane.sh`
+> invocations. Prefer: `membrane gate.status` (health), `membrane gate.bootstrap`
+> (enrollment), `membrane plasmid.refresh` (binary push), `membrane temporal.cascade`
+> (sync). The `deploy_membrane.sh` commands below are preserved as reference for
+> legacy flows and are being absorbed into the Rust CLI.
 
 ---
 

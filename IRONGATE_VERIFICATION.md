@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 105 (WAN depot deployed, aarch64 14/14, 2026-06-09)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot LIVE
+**Last validated:** Wave 107 (deterministic deployment hardened, gate.status LIVE, 2026-06-10)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + checksums, 4-gate mesh
 
 ---
 
