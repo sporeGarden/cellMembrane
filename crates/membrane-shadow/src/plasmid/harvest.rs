@@ -418,14 +418,18 @@ async fn build_binary(
         }
     }
 
-    // NDK linker configuration for Android targets
+    // NDK linker + CC + AR configuration for Android targets
     if target.contains("android") {
         if let Some(linker) = resolve_ndk_linker() {
-            let linker_env = format!(
-                "CARGO_TARGET_{}_LINKER",
-                target.to_uppercase().replace('-', "_")
-            );
-            cmd.env(&linker_env, &linker);
+            let target_upper = target.to_uppercase().replace('-', "_");
+            cmd.env(format!("CARGO_TARGET_{target_upper}_LINKER"), &linker);
+
+            // cc-rs crate needs CC and AR to compile C dependencies
+            let cc_env = format!("CC_{}", target.replace('-', "_"));
+            let ar_env = format!("AR_{}", target.replace('-', "_"));
+            let bin_dir = linker.parent().unwrap_or_else(|| Path::new("."));
+            cmd.env(&cc_env, &linker);
+            cmd.env(&ar_env, bin_dir.join("llvm-ar"));
 
             if let Ok(ndk_home) = std::env::var(ENV_ANDROID_NDK_HOME) {
                 cmd.env("ANDROID_NDK_HOME", &ndk_home);
