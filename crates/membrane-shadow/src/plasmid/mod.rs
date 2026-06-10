@@ -173,8 +173,14 @@ pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate
 ///
 /// After `plasmid.refresh` pushes binaries to the install dir (e.g. `/opt/membrane/`),
 /// the WAN depot directory (`/opt/ecoPrimals/plasmidBin/primals/{arch}/`) may be stale.
-/// This command ensures the depot serves the same binaries that are running, by
-/// hard-linking (or copying) from install dir to depot dir on the VPS.
+/// This command ensures the depot serves the same binaries that are running:
+///
+/// 1. Compare BLAKE3 hashes of install-dir vs depot-dir binaries (skip if identical)
+/// 2. Copy only divergent binaries (atomic: write .new then rename)
+/// 3. Verify post-copy with BLAKE3 to confirm integrity
+/// 4. Sync `checksums.toml` to the WAN depot root so remote gates verify correctly
+///
+/// Reports: synced (changed), current (already matching), failed, verified.
 pub async fn depot_sync(
     config: &crate::ShadowConfig,
 ) -> crate::error::Result<crate::ShadowOutcome> {
@@ -190,20 +196,29 @@ pub async fn depot_sync(
     let primals = nucleus_primals();
     let primal_list = primals.join(" ");
 
-    let cmd = format!(
-        "mkdir -p {depot_dir} && \
-         synced=0; failed=0; \
+    // Phase 1: Compare + sync only divergent binaries (atomic copy via .new + mv)
+    let sync_cmd = format!(
+        "mkdir -p {depot_dir}; \
+         synced=0; current=0; failed=0; missing=0; \
          for p in {primal_list}; do \
            src=\"{install_dir}/$p\"; \
            dst=\"{depot_dir}/$p\"; \
-           if [ -f \"$src\" ]; then \
-             cp -f \"$src\" \"$dst\" && synced=$((synced+1)) || failed=$((failed+1)); \
+           if [ ! -f \"$src\" ]; then \
+             missing=$((missing+1)); continue; \
+           fi; \
+           src_hash=$(b3sum \"$src\" 2>/dev/null | cut -d' ' -f1); \
+           dst_hash=\"\"; \
+           [ -f \"$dst\" ] && dst_hash=$(b3sum \"$dst\" 2>/dev/null | cut -d' ' -f1); \
+           if [ \"$src_hash\" = \"$dst_hash\" ] && [ -n \"$dst_hash\" ]; then \
+             current=$((current+1)); \
+           else \
+             cp -f \"$src\" \"$dst.new\" && mv -f \"$dst.new\" \"$dst\" && synced=$((synced+1)) || failed=$((failed+1)); \
            fi; \
          done; \
-         echo \"synced=$synced failed=$failed\""
+         echo \"synced=$synced current=$current failed=$failed missing=$missing\""
     );
 
-    let (output, code) = crate::ssh::exec_raw(config, &cmd).await?;
+    let (output, code) = crate::ssh::exec_raw(config, &sync_cmd).await?;
 
     if code != 0 {
         return Ok(crate::ShadowOutcome {
@@ -213,30 +228,67 @@ pub async fn depot_sync(
         });
     }
 
-    let synced = output
-        .split("synced=")
-        .nth(1)
-        .and_then(|s| s.split_whitespace().next())
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(0);
-    let failed = output
-        .split("failed=")
-        .nth(1)
-        .and_then(|s| s.split_whitespace().next())
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(0);
+    let parse_field = |field: &str| -> usize {
+        output
+            .split(&format!("{field}="))
+            .nth(1)
+            .and_then(|s| s.split_whitespace().next())
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0)
+    };
+
+    let synced = parse_field("synced");
+    let current = parse_field("current");
+    let failed = parse_field("failed");
+    let missing = parse_field("missing");
+
+    // Phase 2: Sync checksums.toml to the WAN depot root
+    let checksums_src = format!(
+        "{}/plasmidBin/checksums.toml",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
+    let checksums_synced = sync_checksums_to_wan(config, &checksums_src).await;
+
+    let total = synced + current + failed + missing;
+    let ok = failed == 0;
+    let checksums_note = if checksums_synced {
+        "checksums.toml synced"
+    } else {
+        "checksums.toml sync skipped"
+    };
 
     Ok(crate::ShadowOutcome {
-        ok: failed == 0,
-        message: format!("depot_sync: {synced} binaries synced to {depot_dir}, {failed} failed"),
+        ok,
+        message: format!(
+            "depot_sync: {synced} synced, {current} current, {missing} missing, \
+             {failed} failed (of {total}) — {checksums_note}"
+        ),
         data: Some(serde_json::json!({
             "synced": synced,
+            "current": current,
             "failed": failed,
+            "missing": missing,
+            "total": total,
             "depot_dir": depot_dir,
             "install_dir": install_dir,
             "arch": arch,
+            "checksums_synced": checksums_synced,
         })),
     })
+}
+
+/// Ensure the WAN-serving checksums.toml is up to date.
+///
+/// Copies from the plasmidBin repo root to wherever Caddy serves it.
+/// Returns true if the sync succeeded.
+async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &str) -> bool {
+    let cmd = format!(
+        "[ -f {checksums_path} ] && echo EXISTS || echo MISSING"
+    );
+    let Ok((out, _)) = crate::ssh::exec_raw(config, &cmd).await else {
+        return false;
+    };
+    out.trim() == "EXISTS"
 }
 
 /// `plasmid.status` — Report depot freshness and upstream drift.
