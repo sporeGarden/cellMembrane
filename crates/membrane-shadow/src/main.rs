@@ -84,6 +84,7 @@ Plasmid (primal binary bootstrap):
   plasmid.pipeline [--primal NAME] [--now] [--dry-run]
                                    Zero-touch: harvest → refresh → alive (full cycle)
   plasmid.trigger                  Remotely trigger VPS pipeline via SSH (immediate kick)
+  plasmid.ndk.check                Check NDK toolchain for aarch64-linux-android cross-compile
   plasmid.depot_sync               Sync inner→outer membrane (BLAKE3 diff, atomic copy, checksums)
   plasmid.status                   Report depot freshness and upstream drift
   plasmid.staleness                Detect stale primals from provenance (local, no network)

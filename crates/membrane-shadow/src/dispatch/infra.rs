@@ -295,8 +295,7 @@ pub(super) async fn dispatch_gate(
             } else {
                 cellmembrane_types::GateMobility::Fixed
             };
-            let result =
-                gate::bootstrap(config, gate_name, dry_run, mobility).await?;
+            let result = gate::bootstrap(config, gate_name, dry_run, mobility).await?;
             let msg = format!(
                 "bootstrap {}: {}/{} phases passed{}{}{}",
                 result.gate_name,

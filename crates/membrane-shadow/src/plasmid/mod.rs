@@ -60,6 +60,49 @@ pub(crate) fn detect_target_triple() -> String {
     format!("{arch}-unknown-linux-musl")
 }
 
+/// Check NDK toolchain availability for Android cross-compilation.
+///
+/// Reports whether `ANDROID_NDK_HOME` is set, the linker exists, and
+/// the `aarch64-linux-android` Rust target is installed.
+#[must_use]
+pub fn ndk_check() -> crate::ShadowOutcome {
+    let ndk_home = std::env::var(harvest::ENV_ANDROID_NDK_HOME).ok();
+    let linker = harvest::resolve_ndk_linker();
+
+    let target_installed = std::process::Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains(harvest::ANDROID_TARGET));
+
+    let all_ok = ndk_home.is_some() && linker.is_some() && target_installed;
+
+    let linker_str = linker
+        .as_ref()
+        .map_or_else(|| "NOT FOUND".to_string(), |p| p.display().to_string());
+
+    let msg = format!(
+        "NDK check: {}\n  ANDROID_NDK_HOME: {}\n  linker: {linker_str}\n  rustup target: {}",
+        if all_ok { "READY" } else { "NOT READY" },
+        ndk_home.as_deref().unwrap_or("NOT SET"),
+        if target_installed {
+            "installed"
+        } else {
+            "MISSING (run: rustup target add aarch64-linux-android)"
+        },
+    );
+
+    crate::ShadowOutcome {
+        ok: all_ok,
+        message: msg,
+        data: Some(serde_json::json!({
+            "ndk_home": ndk_home,
+            "linker": linker.map(|p| p.display().to_string()),
+            "target_installed": target_installed,
+            "target": harvest::ANDROID_TARGET,
+        })),
+    }
+}
+
 /// Resolve a path with priority: explicit override → env var → computed default.
 pub(crate) fn resolve_path(
     explicit: Option<&str>,
@@ -282,9 +325,7 @@ pub async fn depot_sync(
 /// Copies from the plasmidBin repo root to wherever Caddy serves it.
 /// Returns true if the sync succeeded.
 async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &str) -> bool {
-    let cmd = format!(
-        "[ -f {checksums_path} ] && echo EXISTS || echo MISSING"
-    );
+    let cmd = format!("[ -f {checksums_path} ] && echo EXISTS || echo MISSING");
     let Ok((out, _)) = crate::ssh::exec_raw(config, &cmd).await else {
         return false;
     };

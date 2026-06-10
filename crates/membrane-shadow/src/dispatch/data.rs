@@ -209,6 +209,7 @@ pub(super) async fn dispatch_plasmid(
             let dry_run = args.contains(&"--dry-run");
             plasmid::pipeline(config, primal, dry_run).await
         }
+        "plasmid.ndk.check" => Ok(plasmid::ndk_check()),
         "plasmid.trigger" => plasmid::trigger(config).await,
         "plasmid.depot_sync" => plasmid::depot_sync(config).await,
         "plasmid.status" => plasmid::status().await,

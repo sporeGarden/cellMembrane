@@ -1,0 +1,30 @@
+# cellMembrane — Cargo build configuration
+#
+# NDK cross-compilation for grapheneGate (aarch64-linux-android).
+# Requires: ANDROID_NDK_HOME set to NDK root (e.g. /opt/android-ndk-r26d).
+#
+# Install target:
+#   rustup target add aarch64-linux-android
+#
+# Build:
+#   cargo build --release --target aarch64-linux-android -p membrane-shadow
+#   membrane plasmid.harvest --target aarch64-linux-android
+
+[target.aarch64-linux-android]
+# NDK clang linker — override via CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER env
+# if your NDK lives elsewhere or uses a different API level.
+#
+# Uncomment and adjust for your peptidoglycan installation:
+# linker = "/opt/android-ndk-r26d/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
+
+[target.x86_64-unknown-linux-musl]
+# Standard gate target — statically linked, no glibc dependency.
+# This is the default for all VPS/NUC deployments.
+
+[target.aarch64-unknown-linux-musl]
+# NUC/ARM gate target — statically linked for headless ARM deployments.
+
+[build]
+# Incremental compilation wastes disk in CI/harvest builds.
+# Override locally with CARGO_INCREMENTAL=1 for dev.
+incremental = false

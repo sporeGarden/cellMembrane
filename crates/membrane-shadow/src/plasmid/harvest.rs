@@ -291,7 +291,7 @@ async fn harvest_one(
         };
     }
 
-    strip_binary(&bin_path, primal).await;
+    strip_binary(&bin_path, primal, target).await;
 
     match stage_to_depot(primal, &bin_path, depot_dir, target) {
         Ok((size, blake3)) => {
@@ -361,6 +361,39 @@ async fn try_clone(url: &str, clone_dir: &Path) -> bool {
     result.is_ok_and(|o| o.status.success())
 }
 
+/// Android NDK target triple for native grapheneGate binaries.
+pub(super) const ANDROID_TARGET: &str = "aarch64-linux-android";
+
+/// Environment variable pointing to the Android NDK root.
+pub(super) const ENV_ANDROID_NDK_HOME: &str = "ANDROID_NDK_HOME";
+
+/// Resolve the NDK linker path for `aarch64-linux-android`.
+///
+/// Searches for the linker at `$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/`.
+/// Returns `None` if NDK is not installed or the linker is not found.
+pub(super) fn resolve_ndk_linker() -> Option<std::path::PathBuf> {
+    let ndk_home = std::env::var(ENV_ANDROID_NDK_HOME).ok()?;
+    let ndk_path = std::path::Path::new(&ndk_home);
+
+    let prebuilt = ndk_path.join("toolchains/llvm/prebuilt/linux-x86_64/bin");
+
+    // NDK r25+ uses versioned clang (e.g. aarch64-linux-android33-clang)
+    // Try API 33, 34, 35 then fall back to unversioned
+    for api in [35, 34, 33, 31, 30] {
+        let linker = prebuilt.join(format!("aarch64-linux-android{api}-clang"));
+        if linker.exists() {
+            return Some(linker);
+        }
+    }
+
+    let unversioned = prebuilt.join("aarch64-linux-android-clang");
+    if unversioned.exists() {
+        return Some(unversioned);
+    }
+
+    None
+}
+
 async fn build_binary(
     source: &SourceEntry,
     target: &str,
@@ -385,6 +418,26 @@ async fn build_binary(
         }
     }
 
+    // NDK linker configuration for Android targets
+    if target.contains("android") {
+        if let Some(linker) = resolve_ndk_linker() {
+            let linker_env = format!(
+                "CARGO_TARGET_{}_LINKER",
+                target.to_uppercase().replace('-', "_")
+            );
+            cmd.env(&linker_env, &linker);
+
+            if let Ok(ndk_home) = std::env::var(ENV_ANDROID_NDK_HOME) {
+                cmd.env("ANDROID_NDK_HOME", &ndk_home);
+            }
+        } else {
+            return Err(format!(
+                "NDK linker not found for {target}. Set {ENV_ANDROID_NDK_HOME} \
+                 to the NDK root (e.g. /opt/android-ndk-r26d)"
+            ));
+        }
+    }
+
     let output = cmd.output().await;
     if output.as_ref().is_ok_and(|o| o.status.success()) {
         Ok(())
@@ -393,13 +446,30 @@ async fn build_binary(
     }
 }
 
-async fn strip_binary(bin_path: &Path, primal: &str) {
-    let result = tokio::process::Command::new("strip")
+async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
+    let strip_cmd = if target.contains("android") {
+        resolve_ndk_strip().unwrap_or_else(|| "llvm-strip".into())
+    } else {
+        "strip".into()
+    };
+
+    let result = tokio::process::Command::new(&strip_cmd)
         .arg(bin_path)
         .output()
         .await;
     if result.is_err() {
         eprintln!("warn: strip failed for {primal} — proceeding unstripped");
+    }
+}
+
+fn resolve_ndk_strip() -> Option<String> {
+    let ndk_home = std::env::var(ENV_ANDROID_NDK_HOME).ok()?;
+    let strip = std::path::Path::new(&ndk_home)
+        .join("toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip");
+    if strip.exists() {
+        Some(strip.to_string_lossy().into_owned())
+    } else {
+        None
     }
 }
 

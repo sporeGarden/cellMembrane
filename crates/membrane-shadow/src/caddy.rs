@@ -413,9 +413,7 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
         return Ok(format!("{domain}: already using Caddy ACME"));
     }
 
-    let sed_cmd = format!(
-        "sed -i '/^{domain}/,/^}}/ {{ /^[[:space:]]*tls \\//d; }}' {CADDYFILE}"
-    );
+    let sed_cmd = format!("sed -i '/^{domain}/,/^}}/ {{ /^[[:space:]]*tls \\//d; }}' {CADDYFILE}");
     let (out, code) = caddy_exec(config, &sed_cmd).await?;
     if code != 0 {
         return Err(ShadowError::Ssh(format!(
@@ -503,18 +501,14 @@ pub async fn dispatch(
         }
         "caddy.tls.external" => {
             let domain = args.first().ok_or_else(|| {
-                ShadowError::Parse(
-                    "domain required: membrane caddy.tls.external <domain>".into(),
-                )
+                ShadowError::Parse("domain required: membrane caddy.tls.external <domain>".into())
             })?;
             let msg = tls_external(config, domain).await?;
             Ok(crate::ShadowOutcome::ok(msg))
         }
         "caddy.tls.revert" => {
             let domain = args.first().ok_or_else(|| {
-                ShadowError::Parse(
-                    "domain required: membrane caddy.tls.revert <domain>".into(),
-                )
+                ShadowError::Parse("domain required: membrane caddy.tls.revert <domain>".into())
             })?;
             let msg = tls_revert_acme(config, domain).await?;
             Ok(crate::ShadowOutcome::ok(msg))

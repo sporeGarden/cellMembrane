@@ -56,8 +56,12 @@ fn tls_provider_serde_roundtrip() {
     struct Wrapper {
         p: TlsProvider,
     }
-    let caddy = Wrapper { p: TlsProvider::CaddyAcme };
-    let bear = Wrapper { p: TlsProvider::BearDog };
+    let caddy = Wrapper {
+        p: TlsProvider::CaddyAcme,
+    };
+    let bear = Wrapper {
+        p: TlsProvider::BearDog,
+    };
 
     let s = toml::to_string(&caddy).unwrap();
     assert!(s.contains("caddy_acme"));

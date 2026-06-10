@@ -99,6 +99,8 @@ membrane temporal.cascade                 # Manifest-driven cascade sync (38 rep
 membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VPS
 membrane plasmid.fetch --source wan       # WAN HTTPS fetch + BLAKE3 verification
 membrane plasmid.harvest                  # Build + checksum + auto-publish to git
+membrane plasmid.harvest --target aarch64-linux-android  # NDK cross-compile for grapheneGate
+membrane plasmid.ndk.check                # Verify NDK toolchain readiness
 membrane plasmid.refresh                  # Push depot binaries to VPS (atomic replace)
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
 membrane caddy.depot.checksums            # Serve checksums.toml from WAN endpoint
