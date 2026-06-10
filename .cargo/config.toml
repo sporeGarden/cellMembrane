@@ -11,11 +11,16 @@
 #   membrane plasmid.harvest --target aarch64-linux-android
 
 [target.aarch64-linux-android]
-# NDK clang linker — override via CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER env
-# if your NDK lives elsewhere or uses a different API level.
+# NDK clang linker — set via env or uncomment below.
+# `plasmid.harvest --target aarch64-linux-android` sets these automatically.
 #
-# Uncomment and adjust for your peptidoglycan installation:
-# linker = "/opt/android-ndk-r26d/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
+# Manual build requires:
+#   export ANDROID_NDK_HOME=/opt/android-ndk-r27c
+#   export CC_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
+#   export AR_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+#
+# Or uncomment (peptidoglycan default):
+# linker = "/opt/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
 
 [target.x86_64-unknown-linux-musl]
 # Standard gate target — statically linked, no glibc dependency.
