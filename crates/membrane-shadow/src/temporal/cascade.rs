@@ -45,6 +45,8 @@ pub struct CascadeOpts<'a> {
     pub publish_freshness: bool,
     /// Post-sync phase: none, harvest-only, or full rebuild cycle.
     pub post_sync: PostSyncPhase,
+    /// If true, restart local NUCLEUS processes that received new binaries.
+    pub restart_updated: bool,
 }
 
 /// Execute cascade with typed options.
@@ -200,6 +202,10 @@ async fn run_post_sync_phases(
 
         if plasmidbin_was_pulled(lines) {
             run_auto_fetch(lines).await;
+
+            if opts.restart_updated {
+                run_cascade_restart(lines).await;
+            }
         }
     }
 
@@ -317,6 +323,76 @@ async fn run_auto_fetch(lines: &mut Vec<String>) {
         }
         Err(e) => lines.push(format!("  [auto-fetch] FAIL: {e}")),
     }
+}
+
+/// Restart local NUCLEUS processes whose binaries were updated in the depot.
+///
+/// Compares the running binary (via `/proc/{pid}/exe` readlink) against the depot
+/// binary hash. If they differ, restarts the service unit. This enables a "pull and
+/// converge" workflow without manual intervention.
+async fn run_cascade_restart(lines: &mut Vec<String>) {
+    let arch = crate::plasmid::detect_target_triple();
+    let depot_dir = crate::plasmid::resolve_path(
+        None,
+        cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
+        || {
+            std::path::PathBuf::from(
+                std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT).unwrap_or_else(
+                    |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
+                ),
+            )
+            .join("plasmidBin")
+        },
+    );
+    let bin_dir = depot_dir.join("primals").join(&arch);
+
+    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_dir = std::path::Path::new(&install_base);
+
+    let primals = crate::plasmid::nucleus_primals();
+    let mut restarted = 0u32;
+    let mut skipped = 0u32;
+    let mut failed = 0u32;
+
+    for primal in &primals {
+        let depot_bin = bin_dir.join(primal);
+        let installed_bin = install_dir.join(primal);
+
+        if !depot_bin.exists() || !installed_bin.exists() {
+            continue;
+        }
+
+        let depot_hash = crate::plasmid::compute_blake3_file(&depot_bin);
+        let installed_hash = crate::plasmid::compute_blake3_file(&installed_bin);
+
+        if depot_hash == installed_hash {
+            skipped += 1;
+            continue;
+        }
+
+        // Binary differs — copy new binary and restart
+        if std::fs::copy(&depot_bin, &installed_bin).is_err() {
+            failed += 1;
+            continue;
+        }
+
+        let unit = format!("membrane-nucleus@{primal}.service");
+        let restart = tokio::process::Command::new("systemctl")
+            .args(["--user", "restart", &unit])
+            .output()
+            .await;
+
+        match restart {
+            Ok(o) if o.status.success() => restarted += 1,
+            _ => failed += 1,
+        }
+    }
+
+    let tag = if failed == 0 { "OK" } else { "PARTIAL" };
+    lines.push(format!(
+        "  [cascade-restart] {tag} — {restarted} restarted, {skipped} current, {failed} failed"
+    ));
 }
 
 /// Quick depot freshness summary — reports how many binaries exist and are recent.
@@ -506,10 +582,12 @@ mod tests {
             clone_missing: false,
             publish_freshness: true,
             post_sync: PostSyncPhase::None,
+            restart_updated: false,
         };
         assert_eq!(opts.gate, "eastGate");
         assert_eq!(opts.post_sync, PostSyncPhase::None);
         assert!(opts.publish_freshness);
+        assert!(!opts.restart_updated);
     }
 
     #[test]

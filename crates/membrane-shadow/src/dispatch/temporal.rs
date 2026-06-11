@@ -121,6 +121,8 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
 
     let publish_freshness = !no_freshness && mode == temporal::CascadeMode::Sync;
 
+    let restart_updated = args.contains(&"--with-restart");
+
     let mut outcome = temporal::cascade_with_opts(&temporal::CascadeOpts {
         gate: &gate_name,
         source,
@@ -128,6 +130,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         clone_missing,
         publish_freshness,
         post_sync,
+        restart_updated,
     })
     .await?;
 

@@ -318,7 +318,7 @@ fn verify_blake3(path: &Path, expected: &str) -> bool {
 /// Fetch `checksums.toml` from the WAN depot and parse it into per-primal BLAKE3 hashes.
 /// Enables zero-git verification for WAN-fetched binaries.
 #[cfg(feature = "http")]
-async fn fetch_wan_checksums(arch: &str) -> std::collections::HashMap<String, String> {
+pub async fn fetch_wan_checksums(arch: &str) -> std::collections::HashMap<String, String> {
     let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
     let url = format!("{base_url}/checksums.toml");
@@ -346,7 +346,7 @@ async fn fetch_wan_checksums(arch: &str) -> std::collections::HashMap<String, St
 }
 
 #[cfg(not(feature = "http"))]
-async fn fetch_wan_checksums(_arch: &str) -> std::collections::HashMap<String, String> {
+pub async fn fetch_wan_checksums(_arch: &str) -> std::collections::HashMap<String, String> {
     std::collections::HashMap::new()
 }
 

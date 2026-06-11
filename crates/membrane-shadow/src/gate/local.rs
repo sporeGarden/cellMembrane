@@ -61,7 +61,7 @@ pub async fn bootstrap(
 
     let verify_result = verify_local_depot(&arch);
     phases.push(BootstrapPhase {
-        name: "checksum.verify".into(),
+        name: "checksum.git".into(),
         ok: verify_result.0,
         detail: if dry_run {
             format!("dry-run: would verify — current: {}", verify_result.1)
@@ -69,6 +69,8 @@ pub async fn bootstrap(
             verify_result.1
         },
     });
+
+    phases.push(verify_wan_checksums(&arch, dry_run).await);
 
     phases.push(bootstrap_mesh_phase(gate_name, &arch, dry_run).await);
     phases.push(bootstrap_nucleus_phase(&arch, dry_run));
@@ -581,6 +583,66 @@ fn verify_local_depot(arch: &str) -> (bool, String) {
         ok,
         format!("{verified} verified, {failed} hash mismatch, {missing} missing"),
     )
+}
+
+/// Cross-verify local binaries against the WAN-served checksums.toml.
+///
+/// This provides a second independent verification source (guideStone P3:
+/// Self-Verifying). Even if the git-tracked checksums are stale or
+/// compromised, the WAN endpoint serves the authoritative hashes published
+/// by the VPS depot sync pipeline.
+async fn verify_wan_checksums(arch: &str, dry_run: bool) -> BootstrapPhase {
+    if dry_run {
+        return BootstrapPhase {
+            name: "checksum.wan".into(),
+            ok: true,
+            detail: "dry-run: would cross-verify against WAN depot checksums".into(),
+        };
+    }
+
+    let wan_hashes = crate::plasmid::fetch_wan_checksums(arch).await;
+
+    if wan_hashes.is_empty() {
+        return BootstrapPhase {
+            name: "checksum.wan".into(),
+            ok: true,
+            detail: "WAN checksums unavailable (offline or no http feature) — skipped".into(),
+        };
+    }
+
+    let dest_root = resolve_plasmidbin_dir();
+    let bin_dir = dest_root.join("primals").join(arch);
+
+    let mut verified = 0u32;
+    let mut mismatch = 0u32;
+    let mut missing = 0u32;
+
+    for (name, expected_hash) in &wan_hashes {
+        let bin_path = bin_dir.join(name);
+        if !bin_path.exists() {
+            missing += 1;
+            continue;
+        }
+        let actual = crate::plasmid::compute_blake3_file(&bin_path);
+        if actual == *expected_hash {
+            verified += 1;
+        } else {
+            mismatch += 1;
+            eprintln!(
+                "warn: WAN checksum mismatch for {name}: local={} wan={expected_hash}",
+                &actual[..12]
+            );
+        }
+    }
+
+    let ok = mismatch == 0;
+    BootstrapPhase {
+        name: "checksum.wan".into(),
+        ok,
+        detail: format!(
+            "{verified} verified, {mismatch} mismatch, {missing} missing (WAN cross-check)"
+        ),
+    }
 }
 
 async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
