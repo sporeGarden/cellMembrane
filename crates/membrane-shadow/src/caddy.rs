@@ -23,7 +23,14 @@ fn caddy_bin_path() -> &'static str {
     })
 }
 
-const CADDYFILE: &str = "/etc/membrane/Caddyfile";
+fn caddyfile_path() -> &'static str {
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        let config_dir = std::env::var(cellmembrane_types::service::ENV_CONFIG_DIR)
+            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CONFIG_DIR.into());
+        format!("{config_dir}/Caddyfile")
+    })
+}
 
 /// Execute a command on the Caddy host (golgiBody inner membrane), returning stdout and exit code.
 async fn caddy_exec(config: &ShadowConfig, command: &str) -> Result<(String, i32)> {
@@ -93,9 +100,10 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     .await?;
     let admin_api_ok = api_code == 0 && !api_out.contains("FAIL");
 
+    let caddyfile = caddyfile_path();
     let (vhosts_out, _) = caddy_exec(
         config,
-        "grep -cE '^[a-zA-Z]' /etc/membrane/Caddyfile 2>/dev/null || echo 0",
+        &format!("grep -cE '^[a-zA-Z]' {caddyfile} 2>/dev/null || echo 0"),
     )
     .await?;
     let vhost_count: usize = vhosts_out.trim().parse().unwrap_or(0);
@@ -114,7 +122,7 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     Ok(CaddyHealth {
         service_active,
         admin_api_ok,
-        config_path: CADDYFILE.into(),
+        config_path: caddyfile_path().into(),
         vhost_count,
         listeners,
     })
@@ -177,19 +185,22 @@ pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus
 
 /// List configured vhosts from the Caddyfile.
 pub async fn vhosts(config: &ShadowConfig) -> Result<Vec<VhostEntry>> {
-    let (caddyfile, code) = caddy_exec(config, "cat /etc/membrane/Caddyfile 2>/dev/null").await?;
+    let caddyfile = caddyfile_path();
+    let cmd = format!("cat {caddyfile} 2>/dev/null");
+    let (content, code) = caddy_exec(config, &cmd).await?;
     if code != 0 {
         return Err(ShadowError::Ssh("Failed to read Caddyfile".into()));
     }
 
-    Ok(parse_caddyfile_vhosts(&caddyfile))
+    Ok(parse_caddyfile_vhosts(&content))
 }
 
 /// Reload Caddy configuration (graceful — zero downtime).
 pub async fn reload(config: &ShadowConfig) -> Result<String> {
     let caddy_bin = caddy_bin_path();
+    let caddyfile = caddyfile_path();
     let cmd = format!(
-        "{caddy_bin} reload --config {CADDYFILE} --force 2>&1 || \
+        "{caddy_bin} reload --config {caddyfile} --force 2>&1 || \
          systemctl reload caddy-tls 2>&1"
     );
     let (out, code) = caddy_exec(config, &cmd).await?;
@@ -207,7 +218,8 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
 /// Validate Caddyfile syntax without applying.
 pub async fn validate(config: &ShadowConfig) -> Result<String> {
     let caddy_bin = caddy_bin_path();
-    let cmd = format!("{caddy_bin} validate --config {CADDYFILE} 2>&1");
+    let caddyfile = caddyfile_path();
+    let cmd = format!("{caddy_bin} validate --config {caddyfile} 2>&1");
     let (out, code) = caddy_exec(config, &cmd).await?;
 
     if code == 0 {
@@ -227,13 +239,14 @@ pub async fn validate(config: &ShadowConfig) -> Result<String> {
 /// The route serves `{depot_root}/primals/` at `https://{outer_domain}/depot/`.
 pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
     let caddy_bin = caddy_bin_path();
+    let caddyfile = caddyfile_path();
     let depot_root = format!(
         "{}/plasmidBin/primals",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
     );
 
     let check_cmd =
-        format!("grep -q '/depot/' {CADDYFILE} 2>/dev/null && echo EXISTS || echo MISSING");
+        format!("grep -q '/depot/' {caddyfile} 2>/dev/null && echo EXISTS || echo MISSING");
     let (check_out, _) = caddy_exec(config, &check_cmd).await?;
 
     if check_out.trim() == "EXISTS" {
@@ -248,7 +261,7 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
         file_server browse
     }}
 SNIPPET
-sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && rm -f /tmp/depot-snippet.caddy"
+sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {caddyfile} && rm -f /tmp/depot-snippet.caddy"
     );
 
     let (out, code) = caddy_exec(config, &inject_cmd).await?;
@@ -260,16 +273,16 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && r
     }
 
     let validate_reload = format!(
-        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
-         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {caddyfile} 2>&1 && \
+         {caddy_bin} reload --config {caddyfile} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
     if reload_code != 0 {
         let rollback_cmd = format!(
             "cd {}/infra/plasmidBin && \
-             git checkout -- {CADDYFILE} 2>/dev/null; \
-             {caddy_bin} reload --config {CADDYFILE} --force 2>/dev/null",
+             git checkout -- {caddyfile} 2>/dev/null; \
+             {caddy_bin} reload --config {caddyfile} --force 2>/dev/null",
             cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
         );
         let _ = caddy_exec(config, &rollback_cmd).await;
@@ -290,13 +303,14 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && r
 /// file directly from the WAN endpoint without cloning plasmidBin.
 pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> {
     let caddy_bin = caddy_bin_path();
+    let caddyfile = caddyfile_path();
     let checksums_path = format!(
         "{}/plasmidBin/checksums.toml",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
     );
 
     let check_cmd =
-        format!("grep -q 'checksums.toml' {CADDYFILE} 2>/dev/null && echo EXISTS || echo MISSING");
+        format!("grep -q 'checksums.toml' {caddyfile} 2>/dev/null && echo EXISTS || echo MISSING");
     let (check_out, _) = caddy_exec(config, &check_cmd).await?;
 
     if check_out.trim() == "EXISTS" {
@@ -308,7 +322,7 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
     );
     let inject_cmd = format!(
         "printf '%s\\n' '{snippet}' > /tmp/checksums-snippet.caddy && \
-         sed -i '/handle \\/depot\\/\\*/r /tmp/checksums-snippet.caddy' {CADDYFILE} && \
+         sed -i '/handle \\/depot\\/\\*/r /tmp/checksums-snippet.caddy' {caddyfile} && \
          rm -f /tmp/checksums-snippet.caddy"
     );
 
@@ -321,8 +335,8 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
     }
 
     let validate_reload = format!(
-        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
-         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {caddyfile} 2>&1 && \
+         {caddy_bin} reload --config {caddyfile} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
@@ -348,12 +362,13 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
 /// Caddy reads them on reload — no ACME interaction required.
 pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String> {
     let caddy_bin = caddy_bin_path();
+    let caddyfile = caddyfile_path();
     let cert_dir = cellmembrane_types::TlsProvider::default_cert_dir();
     let fullchain = format!("{cert_dir}/{domain}/fullchain.pem");
     let privkey = format!("{cert_dir}/{domain}/privkey.pem");
 
     let check_cmd = format!(
-        "grep -A5 '^{domain}' {CADDYFILE} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
+        "grep -A5 '^{domain}' {caddyfile} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
     );
     let (check_out, _) = caddy_exec(config, &check_cmd).await?;
 
@@ -379,7 +394,7 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
         "sed -i '/^{domain}/,/^}}/ {{ \
             /^[[:space:]]*tls[[:space:]]/d; \
             /^{domain}/a\\    tls {fullchain} {privkey} \
-         }}' {CADDYFILE}"
+         }}' {caddyfile}"
     );
     let (out, code) = caddy_exec(config, &sed_cmd).await?;
     if code != 0 {
@@ -390,15 +405,15 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
     }
 
     let validate_reload = format!(
-        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
-         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {caddyfile} 2>&1 && \
+         {caddy_bin} reload --config {caddyfile} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
     if reload_code != 0 {
         let rollback = format!(
-            "sed -i '/^{domain}/,/^}}/ {{ /tls \\//d; }}' {CADDYFILE}; \
-             {caddy_bin} reload --config {CADDYFILE} --force 2>/dev/null"
+            "sed -i '/^{domain}/,/^}}/ {{ /tls \\//d; }}' {caddyfile}; \
+             {caddy_bin} reload --config {caddyfile} --force 2>/dev/null"
         );
         let _ = caddy_exec(config, &rollback).await;
         return Err(ShadowError::Ssh(format!(
@@ -418,8 +433,9 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
 /// automatic certificate management.
 pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<String> {
     let caddy_bin = caddy_bin_path();
+    let caddyfile = caddyfile_path();
     let check_cmd = format!(
-        "grep -A5 '^{domain}' {CADDYFILE} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
+        "grep -A5 '^{domain}' {caddyfile} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
     );
     let (check_out, _) = caddy_exec(config, &check_cmd).await?;
 
@@ -427,7 +443,7 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
         return Ok(format!("{domain}: already using Caddy ACME"));
     }
 
-    let sed_cmd = format!("sed -i '/^{domain}/,/^}}/ {{ /^[[:space:]]*tls \\//d; }}' {CADDYFILE}");
+    let sed_cmd = format!("sed -i '/^{domain}/,/^}}/ {{ /^[[:space:]]*tls \\//d; }}' {caddyfile}");
     let (out, code) = caddy_exec(config, &sed_cmd).await?;
     if code != 0 {
         return Err(ShadowError::Ssh(format!(
@@ -437,8 +453,8 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
     }
 
     let validate_reload = format!(
-        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
-         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {caddyfile} 2>&1 && \
+         {caddy_bin} reload --config {caddyfile} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 

@@ -133,6 +133,9 @@ pub const DEFAULT_INSTALL_BASE: &str = "/opt/membrane";
 /// Default base path for primal UDS sockets.
 pub const DEFAULT_SOCKET_BASE: &str = "/run/membrane";
 
+/// Default configuration directory (system-wide config files).
+pub const DEFAULT_CONFIG_DIR: &str = "/etc/membrane";
+
 /// Default ecoPrimals workspace root on VPS deployments.
 /// Override with `ECOPRIMALS_ROOT` env var.
 pub const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";
@@ -147,6 +150,8 @@ pub const ENV_SECURITY_PROVIDER: &str = "SONGBIRD_SECURITY_PROVIDER";
 pub const ENV_INSTALL_BASE: &str = "MEMBRANE_INSTALL_BASE";
 /// Environment variable for the membrane socket base directory.
 pub const ENV_SOCKET_BASE: &str = "MEMBRANE_SOCKET_BASE";
+/// Environment variable for the membrane configuration directory.
+pub const ENV_CONFIG_DIR: &str = "MEMBRANE_CONFIG_DIR";
 /// Environment variable for the Forgejo SSH host.
 pub const ENV_FORGEJO_SSH_HOST: &str = "FORGEJO_SSH_HOST";
 /// Environment variable for the ecoPrimals workspace root.

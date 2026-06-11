@@ -155,7 +155,9 @@ fn toml_search_paths() -> Vec<String> {
         }
     }
 
-    paths.push("/etc/membrane/membrane.toml".into());
+    let config_dir = std::env::var(cellmembrane_types::service::ENV_CONFIG_DIR)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CONFIG_DIR.into());
+    paths.push(format!("{config_dir}/membrane.toml"));
     paths
 }
 

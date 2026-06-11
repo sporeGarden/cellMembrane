@@ -227,7 +227,9 @@ fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let hook_dir = std::path::Path::new("/etc/NetworkManager/dispatcher.d");
+    let hook_dir_str = std::env::var("NM_DISPATCHER_DIR")
+        .unwrap_or_else(|_| "/etc/NetworkManager/dispatcher.d".into());
+    let hook_dir = std::path::Path::new(&hook_dir_str);
     let hook_path = hook_dir.join("99-membrane-reconnect");
     let hook_content = format!(
         "#!/bin/sh\n\
@@ -320,17 +322,7 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
         return (false, format!("{relay_binary} binary not found"));
     }
 
-    let socket_dir = std::env::var("BIOMEOS_SOCKET_DIR").unwrap_or_else(|_| {
-        let uid = std::env::var("UID")
-            .or_else(|_| std::env::var("EUID"))
-            .unwrap_or_else(|_| {
-                std::fs::read_to_string("/proc/self/loginuid")
-                    .unwrap_or_else(|_| "1000".into())
-                    .trim()
-                    .to_string()
-            });
-        format!("/run/user/{uid}/biomeos")
-    });
+    let socket_dir = super::health::resolve_biomeos_socket_dir();
     let socket_path = format!("{socket_dir}/{relay_binary}.sock");
 
     if !std::path::Path::new(&socket_path).exists() {

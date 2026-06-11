@@ -391,10 +391,15 @@ pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<
 
 // ── Token operations (bearDog auth.token.*) ─────────────────────────
 
-/// Default Forgejo data directory (standard package layout).
-const DEFAULT_FORGEJO_DATA_DIR: &str = "/opt/forgejo/data";
-/// Default Forgejo working directory.
-const DEFAULT_FORGEJO_WORK_DIR: &str = "/opt/forgejo";
+fn default_forgejo_data_dir() -> String {
+    std::env::var(cellmembrane_types::service::ENV_FORGEJO_DATA_DIR)
+        .unwrap_or_else(|_| "/opt/forgejo/data".into())
+}
+
+fn default_forgejo_work_dir() -> String {
+    std::env::var(cellmembrane_types::service::ENV_FORGEJO_WORK_DIR)
+        .unwrap_or_else(|_| "/opt/forgejo".into())
+}
 
 /// Forgejo data directory on the VPS. Resolution chain:
 /// 1. `ShadowConfig.forgejo_data_dir` (from `FORGEJO_DATA_DIR` env)
@@ -407,7 +412,7 @@ fn forgejo_db_path(config: &ShadowConfig) -> String {
     if let Some(ref work_dir) = config.forgejo_work_dir {
         return format!("{work_dir}/data");
     }
-    DEFAULT_FORGEJO_DATA_DIR.to_string()
+    default_forgejo_data_dir()
 }
 
 /// Forgejo working directory on the VPS. Resolution chain:
@@ -426,7 +431,7 @@ fn forgejo_work_path(config: &ShadowConfig) -> String {
             .rsplit_once('/')
             .map_or_else(|| data_dir.clone(), |(parent, _)| parent.to_string());
     }
-    DEFAULT_FORGEJO_WORK_DIR.to_string()
+    default_forgejo_work_dir()
 }
 
 /// List all Forgejo API tokens (via VPS database).

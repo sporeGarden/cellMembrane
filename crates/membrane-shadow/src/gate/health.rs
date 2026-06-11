@@ -261,14 +261,14 @@ fn resolve_mesh_relay_socket() -> String {
     format!("{socket_dir}/{binary_name}.sock")
 }
 
-fn resolve_biomeos_socket_dir() -> String {
+pub(super) fn resolve_biomeos_socket_dir() -> String {
     std::env::var("BIOMEOS_SOCKET_DIR").unwrap_or_else(|_| {
         let uid = resolve_uid();
         format!("/run/user/{uid}/biomeos")
     })
 }
 
-fn resolve_uid() -> String {
+pub(super) fn resolve_uid() -> String {
     std::env::var("UID")
         .or_else(|_| std::env::var("EUID"))
         .unwrap_or_else(|_| {
