@@ -40,7 +40,9 @@ pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Re
         ));
     }
 
-    if target.contains("musl") && !file_output.contains("statically linked") {
+    let is_static =
+        file_output.contains("statically linked") || file_output.contains("static-pie linked");
+    if target.contains("musl") && !is_static {
         return Err(format!(
             "BUILD-ELF-01: expected static binary for musl target '{target}', got: {file_output}"
         ));
