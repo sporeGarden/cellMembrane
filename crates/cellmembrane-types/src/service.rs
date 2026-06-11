@@ -204,6 +204,26 @@ pub const ENV_CF_API_TOKEN: &str = "CF_API_TOKEN";
 /// Cloudflare zone ID (alternate alias used by `wrangler`/Cloudflare tooling).
 pub const ENV_CF_ZONE_ID: &str = "CF_ZONE_ID";
 
+/// Forgejo SSH git server address (host:port).
+pub const ENV_FORGEJO_GIT_ADDR: &str = "FORGEJO_GIT_ADDR";
+/// Default Forgejo SSH address for git operations.
+pub const DEFAULT_FORGEJO_GIT_ADDR: &str = "git.primals.eco:2222";
+
+/// GitHub organization name (for release artifact URLs).
+pub const ENV_GITHUB_ORG: &str = "MEMBRANE_GITHUB_ORG";
+/// Default GitHub organization.
+pub const DEFAULT_GITHUB_ORG: &str = "ecoPrimals";
+
+/// Forgejo organization name (for repo paths).
+pub const ENV_FORGEJO_ORG: &str = "MEMBRANE_FORGEJO_ORG";
+/// Default Forgejo organization.
+pub const DEFAULT_FORGEJO_ORG: &str = "sporeGarden";
+
+/// WAN depot hostname (used in Caddy config and depot URLs).
+pub const ENV_DEPOT_HOSTNAME: &str = "MEMBRANE_DEPOT_HOSTNAME";
+/// Default depot hostname served by Caddy.
+pub const DEFAULT_DEPOT_HOSTNAME: &str = "membrane.primals.eco";
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

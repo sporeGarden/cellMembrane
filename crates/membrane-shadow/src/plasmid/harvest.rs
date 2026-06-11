@@ -220,7 +220,7 @@ async fn has_upstream_changes(
 /// sees GitHub pushes and peptidoglycan sees both layers.
 async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| "git.primals.eco:2222".into());
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
 
     let forgejo = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await;
     let github = try_ls_remote_head(&format!("https://github.com/{repo}.git")).await;
@@ -336,7 +336,7 @@ async fn clone_source(
     std::fs::create_dir_all(build_root).ok();
 
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| "git.primals.eco:2222".into());
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
     let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
     let github_url = format!("https://github.com/{}.git", source.repo);
 
@@ -569,27 +569,39 @@ async fn publish_depot_checksums(depot_dir: &std::path::Path) {
         return;
     }
 
+    let git = |args: &[&str]| {
+        tokio::process::Command::new("git")
+            .args(args)
+            .current_dir(&git_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+    };
+
+    let _ = git(&["add", "checksums.toml", "provenance.toml"]).await;
+
+    let diff = tokio::process::Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .current_dir(&git_dir)
+        .status()
+        .await;
+
+    let has_staged = diff.is_ok_and(|s| !s.success());
+    if !has_staged {
+        return;
+    }
+
     let commit_msg = format!(
         "harvest: update checksums + provenance ({})",
         chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
     );
 
-    let script = format!(
-        "cd {} && git add checksums.toml provenance.toml && \
-         git diff --cached --quiet || \
-         git commit -m '{}' && \
-         git push forgejo main 2>/dev/null; \
-         git push origin main 2>/dev/null",
-        git_dir.display(),
-        commit_msg
-    );
+    let _ = git(&["commit", "-m", &commit_msg]).await;
 
-    let _ = tokio::process::Command::new("bash")
-        .args(["-c", &script])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await;
+    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
+        .unwrap_or_else(|_| "forgejo".into());
+    let _ = git(&["push", &forgejo_host, "main"]).await;
+    let _ = git(&["push", "origin", "main"]).await;
 }
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {

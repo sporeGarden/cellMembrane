@@ -594,18 +594,59 @@ async fn apply_divergence_policy(
             ))
         }
         "impulse-only" | "flag" => None,
-        "agentic" => {
-            eprintln!(
-                "temporal: agentic policy for {} — deferred (not yet wired to resolver)",
-                matrix.repo_path,
-            );
-            None
-        }
+        "agentic" => resolve_agentic(local_path, matrix, leader, push_target, branch).await,
         unknown => {
             eprintln!("temporal: unknown divergence policy {unknown:?} — treating as flag");
             None
         }
     }
+}
+
+/// Agentic divergence resolver — graduated escalation.
+///
+/// Strategy: try fast-forward → try rebase → signal conflict for review.
+/// Only signals a conflict if both automated approaches fail; this avoids
+/// the impulse noise that a simple "flag" policy generates.
+async fn resolve_agentic(
+    local_path: &Path,
+    matrix: &TemporalMatrix,
+    leader: &str,
+    push_target: &str,
+    branch: &str,
+) -> Option<String> {
+    // Phase 1: attempt fast-forward (no data mutation risk)
+    if git_ok(
+        local_path,
+        &["pull", leader, branch, "--ff-only", "--quiet"],
+    )
+    .await
+    {
+        let pushed =
+            push_to_followers(local_path, matrix, leader, push_target, branch, false).await;
+        return Some(format!(
+            "policy:agentic resolved via ff from {leader}, push {}",
+            pushed.join(" ")
+        ));
+    }
+
+    // Phase 2: attempt rebase (safe rewrite of local-only commits)
+    if git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
+        let pushed = push_to_followers(local_path, matrix, leader, push_target, branch, true).await;
+        return Some(format!(
+            "policy:agentic resolved via rebase from {leader}, push {}",
+            pushed.join(" ")
+        ));
+    }
+
+    // Rebase failed — abort any in-progress rebase state
+    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+
+    // Phase 3: signal conflict — emit to stderr and return None for impulse handling
+    eprintln!(
+        "temporal: agentic resolver CONFLICT for {} — ff and rebase both failed against {leader}",
+        matrix.repo_path,
+    );
+    None
 }
 
 async fn push_to_followers(

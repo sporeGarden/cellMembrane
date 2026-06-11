@@ -172,13 +172,17 @@ async fn resolve_tag(
     match source {
         FetchSource::Vps | FetchSource::Wan => Ok("vps-live".into()),
         FetchSource::GitHub => {
-            let url = "https://api.github.com/repos/ecoPrimals/plasmidBin/releases/latest";
-            fetch_release_tag(url).await
+            let org = std::env::var(cellmembrane_types::service::ENV_GITHUB_ORG)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_GITHUB_ORG.into());
+            let url = format!("https://api.github.com/repos/{org}/plasmidBin/releases/latest");
+            fetch_release_tag(&url).await
         }
         FetchSource::Forgejo => {
             let api = &config.forgejo_api;
             let base = api.trim_end_matches("/api/v1");
-            let url = format!("{base}/api/v1/repos/ecoPrimals/plasmidBin/releases/latest");
+            let org = std::env::var(cellmembrane_types::service::ENV_FORGEJO_ORG)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_ORG.into());
+            let url = format!("{base}/api/v1/repos/{org}/plasmidBin/releases/latest");
             fetch_release_tag(&url).await
         }
     }
@@ -223,14 +227,18 @@ async fn download_asset(
 ) -> bool {
     match source {
         FetchSource::GitHub => {
+            let org = std::env::var(cellmembrane_types::service::ENV_GITHUB_ORG)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_GITHUB_ORG.into());
             let url =
-                format!("https://github.com/ecoPrimals/plasmidBin/releases/download/{tag}/{asset}");
+                format!("https://github.com/{org}/plasmidBin/releases/download/{tag}/{asset}");
             download_via_http(&url, dest).await
         }
         FetchSource::Forgejo => {
             let api = &config.forgejo_api;
             let base = api.trim_end_matches("/api/v1");
-            let url = format!("{base}/ecoPrimals/plasmidBin/releases/download/{tag}/{asset}");
+            let org = std::env::var(cellmembrane_types::service::ENV_FORGEJO_ORG)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_ORG.into());
+            let url = format!("{base}/{org}/plasmidBin/releases/download/{tag}/{asset}");
             download_via_http(&url, dest).await
         }
         FetchSource::Vps => {

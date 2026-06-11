@@ -9,9 +9,16 @@
 //!   - `gate.bootstrap` → local gate enrollment
 //!   - `gate.status`    → local gate health probe
 
+pub mod bootstrap;
+pub mod health;
 mod local;
+pub mod verify;
 
-pub use local::{BootstrapPhase, BootstrapResult, GateStatus, StatusProbe, bootstrap, status};
+pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
+pub use health::{GateStatus, StatusProbe, status};
+
+use local::resolve_local_gate_identity;
+use local::resolve_plasmidbin_dir;
 
 use crate::config::ShadowConfig;
 use crate::error::Result;

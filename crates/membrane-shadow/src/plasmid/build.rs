@@ -183,7 +183,7 @@ async fn clone_source(
     clone_dir: &Path,
 ) -> std::result::Result<(), String> {
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| "git.primals.eco:2222".into());
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
     let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
     let github_url = format!("https://github.com/{}.git", source.repo);
 
