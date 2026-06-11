@@ -167,8 +167,21 @@ async fn classify_sync_state(
     let mut has_leader = false;
     let mut has_followers = false;
 
+    // Authority-first leader selection: if the sovereign remote has commits
+    // we're behind, always prefer it as the pull leader. This prevents the
+    // system from choosing a mirror as leader, which would force us to rebase
+    // from an unreliable source and create circular divergence.
+    let sovereign_pos = positions.iter().find(|p| p.remote == SOVEREIGN_REMOTE);
+    if let Some(sp) = sovereign_pos {
+        if sp.behind > 0 {
+            leader_remote = sp.remote.clone();
+            leader_behind = sp.behind;
+            has_leader = true;
+        }
+    }
+
     for pos in positions {
-        if pos.behind > 0 && pos.behind > leader_behind {
+        if !has_leader && pos.behind > 0 && pos.behind > leader_behind {
             leader_behind = pos.behind;
             leader_remote = pos.remote.clone();
             has_leader = true;
@@ -391,17 +404,37 @@ async fn sync_converge(
         }
     }
 
-    for pos in &matrix.positions {
-        if pulled_from.as_deref() == Some(&pos.remote) {
-            continue;
-        }
+    // Authority-first push ordering: push sovereign remote before mirrors.
+    // Mirrors get force-with-lease to prevent circular divergence when they
+    // have independent commits from relay chains or parallel teams.
+    let mut push_targets: Vec<&RemotePosition> = matrix
+        .positions
+        .iter()
+        .filter(|p| pulled_from.as_deref() != Some(p.remote.as_str()))
+        .collect();
+    push_targets.sort_by_key(|p| i32::from(p.remote != SOVEREIGN_REMOTE));
+
+    for pos in push_targets {
         if push_target == "forgejo" && pos.remote != "forgejo" {
             continue;
         }
         let remote_ref = format!("{}/{branch}", pos.remote);
         let ahead_range = format!("{remote_ref}..HEAD");
         let ahead = rev_list_count(local_path, &ahead_range).await;
-        if ahead > 0 && git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await {
+        if ahead == 0 {
+            continue;
+        }
+        // Sovereign remote: normal push. Mirror remotes: force-with-lease.
+        let ok = if pos.remote == SOVEREIGN_REMOTE {
+            git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await
+        } else {
+            git_ok(
+                local_path,
+                &["push", "--force-with-lease", &pos.remote, branch],
+            )
+            .await
+        };
+        if ok {
             pushed_to.push(pos.remote.clone());
         }
     }
@@ -602,11 +635,17 @@ async fn apply_divergence_policy(
     }
 }
 
-/// Agentic divergence resolver — graduated escalation.
+/// Agentic divergence resolver — authority-first graduated escalation.
 ///
-/// Strategy: try fast-forward → try rebase → signal conflict for review.
-/// Only signals a conflict if both automated approaches fail; this avoids
-/// the impulse noise that a simple "flag" policy generates.
+/// Strategy:
+///   1. If leader is not the sovereign remote, prefer converging to sovereign first
+///   2. Try fast-forward from authority → try rebase from authority
+///   3. Push mirrors with force-with-lease (preventing circular divergence)
+///   4. Signal conflict only if convergence to authority fails
+///
+/// The key invariant: never rebase from a mirror remote. The sovereign (Forgejo)
+/// is the single source of truth; mirrors (GitHub) may receive independent pushes
+/// that should be overwritten via force-with-lease, not rebased onto.
 async fn resolve_agentic(
     local_path: &Path,
     matrix: &TemporalMatrix,
@@ -614,40 +653,65 @@ async fn resolve_agentic(
     push_target: &str,
     branch: &str,
 ) -> Option<String> {
-    // Phase 1: attempt fast-forward (no data mutation risk)
+    // Determine the actual convergence target: prefer sovereign even if the
+    // "leader" (by commit count) is a mirror. This prevents rebasing onto
+    // mirror state which creates circular divergence.
+    let authority = if matrix
+        .positions
+        .iter()
+        .any(|p| p.remote == SOVEREIGN_REMOTE && p.behind > 0)
+    {
+        SOVEREIGN_REMOTE
+    } else {
+        leader
+    };
+
+    // Phase 1: attempt fast-forward from authority (no data mutation risk)
     if git_ok(
         local_path,
-        &["pull", leader, branch, "--ff-only", "--quiet"],
+        &["pull", authority, branch, "--ff-only", "--quiet"],
     )
     .await
     {
         let pushed =
-            push_to_followers(local_path, matrix, leader, push_target, branch, false).await;
+            push_to_followers(local_path, matrix, authority, push_target, branch, false).await;
         return Some(format!(
-            "policy:agentic resolved via ff from {leader}, push {}",
+            "policy:agentic resolved via ff from {authority}, push {}",
             pushed.join(" ")
         ));
     }
 
-    // Phase 2: attempt rebase (safe rewrite of local-only commits)
-    if git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
-        let pushed = push_to_followers(local_path, matrix, leader, push_target, branch, true).await;
+    // Phase 2: attempt rebase onto authority only (never rebase onto mirror)
+    if authority == SOVEREIGN_REMOTE
+        && git_ok(
+            local_path,
+            &["pull", "--rebase", authority, branch, "--quiet"],
+        )
+        .await
+    {
+        let pushed =
+            push_to_followers(local_path, matrix, authority, push_target, branch, true).await;
         return Some(format!(
-            "policy:agentic resolved via rebase from {leader}, push {}",
+            "policy:agentic resolved via rebase from {authority}, push {}",
             pushed.join(" ")
         ));
     }
 
-    // Rebase failed — abort any in-progress rebase state
+    // Rebase failed or leader is a mirror — abort any in-progress rebase state
     let _ = git_ok(local_path, &["rebase", "--abort"]).await;
 
     // Phase 3: signal conflict — emit to stderr and return None for impulse handling
     eprintln!(
-        "temporal: agentic resolver CONFLICT for {} — ff and rebase both failed against {leader}",
+        "temporal: agentic resolver CONFLICT for {} — convergence to {authority} failed",
         matrix.repo_path,
     );
     None
 }
+
+/// The sovereign remote name. Authority-first push always converges to this
+/// remote before pushing to mirrors. Mirrors receive `--force-with-lease`
+/// to handle independent pushes from relay chains or other teams.
+const SOVEREIGN_REMOTE: &str = "forgejo";
 
 async fn push_to_followers(
     local_path: &Path,
@@ -658,14 +722,29 @@ async fn push_to_followers(
     force_lease: bool,
 ) -> Vec<String> {
     let mut pushed = Vec::new();
-    for pos in &matrix.positions {
-        if pos.remote == leader {
-            continue;
-        }
+
+    // Authority-first: push to sovereign remote first (normal push) before
+    // mirrors. This prevents circular divergence when mirrors receive
+    // independent commits (e.g. from relay chains or parallel teams).
+    let sovereign_first = {
+        let mut remotes: Vec<&RemotePosition> = matrix
+            .positions
+            .iter()
+            .filter(|p| p.remote != leader)
+            .collect();
+        remotes.sort_by_key(|p| i32::from(p.remote != SOVEREIGN_REMOTE));
+        remotes
+    };
+
+    for pos in sovereign_first {
         if push_target == "forgejo" && pos.remote != "forgejo" {
             continue;
         }
-        let ok = if force_lease {
+        // Sovereign remote gets a normal push (or force-with-lease if we rebased).
+        // Mirror remotes always get force-with-lease to handle their independent
+        // state without creating circular divergence.
+        let use_force = force_lease || pos.remote != SOVEREIGN_REMOTE;
+        let ok = if use_force {
             git_ok(
                 local_path,
                 &["push", "--force-with-lease", &pos.remote, branch],
