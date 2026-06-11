@@ -11,11 +11,13 @@
 //!
 //! BLAKE3 checksums are verified in-process using the `blake3` crate.
 
+pub mod build;
 mod depot;
 mod fetch;
 mod harvest;
 mod refresh;
 
+pub use build::BuildArgs;
 pub use fetch::*;
 pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
 pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};

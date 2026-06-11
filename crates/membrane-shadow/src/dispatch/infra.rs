@@ -312,6 +312,14 @@ pub(super) async fn dispatch_gate(
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
         "gate.status" => dispatch_gate_status().await,
+        "gate.profile" => {
+            let gate_name = args.first().ok_or_else(|| {
+                crate::error::ShadowError::Parse(
+                    "gate.profile requires gate name: membrane gate.profile <gate>".into(),
+                )
+            })?;
+            dispatch_gate_profile(gate_name)
+        }
         _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
     }
 }
@@ -338,6 +346,32 @@ async fn dispatch_gate_status() -> crate::Result<ShadowOutcome> {
         probe_lines.join("\n"),
     );
     Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
+}
+
+fn dispatch_gate_profile(gate_name: &str) -> crate::Result<ShadowOutcome> {
+    let workspace_root = crate::temporal::resolve_workspace_root()?;
+    let manifest = crate::manifest::load_from_workspace(&workspace_root)?;
+
+    let Some(profile) = manifest.gates.get(gate_name) else {
+        let available: Vec<&String> = manifest.gates.keys().collect();
+        return Ok(ShadowOutcome::fail(format!(
+            "gate '{gate_name}' not in ecosystem_manifest.toml. Available: {available:?}"
+        )));
+    };
+
+    let msg = format!(
+        "gate.profile: {gate_name}\n  target: {}\n  mobility: {}\n  bind_mode: {}\n  \
+         composition: {}\n  transport: {}\n  mesh_peer: {}\n  repos: {}",
+        profile.target.as_deref().unwrap_or("(default)"),
+        profile.mobility.as_deref().unwrap_or("fixed"),
+        profile.bind_mode.as_deref().unwrap_or("(auto)"),
+        profile.composition.as_deref().unwrap_or("full"),
+        profile.transport.as_deref().unwrap_or("(auto)"),
+        profile.mesh_peer.as_deref().unwrap_or("(default relay)"),
+        profile.repos.len(),
+    );
+
+    Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(profile)?))
 }
 
 async fn gate_health(config: &ShadowConfig) -> crate::Result<ShadowOutcome> {

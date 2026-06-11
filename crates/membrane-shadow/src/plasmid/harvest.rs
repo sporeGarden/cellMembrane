@@ -291,6 +291,15 @@ async fn harvest_one(
         };
     }
 
+    // BUILD-ELF-01: validate architecture before staging
+    if let Err(detail) = validate_elf_arch(&bin_path, target).await {
+        return HarvestResult {
+            binary: primal.into(),
+            status: HarvestStatus::Failed,
+            detail,
+        };
+    }
+
     strip_binary(&bin_path, primal, target).await;
 
     match stage_to_depot(primal, &bin_path, depot_dir, target) {
@@ -348,6 +357,43 @@ async fn clone_source(
     } else {
         Err("git clone failed on both Forgejo and GitHub".into())
     }
+}
+
+/// Validate the ELF binary matches the expected target architecture (BUILD-ELF-01).
+pub(super) async fn validate_elf_arch(
+    bin_path: &Path,
+    target: &str,
+) -> std::result::Result<(), String> {
+    let output = tokio::process::Command::new("file")
+        .arg(bin_path)
+        .output()
+        .await
+        .map_err(|e| format!("BUILD-ELF-01: `file` command failed: {e}"))?;
+
+    let file_output = String::from_utf8_lossy(&output.stdout);
+
+    let expected_arch = if target.starts_with("x86_64") {
+        "x86-64"
+    } else if target.starts_with("aarch64") {
+        "ARM aarch64"
+    } else {
+        return Ok(());
+    };
+
+    if !file_output.contains(expected_arch) {
+        return Err(format!(
+            "BUILD-ELF-01: arch mismatch — expected '{expected_arch}' for target '{target}', \
+             got: {file_output}"
+        ));
+    }
+
+    if target.contains("musl") && !file_output.contains("statically linked") {
+        return Err(format!(
+            "BUILD-ELF-01: expected static binary for musl target '{target}', got: {file_output}"
+        ));
+    }
+
+    Ok(())
 }
 
 async fn try_clone(url: &str, clone_dir: &Path) -> bool {

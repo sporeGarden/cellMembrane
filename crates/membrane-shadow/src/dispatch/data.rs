@@ -6,6 +6,7 @@
 //! binary fetching, K-Derm relay chain, content verification).
 
 use crate::cli;
+use crate::error::ShadowError;
 use crate::{ShadowConfig, ShadowOutcome, context, identity, manifest, plasmid, relay, temporal};
 
 // ── Manifest domain ──────────────────────────────────────────────────
@@ -203,6 +204,22 @@ pub(super) async fn dispatch_plasmid(
                 target: cli::extract_flag_value(args, "--target").map(Into::into),
             };
             plasmid::harvest(&harvest_args).await
+        }
+        "plasmid.build" => {
+            let primal = cli::extract_flag_value(args, "--primal")
+                .or_else(|| args.iter().find(|a| !a.starts_with('-')).copied());
+            let Some(primal) = primal else {
+                return Err(ShadowError::Parse(
+                    "plasmid.build requires --primal <name> or positional primal name".into(),
+                ));
+            };
+            let build_args = plasmid::BuildArgs {
+                primal: primal.to_string(),
+                target: cli::extract_flag_value(args, "--target").map(Into::into),
+                depot_dir: cli::extract_flag_value(args, "--depot").map(Into::into),
+                dry_run: args.contains(&"--dry-run"),
+            };
+            plasmid::build::build(&build_args).await
         }
         "plasmid.pipeline" => {
             let primal = cli::extract_flag_value(args, "--primal");

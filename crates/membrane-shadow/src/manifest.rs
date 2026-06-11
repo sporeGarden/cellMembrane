@@ -169,11 +169,37 @@ pub struct RepoEntry {
     pub exclude_remotes: Vec<String>,
 }
 
-/// Gate profile — which repos a gate cares about.
+/// Gate profile — topology-aware configuration for deterministic deployment.
+///
+/// Each gate in the ecosystem has a profile that describes its architecture,
+/// transport, composition, and behavior. `gate.bootstrap` reads this profile
+/// to configure the gate without operator memory (guideStone P1: Deterministic).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GateProfile {
     /// List of repo short names this gate syncs.
+    #[serde(default)]
     pub repos: Vec<String>,
+    /// Target architecture (e.g. `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`).
+    #[serde(default)]
+    pub target: Option<String>,
+    /// Mobility classification: `fixed` or `mobile`.
+    #[serde(default)]
+    pub mobility: Option<String>,
+    /// Mesh relay peer address for federation (e.g. `157.230.3.183:7700`).
+    #[serde(default)]
+    pub mesh_peer: Option<String>,
+    /// `PRIMAL_BIND_MODE` for this gate (e.g. `tcp_only`, `fallback`, `uds`).
+    #[serde(default)]
+    pub bind_mode: Option<String>,
+    /// Composition: which primals to start (e.g. `tower`, `compute`, `full`).
+    #[serde(default)]
+    pub composition: Option<String>,
+    /// Transport: how binaries reach this gate (`wan`, `lan`, `adb`, `local`).
+    #[serde(default)]
+    pub transport: Option<String>,
+    /// Gate-specific notes for operators.
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 impl EcosystemManifest {

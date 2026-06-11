@@ -37,7 +37,8 @@ Gate (biomeOS gate.*):
   gate.info                        VPS system info + service summary
   gate.pull                        Run cascade-pull on VPS
   gate.check                       Parity check on VPS workspace
-  gate.status                      Local gate health (depot, mesh, primals)
+  gate.status                      Local gate health (JSON-RPC probe, depot, mesh)
+  gate.profile <gate>              Show gate profile from ecosystem_manifest.toml
   gate.bootstrap <name> [--dry-run] [--mobile]
                                    One-command gate enrollment (fetch→verify→mesh→start→health)
                                    --mobile: write gate-name for NM reconnect hook
@@ -84,6 +85,7 @@ Plasmid (primal binary bootstrap):
   plasmid.pipeline [--primal NAME] [--now] [--dry-run]
                                    Zero-touch: harvest → refresh → alive (full cycle)
   plasmid.trigger                  Remotely trigger VPS pipeline via SSH (immediate kick)
+  plasmid.build <primal>            guideStone-grade single-primal build (ELF validation, provenance)
   plasmid.ndk.check                Check NDK toolchain for aarch64-linux-android cross-compile
   plasmid.depot_sync               Sync inner→outer membrane (BLAKE3 diff, atomic copy, checksums)
   plasmid.status                   Report depot freshness and upstream drift

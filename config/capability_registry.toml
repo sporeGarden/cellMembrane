@@ -33,6 +33,8 @@ gate_pull = { protocol = "ssh", description = "Pull ecosystem repos on VPS" }
 gate_bootstrap = { protocol = "cli", description = "One-command gate enrollment (fetch, verify, mesh, start, health)" }
 gate_bootstrap_mobile = { protocol = "cli", description = "Gate bootstrap with --mobile flag (writes gate-name, enables NM reconnect hook)" }
 gate_status = { protocol = "cli", description = "Local gate health probe (depot, mesh, primals, freshness)" }
+plasmid_build = { protocol = "cli", description = "guideStone-grade single-primal build with ELF validation + provenance" }
+gate_profile = { protocol = "cli", description = "Read gate profile from ecosystem_manifest.toml" }
 ndk_check = { protocol = "cli", description = "Verify NDK toolchain for aarch64-linux-android cross-compilation" }
 harvest_android = { protocol = "cli", description = "plasmid.harvest --target aarch64-linux-android (NDK cross-compile pipeline)" }
 

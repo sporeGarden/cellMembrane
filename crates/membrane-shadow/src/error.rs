@@ -45,6 +45,14 @@ pub enum ShadowError {
     #[error("serialize: {0}")]
     Serialize(#[from] toml::ser::Error),
 
+    /// Configuration error (missing key, invalid structure).
+    #[error("config: {0}")]
+    Config(String),
+
+    /// Build pipeline failure.
+    #[error("build: {0}")]
+    Build(String),
+
     /// Git command failure.
     #[error("git: {0}")]
     Git(String),

@@ -78,12 +78,70 @@ pub async fn bootstrap(
 
     let all_pass = phases.iter().all(|p| p.ok);
 
+    // Emit deployment.toml — guideStone P2 (Reference-Traceable)
+    phases.push(emit_deployment_toml(
+        gate_name, &arch, mobility, dry_run, all_pass,
+    ));
+
     Ok(BootstrapResult {
         gate_name: gate_name.to_string(),
         arch,
         phases,
         all_pass,
     })
+}
+
+fn emit_deployment_toml(
+    gate_name: &str,
+    arch: &str,
+    mobility: cellmembrane_types::GateMobility,
+    dry_run: bool,
+    all_pass: bool,
+) -> BootstrapPhase {
+    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let deployment_path = std::path::Path::new(&install_base).join("deployment.toml");
+
+    if dry_run {
+        return BootstrapPhase {
+            name: "deployment.emit".into(),
+            ok: true,
+            detail: format!("dry-run: would write {}", deployment_path.display()),
+        };
+    }
+
+    let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+    let hostname = match std::process::Command::new("hostname").output() {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        Err(_) => "unknown".into(),
+    };
+
+    let content = format!(
+        "# deployment.toml — gate.bootstrap provenance record\n\
+         # guideStone P2: Reference-Traceable\n\
+         \n\
+         [deployment]\n\
+         gate = \"{gate_name}\"\n\
+         arch = \"{arch}\"\n\
+         mobility = \"{mobility}\"\n\
+         hostname = \"{hostname}\"\n\
+         timestamp = \"{timestamp}\"\n\
+         all_pass = {all_pass}\n\
+         membrane_version = \"{}\"\n",
+        env!("CARGO_PKG_VERSION"),
+    );
+
+    let ok = std::fs::write(&deployment_path, content).is_ok();
+
+    BootstrapPhase {
+        name: "deployment.emit".into(),
+        ok,
+        detail: if ok {
+            format!("wrote {}", deployment_path.display())
+        } else {
+            format!("failed to write {}", deployment_path.display())
+        },
+    }
 }
 
 fn bootstrap_mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
@@ -627,22 +685,74 @@ async fn health_sweep(arch: &str) -> (bool, String) {
             continue;
         }
 
-        let output = tokio::process::Command::new("pgrep")
-            .args(["-f", &format!("{primal}.*server")])
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .await;
-
-        match output {
-            Ok(o) if o.status.success() => alive += 1,
-            _ => dead += 1,
+        // Prefer JSON-RPC health probe (guideStone P3: Self-Verifying)
+        if probe_primal_jsonrpc(primal).await {
+            alive += 1;
+        } else if probe_primal_pgrep(primal).await {
+            // Fallback to process detection for primals without JSON-RPC yet
+            alive += 1;
+        } else {
+            dead += 1;
         }
     }
 
     let total = alive + dead;
     let ok = dead == 0;
     (ok, format!("{alive}/{total} primals alive"))
+}
+
+/// Probe a primal via JSON-RPC `health` method on its UDS socket.
+///
+/// Standard socket path: `/run/membrane/{primal}.sock`
+/// Fallback paths: `$XDG_RUNTIME_DIR/biomeos/{primal}.sock`
+async fn probe_primal_jsonrpc(primal: &str) -> bool {
+    let socket_paths = [
+        format!("/run/membrane/{primal}.sock"),
+        format!(
+            "{}/biomeos/{primal}.sock",
+            std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/run/user/1000".into())
+        ),
+    ];
+
+    for socket_path in &socket_paths {
+        if !std::path::Path::new(socket_path).exists() {
+            continue;
+        }
+
+        let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+
+        let result = tokio::process::Command::new("bash")
+            .args([
+                "-c",
+                &format!(
+                    "echo '{request}' | timeout 2 socat - UNIX-CONNECT:{socket_path} 2>/dev/null"
+                ),
+            ])
+            .output()
+            .await;
+
+        if let Ok(output) = result {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if stdout.contains("\"result\"") || stdout.contains("\"status\"") {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Fallback: detect running process via pgrep.
+async fn probe_primal_pgrep(primal: &str) -> bool {
+    tokio::process::Command::new("pgrep")
+        .args(["-f", &format!("{primal}.*server")])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+        .is_ok_and(|s| s.success())
 }
 
 fn resolve_plasmidbin_dir() -> std::path::PathBuf {
