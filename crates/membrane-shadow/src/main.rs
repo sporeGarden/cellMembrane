@@ -81,7 +81,7 @@ Plasmid (primal binary bootstrap):
                                    Fetch primal binaries with BLAKE3 verification
   plasmid.refresh [--primal NAME] [--source-dir DIR] [--dry-run]
                                    Push local binaries to VPS (atomic replace + restart)
-  plasmid.harvest [--primal NAME] [--depot DIR] [--target TRIPLE] [--force] [--dry-run]
+  plasmid.harvest [--primal NAME] [--all] [--depot DIR] [--target TRIPLE] [--force] [--dry-run]
                                    Build from source, checksum, stage to depot
   plasmid.pipeline [--primal NAME] [--now] [--dry-run]
                                    Zero-touch: harvest → refresh → alive (full cycle)

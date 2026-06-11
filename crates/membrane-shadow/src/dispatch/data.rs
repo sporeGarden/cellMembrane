@@ -196,9 +196,14 @@ pub(super) async fn dispatch_plasmid(
             plasmid::refresh(config, &refresh_args).await
         }
         "plasmid.harvest" => {
+            let all = args.contains(&"--all");
             let harvest_args = plasmid::HarvestArgs {
-                primal: cli::extract_flag_value(args, "--primal").map(Into::into),
-                force: args.contains(&"--force"),
+                primal: if all {
+                    None
+                } else {
+                    cli::extract_flag_value(args, "--primal").map(Into::into)
+                },
+                force: args.contains(&"--force") || all,
                 dry_run: args.contains(&"--dry-run"),
                 depot_dir: cli::extract_flag_value(args, "--depot").map(Into::into),
                 target: cli::extract_flag_value(args, "--target").map(Into::into),
