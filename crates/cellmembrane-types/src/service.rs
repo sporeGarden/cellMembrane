@@ -224,6 +224,14 @@ pub const ENV_DEPOT_HOSTNAME: &str = "MEMBRANE_DEPOT_HOSTNAME";
 /// Default depot hostname served by Caddy.
 pub const DEFAULT_DEPOT_HOSTNAME: &str = "membrane.primals.eco";
 
+/// Sovereign git remote name — authority-first push target.
+///
+/// This is the canonical remote that the temporal sync system converges to
+/// before pushing to mirror remotes. Override for non-standard deployments.
+pub const ENV_SOVEREIGN_REMOTE: &str = "MEMBRANE_SOVEREIGN_REMOTE";
+/// Default sovereign remote name.
+pub const DEFAULT_SOVEREIGN_REMOTE: &str = "forgejo";
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

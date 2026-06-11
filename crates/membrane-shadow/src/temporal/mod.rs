@@ -12,6 +12,7 @@
 //!   - `temporal.sync`  → waterFall (wF): pull leader, push followers
 
 mod cascade;
+mod resolve;
 pub mod types;
 
 pub use cascade::{CascadeMode, CascadeOpts, PostSyncPhase, cascade_with_opts};
@@ -162,34 +163,9 @@ async fn classify_sync_state(
         return (SyncClassification::Parity, SyncAction::None);
     }
 
-    let mut leader_remote = String::new();
-    let mut leader_behind: u32 = 0;
-    let mut has_leader = false;
-    let mut has_followers = false;
-
-    // Authority-first leader selection: if the sovereign remote has commits
-    // we're behind, always prefer it as the pull leader. This prevents the
-    // system from choosing a mirror as leader, which would force us to rebase
-    // from an unreliable source and create circular divergence.
-    let sovereign_pos = positions.iter().find(|p| p.remote == SOVEREIGN_REMOTE);
-    if let Some(sp) = sovereign_pos {
-        if sp.behind > 0 {
-            leader_remote = sp.remote.clone();
-            leader_behind = sp.behind;
-            has_leader = true;
-        }
-    }
-
-    for pos in positions {
-        if !has_leader && pos.behind > 0 && pos.behind > leader_behind {
-            leader_behind = pos.behind;
-            leader_remote = pos.remote.clone();
-            has_leader = true;
-        }
-        if pos.ahead > 0 {
-            has_followers = true;
-        }
-    }
+    let (leader_remote, _) = resolve::select_leader(positions);
+    let has_leader = !leader_remote.is_empty();
+    let has_followers = positions.iter().any(|p| p.ahead > 0);
 
     let diverge_count = count_divergent_remotes(local_path, positions, branch).await;
 
@@ -363,7 +339,6 @@ async fn sync_converge(
 ) -> Result<TemporalSyncResult> {
     let branch = &matrix.branch;
     let mut pulled_from = None;
-    let mut pushed_to = Vec::new();
 
     match &matrix.action {
         SyncAction::Pull { leader } => {
@@ -404,40 +379,14 @@ async fn sync_converge(
         }
     }
 
-    // Authority-first push ordering: push sovereign remote before mirrors.
-    // Mirrors get force-with-lease to prevent circular divergence when they
-    // have independent commits from relay chains or parallel teams.
-    let mut push_targets: Vec<&RemotePosition> = matrix
-        .positions
-        .iter()
-        .filter(|p| pulled_from.as_deref() != Some(p.remote.as_str()))
-        .collect();
-    push_targets.sort_by_key(|p| i32::from(p.remote != SOVEREIGN_REMOTE));
-
-    for pos in push_targets {
-        if push_target == "forgejo" && pos.remote != "forgejo" {
-            continue;
-        }
-        let remote_ref = format!("{}/{branch}", pos.remote);
-        let ahead_range = format!("{remote_ref}..HEAD");
-        let ahead = rev_list_count(local_path, &ahead_range).await;
-        if ahead == 0 {
-            continue;
-        }
-        // Sovereign remote: normal push. Mirror remotes: force-with-lease.
-        let ok = if pos.remote == SOVEREIGN_REMOTE {
-            git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await
-        } else {
-            git_ok(
-                local_path,
-                &["push", "--force-with-lease", &pos.remote, branch],
-            )
-            .await
-        };
-        if ok {
-            pushed_to.push(pos.remote.clone());
-        }
-    }
+    let pushed_to = resolve::push_converge_followers(
+        local_path,
+        &matrix.positions,
+        pulled_from.as_deref(),
+        push_target,
+        branch,
+    )
+    .await;
 
     let summary = match (&pulled_from, pushed_to.is_empty()) {
         (Some(l), false) => format!("pull {l}, push {}", pushed_to.join(" ")),
@@ -464,7 +413,14 @@ async fn sync_diverge(
     manifest: Option<&crate::manifest::EcosystemManifest>,
 ) -> Result<TemporalSyncResult> {
     if let SyncAction::TreeParity { leader, followers } = &matrix.action {
-        return resolve_tree_parity(local_path, repo_path, &matrix.branch, leader, followers).await;
+        return resolve::resolve_tree_parity(
+            local_path,
+            repo_path,
+            &matrix.branch,
+            leader,
+            followers,
+        )
+        .await;
     }
 
     if let Some(m) = manifest {
@@ -486,7 +442,8 @@ async fn sync_diverge(
 
         let _ = crate::impulse::post_sync_diverge(workspace_root, &args).await;
 
-        let resolved = apply_divergence_policy(local_path, matrix, policy, push_target).await;
+        let resolved =
+            resolve::apply_divergence_policy(local_path, matrix, policy, push_target).await;
         if let Some(summary) = resolved {
             return Ok(TemporalSyncResult {
                 repo_path: repo_path.to_string(),
@@ -504,49 +461,6 @@ async fn sync_diverge(
         summary: format!("DIVERGE — {matrix}"),
         pulled_from: None,
         pushed_to: vec![],
-    })
-}
-
-async fn resolve_tree_parity(
-    local_path: &Path,
-    repo_path: &str,
-    branch: &str,
-    leader: &str,
-    followers: &[String],
-) -> Result<TemporalSyncResult> {
-    if !git_ok(
-        local_path,
-        &["reset", "--hard", &format!("{leader}/{branch}")],
-    )
-    .await
-    {
-        return Ok(TemporalSyncResult {
-            repo_path: repo_path.to_string(),
-            ok: false,
-            summary: format!("tree-parity reset to {leader} failed"),
-            pulled_from: None,
-            pushed_to: vec![],
-        });
-    }
-
-    let mut pushed_to = Vec::new();
-    for follower in followers {
-        if git_ok(
-            local_path,
-            &["push", "--force-with-lease", follower, branch],
-        )
-        .await
-        {
-            pushed_to.push(follower.clone());
-        }
-    }
-
-    Ok(TemporalSyncResult {
-        repo_path: repo_path.to_string(),
-        ok: true,
-        summary: format!("tree-parity resolved: {leader} → {}", pushed_to.join(", ")),
-        pulled_from: Some(leader.to_string()),
-        pushed_to,
     })
 }
 
@@ -578,186 +492,6 @@ pub async fn check_all(workspace_root: &Path, repo_paths: &[&str]) -> Result<Tem
 /// Resolve workspace root. Delegates to [`crate::resolve_workspace_root`].
 pub fn resolve_workspace_root() -> Result<PathBuf> {
     crate::resolve_workspace_root()
-}
-
-/// Apply graduated merge strategy based on divergence policy from manifest.
-///
-/// Returns `Some(summary)` if the policy was applied successfully (repo converged),
-/// or `None` if the policy defers resolution (`impulse-only`, `flag`, `agentic`).
-async fn apply_divergence_policy(
-    local_path: &Path,
-    matrix: &TemporalMatrix,
-    policy: &str,
-    push_target: &str,
-) -> Option<String> {
-    let branch = &matrix.branch;
-
-    let leader = matrix
-        .positions
-        .iter()
-        .min_by_key(|p| p.behind)
-        .map(|p| &p.remote)?;
-
-    match policy {
-        "merge-ff" => {
-            if !git_ok(
-                local_path,
-                &["pull", leader, branch, "--ff-only", "--quiet"],
-            )
-            .await
-            {
-                return None;
-            }
-            let pushed =
-                push_to_followers(local_path, matrix, leader, push_target, branch, false).await;
-            Some(format!(
-                "policy:merge-ff pull {leader}, push {}",
-                pushed.join(" ")
-            ))
-        }
-        "merge-rebase" => {
-            if !git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
-                return None;
-            }
-            let pushed =
-                push_to_followers(local_path, matrix, leader, push_target, branch, true).await;
-            Some(format!(
-                "policy:merge-rebase rebase {leader}, push {}",
-                pushed.join(" ")
-            ))
-        }
-        "impulse-only" | "flag" => None,
-        "agentic" => resolve_agentic(local_path, matrix, leader, push_target, branch).await,
-        unknown => {
-            eprintln!("temporal: unknown divergence policy {unknown:?} — treating as flag");
-            None
-        }
-    }
-}
-
-/// Agentic divergence resolver — authority-first graduated escalation.
-///
-/// Strategy:
-///   1. If leader is not the sovereign remote, prefer converging to sovereign first
-///   2. Try fast-forward from authority → try rebase from authority
-///   3. Push mirrors with force-with-lease (preventing circular divergence)
-///   4. Signal conflict only if convergence to authority fails
-///
-/// The key invariant: never rebase from a mirror remote. The sovereign (Forgejo)
-/// is the single source of truth; mirrors (GitHub) may receive independent pushes
-/// that should be overwritten via force-with-lease, not rebased onto.
-async fn resolve_agentic(
-    local_path: &Path,
-    matrix: &TemporalMatrix,
-    leader: &str,
-    push_target: &str,
-    branch: &str,
-) -> Option<String> {
-    // Determine the actual convergence target: prefer sovereign even if the
-    // "leader" (by commit count) is a mirror. This prevents rebasing onto
-    // mirror state which creates circular divergence.
-    let authority = if matrix
-        .positions
-        .iter()
-        .any(|p| p.remote == SOVEREIGN_REMOTE && p.behind > 0)
-    {
-        SOVEREIGN_REMOTE
-    } else {
-        leader
-    };
-
-    // Phase 1: attempt fast-forward from authority (no data mutation risk)
-    if git_ok(
-        local_path,
-        &["pull", authority, branch, "--ff-only", "--quiet"],
-    )
-    .await
-    {
-        let pushed =
-            push_to_followers(local_path, matrix, authority, push_target, branch, false).await;
-        return Some(format!(
-            "policy:agentic resolved via ff from {authority}, push {}",
-            pushed.join(" ")
-        ));
-    }
-
-    // Phase 2: attempt rebase onto authority only (never rebase onto mirror)
-    if authority == SOVEREIGN_REMOTE
-        && git_ok(
-            local_path,
-            &["pull", "--rebase", authority, branch, "--quiet"],
-        )
-        .await
-    {
-        let pushed =
-            push_to_followers(local_path, matrix, authority, push_target, branch, true).await;
-        return Some(format!(
-            "policy:agentic resolved via rebase from {authority}, push {}",
-            pushed.join(" ")
-        ));
-    }
-
-    // Rebase failed or leader is a mirror — abort any in-progress rebase state
-    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
-
-    // Phase 3: signal conflict — emit to stderr and return None for impulse handling
-    eprintln!(
-        "temporal: agentic resolver CONFLICT for {} — convergence to {authority} failed",
-        matrix.repo_path,
-    );
-    None
-}
-
-/// The sovereign remote name. Authority-first push always converges to this
-/// remote before pushing to mirrors. Mirrors receive `--force-with-lease`
-/// to handle independent pushes from relay chains or other teams.
-const SOVEREIGN_REMOTE: &str = "forgejo";
-
-async fn push_to_followers(
-    local_path: &Path,
-    matrix: &TemporalMatrix,
-    leader: &str,
-    push_target: &str,
-    branch: &str,
-    force_lease: bool,
-) -> Vec<String> {
-    let mut pushed = Vec::new();
-
-    // Authority-first: push to sovereign remote first (normal push) before
-    // mirrors. This prevents circular divergence when mirrors receive
-    // independent commits (e.g. from relay chains or parallel teams).
-    let sovereign_first = {
-        let mut remotes: Vec<&RemotePosition> = matrix
-            .positions
-            .iter()
-            .filter(|p| p.remote != leader)
-            .collect();
-        remotes.sort_by_key(|p| i32::from(p.remote != SOVEREIGN_REMOTE));
-        remotes
-    };
-
-    for pos in sovereign_first {
-        if push_target == "forgejo" && pos.remote != "forgejo" {
-            continue;
-        }
-        // Sovereign remote gets a normal push (or force-with-lease if we rebased).
-        // Mirror remotes always get force-with-lease to handle their independent
-        // state without creating circular divergence.
-        let use_force = force_lease || pos.remote != SOVEREIGN_REMOTE;
-        let ok = if use_force {
-            git_ok(
-                local_path,
-                &["push", "--force-with-lease", &pos.remote, branch],
-            )
-            .await
-        } else {
-            git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await
-        };
-        if ok {
-            pushed.push(pos.remote.clone());
-        }
-    }
-    pushed
 }
 
 /// Re-export freshness tracking functions (for backward compat from dispatch).

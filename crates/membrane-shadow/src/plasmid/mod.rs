@@ -16,6 +16,7 @@ mod depot;
 mod fetch;
 mod harvest;
 mod refresh;
+pub(crate) mod toolchain;
 
 pub use build::BuildArgs;
 pub use fetch::*;

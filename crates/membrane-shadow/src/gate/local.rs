@@ -6,13 +6,15 @@ use std::path::PathBuf;
 
 /// Resolve the local gate identity from env or filesystem.
 ///
-/// Priority: `MEMBRANE_GATE_NAME` env → `/opt/ecoPrimals/.gate` → `~/.gate` → "unknown".
+/// Priority: `GATE_NAME` env → `/opt/ecoPrimals/.gate` → `~/.gate` → "unknown".
 pub(super) fn resolve_local_gate_identity() -> String {
-    if let Ok(name) = std::env::var("MEMBRANE_GATE_NAME") {
+    if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
         return name;
     }
+    let ecoprimals_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
     let candidates = [
-        PathBuf::from("/opt/ecoPrimals/.gate"),
+        PathBuf::from(format!("{ecoprimals_root}/.gate")),
         dirs_home().join(".gate"),
     ];
     for path in &candidates {

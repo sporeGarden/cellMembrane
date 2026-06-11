@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use super::{detect_target_triple, nucleus_primals};
+use super::{detect_target_triple, nucleus_primals, toolchain};
 
 /// Parsed CLI arguments for `plasmid.harvest`.
 pub struct HarvestArgs {
@@ -268,7 +268,7 @@ async fn harvest_one(
 
     let head_commit = get_local_head(&clone_dir).await.unwrap_or_default();
 
-    if let Err(detail) = build_binary(source, target, &clone_dir).await {
+    if let Err(detail) = toolchain::build_binary(source, target, &clone_dir).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
@@ -300,7 +300,7 @@ async fn harvest_one(
         };
     }
 
-    strip_binary(&bin_path, primal, target).await;
+    toolchain::strip_binary(&bin_path, primal, target).await;
 
     match stage_to_depot(primal, &bin_path, depot_dir, target) {
         Ok((size, blake3)) => {
@@ -341,12 +341,12 @@ async fn clone_source(
     let github_url = format!("https://github.com/{}.git", source.repo);
 
     // Try Forgejo SSH first (works for private repos, inner membrane)
-    if try_clone(&forgejo_url, clone_dir).await {
+    if toolchain::try_clone(&forgejo_url, clone_dir).await {
         return Ok(());
     }
 
     // Fall back to GitHub HTTPS (outer membrane, public repos)
-    if try_clone(&github_url, clone_dir).await {
+    if toolchain::try_clone(&github_url, clone_dir).await {
         return Ok(());
     }
 
@@ -359,169 +359,9 @@ async fn clone_source(
     }
 }
 
-/// Validate the ELF binary matches the expected target architecture (BUILD-ELF-01).
-pub(super) async fn validate_elf_arch(
-    bin_path: &Path,
-    target: &str,
-) -> std::result::Result<(), String> {
-    let output = tokio::process::Command::new("file")
-        .arg(bin_path)
-        .output()
-        .await
-        .map_err(|e| format!("BUILD-ELF-01: `file` command failed: {e}"))?;
-
-    let file_output = String::from_utf8_lossy(&output.stdout);
-
-    let expected_arch = if target.starts_with("x86_64") {
-        "x86-64"
-    } else if target.starts_with("aarch64") {
-        "ARM aarch64"
-    } else {
-        return Ok(());
-    };
-
-    if !file_output.contains(expected_arch) {
-        return Err(format!(
-            "BUILD-ELF-01: arch mismatch — expected '{expected_arch}' for target '{target}', \
-             got: {file_output}"
-        ));
-    }
-
-    if target.contains("musl") && !file_output.contains("statically linked") {
-        return Err(format!(
-            "BUILD-ELF-01: expected static binary for musl target '{target}', got: {file_output}"
-        ));
-    }
-
-    Ok(())
-}
-
-async fn try_clone(url: &str, clone_dir: &Path) -> bool {
-    if clone_dir.exists() {
-        let _ = std::fs::remove_dir_all(clone_dir);
-    }
-    let result = tokio::process::Command::new("git")
-        .args(["clone", "--depth", "1", url, &clone_dir.to_string_lossy()])
-        .output()
-        .await;
-    result.is_ok_and(|o| o.status.success())
-}
-
-/// Android NDK target triple for native grapheneGate binaries.
-pub(super) const ANDROID_TARGET: &str = "aarch64-linux-android";
-
-/// Environment variable pointing to the Android NDK root.
-pub(super) const ENV_ANDROID_NDK_HOME: &str = "ANDROID_NDK_HOME";
-
-/// Resolve the NDK linker path for `aarch64-linux-android`.
-///
-/// Searches for the linker at `$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/`.
-/// Returns `None` if NDK is not installed or the linker is not found.
-pub(super) fn resolve_ndk_linker() -> Option<std::path::PathBuf> {
-    let ndk_home = std::env::var(ENV_ANDROID_NDK_HOME).ok()?;
-    let ndk_path = std::path::Path::new(&ndk_home);
-
-    let prebuilt = ndk_path.join("toolchains/llvm/prebuilt/linux-x86_64/bin");
-
-    // NDK r25+ uses versioned clang (e.g. aarch64-linux-android33-clang)
-    // Try API 33, 34, 35 then fall back to unversioned
-    for api in [35, 34, 33, 31, 30] {
-        let linker = prebuilt.join(format!("aarch64-linux-android{api}-clang"));
-        if linker.exists() {
-            return Some(linker);
-        }
-    }
-
-    let unversioned = prebuilt.join("aarch64-linux-android-clang");
-    if unversioned.exists() {
-        return Some(unversioned);
-    }
-
-    None
-}
-
-async fn build_binary(
-    source: &SourceEntry,
-    target: &str,
-    clone_dir: &Path,
-) -> std::result::Result<(), String> {
-    let target_dir = clone_dir.join("target");
-    let mut cmd = tokio::process::Command::new("cargo");
-    cmd.args([
-        "build",
-        "--release",
-        "--target",
-        target,
-        "--manifest-path",
-        &clone_dir.join("Cargo.toml").to_string_lossy(),
-        "--target-dir",
-        &target_dir.to_string_lossy(),
-    ]);
-
-    if let Some(extra) = &source.build_args {
-        for arg in extra.split_whitespace() {
-            cmd.arg(arg);
-        }
-    }
-
-    // NDK linker + CC + AR configuration for Android targets
-    if target.contains("android") {
-        if let Some(linker) = resolve_ndk_linker() {
-            let target_upper = target.to_uppercase().replace('-', "_");
-            cmd.env(format!("CARGO_TARGET_{target_upper}_LINKER"), &linker);
-
-            // cc-rs crate needs CC and AR to compile C dependencies
-            let cc_env = format!("CC_{}", target.replace('-', "_"));
-            let ar_env = format!("AR_{}", target.replace('-', "_"));
-            let bin_dir = linker.parent().unwrap_or_else(|| Path::new("."));
-            cmd.env(&cc_env, &linker);
-            cmd.env(&ar_env, bin_dir.join("llvm-ar"));
-
-            if let Ok(ndk_home) = std::env::var(ENV_ANDROID_NDK_HOME) {
-                cmd.env("ANDROID_NDK_HOME", &ndk_home);
-            }
-        } else {
-            return Err(format!(
-                "NDK linker not found for {target}. Set {ENV_ANDROID_NDK_HOME} \
-                 to the NDK root (e.g. /opt/android-ndk-r26d)"
-            ));
-        }
-    }
-
-    let output = cmd.output().await;
-    if output.as_ref().is_ok_and(|o| o.status.success()) {
-        Ok(())
-    } else {
-        Err("cargo build failed".into())
-    }
-}
-
-async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
-    let strip_cmd = if target.contains("android") {
-        resolve_ndk_strip().unwrap_or_else(|| "llvm-strip".into())
-    } else {
-        "strip".into()
-    };
-
-    let result = tokio::process::Command::new(&strip_cmd)
-        .arg(bin_path)
-        .output()
-        .await;
-    if result.is_err() {
-        eprintln!("warn: strip failed for {primal} — proceeding unstripped");
-    }
-}
-
-fn resolve_ndk_strip() -> Option<String> {
-    let ndk_home = std::env::var(ENV_ANDROID_NDK_HOME).ok()?;
-    let strip = std::path::Path::new(&ndk_home)
-        .join("toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip");
-    if strip.exists() {
-        Some(strip.to_string_lossy().into_owned())
-    } else {
-        None
-    }
-}
+pub(super) use toolchain::{
+    ANDROID_TARGET, ENV_ANDROID_NDK_HOME, resolve_ndk_linker, validate_elf_arch,
+};
 
 fn stage_to_depot(
     primal: &str,
