@@ -14,7 +14,15 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
-const CADDY_BIN: &str = "/opt/membrane/caddy";
+fn caddy_bin_path() -> &'static str {
+    static BIN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    BIN.get_or_init(|| {
+        let vps_bin_dir = std::env::var(cellmembrane_types::service::ENV_VPS_BIN_DIR)
+            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+        format!("{vps_bin_dir}/caddy")
+    })
+}
+
 const CADDYFILE: &str = "/etc/membrane/Caddyfile";
 
 /// Execute a command on the Caddy host (golgiBody inner membrane), returning stdout and exit code.
@@ -179,8 +187,9 @@ pub async fn vhosts(config: &ShadowConfig) -> Result<Vec<VhostEntry>> {
 
 /// Reload Caddy configuration (graceful — zero downtime).
 pub async fn reload(config: &ShadowConfig) -> Result<String> {
+    let caddy_bin = caddy_bin_path();
     let cmd = format!(
-        "{CADDY_BIN} reload --config {CADDYFILE} --force 2>&1 || \
+        "{caddy_bin} reload --config {CADDYFILE} --force 2>&1 || \
          systemctl reload caddy-tls 2>&1"
     );
     let (out, code) = caddy_exec(config, &cmd).await?;
@@ -197,7 +206,8 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
 
 /// Validate Caddyfile syntax without applying.
 pub async fn validate(config: &ShadowConfig) -> Result<String> {
-    let cmd = format!("{CADDY_BIN} validate --config {CADDYFILE} 2>&1");
+    let caddy_bin = caddy_bin_path();
+    let cmd = format!("{caddy_bin} validate --config {CADDYFILE} 2>&1");
     let (out, code) = caddy_exec(config, &cmd).await?;
 
     if code == 0 {
@@ -216,6 +226,7 @@ pub async fn validate(config: &ShadowConfig) -> Result<String> {
 /// enabling WAN gates to fetch via `plasmid.fetch --source wan`.
 /// The route serves `{depot_root}/primals/` at `https://{outer_domain}/depot/`.
 pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
+    let caddy_bin = caddy_bin_path();
     let depot_root = format!(
         "{}/plasmidBin/primals",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
@@ -249,8 +260,8 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && r
     }
 
     let validate_reload = format!(
-        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
-         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
+         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
@@ -258,7 +269,7 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && r
         let rollback_cmd = format!(
             "cd {}/infra/plasmidBin && \
              git checkout -- {CADDYFILE} 2>/dev/null; \
-             {CADDY_BIN} reload --config {CADDYFILE} --force 2>/dev/null",
+             {caddy_bin} reload --config {CADDYFILE} --force 2>/dev/null",
             cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
         );
         let _ = caddy_exec(config, &rollback_cmd).await;
@@ -278,6 +289,7 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {CADDYFILE} && r
 /// Enables zero-git verification: gates can fetch the authoritative checksum
 /// file directly from the WAN endpoint without cloning plasmidBin.
 pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> {
+    let caddy_bin = caddy_bin_path();
     let checksums_path = format!(
         "{}/plasmidBin/checksums.toml",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
@@ -309,8 +321,8 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
     }
 
     let validate_reload = format!(
-        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
-         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
+         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
@@ -335,6 +347,7 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
 /// `BearDog` (or any external provisioner) writes certs to that path.
 /// Caddy reads them on reload — no ACME interaction required.
 pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String> {
+    let caddy_bin = caddy_bin_path();
     let cert_dir = cellmembrane_types::TlsProvider::default_cert_dir();
     let fullchain = format!("{cert_dir}/{domain}/fullchain.pem");
     let privkey = format!("{cert_dir}/{domain}/privkey.pem");
@@ -377,15 +390,15 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
     }
 
     let validate_reload = format!(
-        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
-         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
+         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
     if reload_code != 0 {
         let rollback = format!(
             "sed -i '/^{domain}/,/^}}/ {{ /tls \\//d; }}' {CADDYFILE}; \
-             {CADDY_BIN} reload --config {CADDYFILE} --force 2>/dev/null"
+             {caddy_bin} reload --config {CADDYFILE} --force 2>/dev/null"
         );
         let _ = caddy_exec(config, &rollback).await;
         return Err(ShadowError::Ssh(format!(
@@ -404,6 +417,7 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
 /// Removes the explicit `tls /path/...` directive, letting Caddy resume
 /// automatic certificate management.
 pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<String> {
+    let caddy_bin = caddy_bin_path();
     let check_cmd = format!(
         "grep -A5 '^{domain}' {CADDYFILE} 2>/dev/null | grep -q 'tls /' && echo EXTERNAL || echo ACME"
     );
@@ -423,8 +437,8 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
     }
 
     let validate_reload = format!(
-        "{CADDY_BIN} validate --config {CADDYFILE} 2>&1 && \
-         {CADDY_BIN} reload --config {CADDYFILE} --force 2>&1"
+        "{caddy_bin} validate --config {CADDYFILE} 2>&1 && \
+         {caddy_bin} reload --config {CADDYFILE} --force 2>&1"
     );
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 

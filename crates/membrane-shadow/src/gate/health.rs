@@ -280,10 +280,12 @@ fn resolve_uid() -> String {
 }
 
 fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
-    let xdg_runtime =
-        std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
+    let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
+    let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
+        .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
     vec![
-        format!("/run/membrane/{primal}.sock"),
+        format!("{socket_base}/{primal}.sock"),
         format!("{xdg_runtime}/biomeos/{primal}.sock"),
     ]
 }
