@@ -49,13 +49,15 @@ pub async fn bootstrap(
     let arch = crate::plasmid::detect_target_triple();
     let mut phases: Vec<BootstrapPhase> = Vec::new();
 
+    let transport = resolve_gate_transport(gate_name);
+
     phases.push(BootstrapPhase {
         name: "arch.detect".into(),
         ok: true,
-        detail: format!("{arch} ({mobility})"),
+        detail: format!("{arch} ({mobility}) transport={transport}"),
     });
 
-    phases.push(bootstrap_fetch_phase(config, dry_run).await);
+    phases.push(bootstrap_fetch_phase(config, &transport, dry_run).await);
 
     let verify_result = verify_local_depot(&arch);
     phases.push(BootstrapPhase {
@@ -176,16 +178,52 @@ fn bootstrap_mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
-async fn bootstrap_fetch_phase(config: &ShadowConfig, dry_run: bool) -> BootstrapPhase {
+/// Resolve the transport backend for a gate from the ecosystem manifest.
+///
+/// Falls back to "wan" if the gate isn't found or the manifest can't be loaded.
+fn resolve_gate_transport(gate_name: &str) -> String {
+    let Ok(workspace_root) = crate::temporal::resolve_workspace_root() else {
+        return "wan".into();
+    };
+    let Ok(manifest) = crate::manifest::load_from_workspace(&workspace_root) else {
+        return "wan".into();
+    };
+    manifest
+        .gates
+        .get(gate_name)
+        .and_then(|p| p.transport.clone())
+        .unwrap_or_else(|| "wan".into())
+}
+
+/// Map a profile transport string to the appropriate `FetchSource`.
+///
+/// `local` uses SSH/rsync (VPS layer). All remote transports currently
+/// resolve to WAN HTTPS. As LAN rsync and ADB push mature, they will
+/// diverge from the WAN fallback.
+fn transport_to_fetch_source(transport: &str) -> crate::plasmid::FetchSource {
+    match transport {
+        "local" => crate::plasmid::FetchSource::Vps,
+        _ => crate::plasmid::FetchSource::Wan,
+    }
+}
+
+async fn bootstrap_fetch_phase(
+    config: &ShadowConfig,
+    transport: &str,
+    dry_run: bool,
+) -> BootstrapPhase {
+    let source = transport_to_fetch_source(transport);
     if dry_run {
         return BootstrapPhase {
             name: "depot.fetch".into(),
             ok: true,
-            detail: "dry-run: would fetch all primals from WAN depot".into(),
+            detail: format!(
+                "dry-run: would fetch all primals via {source} (transport={transport})"
+            ),
         };
     }
     let fetch_args = crate::plasmid::FetchArgs {
-        source: crate::plasmid::FetchSource::Wan,
+        source,
         primal: None,
         release_tag: None,
         force: true,
@@ -208,7 +246,7 @@ async fn bootstrap_fetch_phase(config: &ShadowConfig, dry_run: bool) -> Bootstra
                 .unwrap_or(0);
             (
                 failed == 0,
-                format!("{downloaded} downloaded, {failed} failed"),
+                format!("{downloaded} downloaded, {failed} failed (via {source})"),
             )
         }
         Err(e) => (false, format!("fetch error: {e}")),
