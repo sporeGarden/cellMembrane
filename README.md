@@ -55,21 +55,23 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 351+ tests — pedantic clippy clean
+cargo test                  # 360+ tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 107 (Deterministic Deployment + Stadial-Ready):**
-Zero P1 blockers. Zero development debt. 4-gate mesh collective LIVE.
-`gate.bootstrap` — one-command gate enrollment (6 phases: fetch→verify→mesh→start→health).
-`gate.status` — local gate health probe (depot integrity, mesh, primals, freshness).
-`--dry-run` for bootstrap. Source divergence fix — `plasmid.refresh` reads from depot
-not stale staging. Checksum coherence — pre-push DIVERGENCE warning. WAN checksums —
-`plasmid.fetch --source wan` auto-downloads `checksums.toml` for zero-git verification.
-Atomic publish — harvest auto-commits + pushes checksums.toml + provenance.toml.
-`gate.rs` refactored to `gate/mod.rs` + `gate/local.rs`. 351 tests, zero clippy,
-zero `#[allow]`, zero `unsafe`, zero production `unwrap()`, all files <800L.
+**Wave 110 (Deep Debt Evolution + Gate Expansion):**
+Native async UDS JSON-RPC probes (replaces all bash/socat). `gate/` split into
+`bootstrap.rs` + `health.rs` + `verify.rs` (868L → 4 focused modules). Dual-checksum
+verification (git + WAN). `temporal.cascade --with-restart` (selective NUCLEUS restart).
+Transport-driven bootstrap (profile `transport` field routes fetch). Agentic divergence
+resolver (graduated ff → rebase → signal). All hardcoded org/host values evolved to
+env-overridable constants. northGate + westGate profiles registered. 360 tests, zero
+clippy, zero `#[allow]`, zero `unsafe`, zero production `unwrap()`, all files <800L.
+
+**Wave 107–109 (Deterministic Deployment + guideStone):**
+`gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),
+`gate.profile`, `deployment.toml` emission, BUILD-ELF-01, HARVEST-NAME-01, GATE-PROFILE-01.
 
 **Wave 105–106 (WAN Depot + Cross-Topology Validation):**
 WAN depot SHIPPED. aarch64 14/14 built. 3-gate → 4-gate mesh collective. `gate.bootstrap`
@@ -93,17 +95,19 @@ validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
 Typed Rust CLI for sovereign VPS control — replaces all bash sync/relay scripts:
 
 ```bash
-membrane gate.status                      # Local gate health (depot, mesh, primals, freshness)
-membrane gate.bootstrap <name> [--dry-run]  # One-command gate enrollment (6 phases)
+membrane gate.status                      # Local gate health (native UDS probes + depot + mesh)
+membrane gate.bootstrap <name> [--dry-run] [--mobile]  # Profile-driven enrollment (7 phases)
+membrane gate.profile <name>              # Read gate profile from ecosystem_manifest.toml
 membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
+membrane temporal.cascade --with-restart  # Cascade + fetch + restart updated primals
 membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VPS
-membrane plasmid.fetch --source wan       # WAN HTTPS fetch + BLAKE3 verification
+membrane plasmid.build <primal> [--target T]  # guideStone-grade single-primal build
+membrane plasmid.fetch --source wan       # WAN HTTPS fetch + dual BLAKE3 verification
 membrane plasmid.harvest                  # Build + checksum + auto-publish to git
-membrane plasmid.harvest --target aarch64-linux-android  # NDK cross-compile for grapheneGate
+membrane plasmid.harvest --target aarch64-linux-android  # NDK cross-compile
 membrane plasmid.ndk.check                # Verify NDK toolchain readiness
 membrane plasmid.refresh                  # Push depot binaries to VPS (atomic replace)
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
-membrane caddy.depot.checksums            # Serve checksums.toml from WAN endpoint
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
 ```
@@ -171,6 +175,8 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | WAN depot + aarch64 sweep (Wave 105): WAN fetch HTTPS, 14/14 aarch64, sha2/hmac crates, zero P1 | DONE |
 | Cross-topology validation (Wave 106): gate.bootstrap, cascade auto-fetch, mesh persistence, 3-gate collective, deterministic deploy standard | DONE |
 | Post-stadial hardening (Wave 107): gate.status, --dry-run, WAN checksums, source divergence fix, atomic publish, checksum coherence | DONE |
+| guideStone convergence (Wave 109): plasmid.build, gate.profile, deployment.toml, JSON-RPC health, BUILD-ELF-01 | DONE |
+| Deep debt evolution (Wave 110): native UDS (tokio::net::UnixStream), gate/ modular split, agnostic config, agentic resolver, dual checksum, cascade-restart | DONE |
 
 ---
 
@@ -282,9 +288,12 @@ gardens/cellMembrane/
           impulse.rs          # impulse + potential sense dispatch
           infra.rs            # repo, mirror, service, gate, token
           data.rs             # manifest, identity, context, plasmid, relay
-        gate/                 # Gate operations (bootstrap, status, health)
+        gate/                 # Gate operations (modular: bootstrap, health, verify)
           mod.rs              # VPS-oriented: info, pull, check
-          local.rs            # Local-oriented: bootstrap (6-phase), status (4-probe)
+          bootstrap.rs        # Local enrollment (7-phase, transport-driven)
+          health.rs           # Native async UDS JSON-RPC probes + status
+          verify.rs           # Dual checksum verification (git + WAN)
+          local.rs            # Shared helpers (identity, depot path resolution)
         relay.rs              # K-Derm relay chain (SSH+cat, no rsync)
         impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)
         temporal.rs           # Manifest-driven temporal cascade + tree-parity

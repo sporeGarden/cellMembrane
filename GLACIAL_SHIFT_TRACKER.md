@@ -1,14 +1,21 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-10 (Wave 107)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 4-gate mesh collective LIVE, deterministic deployment CODIFIED
+**Last updated:** 2026-06-11 (Wave 110)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
+**Wave 110 update:** Deep debt evolution — all local bash/socat probes replaced with native
+`tokio::net::UnixStream` async. `gate/local.rs` (868L) refactored to 4 focused modules.
+Dual-checksum verification (git + WAN). `temporal.cascade --with-restart`. Transport-driven
+bootstrap. Agentic divergence resolver (graduated ff → rebase → signal). All hardcoded
+org/host values → env-overridable constants. northGate + westGate profiles registered.
+Stream 2 (Build Pipeline) 6/6 DONE. 360 tests, zero clippy, all files <800L.
+**Wave 109 update:** guideStone convergence — `plasmid.build` (Rust build pipeline),
+`gate.profile`, `deployment.toml` emission, JSON-RPC health probes, BUILD-ELF-01,
+HARVEST-NAME-01, GATE-PROFILE-01. Three-tier context architecture shipped.
 **Wave 107 update:** Post-stadial tooling evolution complete. `gate.status` (local health
 probe), `gate.bootstrap --dry-run`, source divergence fix, checksum coherence detection,
 WAN checksums (zero-git verification), atomic publish (harvest auto-commits checksums.toml).
-Zero development debt: 351 tests, zero clippy, zero `#[allow]`, zero `unsafe`, zero
-production `unwrap()`, all files <800L. Remaining items are purely operational (gate
-power-ons, aarch64 rebuilds).
+Zero development debt: all files <800L. Remaining items are purely operational.
 **Wave 106 update:** Cross-topology validation. gate.bootstrap SHIPPED + VALIDATED on
 strandGate + ironGate. Cascade auto-fetch. NUCLEUS supervision (biomeOS v4.17). 3-gate
 mesh collective (eastGate ↔ golgiBody ↔ ironGate). Deterministic deployment standard
