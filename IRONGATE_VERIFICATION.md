@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 110 (deep debt evolution, native UDS probes, gate expansion, 2026-06-11)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 6-gate mesh
+**Last validated:** Wave 110+ (primal composition grade, capability discovery, configurable paths, 2026-06-11)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 6-gate mesh, capability-based registry
 
 ---
 
@@ -73,7 +73,7 @@ All checks must pass:
 - [ ] `fail2ban` protecting SSH
 - [ ] UFW: zero externally-exposed primal TCP ports
 - [ ] Federation mesh port :7700 operational
-- [ ] `socat` bridges operational for UDS→private-network proxying
+- [ ] Native UDS JSON-RPC probes responding (tokio::net::UnixStream)
 
 ## Ownership After Verification
 

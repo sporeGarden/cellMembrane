@@ -60,14 +60,18 @@ cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsa
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 110 (Deep Debt Evolution + Gate Expansion):**
+**Wave 110+ (Deep Debt Evolution + Primal Composition Grade):**
 Native async UDS JSON-RPC probes (replaces all bash/socat). `gate/` split into
 `bootstrap.rs` + `health.rs` + `verify.rs` (868L → 4 focused modules). Dual-checksum
 verification (git + WAN). `temporal.cascade --with-restart` (selective NUCLEUS restart).
 Transport-driven bootstrap (profile `transport` field routes fetch). Agentic divergence
-resolver (graduated ff → rebase → signal). All hardcoded org/host values evolved to
-env-overridable constants. northGate + westGate profiles registered. 360 tests, zero
-clippy, zero `#[allow]`, zero `unsafe`, zero production `unwrap()`, all files <800L.
+resolver (authority-first graduated ff → rebase → signal, SOVEREIGN_REMOTE configurable).
+`temporal/resolve.rs` extracted (push logic + divergence policy). `plasmid/toolchain.rs`
+extracted (ELF validation + NDK cross-compile). **`ServiceCapability` enum** — primals
+discovered by capability (`MeshRelay`, `TurnServer`, `CryptoSigner`, etc.) not name.
+All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`, `MEMBRANE_SOCKET_BASE`,
+`VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`). Zero production `unwrap()`, zero
+`#[allow]`, zero `unsafe`, zero TODO/FIXME, all deps pure Rust. 360 tests, zero clippy.
 
 **Wave 107–109 (Deterministic Deployment + guideStone):**
 `gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),
@@ -177,6 +181,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Post-stadial hardening (Wave 107): gate.status, --dry-run, WAN checksums, source divergence fix, atomic publish, checksum coherence | DONE |
 | guideStone convergence (Wave 109): plasmid.build, gate.profile, deployment.toml, JSON-RPC health, BUILD-ELF-01 | DONE |
 | Deep debt evolution (Wave 110): native UDS (tokio::net::UnixStream), gate/ modular split, agnostic config, agentic resolver, dual checksum, cascade-restart | DONE |
+| Primal composition grade (Wave 110+): ServiceCapability discovery, temporal/resolve.rs + plasmid/toolchain.rs extracted, all paths env-configurable, DRY socket resolution, zero prod unwrap/TODO/allow | DONE |
 
 ---
 
@@ -217,7 +222,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 - RustDesk self-hosted remote access
 - Multi-gate expansion (westGate, northGate provisioning)
 - plasmidBin — binary harvesting, checksums, `sources.toml`, CI workflows
-- VPS deployment ops — systemd units, `socat` bridges, firewall, refresh cycles
+- VPS deployment ops — systemd units, UDS probes, firewall, refresh cycles
 - Peptidoglycan self-refresh timer and auto-fetch evolution
 
 **cellMembrane team does NOT own:**
@@ -296,13 +301,17 @@ gardens/cellMembrane/
           local.rs            # Shared helpers (identity, depot path resolution)
         relay.rs              # K-Derm relay chain (SSH+cat, no rsync)
         impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)
-        temporal.rs           # Manifest-driven temporal cascade + tree-parity
+        temporal/             # Temporal sync + cascade
+          mod.rs              # Manifest-driven temporal cascade + tree-parity
+          resolve.rs          # Authority-first divergence resolution + push logic
+          cascade.rs          # Cascade orchestration + restart/rebuild modes
         freshness.rs          # Wave freshness publishing + binary drift detection
         plasmid/              # Primal binary lifecycle
           mod.rs              # Registry-derived primal list, target triple, shared utils
           fetch.rs            # Fetch + WAN checksum verification + BLAKE3
           harvest.rs          # Build + checksum + atomic publish to git
           refresh.rs          # Atomic push to VPS + checksum coherence check
+          toolchain.rs        # ELF validation + NDK cross-compile + strip
         caddy.rs              # Caddy TLS + depot + checksums provisioning
         cloudflare.rs         # Cloudflare API v4 (DNS, cache, SSL, zones)
         forgejo.rs            # Forgejo REST API (native reqwest)

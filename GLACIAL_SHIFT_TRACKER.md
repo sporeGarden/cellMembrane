@@ -3,12 +3,17 @@
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-06-11 (Wave 110)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
-**Wave 110 update:** Deep debt evolution — all local bash/socat probes replaced with native
-`tokio::net::UnixStream` async. `gate/local.rs` (868L) refactored to 4 focused modules.
-Dual-checksum verification (git + WAN). `temporal.cascade --with-restart`. Transport-driven
-bootstrap. Agentic divergence resolver (graduated ff → rebase → signal). All hardcoded
-org/host values → env-overridable constants. northGate + westGate profiles registered.
-Stream 2 (Build Pipeline) 6/6 DONE. 360 tests, zero clippy, all files <800L.
+**Wave 110+ update:** Primal composition grade achieved. `ServiceCapability` enum —
+capability-based service discovery replaces all hardcoded primal names. `temporal/resolve.rs`
+extracted (authority-first push + agentic divergence resolution). `plasmid/toolchain.rs`
+extracted (ELF validation + NDK). All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`,
+`MEMBRANE_SOCKET_BASE`, `VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`, `NM_DISPATCHER_DIR`).
+DRY socket resolution (bootstrap reuses health's). Stream 5 `agentic_resolve` DONE. Zero
+production unwrap/expect, zero TODO/FIXME/HACK, zero #[allow], zero unsafe (forbid), zero
+mocks in prod, all deps pure Rust. 360 tests, zero clippy.
+**Wave 110 update:** Deep debt evolution — native UDS probes, gate/ modular split,
+dual-checksum verification, cascade-restart, agentic resolver, agnostic config.
+Stream 2 (Build Pipeline) 6/6 DONE. northGate + westGate profiles registered.
 **Wave 109 update:** guideStone convergence — `plasmid.build` (Rust build pipeline),
 `gate.profile`, `deployment.toml` emission, JSON-RPC health probes, BUILD-ELF-01,
 HARVEST-NAME-01, GATE-PROFILE-01. Three-tier context architecture shipped.
