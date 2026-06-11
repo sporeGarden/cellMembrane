@@ -308,11 +308,16 @@ fn emit_deployment_toml(
 // ── Mesh configuration (native UDS) ───────────────────────────────────
 
 async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
-    let dest_root = super::health::resolve_plasmidbin_dir();
-    let songbird_bin = dest_root.join("primals").join(arch).join("songbird");
+    let relay = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
+    let relay_binary = relay.map_or("songbird", |s| s.binary);
 
-    if !songbird_bin.exists() {
-        return (false, "songbird binary not found".into());
+    let dest_root = super::health::resolve_plasmidbin_dir();
+    let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);
+
+    if !relay_bin.exists() {
+        return (false, format!("{relay_binary} binary not found"));
     }
 
     let socket_dir = std::env::var("BIOMEOS_SOCKET_DIR").unwrap_or_else(|_| {
@@ -326,12 +331,14 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
             });
         format!("/run/user/{uid}/biomeos")
     });
-    let socket_path = format!("{socket_dir}/songbird.sock");
+    let socket_path = format!("{socket_dir}/{relay_binary}.sock");
 
     if !std::path::Path::new(&socket_path).exists() {
         return (
             false,
-            format!("songbird socket not found at {socket_path} — start songbird first"),
+            format!(
+                "{relay_binary} socket not found at {socket_path} — start {relay_binary} first"
+            ),
         );
     }
 
@@ -364,7 +371,7 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
     let (mut reader, mut writer) = stream.into_split();
 
     if writer.write_all(request.as_bytes()).await.is_err() {
-        return (false, "failed to write to songbird socket".into());
+        return (false, format!("failed to write to {relay_binary} socket"));
     }
     let _ = writer.shutdown().await;
 
@@ -410,9 +417,11 @@ fn start_nucleus_primals(arch: &str) -> (bool, String) {
             continue;
         }
 
-        if *primal == "songbird" {
-            skipped += 1;
-            continue;
+        if let Some(svc) = cellmembrane_types::MembraneService::for_binary(primal) {
+            if svc.is_mesh_infrastructure() {
+                skipped += 1;
+                continue;
+            }
         }
 
         let spawn_result = tokio::process::Command::new(&bin_path)

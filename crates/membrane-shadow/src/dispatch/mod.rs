@@ -161,14 +161,19 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
         });
     }
 
-    // Check 2: Songbird TURN running
+    // Check 2: TURN relay running (capability-discovered port)
+    let turn_port = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::TurnServer,
+    )
+    .and_then(|s| s.port)
+    .unwrap_or(3478);
     let (turn_out, turn_code) = crate::ssh::exec_raw(
         &pepti_config,
-        "ss -tlnp | grep -q ':3478' && echo OK || echo FAIL",
+        &format!("ss -tlnp | grep -q ':{turn_port}' && echo OK || echo FAIL"),
     )
     .await?;
     let turn_ok = turn_code == 0 && turn_out.contains("OK");
-    checks.push(("songbird.turn", turn_ok, "port 3478".into()));
+    checks.push(("mesh.turn", turn_ok, format!("port {turn_port}")));
 
     // Check 3: tower.env exists (identity)
     let tower_env_path = format!("{}/tower.env", config.vps_root.trim_end_matches('/'));

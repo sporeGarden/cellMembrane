@@ -78,12 +78,12 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     })
 }
 
-/// Probe mesh status via JSON-RPC on songbird UDS socket — native async.
+/// Probe mesh status via JSON-RPC on the mesh relay UDS socket.
 async fn probe_mesh_status() -> (bool, String) {
-    let socket_path = resolve_songbird_socket();
+    let socket_path = resolve_mesh_relay_socket();
 
     if !Path::new(&socket_path).exists() {
-        return (false, "songbird socket not found".into());
+        return (false, "mesh relay socket not found".into());
     }
 
     let request = serde_json::json!({
@@ -251,10 +251,14 @@ async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Resu
     String::from_utf8(buf).map_err(|e| format!("utf8 error: {e}"))
 }
 
-/// Resolve the songbird UDS socket path.
-fn resolve_songbird_socket() -> String {
+/// Resolve the mesh relay UDS socket path via capability discovery.
+fn resolve_mesh_relay_socket() -> String {
+    let relay = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
+    let binary_name = relay.map_or("songbird", |s| s.binary);
     let socket_dir = resolve_biomeos_socket_dir();
-    format!("{socket_dir}/songbird.sock")
+    format!("{socket_dir}/{binary_name}.sock")
 }
 
 fn resolve_biomeos_socket_dir() -> String {

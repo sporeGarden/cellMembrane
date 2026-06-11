@@ -1,21 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Optional primal UDS integration (songbird relay, bearDog signing).
+//! Optional primal UDS integration (mesh relay, crypto signing).
 //!
 //! All functions are best-effort: missing sockets or failed connections
 //! fall through silently — git push is the reliable baseline.
+//!
+//! Providers are discovered via [`ServiceCapability`] rather than hardcoded names.
 
 use std::path::{Path, PathBuf};
 
+use cellmembrane_types::ServiceCapability;
 use chrono::Local;
 
 use super::types::{ImpulseFile, ImpulseSignature};
 
-/// Default socket name for the mesh relay primal (`Songbird`).
-const RELAY_SOCKET_NAME: &str = "songbird-default.sock";
+fn relay_socket_name() -> String {
+    let svc = cellmembrane_types::MembraneService::with_capability(ServiceCapability::MeshRelay);
+    let binary = svc.map_or("songbird", |s| s.binary);
+    format!("{binary}-default.sock")
+}
 
-/// Default socket name for the crypto signing primal (`BearDog`).
-const SIGNER_SOCKET_NAME: &str = "beardog-default.sock";
+fn signer_socket_name() -> String {
+    let svc = cellmembrane_types::MembraneService::with_capability(ServiceCapability::CryptoSigner);
+    let binary = svc.map_or("beardog", |s| s.binary);
+    format!("{binary}-default.sock")
+}
 
 pub fn try_relay_impulse(impulse: &ImpulseFile) {
     #[cfg(not(unix))]
@@ -26,7 +35,7 @@ pub fn try_relay_impulse(impulse: &ImpulseFile) {
 
     #[cfg(unix)]
     {
-        let Some(socket_path) = discover_socket(RELAY_SOCKET_NAME) else {
+        let Some(socket_path) = discover_socket(&relay_socket_name()) else {
             return;
         };
 
@@ -65,7 +74,7 @@ pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<Impu
 
     #[cfg(unix)]
     {
-        let socket_path = discover_socket(SIGNER_SOCKET_NAME)?;
+        let socket_path = discover_socket(&signer_socket_name())?;
 
         let request = serde_json::json!({
             "jsonrpc": "2.0",

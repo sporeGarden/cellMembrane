@@ -66,6 +66,34 @@ impl fmt::Display for TransportMode {
     }
 }
 
+/// Capability tag for runtime discovery.
+///
+/// Instead of hardcoding binary names ("songbird", "beardog") in production
+/// code, services declare capabilities and consumers discover providers
+/// through the registry at compile time or runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceCapability {
+    /// Mesh relay — provides peer-to-peer connectivity and message routing.
+    MeshRelay,
+    /// TURN server — NAT traversal for real-time connections.
+    TurnServer,
+    /// Cryptographic signing — ed25519 signatures, key management.
+    CryptoSigner,
+    /// Security enforcement — authentication, authorization, secrets.
+    Security,
+    /// Observability — metrics collection, health aggregation.
+    Observability,
+    /// Content serving — static file / API serving.
+    ContentServing,
+    /// Storage — persistent data management.
+    Storage,
+    /// Compute orchestration — job scheduling, pipeline execution.
+    ComputeOrchestration,
+    /// Identity — gate identity, certificate management.
+    Identity,
+}
+
 /// Health check strategy for a service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HealthCheckMethod {
@@ -335,6 +363,8 @@ pub struct MembraneService {
     pub min_composition: MembraneComposition,
     /// VPS deployment transport mode (Wave 56 standard).
     pub vps_transport: TransportMode,
+    /// Declared capabilities — used for runtime discovery instead of name matching.
+    pub capabilities: &'static [ServiceCapability],
 }
 
 const BEARDOG: MembraneService = MembraneService {
@@ -350,6 +380,7 @@ const BEARDOG: MembraneService = MembraneService {
     extra_ports: &[(8443, Protocol::Tcp, "beardog-tls-shadow")],
     min_composition: MembraneComposition::Tower,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::CryptoSigner, ServiceCapability::Security],
 };
 
 const SONGBIRD: MembraneService = MembraneService {
@@ -365,6 +396,7 @@ const SONGBIRD: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Relay,
     vps_transport: TransportMode::TcpOptIn,
+    capabilities: &[ServiceCapability::MeshRelay, ServiceCapability::TurnServer],
 };
 
 const SKUNKBAT: MembraneService = MembraneService {
@@ -380,6 +412,7 @@ const SKUNKBAT: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Tower,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::Observability],
 };
 
 const NESTGATE: MembraneService = MembraneService {
@@ -395,6 +428,7 @@ const NESTGATE: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::ContentServing],
 };
 
 const RHIZOCRYPT: MembraneService = MembraneService {
@@ -410,6 +444,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     extra_ports: &[(9602, Protocol::Tcp, "rhizocrypt-jsonrpc")],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::Storage],
 };
 
 const LOAMSPINE: MembraneService = MembraneService {
@@ -425,6 +460,7 @@ const LOAMSPINE: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::Storage],
 };
 
 const SWEETGRASS: MembraneService = MembraneService {
@@ -440,6 +476,7 @@ const SWEETGRASS: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::Identity],
 };
 
 // ── Compute tier (Node composition) ──────────────────────────────────────────
@@ -457,6 +494,7 @@ const TOADSTOOL: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::ComputeOrchestration],
 };
 
 const BARRACUDA: MembraneService = MembraneService {
@@ -472,6 +510,7 @@ const BARRACUDA: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::ComputeOrchestration],
 };
 
 const CORALREEF: MembraneService = MembraneService {
@@ -487,6 +526,7 @@ const CORALREEF: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::Storage],
 };
 
 // ── Meta tier (orchestration) ────────────────────────────────────────────────
@@ -504,6 +544,7 @@ const BIOMEOS: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::ComputeOrchestration],
 };
 
 const SQUIRREL: MembraneService = MembraneService {
@@ -519,6 +560,7 @@ const SQUIRREL: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::Storage],
 };
 
 const PETALTONGUE: MembraneService = MembraneService {
@@ -534,6 +576,7 @@ const PETALTONGUE: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nucleus,
     vps_transport: TransportMode::UdsOnly,
+    capabilities: &[ServiceCapability::ContentServing],
 };
 
 // ── Symbiotic partners (not ecoPrimals) ──────────────────────────────────────
@@ -551,6 +594,7 @@ const HBBS: MembraneService = MembraneService {
     extra_ports: &[(21115, Protocol::Tcp, "hbbs-id")],
     min_composition: MembraneComposition::RustDesk,
     vps_transport: TransportMode::TcpDefault,
+    capabilities: &[],
 };
 
 const HBBR: MembraneService = MembraneService {
@@ -566,6 +610,7 @@ const HBBR: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::RustDesk,
     vps_transport: TransportMode::TcpDefault,
+    capabilities: &[],
 };
 
 const CADDY: MembraneService = MembraneService {
@@ -581,6 +626,7 @@ const CADDY: MembraneService = MembraneService {
     extra_ports: &[(80, Protocol::Tcp, "caddy-acme")],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::TcpDefault,
+    capabilities: &[],
 };
 
 const KNOTDNS: MembraneService = MembraneService {
@@ -596,6 +642,7 @@ const KNOTDNS: MembraneService = MembraneService {
     extra_ports: &[],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::TcpDefault,
+    capabilities: &[],
 };
 
 /// All known membrane services. Runtime discovery starts here.
@@ -686,6 +733,40 @@ impl MembraneService {
     #[must_use]
     pub const fn requires_tcp_in_uds_mode(&self) -> bool {
         matches!(self.vps_transport, TransportMode::TcpDefault)
+    }
+
+    /// Whether this service declares the given capability.
+    #[must_use]
+    pub fn has_capability(&self, cap: ServiceCapability) -> bool {
+        self.capabilities.contains(&cap)
+    }
+
+    /// Discover the first service providing a given capability.
+    ///
+    /// Eliminates hardcoded binary-name lookups — consumers discover
+    /// providers by what they do, not what they're called.
+    #[must_use]
+    pub fn with_capability(cap: ServiceCapability) -> Option<&'static Self> {
+        ALL_SERVICES.iter().find(|s| s.has_capability(cap))
+    }
+
+    /// All services declaring a given capability (for multi-provider scenarios).
+    #[must_use]
+    pub fn all_with_capability(cap: ServiceCapability) -> Vec<&'static Self> {
+        ALL_SERVICES
+            .iter()
+            .filter(|s| s.has_capability(cap))
+            .collect()
+    }
+
+    /// Whether this service should be started after the mesh relay.
+    ///
+    /// Services providing `MeshRelay` are infrastructure — they must start
+    /// before other primals that depend on connectivity.
+    #[must_use]
+    pub fn is_mesh_infrastructure(&self) -> bool {
+        self.has_capability(ServiceCapability::MeshRelay)
+            || self.has_capability(ServiceCapability::TurnServer)
     }
 }
 
