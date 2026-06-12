@@ -42,6 +42,7 @@ pub struct SandboxInstance {
     pub started_at: Option<Instant>,
 }
 
+
 /// Result of sandbox validation for a single primal.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SandboxResult {
@@ -74,9 +75,17 @@ fn resolve_sandbox_bin_dir() -> PathBuf {
 /// Spin up a sandboxed instance, returning the handle.
 ///
 /// The binary is copied to the sandbox staging area and started with
-/// `--socket` pointing to an isolated namespace. The process is detached
-/// but tracked by PID for cleanup.
+/// `--socket` pointing to an isolated namespace. If `security_socket` is
+/// provided (from a dependency chain), the process also gets `--security-socket`.
 pub fn spin_up(args: &SandboxArgs) -> Result<SandboxInstance, String> {
+    spin_up_with_deps(args, None)
+}
+
+/// Spin up with an optional security socket path for Tower dependency injection.
+pub fn spin_up_with_deps(
+    args: &SandboxArgs,
+    security_socket: Option<&Path>,
+) -> Result<SandboxInstance, String> {
     let socket_dir = resolve_sandbox_socket_dir();
     let bin_dir = resolve_sandbox_bin_dir();
 
@@ -108,10 +117,14 @@ pub fn spin_up(args: &SandboxArgs) -> Result<SandboxInstance, String> {
             .map_err(|e| format!("chmod sandbox binary: {e}"))?;
     }
 
-    let child = tokio::process::Command::new(&sandbox_binary)
-        .arg("server")
-        .arg("--socket")
-        .arg(&socket_path)
+    let mut cmd = tokio::process::Command::new(&sandbox_binary);
+    cmd.arg("server").arg("--socket").arg(&socket_path);
+
+    if let Some(sec_sock) = security_socket {
+        cmd.arg("--security-socket").arg(sec_sock);
+    }
+
+    let child = cmd
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -232,6 +245,142 @@ pub async fn validate(args: &SandboxArgs) -> Result<SandboxResult, String> {
     teardown(&instance).await;
 
     Ok(result)
+}
+
+/// Resolve Tower dependencies required to sandbox-validate a given primal.
+///
+/// Non-Tower primals need bearDog (crypto signer) running so they can connect
+/// to `--security-socket` during health checks. Tower primals themselves
+/// (beardog, songbird, skunkbat) have no upstream dependencies.
+///
+/// Returns `None` if the primal has no dependencies, or `Some(binary_name)` of
+/// the required security provider.
+#[must_use]
+pub fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
+    use cellmembrane_types::service::ServiceCapability;
+    use cellmembrane_types::MembraneComposition;
+
+    let service = cellmembrane_types::MembraneService::all()
+        .iter()
+        .find(|s| s.binary == primal)?;
+
+    // Tower-tier primals (beardog, songbird, skunkbat) have no upstream deps
+    if service.min_composition <= MembraneComposition::Tower {
+        return None;
+    }
+
+    // All non-Tower primals depend on the crypto signer for security-socket
+    let signer = cellmembrane_types::MembraneService::with_capability(
+        ServiceCapability::CryptoSigner,
+    )?;
+    Some(signer.binary)
+}
+
+/// Full validation cycle with automatic dependency provisioning.
+///
+/// If the target primal requires bearDog (security spine), a sandbox bearDog is
+/// started first and its socket path is injected as `--security-socket`. After
+/// validation completes, both the target and its dependencies are torn down.
+///
+/// This is the preferred entry point for pipeline integration — handles the
+/// SANDBOX-DEPENDENCY-CHAIN scenario transparently.
+pub async fn validate_with_deps(args: &SandboxArgs) -> Result<SandboxResult, String> {
+    let timeout =
+        std::time::Duration::from_secs(args.timeout_secs.unwrap_or(SANDBOX_HEALTH_TIMEOUT_SECS));
+
+    let dep_instance = match resolve_security_dependency(&args.primal) {
+        Some(dep_binary) => {
+            let dep_path = resolve_dependency_binary_path(dep_binary)?;
+            let dep_args = SandboxArgs {
+                primal: dep_binary.to_string(),
+                commit: args.commit.clone(),
+                binary_path: dep_path,
+                timeout_secs: Some(10),
+            };
+            let instance = spin_up(&dep_args)?;
+            // Wait for dependency to become ready before starting the target
+            let dep_ready = tokio::time::timeout(
+                std::time::Duration::from_secs(8),
+                wait_for_socket(&instance.socket_path),
+            )
+            .await;
+            if dep_ready.is_err() {
+                teardown(&instance).await;
+                return Ok(SandboxResult {
+                    primal: args.primal.clone(),
+                    commit: args.commit.clone(),
+                    health_ok: false,
+                    detail: format!("dependency {dep_binary} socket never appeared"),
+                    elapsed_ms: 8000,
+                });
+            }
+            Some(instance)
+        }
+        None => None,
+    };
+
+    let security_socket = dep_instance.as_ref().map(|d| d.socket_path.as_path());
+    let instance = spin_up_with_deps(args, security_socket)?;
+
+    let result = tokio::time::timeout(timeout, probe_health(&instance))
+        .await
+        .unwrap_or_else(|_| SandboxResult {
+            primal: instance.primal.clone(),
+            commit: instance.commit.clone(),
+            health_ok: false,
+            detail: format!("timeout after {}s", timeout.as_secs()),
+            elapsed_ms: timeout.as_millis() as u64,
+        });
+
+    // Teardown: target first, then dependencies
+    teardown(&instance).await;
+    if let Some(ref dep) = dep_instance {
+        teardown(dep).await;
+    }
+
+    Ok(result)
+}
+
+/// Locate the binary for a dependency (looks in production install, then depot).
+fn resolve_dependency_binary_path(binary: &str) -> Result<PathBuf, String> {
+    // First: check if production binary exists (live system has it installed)
+    let production = PathBuf::from(format!("/opt/membrane/{binary}"));
+    if production.exists() {
+        return Ok(production);
+    }
+
+    // Second: check local depot
+    if let Ok(depot) = crate::plasmid::depot::resolve_depot(None) {
+        let arch = crate::plasmid::detect_target_triple();
+        let depot_bin = depot.join("primals").join(&arch).join(binary);
+        if depot_bin.exists() {
+            return Ok(depot_bin);
+        }
+    }
+
+    // Third: user-local depot fallback
+    if let Ok(home) = std::env::var("HOME") {
+        let home_depot = PathBuf::from(home)
+            .join(".local/share/ecoPrimals/plasmidBin/primals")
+            .join(binary);
+        if home_depot.exists() {
+            return Ok(home_depot);
+        }
+    }
+
+    Err(format!(
+        "dependency binary '{binary}' not found in production, depot, or local"
+    ))
+}
+
+/// Wait for a socket file to appear on disk (polled at 200ms intervals).
+async fn wait_for_socket(path: &Path) {
+    for _ in 0..40 {
+        if path.exists() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 }
 
 /// Validate and promote: run sandbox, on pass atomically replace production binary.
@@ -405,5 +554,27 @@ mod tests {
         };
         assert_eq!(args.primal, "beardog");
         assert!(args.timeout_secs.is_none());
+    }
+
+    #[test]
+    fn resolve_dependency_tower_has_no_deps() {
+        assert!(resolve_security_dependency("beardog").is_none());
+        assert!(resolve_security_dependency("songbird").is_none());
+        assert!(resolve_security_dependency("skunkbat").is_none());
+    }
+
+    #[test]
+    fn resolve_dependency_nucleus_needs_beardog() {
+        assert_eq!(resolve_security_dependency("nestgate"), Some("beardog"));
+        assert_eq!(resolve_security_dependency("biomeos"), Some("beardog"));
+        assert_eq!(resolve_security_dependency("squirrel"), Some("beardog"));
+        assert_eq!(resolve_security_dependency("toadstool"), Some("beardog"));
+        assert_eq!(resolve_security_dependency("sweetgrass"), Some("beardog"));
+        assert_eq!(resolve_security_dependency("loamspine"), Some("beardog"));
+    }
+
+    #[test]
+    fn resolve_dependency_unknown_returns_none() {
+        assert!(resolve_security_dependency("nonexistent-primal").is_none());
     }
 }

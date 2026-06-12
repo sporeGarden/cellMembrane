@@ -188,7 +188,7 @@ pub(super) async fn run_post_cascade_sandbox(
             timeout_secs: Some(20),
         };
 
-        match crate::plasmid::sandbox::validate(&args).await {
+        match crate::plasmid::sandbox::validate_with_deps(&args).await {
             Ok(result) if result.health_ok => {
                 passed.push(primal.clone());
             }
@@ -413,7 +413,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             timeout_secs: None,
         };
 
-        let sandbox_ok = match crate::plasmid::sandbox::validate(&sandbox_args).await {
+        let sandbox_ok = match crate::plasmid::sandbox::validate_with_deps(&sandbox_args).await {
             Ok(result) => result.health_ok,
             Err(e) => {
                 lines.push(format!(
