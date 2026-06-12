@@ -75,6 +75,8 @@ pub mod identity;
 pub mod impulse;
 pub mod manifest;
 pub mod plasmid;
+#[cfg(feature = "http")]
+pub mod provision;
 pub mod relay;
 pub mod service;
 pub mod ssh;

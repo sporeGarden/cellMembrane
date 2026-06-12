@@ -211,14 +211,32 @@ pub struct StalenessReport {
     pub stale: bool,
 }
 
-/// Return socket paths of all healthy AND fresh canary instances — usable as fallback targets.
+/// A failover target — either a local UDS socket or a remote SSH-reachable canary.
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum FailoverTarget {
+    /// Local canary (same host, isolated UDS socket).
+    Local {
+        primal: String,
+        socket: PathBuf,
+    },
+    /// Remote canary (SSH-reachable VPS droplet).
+    Remote {
+        primal: String,
+        ip: String,
+        gate: String,
+    },
+}
+
+/// Return all healthy AND fresh canary instances — usable as fallback targets.
 ///
+/// Combines local canary pool (UDS sockets) with remote canary droplets (SSH health probe).
 /// Stale canaries (older than `MEMBRANE_CANARY_MAX_AGE_HOURS`) are refused for failover
 /// to prevent rolling back to dangerously outdated binaries.
-pub async fn failover_targets() -> Vec<(String, PathBuf)> {
-    let pool = load_pool();
+pub async fn failover_targets() -> Vec<FailoverTarget> {
     let mut targets = Vec::new();
 
+    // Local canary pool
+    let pool = load_pool();
     for slot in &pool.slots {
         if is_stale(slot) {
             eprintln!(
@@ -230,8 +248,30 @@ pub async fn failover_targets() -> Vec<(String, PathBuf)> {
         if slot.socket_path.exists() {
             let health = probe_canary(slot).await;
             if health.alive {
-                targets.push((slot.primal.clone(), slot.socket_path.clone()));
+                targets.push(FailoverTarget::Local {
+                    primal: slot.primal.clone(),
+                    socket: slot.socket_path.clone(),
+                });
             }
+        }
+    }
+
+    // Remote canary droplets (SSH health probe)
+    let remote_canaries = load_remote_canaries();
+    for remote in &remote_canaries.entries {
+        if remote_health_check(&remote.ip).await {
+            for primal in &remote.primals {
+                targets.push(FailoverTarget::Remote {
+                    primal: primal.clone(),
+                    ip: remote.ip.clone(),
+                    gate: remote.gate_name.clone(),
+                });
+            }
+        } else {
+            eprintln!(
+                "canary: remote {} ({}) unreachable — skipping",
+                remote.gate_name, remote.ip
+            );
         }
     }
 
@@ -289,6 +329,126 @@ pub async fn teardown_all() {
     }
     let empty = CanaryPool::default();
     save_pool(&empty);
+}
+
+// ── Remote canary registry ───────────────────────────────────────────────
+
+/// A remote canary droplet entry (SSH-reachable warm standby).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RemoteCanary {
+    /// Gate name (e.g. "canary-fieldmouse").
+    pub gate_name: String,
+    /// Public IP of the remote droplet.
+    pub ip: String,
+    /// Provider droplet ID (for lifecycle management).
+    pub droplet_id: Option<u64>,
+    /// Primals available on this remote canary.
+    pub primals: Vec<String>,
+    /// When this remote was registered.
+    pub registered_at: String,
+}
+
+/// Registry of remote canary droplets.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct RemoteCanaryRegistry {
+    pub entries: Vec<RemoteCanary>,
+}
+
+/// Path to the remote canaries registry.
+fn remote_canaries_path() -> PathBuf {
+    resolve_canary_bin_dir().join("remote-canaries.toml")
+}
+
+/// Load the remote canary registry from disk.
+pub fn load_remote_canaries() -> RemoteCanaryRegistry {
+    let path = remote_canaries_path();
+    if !path.exists() {
+        return RemoteCanaryRegistry::default();
+    }
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| toml::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Save the remote canary registry to disk.
+pub fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
+    let path = remote_canaries_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    if let Ok(content) = toml::to_string_pretty(registry) {
+        std::fs::write(&path, content).ok();
+    }
+}
+
+/// Register a newly provisioned remote canary droplet.
+pub fn register_remote_canary(
+    gate_name: &str,
+    ip: &str,
+    droplet_id: Option<u64>,
+    primals: Vec<String>,
+) {
+    let mut registry = load_remote_canaries();
+    registry.entries.retain(|e| e.gate_name != gate_name);
+    registry.entries.push(RemoteCanary {
+        gate_name: gate_name.to_string(),
+        ip: ip.to_string(),
+        droplet_id,
+        primals,
+        registered_at: chrono::Utc::now().to_rfc3339(),
+    });
+    save_remote_canaries(&registry);
+}
+
+/// Remove a remote canary from the registry.
+pub fn deregister_remote_canary(gate_name: &str) {
+    let mut registry = load_remote_canaries();
+    registry.entries.retain(|e| e.gate_name != gate_name);
+    save_remote_canaries(&registry);
+}
+
+/// SSH-based health check for a remote canary droplet.
+/// Discovers the crypto spine binary via capability registry for the probe socket.
+async fn remote_health_check(ip: &str) -> bool {
+    let spine_binary = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    )
+    .map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
+        s.binary
+    });
+
+    let probe_cmd = format!(
+        "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:/run/membrane/{spine_binary}.sock 2>/dev/null"
+    );
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        tokio::process::Command::new("ssh")
+            .args([
+                "-o", "ConnectTimeout=5",
+                "-o", "BatchMode=yes",
+                "-o", "StrictHostKeyChecking=accept-new",
+                &format!("root@{ip}"),
+                &probe_cmd,
+            ])
+            .output(),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(output)) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            output.status.success()
+                && (stdout.contains("\"status\"") || stdout.contains("\"result\""))
+        }
+        _ => false,
+    }
+}
+
+/// List all remote canary entries.
+pub fn list_remote_canaries() -> Vec<RemoteCanary> {
+    load_remote_canaries().entries
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────
@@ -432,5 +592,57 @@ mod tests {
         let pool = CanaryPool::default();
         let serialized = toml::to_string_pretty(&pool).expect("serialize");
         assert!(serialized.contains("slots"));
+    }
+
+    #[test]
+    fn remote_canary_registry_roundtrip() {
+        let registry = RemoteCanaryRegistry {
+            entries: vec![RemoteCanary {
+                gate_name: "canary-fieldmouse".into(),
+                ip: "1.2.3.4".into(),
+                droplet_id: Some(98765),
+                primals: vec!["beardog".into(), "songbird".into(), "toadstool".into()],
+                registered_at: "2026-06-12T12:00:00Z".into(),
+            }],
+        };
+
+        let serialized = toml::to_string_pretty(&registry).expect("serialize");
+        let deserialized: RemoteCanaryRegistry =
+            toml::from_str(&serialized).expect("deserialize");
+        assert_eq!(deserialized.entries.len(), 1);
+        assert_eq!(deserialized.entries[0].gate_name, "canary-fieldmouse");
+        assert_eq!(deserialized.entries[0].ip, "1.2.3.4");
+        assert_eq!(deserialized.entries[0].droplet_id, Some(98765));
+        assert_eq!(deserialized.entries[0].primals.len(), 3);
+    }
+
+    #[test]
+    fn empty_registry_serializes() {
+        let registry = RemoteCanaryRegistry::default();
+        let serialized = toml::to_string_pretty(&registry).expect("serialize");
+        assert!(serialized.contains("entries"));
+    }
+
+    #[test]
+    fn staleness_detection() {
+        let fresh_slot = CanarySlot {
+            primal: "beardog".into(),
+            binary_path: PathBuf::from("/opt/membrane/canary/beardog"),
+            socket_path: PathBuf::from("/run/membrane/canary/beardog.sock"),
+            commit: "fresh123".into(),
+            promoted_at: chrono::Utc::now().to_rfc3339(),
+            pid: None,
+        };
+        assert!(!is_stale(&fresh_slot));
+
+        let stale_slot = CanarySlot {
+            primal: "beardog".into(),
+            binary_path: PathBuf::from("/opt/membrane/canary/beardog"),
+            socket_path: PathBuf::from("/run/membrane/canary/beardog.sock"),
+            commit: "stale456".into(),
+            promoted_at: "2020-01-01T00:00:00Z".into(),
+            pid: None,
+        };
+        assert!(is_stale(&stale_slot));
     }
 }

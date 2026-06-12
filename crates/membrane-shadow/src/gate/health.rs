@@ -218,8 +218,12 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
 
 // ── Sovereignty probes (S1-S4 live validation) ───────────────────────────
 
-/// Domain used for sovereign TLS and content probes.
-const SOVEREIGN_DOMAIN: &str = "membrane.primals.eco";
+/// Resolve the sovereign domain for TLS and content probes.
+/// Uses `MEMBRANE_DEPOT_HOSTNAME` env var with fallback to the types crate default.
+fn resolve_sovereign_domain() -> String {
+    std::env::var(cellmembrane_types::service::ENV_DEPOT_HOSTNAME)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME.into())
+}
 
 /// Probe all four sovereignty shadows (S1 TLS, S2 Relay, S3 Content, S4 Auth).
 ///
@@ -235,9 +239,10 @@ async fn probe_sovereignty() -> Vec<StatusProbe> {
     vec![s1, s2, s3, s4]
 }
 
-/// S1: Sovereign TLS — validate certificate and TTFB from membrane.primals.eco.
+/// S1: Sovereign TLS — validate certificate and TTFB from sovereign domain.
 async fn probe_s1_tls() -> StatusProbe {
-    let url = format!("https://{SOVEREIGN_DOMAIN}/");
+    let domain = resolve_sovereign_domain();
+    let url = format!("https://{domain}/");
     let start = std::time::Instant::now();
 
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -260,13 +265,13 @@ async fn probe_s1_tls() -> StatusProbe {
                 StatusProbe {
                     name: "sovereignty.s1_tls".into(),
                     ok: true,
-                    detail: format!("OPERATIONAL — {SOVEREIGN_DOMAIN} {status} ({ttfb_ms}ms)"),
+                    detail: format!("OPERATIONAL — {domain} {status} ({ttfb_ms}ms)"),
                 }
             } else {
                 StatusProbe {
                     name: "sovereignty.s1_tls".into(),
                     ok: false,
-                    detail: format!("{SOVEREIGN_DOMAIN} returned {status} ({ttfb_ms}ms)"),
+                    detail: format!("{domain} returned {status} ({ttfb_ms}ms)"),
                 }
             }
         }
@@ -318,10 +323,17 @@ async fn probe_s2_relay() -> StatusProbe {
 /// S3: Sovereign Content — probe WAN depot HTTPS availability and TTFB.
 ///
 /// Probes the depot file server (Caddy) to confirm binaries are being served
-/// over sovereign TLS. Path: `/depot/{arch}/{binary}` via HEAD request.
+/// over sovereign TLS. Uses the crypto spine binary as probe target (always present).
 async fn probe_s3_content() -> StatusProbe {
     let arch = crate::plasmid::detect_target_triple();
-    let url = format!("https://{SOVEREIGN_DOMAIN}/depot/{arch}/beardog");
+    let probe_binary = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    )
+    .map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
+        s.binary
+    });
+    let domain = resolve_sovereign_domain();
+    let url = format!("https://{domain}/depot/{arch}/{probe_binary}");
     let start = std::time::Instant::now();
 
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -378,7 +390,9 @@ async fn probe_s4_auth() -> StatusProbe {
     let signer = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
-    let binary_name = signer.map_or("beardog", |s| s.binary);
+    let binary_name = signer.map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
+        s.binary
+    });
     let socket_paths = resolve_primal_socket_paths(binary_name);
 
     let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
@@ -462,10 +476,12 @@ async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Resu
 
 /// Resolve the mesh relay UDS socket path via capability discovery.
 fn resolve_mesh_relay_socket() -> String {
-    let relay = cellmembrane_types::MembraneService::with_capability(
+    let binary_name = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-    let binary_name = relay.map_or("songbird", |s| s.binary);
+    )
+    .map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
+        s.binary
+    });
     let socket_dir = resolve_biomeos_socket_dir();
     format!("{socket_dir}/{binary_name}.sock")
 }

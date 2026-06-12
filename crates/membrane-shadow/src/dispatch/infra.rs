@@ -221,6 +221,7 @@ pub(super) async fn dispatch_service(
 
 // ── Gate domain ──────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_lines, reason = "match dispatch hub — each arm is trivial")]
 pub(super) async fn dispatch_gate(
     config: &ShadowConfig,
     cmd: &str,
@@ -321,6 +322,12 @@ pub(super) async fn dispatch_gate(
             })?;
             dispatch_gate_profile(gate_name)
         }
+        #[cfg(feature = "http")]
+        "gate.provision" => dispatch_gate_provision(args).await,
+        #[cfg(feature = "http")]
+        "gate.provision.status" => dispatch_gate_provision_status(args).await,
+        #[cfg(feature = "http")]
+        "gate.provision.destroy" => dispatch_gate_provision_destroy(args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
     }
 }
@@ -567,4 +574,182 @@ pub(super) async fn dispatch_token(
         }
         _ => Ok(ShadowOutcome::fail(format!("unknown token command: {cmd}"))),
     }
+}
+
+#[cfg(feature = "http")]
+async fn dispatch_gate_provision(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use crate::provision::{self, digitalocean, ProvisionRequest};
+
+    let provider_str = cli::extract_flag_value(args, "--provider").unwrap_or("digitalocean");
+    let _provider: provision::Provider = provider_str
+        .parse()
+        .map_err(|e: String| crate::ShadowError::Parse(e))?;
+
+    let name = cli::extract_flag_value(args, "--name")
+        .unwrap_or("membrane-canary")
+        .to_string();
+    let region = cli::extract_flag_value(args, "--region")
+        .unwrap_or("nyc1")
+        .to_string();
+    let size = cli::extract_flag_value(args, "--size")
+        .unwrap_or("s-1vcpu-2gb")
+        .to_string();
+    let profile = cli::extract_flag_value(args, "--profile")
+        .unwrap_or("canary-fieldmouse")
+        .to_string();
+    let dry_run = args.contains(&"--dry-run");
+
+    if dry_run {
+        return Ok(ShadowOutcome::ok(format!(
+            "dry-run: would provision {name} ({size}) in {region} with profile {profile}"
+        )));
+    }
+
+    eprintln!("provision: resolving SSH keys...");
+    let keys = digitalocean::list_ssh_keys().await?;
+    let ssh_key_ids: Vec<String> = keys.iter().map(|k| k.id.to_string()).collect();
+
+    if ssh_key_ids.is_empty() {
+        return Ok(ShadowOutcome::fail(
+            "no SSH keys found on DO account — add one first",
+        ));
+    }
+
+    eprintln!(
+        "provision: creating droplet {name} ({size}, {region}) with {} SSH key(s)...",
+        ssh_key_ids.len()
+    );
+
+    let req = ProvisionRequest {
+        name: name.clone(),
+        region,
+        size,
+        image: "debian-12-x64".into(),
+        profile: profile.clone(),
+        ssh_keys: ssh_key_ids,
+        tags: vec!["membrane".into(), "canary".into(), "ecoprimals".into()],
+    };
+
+    let droplet = digitalocean::create_droplet(&req).await?;
+    eprintln!("provision: droplet {} created (id={}), waiting for active...", droplet.name, droplet.id);
+
+    let active = digitalocean::wait_until_active(droplet.id, &profile).await?;
+    let ip = active.ip.clone().unwrap_or_default();
+    eprintln!("provision: droplet active at {ip}");
+
+    eprintln!("provision: bootstrapping...");
+    let outcome = provision::bootstrap::bootstrap_droplet(&active, &name).await;
+
+    let msg = format!(
+        "provision: {} (id={}, ip={ip})\n  phases:\n    {}",
+        outcome.message,
+        active.id,
+        outcome.phases.join("\n    ")
+    );
+
+    Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&outcome)?))
+}
+
+#[cfg(feature = "http")]
+async fn dispatch_gate_provision_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use crate::plasmid::canary;
+    use crate::provision::digitalocean;
+
+    if let Some(id_str) = cli::extract_flag_value(args, "--id") {
+        let id: u64 = id_str
+            .parse()
+            .map_err(|_| crate::ShadowError::Parse(format!("invalid droplet id: {id_str}")))?;
+        let state = digitalocean::get_droplet(id).await?;
+        let msg = format!(
+            "{} (id={}) — {} @ {}",
+            state.name,
+            state.id,
+            state.status,
+            state.ip.as_deref().unwrap_or("no-ip")
+        );
+        Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&state)?))
+    } else {
+        let droplets = digitalocean::list_membrane_droplets().await?;
+        let remote_canaries = canary::list_remote_canaries();
+
+        if droplets.is_empty() && remote_canaries.is_empty() {
+            return Ok(ShadowOutcome::ok("no membrane droplets found"));
+        }
+
+        let mut lines: Vec<String> = droplets
+            .iter()
+            .map(|d| {
+                format!(
+                    "  {} (id={}) — {} @ {} [{}]",
+                    d.name,
+                    d.id,
+                    d.status,
+                    d.ip.as_deref().unwrap_or("no-ip"),
+                    d.region
+                )
+            })
+            .collect();
+
+        if !remote_canaries.is_empty() {
+            lines.push(String::new());
+            lines.push("  remote canary registry:".into());
+            for rc in &remote_canaries {
+                lines.push(format!(
+                    "    {} @ {} (id={:?}, primals={})",
+                    rc.gate_name,
+                    rc.ip,
+                    rc.droplet_id,
+                    rc.primals.len()
+                ));
+            }
+        }
+
+        let msg = format!(
+            "{} droplet(s), {} registered canary(ies):\n{}",
+            droplets.len(),
+            remote_canaries.len(),
+            lines.join("\n")
+        );
+        Ok(ShadowOutcome::ok_with(
+            msg,
+            serde_json::to_value(&droplets)?,
+        ))
+    }
+}
+
+#[cfg(feature = "http")]
+async fn dispatch_gate_provision_destroy(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use crate::plasmid::canary;
+    use crate::provision::digitalocean;
+
+    let id_str = cli::extract_flag_value(args, "--id").ok_or_else(|| {
+        crate::ShadowError::Parse("gate.provision.destroy requires --id <droplet-id>".into())
+    })?;
+    let id: u64 = id_str
+        .parse()
+        .map_err(|_| crate::ShadowError::Parse(format!("invalid droplet id: {id_str}")))?;
+
+    let gate_name = cli::extract_flag_value(args, "--gate");
+
+    let dry_run = args.contains(&"--dry-run");
+    if dry_run {
+        return Ok(ShadowOutcome::ok(format!(
+            "dry-run: would destroy droplet id={id}"
+        )));
+    }
+
+    digitalocean::destroy_droplet(id).await?;
+
+    // Deregister from remote canary registry if gate name is known
+    if let Some(name) = gate_name {
+        canary::deregister_remote_canary(name);
+    } else {
+        // Try to find by droplet ID in registry
+        let registry = canary::load_remote_canaries();
+        if let Some(entry) = registry.entries.iter().find(|e| e.droplet_id == Some(id)) {
+            canary::deregister_remote_canary(&entry.gate_name.clone());
+        }
+    }
+
+    Ok(ShadowOutcome::ok(format!("DESTROYED droplet id={id}")))
 }

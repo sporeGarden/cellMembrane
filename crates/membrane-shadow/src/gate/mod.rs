@@ -3,11 +3,12 @@
 //! Gate operations — VPS status, workspace sync, parity checks, local bootstrap/status.
 //!
 //! Shadow domain mapping:
-//!   - `gate.info`      → biomeOS gate.info (VPS)
-//!   - `gate.pull`      → biomeOS gate.pull (cascade-pull on golgiBody)
-//!   - `gate.check`     → biomeOS gate.check (parity check)
+//!   - `gate.info`      → VPS workspace info
+//!   - `gate.pull`      → `membrane temporal.cascade` on VPS
+//!   - `gate.check`     → `membrane temporal.check` on VPS
 //!   - `gate.bootstrap` → local gate enrollment
 //!   - `gate.status`    → local gate health probe
+//!   - `gate.provision` → cloud droplet provisioning (fieldMouse canary)
 
 pub mod bootstrap;
 pub mod health;
@@ -148,14 +149,7 @@ systemctl list-units --type=service --state=running --no-pager --no-legend | \
 /// Shadow for: `biomeOS gate.pull`
 pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
     let root = &config.vps_root;
-    let cmd = format!(
-        "cd {root} && GATE=$(cat {root}/.gate 2>/dev/null || echo auto) && \
-         if command -v membrane >/dev/null 2>&1; then \
-           membrane temporal.cascade --source forgejo 2>&1; \
-         else \
-           infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal; \
-         fi",
-    );
+    let cmd = format!("cd {root} && membrane temporal.cascade --source forgejo 2>&1");
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
 }
@@ -165,14 +159,7 @@ pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
 /// Shadow for: `biomeOS gate.check`
 pub async fn check(config: &ShadowConfig) -> Result<SyncResult> {
     let root = &config.vps_root;
-    let cmd = format!(
-        "cd {root} && GATE=$(cat {root}/.gate 2>/dev/null || echo auto) && \
-         if command -v membrane >/dev/null 2>&1; then \
-           membrane temporal.check 2>&1; \
-         else \
-           infra/wateringHole/scripts/cascade-pull.sh --gate \"$GATE\" --source temporal --check; \
-         fi",
-    );
+    let cmd = format!("cd {root} && membrane temporal.check 2>&1");
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
 }

@@ -104,7 +104,11 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     let no_freshness = args.contains(&"--no-freshness");
     let check_installed = args.contains(&"--check-installed");
     let post_sync = if args.contains(&"--with-rebuild") {
-        temporal::PostSyncPhase::Rebuild
+        if args.contains(&"--skip-sandbox") {
+            temporal::PostSyncPhase::Rebuild
+        } else {
+            temporal::PostSyncPhase::SandboxRebuild
+        }
     } else if args.contains(&"--with-harvest") {
         temporal::PostSyncPhase::Harvest
     } else {

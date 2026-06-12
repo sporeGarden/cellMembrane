@@ -274,6 +274,26 @@ pub const ENV_SOVEREIGN_REMOTE: &str = "MEMBRANE_SOVEREIGN_REMOTE";
 /// Default sovereign remote name.
 pub const DEFAULT_SOVEREIGN_REMOTE: &str = "forgejo";
 
+/// When set to `1`/`true`/`yes`, cascade auto-triggers harvest+sandbox+refresh
+/// when depot staleness is detected (production gates only).
+pub const ENV_AUTO_REBUILD: &str = "MEMBRANE_AUTO_REBUILD";
+
+/// `DigitalOcean` API token for cloud provisioning (fieldMouse droplets).
+/// Fallback: `DO_TOKEN` (doctl-compatible).
+pub const ENV_DIGITALOCEAN_TOKEN: &str = "DIGITALOCEAN_TOKEN";
+
+/// Fallback binary name for the crypto signer capability.
+///
+/// Used when `MembraneService::with_capability(CryptoSigner)` returns None
+/// (should never happen in a valid registry, but provides a compile-time default).
+pub const FALLBACK_CRYPTO_SIGNER: &str = "beardog";
+
+/// Fallback binary name for the mesh relay capability.
+pub const FALLBACK_MESH_RELAY: &str = "songbird";
+
+/// Fallback binary name for content serving.
+pub const FALLBACK_CONTENT_SERVING: &str = "nestgate";
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

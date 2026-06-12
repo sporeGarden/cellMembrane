@@ -563,6 +563,7 @@ async fn relay_status() -> crate::Result<ShadowOutcome> {
 
 // ── Content domain (S3 sporePrint content integrity) ─────────────────
 
+#[allow(clippy::too_many_lines, reason = "multi-service health sweep — refactor candidate")]
 pub(super) async fn dispatch_content(
     config: &ShadowConfig,
     cmd: &str,
@@ -574,8 +575,17 @@ pub(super) async fn dispatch_content(
                 crate::ssh::exec_raw(config, "systemctl is-active caddy-tls").await?;
             let caddy_active = caddy_code == 0;
 
+            let content_binary = cellmembrane_types::MembraneService::with_capability(
+                cellmembrane_types::ServiceCapability::ContentServing,
+            )
+            .map_or(
+                cellmembrane_types::service::FALLBACK_CONTENT_SERVING,
+                |s| s.binary,
+            );
+            let content_unit = format!("{content_binary}-membrane");
             let (nestgate_out, nestgate_code) =
-                crate::ssh::exec_raw(config, "systemctl is-active nestgate-membrane").await?;
+                crate::ssh::exec_raw(config, &format!("systemctl is-active {content_unit}"))
+                    .await?;
             let nestgate_active = nestgate_code == 0;
 
             let content_path =

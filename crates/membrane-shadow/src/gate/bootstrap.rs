@@ -196,7 +196,10 @@ async fn sandbox_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let tower_primals = ["beardog", "songbird"];
+    let tower_services = cellmembrane_types::MembraneService::for_composition(
+        cellmembrane_types::MembraneComposition::Tower,
+    );
+    let tower_primals: Vec<&str> = tower_services.iter().map(|s| s.binary).collect();
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut details = Vec::new();
@@ -384,7 +387,10 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
     let relay = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    let relay_binary = relay.map_or("songbird", |s| s.binary);
+    let relay_binary =
+        relay.map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
+            s.binary
+        });
 
     let dest_root = super::health::resolve_plasmidbin_dir();
     let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);

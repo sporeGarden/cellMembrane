@@ -1,9 +1,9 @@
 # cellMembrane reference configuration
-# K-Derm: Diderm envelope physically realized across three VPS nodes
-# Inner membrane (golgiBody): Forgejo, NUCLEUS primals, sovereign services
+# Wave 111: 3-tier diesel engine (sandbox/main/canary) with fieldMouse provisioning
+# Inner membrane (golgiBody): Forgejo, NUCLEUS 13/13, sovereign services
 # Peptidoglycan (peptidoglycan): Build hub, workspace, temporal sync convergence
 # Outer membrane (golgiBody-ext): sporePrint hosting, TURN relay, public-facing
-# Wave 63: Three-node diderm deployment
+# Canary (fieldMouse): Warm standby droplet, previous-good binaries, auto-failover
 
 [membrane]
 name = "membrane-relay"

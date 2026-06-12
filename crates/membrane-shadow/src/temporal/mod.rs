@@ -11,7 +11,8 @@
 //!   - `temporal.check` → quorumSignal (qS): sense remote positions
 //!   - `temporal.sync`  → waterFall (wF): pull leader, push followers
 
-mod cascade;
+pub(super) mod cascade;
+mod post_sync;
 mod resolve;
 pub mod types;
 
