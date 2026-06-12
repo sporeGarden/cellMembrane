@@ -371,16 +371,43 @@ async fn sync_converge(
                         discarded.join(", "),
                     );
                 }
-            } else {
-                let reason = if has_dirty_worktree(local_path).await {
-                    format!("pull {leader} blocked (dirty worktree)")
+            } else if has_dirty_worktree(local_path).await {
+                // CASCADE-STALE-RECOVERY: auto-stash, pull, pop
+                let stashed = git_ok(local_path, &["stash", "push", "-m", "temporal-cascade-auto"]).await;
+                if stashed {
+                    eprintln!("temporal: auto-stashed dirty worktree in {repo_path}");
+                    let pull_ok = git_ok(
+                        local_path,
+                        &["pull", leader, branch, "--ff-only", "--quiet"],
+                    )
+                    .await;
+                    let _ = git_ok(local_path, &["stash", "pop", "--quiet"]).await;
+                    if pull_ok {
+                        pulled_from = Some(leader.clone());
+                        eprintln!("temporal: stash-recovery succeeded for {repo_path}");
+                    } else {
+                        return Ok(TemporalSyncResult {
+                            repo_path: repo_path.to_string(),
+                            ok: false,
+                            summary: format!("pull {leader} failed after stash (diverged)"),
+                            pulled_from: None,
+                            pushed_to: vec![],
+                        });
+                    }
                 } else {
-                    format!("pull {leader} failed (ff-only)")
-                };
+                    return Ok(TemporalSyncResult {
+                        repo_path: repo_path.to_string(),
+                        ok: false,
+                        summary: format!("pull {leader} blocked (stash failed)"),
+                        pulled_from: None,
+                        pushed_to: vec![],
+                    });
+                }
+            } else {
                 return Ok(TemporalSyncResult {
                     repo_path: repo_path.to_string(),
                     ok: false,
-                    summary: reason,
+                    summary: format!("pull {leader} failed (ff-only — diverged)"),
                     pulled_from: None,
                     pushed_to: vec![],
                 });

@@ -124,6 +124,8 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 
     std::fs::create_dir_all(&bin_dir).map_err(ShadowError::Io)?;
 
+    cleanup_partial_downloads(&bin_dir);
+
     let mut checksums = load_checksums(&bin_dir, &tag);
     if checksums.is_empty() && args.source == FetchSource::Wan {
         checksums = fetch_wan_checksums(&arch).await;
@@ -277,7 +279,7 @@ async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
 
     match output {
         Ok(o) if o.status.success() && !o.stdout.is_empty() => {
-            tokio::fs::write(dest, &o.stdout).await.is_ok()
+            atomic_write(dest, &o.stdout).await
         }
         _ => false,
     }
@@ -301,12 +303,41 @@ async fn download_via_http(url: &str, dest: &Path) -> bool {
         return false;
     };
 
-    tokio::fs::write(dest, &bytes).await.is_ok()
+    atomic_write(dest, &bytes).await
 }
 
 #[cfg(not(feature = "http"))]
 async fn download_via_http(_url: &str, _dest: &Path) -> bool {
     false
+}
+
+/// Remove leftover `.tmp` files from interrupted downloads.
+fn cleanup_partial_downloads(bin_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(bin_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("tmp") {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
+/// Atomic write: data → temp file → rename to final path.
+/// Prevents partial/corrupt binaries from appearing at `dest` if the process
+/// is interrupted mid-write. Cleans up the temp file on failure.
+async fn atomic_write(dest: &Path, data: &[u8]) -> bool {
+    let tmp = dest.with_extension("tmp");
+    if tokio::fs::write(&tmp, data).await.is_err() {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return false;
+    }
+    if tokio::fs::rename(&tmp, dest).await.is_err() {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return false;
+    }
+    true
 }
 
 // ── Checksum verification ────────────────────────────────────────────────────
@@ -461,13 +492,29 @@ async fn fetch_primals(
             || download_asset(args.source, config, tag, primal, arch, primal, &local_path).await;
 
         if !got {
-            results.push(FetchResult {
-                primal: (*primal).to_string(),
-                status: "download_failed".into(),
-                tag: Some(tag.to_string()),
-                verified: false,
-            });
-            continue;
+            // PARTIAL-FETCH-RESUME: one retry after short backoff
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let retry_got = download_asset(
+                args.source,
+                config,
+                tag,
+                &arch_asset,
+                arch,
+                primal,
+                &local_path,
+            )
+            .await
+                || download_asset(args.source, config, tag, primal, arch, primal, &local_path)
+                    .await;
+            if !retry_got {
+                results.push(FetchResult {
+                    primal: (*primal).to_string(),
+                    status: "download_failed".into(),
+                    tag: Some(tag.to_string()),
+                    verified: false,
+                });
+                continue;
+            }
         }
 
         #[cfg(unix)]

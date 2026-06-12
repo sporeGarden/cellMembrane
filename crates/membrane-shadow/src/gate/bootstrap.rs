@@ -71,6 +71,8 @@ pub async fn bootstrap(
 
     phases.push(super::verify::verify_wan_checksums(&arch, dry_run).await);
 
+    phases.push(sandbox_phase(&arch, dry_run).await);
+
     phases.push(mesh_phase(gate_name, &arch, dry_run).await);
     phases.push(nucleus_phase(&arch, dry_run));
     phases.push(health_phase(&arch, dry_run).await);
@@ -163,6 +165,75 @@ async fn fetch_phase(config: &ShadowConfig, transport: &str, dry_run: bool) -> B
     };
     BootstrapPhase {
         name: "depot.fetch".into(),
+        ok,
+        detail,
+    }
+}
+
+async fn sandbox_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
+    if dry_run {
+        return BootstrapPhase {
+            name: "sandbox.validate".into(),
+            ok: true,
+            detail: "dry-run: would sandbox-validate Tower primals before install".into(),
+        };
+    }
+
+    let Ok(depot_dir) = crate::plasmid::depot::resolve_depot(None) else {
+        return BootstrapPhase {
+            name: "sandbox.validate".into(),
+            ok: true,
+            detail: "skipped: depot not resolved (sandbox validation optional)".into(),
+        };
+    };
+
+    let bin_dir = depot_dir.join("primals").join(arch);
+    if !bin_dir.exists() {
+        return BootstrapPhase {
+            name: "sandbox.validate".into(),
+            ok: true,
+            detail: format!("skipped: no binaries at {}", bin_dir.display()),
+        };
+    }
+
+    let tower_primals = ["beardog", "songbird"];
+    let mut passed = 0u32;
+    let mut failed = 0u32;
+    let mut details = Vec::new();
+
+    for primal in &tower_primals {
+        let binary_path = bin_dir.join(primal);
+        if !binary_path.exists() {
+            continue;
+        }
+        let args = crate::plasmid::sandbox::SandboxArgs {
+            primal: (*primal).to_string(),
+            commit: "bootstrap".into(),
+            binary_path,
+            timeout_secs: Some(20),
+        };
+        match crate::plasmid::sandbox::validate(&args).await {
+            Ok(result) if result.health_ok => {
+                passed += 1;
+                details.push(format!("{primal}:PASS"));
+            }
+            Ok(result) => {
+                failed += 1;
+                details.push(format!("{primal}:FAIL({})", result.detail));
+            }
+            Err(e) => {
+                details.push(format!("{primal}:SKIP({e})"));
+            }
+        }
+    }
+
+    let ok = failed == 0;
+    let detail = format!(
+        "{passed} passed, {failed} failed [{}]",
+        details.join(", ")
+    );
+    BootstrapPhase {
+        name: "sandbox.validate".into(),
         ok,
         detail,
     }

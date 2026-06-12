@@ -183,7 +183,7 @@ async fn rustc_version() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-pub(super) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
+pub fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
     let path = resolve_path(
         override_dir,
         cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,

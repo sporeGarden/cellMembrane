@@ -13,7 +13,7 @@
 
 pub mod build;
 pub(crate) mod canary;
-mod depot;
+pub(crate) mod depot;
 mod fetch;
 mod harvest;
 mod refresh;
