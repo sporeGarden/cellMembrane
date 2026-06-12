@@ -82,6 +82,79 @@ pub async fn publish_freshness_toml(
     Ok(())
 }
 
+/// Auto-commit and push freshness.toml after cascade publish.
+///
+/// Commits the updated freshness.toml in the wateringHole repo and pushes
+/// to the configured remote. This eliminates manual freshness commits and
+/// multi-gate conflict patterns.
+pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
+    let wh_dir = root.join("infra/wateringHole");
+    if !wh_dir.join(".git").exists() {
+        return Err(ShadowError::Config(
+            "wateringHole not a git repo — cannot auto-commit freshness".into(),
+        ));
+    }
+
+    let gate = std::env::var(cellmembrane_types::service::ENV_GATE_NAME)
+        .or_else(|_| std::fs::read_to_string(root.join(".gate")).map(|s| s.trim().to_string()))
+        .unwrap_or_else(|_| "membrane".into());
+
+    // Stage freshness.toml
+    let add = tokio::process::Command::new("git")
+        .args(["add", "freshness.toml"])
+        .current_dir(&wh_dir)
+        .output()
+        .await
+        .map_err(ShadowError::Io)?;
+    if !add.status.success() {
+        return Ok(()); // nothing to stage — file unchanged
+    }
+
+    // Check if there's anything to commit
+    let diff = tokio::process::Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .current_dir(&wh_dir)
+        .output()
+        .await
+        .map_err(ShadowError::Io)?;
+    if diff.status.success() {
+        return Ok(()); // nothing staged
+    }
+
+    let msg = format!("freshness: auto-publish by {gate} (membrane temporal.cascade)");
+    let commit = tokio::process::Command::new("git")
+        .args(["commit", "-m", &msg])
+        .current_dir(&wh_dir)
+        .output()
+        .await
+        .map_err(ShadowError::Io)?;
+    if !commit.status.success() {
+        return Err(ShadowError::Config(format!(
+            "freshness auto-commit failed: {}",
+            String::from_utf8_lossy(&commit.stderr)
+        )));
+    }
+
+    // Push to forgejo (primary remote for wateringHole)
+    let push = tokio::process::Command::new("git")
+        .args(["push", "forgejo", "main"])
+        .current_dir(&wh_dir)
+        .output()
+        .await
+        .map_err(ShadowError::Io)?;
+    if !push.status.success() {
+        // Non-fatal: push may fail due to conflict (another gate pushed first)
+        let stderr = String::from_utf8_lossy(&push.stderr);
+        if stderr.contains("rejected") || stderr.contains("fetch first") {
+            // Expected race — another gate published first; our local is fine
+            return Ok(());
+        }
+        return Err(ShadowError::Ssh(format!("freshness push failed: {stderr}")));
+    }
+
+    Ok(())
+}
+
 /// Check installed binary freshness against source HEAD SHAs.
 ///
 /// Reads provenance sidecars from `~/.local/share/ecoPrimals/provenance/`

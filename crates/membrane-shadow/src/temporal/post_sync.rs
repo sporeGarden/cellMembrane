@@ -68,7 +68,13 @@ pub(super) async fn run_post_sync_phases(
 
     if opts.publish_freshness && opts.mode == CascadeMode::Sync {
         match crate::freshness::publish_freshness_toml(root, m, repos).await {
-            Ok(()) => lines.push("  [freshness] PUBLISHED freshness.toml".to_string()),
+            Ok(()) => {
+                lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
+                match crate::freshness::auto_commit_freshness(root).await {
+                    Ok(()) => {}
+                    Err(e) => lines.push(format!("  [freshness] auto-push: {e}")),
+                }
+            }
             Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
         }
     }
