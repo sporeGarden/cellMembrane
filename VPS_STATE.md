@@ -1,16 +1,18 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-06-11 (Wave 110)
-**Deployed composition:** Full NUCLEUS (Wave 61→110) — 13 primals + 4 symbiotic + federation + WAN depot
+**Last updated:** 2026-06-11 (Wave 110+)
+**Deployed composition:** Full NUCLEUS (Wave 61→110+) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust membrane binary
-**Deployment model:** Deterministic — `gate.bootstrap` (6 invariants) + `membrane plasmid.refresh` (atomic replace) + cascade auto-fetch
+**Deployment model:** Deterministic — `gate.bootstrap` (6 invariants) + sandbox validation + atomic promote + canary retirement + cascade auto-fetch
 **WAN depot:** `https://membrane.primals.eco/depot/` — 13 binaries + checksums.toml over HTTPS (zero SSH for WAN gates)
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 **Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02, S4 GRADUATED)
 **Mesh:** 6-gate collective (eastGate ↔ golgiBody ↔ ironGate + strandGate + northGate + westGate), songbird:7700 hub
 **Disk:** 60% (cleaned Wave 69)
 **Caddy:** sovereign TLS on `membrane.primals.eco` (Let's Encrypt E8) + `/depot/` file_server
+**Sandbox:** `/opt/membrane/sandbox/` + `/run/membrane/sandbox/` — ephemeral UDS validation (systemd `membrane-sandbox@`)
+**Canary:** `/opt/membrane/canary/` + `/run/membrane/canary/` — previous-good fallback pool (systemd `membrane-canary@`)
 
 ---
 

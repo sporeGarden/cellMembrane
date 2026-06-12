@@ -12,10 +12,12 @@
 //! BLAKE3 checksums are verified in-process using the `blake3` crate.
 
 pub mod build;
+pub(crate) mod canary;
 mod depot;
 mod fetch;
 mod harvest;
 mod refresh;
+pub(crate) mod sandbox;
 pub(crate) mod toolchain;
 
 pub use build::BuildArgs;
@@ -165,10 +167,60 @@ pub async fn pipeline(
         });
     }
 
-    let depot_source = depot::resolve_depot(None).ok().map(|d| {
-        let arch = detect_target_triple();
-        d.join("primals").join(arch).to_string_lossy().into_owned()
-    });
+    // Sandbox validation for each built primal before pushing to VPS
+    let arch = detect_target_triple();
+    let depot_dir = depot::resolve_depot(None)?;
+    let bin_dir = depot_dir.join("primals").join(&arch);
+
+    if let Some(data) = &harvest_outcome.data {
+        if let Some(arr) = data.as_array() {
+            for entry in arr {
+                let is_built = entry
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .is_some_and(|s| s == "Built");
+                if !is_built {
+                    continue;
+                }
+
+                let Some(name) = entry.get("primal").and_then(|p| p.as_str()) else {
+                    continue;
+                };
+
+                let binary_path = bin_dir.join(name);
+                if !binary_path.exists() {
+                    continue;
+                }
+
+                let commit = entry
+                    .get("commit")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("HEAD");
+
+                let sandbox_args = sandbox::SandboxArgs {
+                    primal: name.to_string(),
+                    commit: commit.to_string(),
+                    binary_path,
+                    timeout_secs: None,
+                };
+
+                if let Ok(result) = sandbox::validate(&sandbox_args).await {
+                    if !result.health_ok {
+                        return Ok(crate::ShadowOutcome {
+                            ok: false,
+                            message: format!(
+                                "{} | sandbox FAIL for {} — {} ({}ms). Refresh aborted.",
+                                harvest_outcome.message, name, result.detail, result.elapsed_ms
+                            ),
+                            data: Some(serde_json::to_value(&result).unwrap_or_default()),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let depot_source = Some(bin_dir.to_string_lossy().into_owned());
 
     let refresh_args = RefreshArgs {
         primal: primal.map(Into::into),
@@ -180,7 +232,10 @@ pub async fn pipeline(
 
     Ok(crate::ShadowOutcome {
         ok: refresh_outcome.ok,
-        message: format!("{} | {}", harvest_outcome.message, refresh_outcome.message),
+        message: format!(
+            "{} | sandbox: PASS | {}",
+            harvest_outcome.message, refresh_outcome.message
+        ),
         data: refresh_outcome.data,
     })
 }

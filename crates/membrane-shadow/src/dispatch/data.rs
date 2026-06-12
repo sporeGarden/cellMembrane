@@ -255,9 +255,172 @@ pub(super) async fn dispatch_plasmid(
             }
             Err(e) => Err(e),
         },
+        c if c.starts_with("plasmid.sandbox") || c.starts_with("plasmid.canary") => {
+            dispatch_plasmid_lifecycle(cmd, args).await
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown plasmid command: {cmd}"
         ))),
+    }
+}
+
+/// Sandbox + canary lifecycle dispatch (extracted to keep `dispatch_plasmid` under line limit).
+async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+    match cmd {
+        "plasmid.sandbox" => dispatch_sandbox_validate(args).await,
+        "plasmid.sandbox.list" => {
+            let instances = plasmid::sandbox::list_active();
+            let msg = if instances.is_empty() {
+                "no active sandboxes".to_string()
+            } else {
+                format!("{} active sandbox(es)", instances.len())
+            };
+            let data: Vec<serde_json::Value> = instances
+                .iter()
+                .map(|i| {
+                    serde_json::json!({
+                        "primal": i.primal,
+                        "commit": i.commit,
+                        "socket": i.socket_path.display().to_string(),
+                    })
+                })
+                .collect();
+            Ok(ShadowOutcome::ok_with(msg, serde_json::json!(data)))
+        }
+        "plasmid.canary.list" => {
+            let slots = plasmid::canary::list();
+            let msg = if slots.is_empty() {
+                "canary pool empty".to_string()
+            } else {
+                format!("{} canary slot(s)", slots.len())
+            };
+            Ok(ShadowOutcome::ok_with(
+                msg,
+                serde_json::to_value(&slots).unwrap_or_default(),
+            ))
+        }
+        "plasmid.canary.health" => {
+            let results = plasmid::canary::canary_health_watch().await;
+            let alive = results.iter().filter(|r| r.alive).count();
+            let msg = format!("{alive}/{} canaries healthy", results.len());
+            Ok(ShadowOutcome::ok_with(
+                msg,
+                serde_json::to_value(&results).unwrap_or_default(),
+            ))
+        }
+        "plasmid.canary.promote" => {
+            let primal = cli::extract_flag_value(args, "--primal").ok_or_else(|| {
+                ShadowError::Config("plasmid.canary.promote requires --primal".into())
+            })?;
+            let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+            let production_path = std::path::PathBuf::from(&install_dir).join(primal);
+
+            match plasmid::canary::promote_canary(primal, &production_path).await {
+                Ok(slot) => Ok(ShadowOutcome::ok(format!(
+                    "canary promoted: {} (commit {}) → production",
+                    slot.primal, slot.commit
+                ))),
+                Err(e) => Ok(ShadowOutcome::fail(format!("canary promote failed: {e}"))),
+            }
+        }
+        "plasmid.canary.failover" => {
+            let targets = plasmid::canary::failover_targets().await;
+            let msg = format!("{} healthy canary failover targets", targets.len());
+            Ok(ShadowOutcome::ok_with(
+                msg,
+                serde_json::to_value(&targets).unwrap_or_default(),
+            ))
+        }
+        "plasmid.canary.teardown" => {
+            plasmid::canary::teardown_all().await;
+            Ok(ShadowOutcome::ok("all canary instances terminated"))
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown lifecycle command: {cmd}"
+        ))),
+    }
+}
+
+async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let primal = cli::extract_flag_value(args, "--primal")
+        .ok_or_else(|| ShadowError::Config("plasmid.sandbox requires --primal".into()))?;
+    let commit = cli::extract_flag_value(args, "--commit")
+        .unwrap_or("HEAD")
+        .to_string();
+    let timeout = cli::extract_flag_value(args, "--timeout").and_then(|s| s.parse::<u64>().ok());
+
+    let arch = plasmid::detect_target_triple();
+    let depot_dir = std::env::var("PLASMIDBIN_DEPOT").map_or_else(
+        |_| {
+            let data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+                format!("{home}/.local/share")
+            });
+            std::path::PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin/primals/{arch}"))
+        },
+        std::path::PathBuf::from,
+    );
+    let binary_path = depot_dir.join(primal);
+
+    if !binary_path.exists() {
+        return Ok(ShadowOutcome::fail(format!(
+            "binary not found in depot: {}",
+            binary_path.display()
+        )));
+    }
+
+    let sandbox_args = plasmid::sandbox::SandboxArgs {
+        primal: primal.to_string(),
+        commit,
+        binary_path,
+        timeout_secs: timeout,
+    };
+
+    let promote = args.contains(&"--promote");
+    if promote {
+        let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+        let production_path = std::path::PathBuf::from(install_dir).join(primal);
+
+        match plasmid::sandbox::validate_and_promote(&sandbox_args, &production_path).await {
+            Ok((result, old_binary)) => {
+                let ok = result.health_ok;
+                let msg = format!(
+                    "sandbox {}: {} — {} ({}ms){}",
+                    result.primal,
+                    if ok { "PASS+PROMOTED" } else { "FAIL" },
+                    result.detail,
+                    result.elapsed_ms,
+                    old_binary.map_or(String::new(), |p| format!(" (old → {})", p.display())),
+                );
+                Ok(ShadowOutcome {
+                    ok,
+                    message: msg,
+                    data: Some(serde_json::to_value(&result).unwrap_or_default()),
+                })
+            }
+            Err(e) => Ok(ShadowOutcome::fail(format!("sandbox+promote error: {e}"))),
+        }
+    } else {
+        match plasmid::sandbox::validate(&sandbox_args).await {
+            Ok(result) => {
+                let ok = result.health_ok;
+                let msg = format!(
+                    "sandbox {}: {} — {} ({}ms)",
+                    result.primal,
+                    if ok { "PASS" } else { "FAIL" },
+                    result.detail,
+                    result.elapsed_ms,
+                );
+                Ok(ShadowOutcome {
+                    ok,
+                    message: msg,
+                    data: Some(serde_json::to_value(&result).unwrap_or_default()),
+                })
+            }
+            Err(e) => Ok(ShadowOutcome::fail(format!("sandbox error: {e}"))),
+        }
     }
 }
 

@@ -1,0 +1,37 @@
+# membrane-canary@.service — Template unit for canary (previous-good) instances
+# Instance name (%i) is the primal binary name (e.g. beardog, songbird).
+#
+# Canary instances are the previous known-good binaries kept running as
+# fallback targets. They serve on isolated sockets so production is unaffected.
+# Mesh peers and auth consumers can failover to canary if production dies.
+#
+# Usage (via membrane tooling):
+#   systemctl start membrane-canary@beardog
+#
+# The canary binary lives at /opt/membrane/canary/{primal}
+# and binds to /run/membrane/canary/{primal}.sock
+[Unit]
+Description=Canary Fallback — %i
+After=network-online.target
+ConditionPathExists=/opt/membrane/canary/%i
+
+[Service]
+Type=simple
+ExecStartPre=-/bin/rm -f /run/membrane/canary/%i.sock
+ExecStart=/opt/membrane/canary/%i server --socket /run/membrane/canary/%i.sock
+Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
+Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
+Environment=BIOMEOS_SOCKET_DIR=/run/membrane/canary
+RuntimeDirectory=membrane/canary
+RuntimeDirectoryPreserve=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=canary-%i
+
+# Canary runs indefinitely (until replaced by next promotion cycle)
+Restart=always
+RestartSec=5
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

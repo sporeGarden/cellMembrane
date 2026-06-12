@@ -302,10 +302,15 @@ const REGENERABLE_METADATA: &[&str] = &["checksums.toml", "provenance.toml", "fr
 
 /// Check if a repository has uncommitted changes that would block a pull.
 async fn has_dirty_worktree(local_path: &Path) -> bool {
-    let output = git(local_path, &["status", "--porcelain"]).await.unwrap_or_default();
+    let output = git(local_path, &["status", "--porcelain"])
+        .await
+        .unwrap_or_default();
     output.lines().any(|l| {
         let trimmed = l.trim();
-        trimmed.len() >= 3 && !REGENERABLE_METADATA.iter().any(|m| trimmed[3..].trim().ends_with(m))
+        trimmed.len() >= 3
+            && !REGENERABLE_METADATA
+                .iter()
+                .any(|m| trimmed[3..].trim().ends_with(m))
     })
 }
 

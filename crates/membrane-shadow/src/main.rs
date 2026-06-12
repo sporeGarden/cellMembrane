@@ -9,6 +9,11 @@ use membrane_shadow::{ShadowConfig, ShadowOutcome};
 use std::process::ExitCode;
 
 fn usage() {
+    usage_header();
+    usage_lifecycle();
+}
+
+fn usage_header() {
     eprintln!(
         r"membrane — sovereign shadow functions
 
@@ -91,12 +96,24 @@ Plasmid (primal binary bootstrap):
   plasmid.depot_sync               Sync inner→outer membrane (BLAKE3 diff, atomic copy, checksums)
   plasmid.status                   Report depot freshness and upstream drift
   plasmid.staleness                Detect stale primals from provenance (local, no network)
+  plasmid.sandbox --primal NAME [--commit SHA] [--timeout SECS]
+                                   Validate a staged binary in isolated sandbox before promotion
+  plasmid.sandbox.list             Show active sandbox instances
+  plasmid.canary.list              Show canary pool state (previous-good fallback instances)
+  plasmid.canary.health            Health-check all canary instances
+  plasmid.canary.promote --primal NAME
+                                   Promote canary back to production (rollback)
 
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)
   relay.mediate [repo_path...]     Pull from Forgejo only (metallic bond inward)
-  relay.ship [repo_path...]        Push to GitHub via golgiBody-ext (ionic→weak outward)
+  relay.ship [repo_path...]        Push to GitHub via golgiBody-ext (ionic→weak outward)"
+    );
+}
 
+fn usage_lifecycle() {
+    eprintln!(
+        r"
 Webhook (push-driven cascade):
   webhook.test <json_body>         Process a push event (dry-run: selective harvest)
   webhook.verify <body> --signature <hex>

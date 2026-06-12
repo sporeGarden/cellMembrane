@@ -34,7 +34,7 @@ pub struct GateStatus {
 
 /// Query the status of an already-bootstrapped gate (local).
 ///
-/// Probes: depot integrity → mesh reachability → primal processes → depot freshness.
+/// Probes: depot integrity → mesh reachability → primal processes → depot freshness → sovereignty.
 pub async fn status() -> crate::error::Result<GateStatus> {
     let arch = crate::plasmid::detect_target_triple();
     let gate_name = super::resolve_local_gate_identity();
@@ -67,6 +67,9 @@ pub async fn status() -> crate::error::Result<GateStatus> {
         ok: fresh_ok,
         detail: fresh_detail,
     });
+
+    let sovereignty_probes = probe_sovereignty().await;
+    probes.extend(sovereignty_probes);
 
     let healthy = probes.iter().all(|p| p.ok);
 
@@ -211,6 +214,210 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
     let total = present + missing;
     let ok = missing == 0;
     (ok, format!("{present}/{total} binaries present"))
+}
+
+// ── Sovereignty probes (S1-S4 live validation) ───────────────────────────
+
+/// Domain used for sovereign TLS and content probes.
+const SOVEREIGN_DOMAIN: &str = "membrane.primals.eco";
+
+/// Probe all four sovereignty shadows (S1 TLS, S2 Relay, S3 Content, S4 Auth).
+///
+/// These are live WAN probes that validate the ecoPrimals sovereign infrastructure
+/// is operational — replacing static documentation with runtime truth.
+async fn probe_sovereignty() -> Vec<StatusProbe> {
+    let (s1, s2, s3, s4) = tokio::join!(
+        probe_s1_tls(),
+        probe_s2_relay(),
+        probe_s3_content(),
+        probe_s4_auth(),
+    );
+    vec![s1, s2, s3, s4]
+}
+
+/// S1: Sovereign TLS — validate certificate and TTFB from membrane.primals.eco.
+async fn probe_s1_tls() -> StatusProbe {
+    let url = format!("https://{SOVEREIGN_DOMAIN}/");
+    let start = std::time::Instant::now();
+
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("client: {e}"))?
+            .head(&url)
+            .send()
+            .await
+            .map_err(|e| format!("request: {e}"))
+    })
+    .await;
+
+    match result {
+        Ok(Ok(resp)) => {
+            let ttfb_ms = start.elapsed().as_millis();
+            let status = resp.status();
+            if status.is_success() || status.as_u16() == 308 || status.as_u16() == 301 {
+                StatusProbe {
+                    name: "sovereignty.s1_tls".into(),
+                    ok: true,
+                    detail: format!("OPERATIONAL — {SOVEREIGN_DOMAIN} {status} ({ttfb_ms}ms)"),
+                }
+            } else {
+                StatusProbe {
+                    name: "sovereignty.s1_tls".into(),
+                    ok: false,
+                    detail: format!("{SOVEREIGN_DOMAIN} returned {status} ({ttfb_ms}ms)"),
+                }
+            }
+        }
+        Ok(Err(e)) => StatusProbe {
+            name: "sovereignty.s1_tls".into(),
+            ok: false,
+            detail: format!("FAIL — {e}"),
+        },
+        Err(_) => StatusProbe {
+            name: "sovereignty.s1_tls".into(),
+            ok: false,
+            detail: "TIMEOUT — TLS probe exceeded 5s".into(),
+        },
+    }
+}
+
+/// S2: Sovereign Relay — probe Songbird federation (:7700) TCP and TURN (:3478) TCP.
+///
+/// Federation port is always TCP. TURN may primarily use UDP but also listens on TCP.
+/// Federation reachability is the primary signal; TURN TCP is best-effort.
+async fn probe_s2_relay() -> StatusProbe {
+    let vps_host = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
+        .unwrap_or_else(|_| "157.230.3.183".into());
+
+    let fed_addr = format!("{vps_host}:7700");
+    let turn_addr = format!("{vps_host}:3478");
+
+    let (fed_ok, turn_ok) = tokio::join!(tcp_reachable(&fed_addr), tcp_reachable(&turn_addr),);
+
+    let detail = format!(
+        "federation:{} TURN:{}",
+        if fed_ok { "REACHABLE" } else { "UNREACHABLE" },
+        if turn_ok {
+            "TCP-OK"
+        } else {
+            "TCP-CLOSED(UDP-only)"
+        },
+    );
+
+    StatusProbe {
+        name: "sovereignty.s2_relay".into(),
+        ok: fed_ok,
+        detail,
+    }
+}
+
+/// S3: Sovereign Content — probe WAN depot HTTPS availability and TTFB.
+///
+/// Probes the depot file server (Caddy) to confirm binaries are being served
+/// over sovereign TLS. Path: `/depot/{arch}/{binary}` via HEAD request.
+async fn probe_s3_content() -> StatusProbe {
+    let arch = crate::plasmid::detect_target_triple();
+    let url = format!("https://{SOVEREIGN_DOMAIN}/depot/{arch}/beardog");
+    let start = std::time::Instant::now();
+
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("client: {e}"))?
+            .head(&url)
+            .send()
+            .await
+            .map_err(|e| format!("request: {e}"))
+    })
+    .await;
+
+    match result {
+        Ok(Ok(resp)) => {
+            let ttfb_ms = start.elapsed().as_millis();
+            if resp.status().is_success() {
+                let size_kb = resp
+                    .headers()
+                    .get("content-length")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(|b| b / 1024);
+                let size_info = size_kb.map_or(String::new(), |kb| format!(" {kb}KB"));
+                StatusProbe {
+                    name: "sovereignty.s3_content".into(),
+                    ok: true,
+                    detail: format!("OPERATIONAL — depot serving{size_info} ({ttfb_ms}ms TTFB)"),
+                }
+            } else {
+                StatusProbe {
+                    name: "sovereignty.s3_content".into(),
+                    ok: false,
+                    detail: format!("depot returned {} ({ttfb_ms}ms)", resp.status()),
+                }
+            }
+        }
+        Ok(Err(e)) => StatusProbe {
+            name: "sovereignty.s3_content".into(),
+            ok: false,
+            detail: format!("FAIL — {e}"),
+        },
+        Err(_) => StatusProbe {
+            name: "sovereignty.s3_content".into(),
+            ok: false,
+            detail: "TIMEOUT — content probe exceeded 5s".into(),
+        },
+    }
+}
+
+/// S4: Sovereign Auth — probe `BearDog` BTSP enforcement via local UDS health.
+async fn probe_s4_auth() -> StatusProbe {
+    let signer = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let binary_name = signer.map_or("beardog", |s| s.binary);
+    let socket_paths = resolve_primal_socket_paths(binary_name);
+
+    let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+
+    for socket_path in &socket_paths {
+        if !Path::new(socket_path).exists() {
+            continue;
+        }
+        if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
+            if response.contains("\"status\"") {
+                let enforced =
+                    response.contains("enforced") || response.contains("\"auth_mode\":\"btsp\"");
+                let detail = if enforced {
+                    "ENFORCED — BearDog BTSP active".to_string()
+                } else {
+                    "RESPONDING — BearDog alive (auth mode unconfirmed)".to_string()
+                };
+                return StatusProbe {
+                    name: "sovereignty.s4_auth".into(),
+                    ok: true,
+                    detail,
+                };
+            }
+        }
+    }
+
+    StatusProbe {
+        name: "sovereignty.s4_auth".into(),
+        ok: false,
+        detail: "UNREACHABLE — BearDog not responding on UDS".into(),
+    }
+}
+
+/// TCP reachability check with 3s timeout.
+async fn tcp_reachable(addr: &str) -> bool {
+    tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        tokio::net::TcpStream::connect(addr),
+    )
+    .await
+    .is_ok_and(|r| r.is_ok())
 }
 
 // ── Native UDS JSON-RPC client ─────────────────────────────────────────

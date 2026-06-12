@@ -3,14 +3,19 @@
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-06-11 (Wave 110)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
-**Wave 110+ update:** Primal composition grade achieved. `ServiceCapability` enum —
-capability-based service discovery replaces all hardcoded primal names. `temporal/resolve.rs`
-extracted (authority-first push + agentic divergence resolution). `plasmid/toolchain.rs`
-extracted (ELF validation + NDK). All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`,
-`MEMBRANE_SOCKET_BASE`, `VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`, `NM_DISPATCHER_DIR`).
+**Wave 110+ update:** Primal composition grade + sandbox/canary pipeline achieved.
+`ServiceCapability` enum — capability-based service discovery replaces all hardcoded primal
+names. `temporal/resolve.rs` extracted (authority-first push + agentic divergence resolution).
+`plasmid/toolchain.rs` extracted (ELF validation + NDK). **Sandbox NUCLEUS**: ephemeral
+isolated validation before binary promotion (spin-up → UDS JSON-RPC probe → teardown).
+**Canary pool**: previous-good binaries retired to `/opt/membrane/canary/`, health-watched,
+available as failover targets. Atomic blue/green promotion with canary retirement wired
+into cascade-restart. `service/registry.rs` extracted (pure data, smart refactor).
+All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`, `MEMBRANE_SOCKET_BASE`,
+`VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`, `NM_DISPATCHER_DIR`).
 DRY socket resolution (bootstrap reuses health's). Stream 5 `agentic_resolve` DONE. Zero
 production unwrap/expect, zero TODO/FIXME/HACK, zero #[allow], zero unsafe (forbid), zero
-mocks in prod, all deps pure Rust. 360 tests, zero clippy.
+mocks in prod, all deps pure Rust. 365 tests, zero clippy.
 **Wave 110 update:** Deep debt evolution — native UDS probes, gate/ modular split,
 dual-checksum verification, cascade-restart, agentic resolver, agnostic config.
 Stream 2 (Build Pipeline) 6/6 DONE. northGate + westGate profiles registered.

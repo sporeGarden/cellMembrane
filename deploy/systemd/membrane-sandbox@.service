@@ -1,0 +1,36 @@
+# membrane-sandbox@.service — Template unit for sandbox validation instances
+# Instance name (%i) is "{primal}-{commit_short}" (e.g. beardog-abc12345).
+#
+# Sandboxed instances run in an isolated socket namespace for health validation
+# before promotion to production. Auto-killed after timeout.
+#
+# Usage (via membrane tooling, not manual):
+#   systemctl start membrane-sandbox@beardog-abc12345
+#
+# The sandbox binary is staged at /opt/membrane/sandbox/{primal}-{commit}
+# and binds to /run/membrane/sandbox/{primal}-{commit}.sock
+[Unit]
+Description=Sandbox Validation — %i
+After=network-online.target
+ConditionPathExists=/opt/membrane/sandbox/%i
+
+[Service]
+Type=simple
+ExecStart=/opt/membrane/sandbox/%i server --socket /run/membrane/sandbox/%i.sock
+Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
+Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
+Environment=BIOMEOS_SOCKET_DIR=/run/membrane/sandbox
+RuntimeDirectory=membrane/sandbox
+RuntimeDirectoryPreserve=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sandbox-%i
+
+# Auto-terminate after 30s (validation timeout)
+RuntimeMaxSec=30
+
+# No restart — sandbox is one-shot validation
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

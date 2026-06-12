@@ -371,7 +371,37 @@ async fn run_cascade_restart(lines: &mut Vec<String>) {
             continue;
         }
 
-        // Binary differs — copy new binary and restart
+        // Sandbox validation before promoting the new binary
+        let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
+            primal: (*primal).to_string(),
+            commit: depot_hash[..8].to_string(),
+            binary_path: depot_bin.clone(),
+            timeout_secs: None,
+        };
+
+        let sandbox_ok = match crate::plasmid::sandbox::validate(&sandbox_args).await {
+            Ok(result) => result.health_ok,
+            Err(_) => true, // infra failure — proceed with restart (fail-open)
+        };
+
+        if !sandbox_ok {
+            lines.push(format!(
+                "  [cascade-restart] {primal} sandbox FAIL — skipping"
+            ));
+            failed += 1;
+            continue;
+        }
+
+        // Retire current production binary to canary pool before overwriting
+        if installed_bin.exists() {
+            let _ = crate::plasmid::canary::retire_to_canary(
+                primal,
+                &installed_bin,
+                &installed_hash[..8],
+            )
+            .await;
+        }
+
         if std::fs::copy(&depot_bin, &installed_bin).is_err() {
             failed += 1;
             continue;

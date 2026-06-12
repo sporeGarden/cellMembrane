@@ -55,12 +55,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 360+ tests — pedantic clippy clean
+cargo test                  # 365 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 110+ (Deep Debt Evolution + Primal Composition Grade):**
+**Wave 110+ (Deep Debt Evolution + Sandbox/Canary Pipeline):**
 Native async UDS JSON-RPC probes (replaces all bash/socat). `gate/` split into
 `bootstrap.rs` + `health.rs` + `verify.rs` (868L → 4 focused modules). Dual-checksum
 verification (git + WAN). `temporal.cascade --with-restart` (selective NUCLEUS restart).
@@ -69,9 +69,12 @@ resolver (authority-first graduated ff → rebase → signal, SOVEREIGN_REMOTE c
 `temporal/resolve.rs` extracted (push logic + divergence policy). `plasmid/toolchain.rs`
 extracted (ELF validation + NDK cross-compile). **`ServiceCapability` enum** — primals
 discovered by capability (`MeshRelay`, `TurnServer`, `CryptoSigner`, etc.) not name.
-All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`, `MEMBRANE_SOCKET_BASE`,
+**Sandbox NUCLEUS**: ephemeral isolated validation before promotion (spin-up → UDS probe →
+teardown). **Canary pool**: previous-good binaries retained as fallback instances.
+Atomic blue/green promotion with canary retirement. `service/registry.rs` extracted
+(pure data). All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`, `MEMBRANE_SOCKET_BASE`,
 `VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`). Zero production `unwrap()`, zero
-`#[allow]`, zero `unsafe`, zero TODO/FIXME, all deps pure Rust. 360 tests, zero clippy.
+`#[allow]`, zero `unsafe`, zero TODO/FIXME, all deps pure Rust. 365 tests, zero clippy.
 
 **Wave 107–109 (Deterministic Deployment + guideStone):**
 `gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),
@@ -111,6 +114,12 @@ membrane plasmid.harvest                  # Build + checksum + auto-publish to g
 membrane plasmid.harvest --target aarch64-linux-android  # NDK cross-compile
 membrane plasmid.ndk.check                # Verify NDK toolchain readiness
 membrane plasmid.refresh                  # Push depot binaries to VPS (atomic replace)
+membrane plasmid.sandbox --primal beardog # Sandbox validation (isolated UDS probe)
+membrane plasmid.sandbox --primal X --promote  # Validate + atomic promote to production
+membrane plasmid.canary.list              # Show canary pool state (previous-good)
+membrane plasmid.canary.health            # Health-check all canary instances
+membrane plasmid.canary.promote --primal X  # Rollback: canary → production
+membrane plasmid.canary.failover          # List healthy failover targets
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
@@ -182,6 +191,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | guideStone convergence (Wave 109): plasmid.build, gate.profile, deployment.toml, JSON-RPC health, BUILD-ELF-01 | DONE |
 | Deep debt evolution (Wave 110): native UDS (tokio::net::UnixStream), gate/ modular split, agnostic config, agentic resolver, dual checksum, cascade-restart | DONE |
 | Primal composition grade (Wave 110+): ServiceCapability discovery, temporal/resolve.rs + plasmid/toolchain.rs extracted, all paths env-configurable, DRY socket resolution, zero prod unwrap/TODO/allow | DONE |
+| Sandbox NUCLEUS + canary pool (Wave 110+): sandbox.rs ephemeral validation, canary.rs fallback pool, atomic blue/green promotion, cascade-restart with canary retirement, service/registry.rs extracted | DONE |
 
 ---
 
@@ -274,7 +284,9 @@ gardens/cellMembrane/
         firewall.rs           # UFW rules from composition (SSH_PORT constant)
         identity.rs           # Family ID, gate ID
         provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
-        service.rs            # Static service registry — zero allocation, const fn
+        service/              # Static service registry — zero allocation, const fn
+          mod.rs              # Types, enums, ServicePaths, impl MembraneService (550L)
+          registry.rs         # 17 const service entries + ALL_SERVICES array (304L)
         validation.rs         # Report pattern (pass/fail/warn) + doc-tests
       tests/
         channels.rs           # Channel trust, ports, crypto, serde (4 tests)
@@ -312,6 +324,8 @@ gardens/cellMembrane/
           harvest.rs          # Build + checksum + atomic publish to git
           refresh.rs          # Atomic push to VPS + checksum coherence check
           toolchain.rs        # ELF validation + NDK cross-compile + strip
+          sandbox.rs          # Ephemeral isolated validation (spin-up → probe → teardown)
+          canary.rs           # Previous-good pool (retire → health-watch → failover)
         caddy.rs              # Caddy TLS + depot + checksums provisioning
         cloudflare.rs         # Cloudflare API v4 (DNS, cache, SSL, zones)
         forgejo.rs            # Forgejo REST API (native reqwest)

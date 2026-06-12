@@ -1,7 +1,7 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (ironGate team)
-**Last updated:** 2026-06-10 (Wave 107)
+**Last updated:** 2026-06-11 (Wave 110+)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
 > **Note (Wave 107):** The `membrane` Rust CLI now replaces most `deploy_membrane.sh`
@@ -25,6 +25,7 @@
 9. [SSH Key Management (Multi-Gate)](#9-ssh-key-management-multi-gate)
 10. [Emergency Procedures](#10-emergency-procedures)
 11. [Self-Hosted GitHub Actions Runner](#11-self-hosted-github-actions-runner)
+12. [Sandbox Validation + Canary Pool](#12-sandbox-validation--canary-pool-wave-110)
 
 ---
 
@@ -548,3 +549,57 @@ curl -s http://127.0.0.1:7700/jsonrpc -H "Content-Type: application/json" -d '{
 - `SONGBIRD_PEERS` auto-bootstraps on startup (was requiring manual `mesh.init`)
 - `mesh.init` accepts string format `"node@host:port"` (was object-only)
 - `latency_ms` populated via periodic health probes (~2 min interval)
+
+---
+
+## 12. Sandbox Validation + Canary Pool (Wave 110+)
+
+### Pre-deployment sandbox validation
+
+```bash
+# Validate a staged binary in isolation before promoting to production
+membrane plasmid.sandbox --primal beardog
+
+# Validate AND atomically promote if healthy
+membrane plasmid.sandbox --primal beardog --promote
+
+# List active sandbox instances
+membrane plasmid.sandbox.list
+```
+
+### Canary pool management
+
+```bash
+# List canary pool (previous-good binaries)
+membrane plasmid.canary.list
+
+# Health-check all canaries
+membrane plasmid.canary.health
+
+# Rollback: promote canary back to production
+membrane plasmid.canary.promote --primal beardog
+
+# List healthy failover targets (for mesh routing)
+membrane plasmid.canary.failover
+
+# Tear down all canary instances (cleanup)
+membrane plasmid.canary.teardown
+```
+
+### How cascade-restart uses sandbox + canary
+
+When `temporal.cascade --with-restart` detects a new binary:
+1. **Sandbox**: Spawns new binary in isolated UDS socket, probes JSON-RPC health
+2. **Canary retire**: If sandbox passes, copies old production binary to canary dir
+3. **Promote**: Overwrites production binary with new (atomic `fs::copy`)
+4. **Restart**: `systemctl restart membrane-nucleus@{primal}`
+5. **Fail-open**: If sandbox infra fails (directory missing, etc.), proceeds anyway
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MEMBRANE_SANDBOX_SOCKET_DIR` | `/run/membrane/sandbox` | Sandbox UDS directory |
+| `MEMBRANE_SANDBOX_BIN_DIR` | `/opt/membrane/sandbox` | Sandbox binary staging |
+| `MEMBRANE_CANARY_SOCKET_DIR` | `/run/membrane/canary` | Canary UDS directory |
+| `MEMBRANE_CANARY_BIN_DIR` | `/opt/membrane/canary` | Canary binary storage |

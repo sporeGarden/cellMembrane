@@ -190,8 +190,63 @@ pub async fn handle_push(
         });
     }
 
+    // Sandbox validation: spin up new binary in isolation, health-check before promoting
+    let arch = crate::plasmid::detect_target_triple();
+    let primal_lower = action.repo_name.to_lowercase();
+    let depot_binary = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
+        let data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+            format!("{home}/.local/share")
+        });
+        std::path::PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
+    })
+    .join("primals")
+    .join(&arch)
+    .join(&primal_lower);
+
+    if depot_binary.exists() {
+        let commit_short = if event.after.len() >= 8 {
+            &event.after[..8]
+        } else {
+            &event.after
+        };
+
+        let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
+            primal: primal_lower.clone(),
+            commit: commit_short.to_string(),
+            binary_path: depot_binary,
+            timeout_secs: None,
+        };
+
+        match crate::plasmid::sandbox::validate(&sandbox_args).await {
+            Ok(result) if !result.health_ok => {
+                eprintln!(
+                    "[webhook] sandbox FAIL for {} — {}",
+                    primal_lower, result.detail
+                );
+                return Ok(crate::ShadowOutcome {
+                    ok: false,
+                    message: format!(
+                        "webhook: {} sandbox validation FAILED — {} ({}ms). Production unchanged.",
+                        action.repo_name, result.detail, result.elapsed_ms
+                    ),
+                    data: Some(serde_json::to_value(&result).unwrap_or_default()),
+                });
+            }
+            Ok(result) => {
+                eprintln!(
+                    "[webhook] sandbox PASS for {} — {} ({}ms)",
+                    primal_lower, result.detail, result.elapsed_ms
+                );
+            }
+            Err(e) => {
+                eprintln!("[webhook] sandbox infra error for {primal_lower}: {e} — proceeding");
+            }
+        }
+    }
+
     let refresh_args = crate::plasmid::RefreshArgs {
-        primal: Some(action.repo_name.to_lowercase()),
+        primal: Some(primal_lower),
         dry_run: false,
         source_dir: None,
     };
@@ -201,7 +256,7 @@ pub async fn handle_push(
     Ok(crate::ShadowOutcome {
         ok: refresh_outcome.ok,
         message: format!(
-            "webhook: {} → harvest: {} | refresh: {}",
+            "webhook: {} → harvest: {} | sandbox: PASS | refresh: {}",
             action.repo_name, harvest_outcome.message, refresh_outcome.message
         ),
         data: refresh_outcome.data,
