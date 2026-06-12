@@ -60,6 +60,14 @@ cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsa
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
+**Wave 111 (Gate Expansion + Robustness Hardening):**
+`gate.bootstrap` sandbox integration — Tower primals sandbox-validated before install.
+CASCADE-STALE-RECOVERY (auto-stash + ff-only pull + pop for dirty worktrees).
+PARTIAL-FETCH-RESUME (atomic `.tmp` → rename, stale partial cleanup, retry with backoff).
+Pure Rust ELF validation (no external `file` command — reads e_machine + PT_INTERP directly).
+Hardcoded ports evolved to named constants (`DEFAULT_FEDERATION_PORT`, `DEFAULT_TURN_PORT`,
+`DEFAULT_VPS_HOST`). All env vars centralized to types crate.
+
 **Wave 110+ (Deep Debt Evolution + Sandbox/Canary Pipeline):**
 Native async UDS JSON-RPC probes (replaces all bash/socat). `gate/` split into
 `bootstrap.rs` + `health.rs` + `verify.rs` (868L → 4 focused modules). Dual-checksum

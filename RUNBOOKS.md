@@ -1,7 +1,7 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (ironGate team)
-**Last updated:** 2026-06-11 (Wave 110+)
+**Last updated:** 2026-06-12 (Wave 111)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
 > **Note (Wave 107):** The `membrane` Rust CLI now replaces most `deploy_membrane.sh`
