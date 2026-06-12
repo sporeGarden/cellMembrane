@@ -332,6 +332,27 @@ async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<S
                 serde_json::to_value(&targets).unwrap_or_default(),
             ))
         }
+        "plasmid.canary.audit" => {
+            let auto_refresh = args.contains(&"--refresh");
+            let reports = plasmid::canary::staleness_audit(auto_refresh).await;
+            let stale_count = reports.iter().filter(|r| r.stale).count();
+            let msg = if reports.is_empty() {
+                "canary pool empty — nothing to audit".to_string()
+            } else if stale_count == 0 {
+                format!("{} canary(s) — all fresh", reports.len())
+            } else if auto_refresh {
+                format!("{stale_count}/{} stale canary(s) removed", reports.len())
+            } else {
+                format!(
+                    "{stale_count}/{} stale (use --refresh to remove)",
+                    reports.len()
+                )
+            };
+            Ok(ShadowOutcome::ok_with(
+                msg,
+                serde_json::to_value(&reports).unwrap_or_default(),
+            ))
+        }
         "plasmid.canary.teardown" => {
             plasmid::canary::teardown_all().await;
             Ok(ShadowOutcome::ok("all canary instances terminated"))

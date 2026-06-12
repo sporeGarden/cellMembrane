@@ -165,11 +165,36 @@ async fn refresh_one(
     let remote_new = format!("{install_dir}/{primal}.new");
     let remote_final = format!("{install_dir}/{primal}");
 
-    if let Err(e) = crate::ssh::scp_to(config, &local_path, &remote_new).await {
+    // WAN-TIMEOUT-GRACEFUL: retry SCP with exponential backoff (2s, 4s, 8s)
+    let mut scp_ok = false;
+    let mut last_err = String::new();
+    for attempt in 0..3u32 {
+        if attempt > 0 {
+            let backoff = std::time::Duration::from_secs(2u64.pow(attempt));
+            tokio::time::sleep(backoff).await;
+        }
+        match crate::ssh::scp_to(config, &local_path, &remote_new).await {
+            Ok(()) => {
+                scp_ok = true;
+                break;
+            }
+            Err(e) => {
+                last_err = format!("{e}");
+                eprintln!(
+                    "refresh: scp {primal} attempt {} failed: {last_err}",
+                    attempt + 1
+                );
+            }
+        }
+    }
+    if !scp_ok {
+        // Rollback: clean up partial .new file on remote
+        let cleanup = format!("rm -f {remote_new}");
+        let _ = crate::ssh::exec_raw(config, &cleanup).await;
         return RefreshResult {
             binary: primal.into(),
             status: RefreshStatus::Failed,
-            detail: format!("scp failed: {e}"),
+            detail: format!("scp failed after 3 attempts: {last_err}"),
         };
     }
 

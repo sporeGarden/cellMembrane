@@ -141,12 +141,92 @@ pub async fn canary_health_watch() -> Vec<CanaryHealth> {
     results
 }
 
-/// Return socket paths of all healthy canary instances — usable as fallback targets.
+/// Maximum age (in hours) before a canary is considered stale and refused for failover.
+/// Configurable via `MEMBRANE_CANARY_MAX_AGE_HOURS` (default: 168 = 7 days / ~2 waves).
+const DEFAULT_MAX_AGE_HOURS: i64 = 168;
+
+/// Check if a canary slot is stale (`promoted_at` older than max age).
+fn is_stale(slot: &CanarySlot) -> bool {
+    let max_hours = std::env::var("MEMBRANE_CANARY_MAX_AGE_HOURS")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(DEFAULT_MAX_AGE_HOURS);
+
+    let Ok(promoted) = chrono::DateTime::parse_from_rfc3339(&slot.promoted_at) else {
+        return true; // unparseable timestamp = stale
+    };
+
+    let age = chrono::Utc::now().signed_duration_since(promoted);
+    age.num_hours() > max_hours
+}
+
+/// Audit the canary pool for staleness.
+///
+/// Returns a report of each canary's age and staleness status.
+/// If `auto_refresh` is true, stale canaries are killed and removed from the pool.
+pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
+    let pool = load_pool();
+    let mut reports = Vec::with_capacity(pool.slots.len());
+    let mut stale_primals = Vec::new();
+
+    for slot in &pool.slots {
+        let stale = is_stale(slot);
+        let age_hours = chrono::DateTime::parse_from_rfc3339(&slot.promoted_at)
+            .map_or(-1, |t| chrono::Utc::now().signed_duration_since(t).num_hours());
+
+        reports.push(StalenessReport {
+            primal: slot.primal.clone(),
+            commit: slot.commit.clone(),
+            promoted_at: slot.promoted_at.clone(),
+            age_hours,
+            stale,
+        });
+
+        if stale {
+            stale_primals.push(slot.primal.clone());
+        }
+    }
+
+    if auto_refresh && !stale_primals.is_empty() {
+        let mut pool = load_pool();
+        for primal in &stale_primals {
+            if let Some(slot) = pool.slots.iter().find(|s| &s.primal == primal) {
+                kill_canary(slot).await;
+            }
+        }
+        pool.slots.retain(|s| !stale_primals.contains(&s.primal));
+        save_pool(&pool);
+    }
+
+    reports
+}
+
+/// Staleness report for a single canary slot.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StalenessReport {
+    pub primal: String,
+    pub commit: String,
+    pub promoted_at: String,
+    pub age_hours: i64,
+    pub stale: bool,
+}
+
+/// Return socket paths of all healthy AND fresh canary instances — usable as fallback targets.
+///
+/// Stale canaries (older than `MEMBRANE_CANARY_MAX_AGE_HOURS`) are refused for failover
+/// to prevent rolling back to dangerously outdated binaries.
 pub async fn failover_targets() -> Vec<(String, PathBuf)> {
     let pool = load_pool();
     let mut targets = Vec::new();
 
     for slot in &pool.slots {
+        if is_stale(slot) {
+            eprintln!(
+                "canary: refusing stale failover target {}/{} (promoted {})",
+                slot.primal, slot.commit, slot.promoted_at
+            );
+            continue;
+        }
         if slot.socket_path.exists() {
             let health = probe_canary(slot).await;
             if health.alive {

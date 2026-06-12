@@ -287,6 +287,7 @@ pub(super) async fn dispatch_gate(
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
         "gate.health" => gate_health(config).await,
+        "health.audit" => health_audit(config, args).await,
         "gate.bootstrap" => {
             let gate_name = cli::require_arg(args, 0, "gate-name")?;
             let dry_run = args.contains(&"--dry-run");
@@ -432,6 +433,96 @@ async fn gate_health(config: &ShadowConfig) -> crate::Result<ShadowOutcome> {
                 "disk": disk,
             })),
         }
+    })
+}
+
+// ── Health Audit domain ──────────────────────────────────────────────
+
+/// Cross-gate version skew report.
+///
+/// Probes the local depot provenance and compares commit versions.
+/// With `--mesh`, queries the VPS depot checksums for remote comparison.
+async fn health_audit(
+    config: &ShadowConfig,
+    args: &[&str],
+) -> crate::Result<ShadowOutcome> {
+    use crate::plasmid;
+
+    let include_mesh = args.contains(&"--mesh");
+
+    let Ok(depot_dir) = plasmid::depot::resolve_depot(None) else {
+        return Ok(ShadowOutcome::fail("depot not resolved — cannot audit"));
+    };
+
+    let local_report = plasmid::depot::detect_stale_primals(&depot_dir)?;
+
+    let mut entries: Vec<serde_json::Value> = Vec::new();
+    for entry in &local_report.entries {
+        entries.push(serde_json::json!({
+            "primal": entry.name,
+            "binary_exists": entry.binary_exists,
+            "commit": entry.provenance_commit.as_deref().unwrap_or("none"),
+            "stale": entry.stale,
+        }));
+    }
+
+    // VPS remote comparison (if --mesh)
+    let mut vps_skew: Vec<serde_json::Value> = Vec::new();
+    if include_mesh {
+        let vps_provenance = crate::ssh::exec(
+            config,
+            "cat /opt/ecoPrimals/plasmidBin/provenance.toml 2>/dev/null || echo ''",
+        )
+        .await
+        .unwrap_or_default();
+
+        if !vps_provenance.is_empty() {
+            for entry in &local_report.entries {
+                let local_commit = entry.provenance_commit.as_deref().unwrap_or("");
+                if local_commit.is_empty() {
+                    continue;
+                }
+                let vps_has = vps_provenance.contains(local_commit);
+                if !vps_has {
+                    vps_skew.push(serde_json::json!({
+                        "primal": entry.name,
+                        "local_commit": local_commit,
+                        "vps_match": false,
+                    }));
+                }
+            }
+        }
+    }
+
+    let total = local_report.total;
+    let stale = local_report.stale_count;
+    let msg = if stale == 0 && vps_skew.is_empty() {
+        format!("health.audit: {total} primals — NO SKEW (all current)")
+    } else {
+        let mut parts = Vec::new();
+        if stale > 0 {
+            parts.push(format!("{stale} stale in depot"));
+        }
+        if !vps_skew.is_empty() {
+            parts.push(format!("{} local/VPS version mismatch", vps_skew.len()));
+        }
+        format!("health.audit: {total} primals — {}", parts.join(", "))
+    };
+
+    let ok = stale == 0 && vps_skew.is_empty();
+    let data = serde_json::json!({
+        "total": total,
+        "stale": stale,
+        "current": local_report.current_count,
+        "vps_skew_count": vps_skew.len(),
+        "entries": entries,
+        "vps_skew": vps_skew,
+    });
+
+    Ok(if ok {
+        ShadowOutcome::ok_with(msg, data)
+    } else {
+        ShadowOutcome { ok: false, message: msg, data: Some(data) }
     })
 }
 
