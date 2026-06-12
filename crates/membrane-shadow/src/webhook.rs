@@ -194,10 +194,12 @@ pub async fn handle_push(
     let arch = crate::plasmid::detect_target_triple();
     let primal_lower = action.repo_name.to_lowercase();
     let depot_binary = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
-        let data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-            format!("{home}/.local/share")
-        });
+        let data_home = std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME)
+            .unwrap_or_else(|_| {
+                let home = std::env::var(cellmembrane_types::service::ENV_HOME)
+                    .unwrap_or_else(|_| "/tmp".into());
+                format!("{home}/.local/share")
+            });
         std::path::PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
     })
     .join("primals")

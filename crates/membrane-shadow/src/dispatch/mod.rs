@@ -166,7 +166,7 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
         cellmembrane_types::ServiceCapability::TurnServer,
     )
     .and_then(|s| s.port)
-    .unwrap_or(3478);
+    .unwrap_or(cellmembrane_types::service::DEFAULT_TURN_PORT);
     let (turn_out, turn_code) = crate::ssh::exec_raw(
         &pepti_config,
         &format!("ss -tlnp | grep -q ':{turn_port}' && echo OK || echo FAIL"),

@@ -289,10 +289,12 @@ async fn probe_s1_tls() -> StatusProbe {
 /// Federation reachability is the primary signal; TURN TCP is best-effort.
 async fn probe_s2_relay() -> StatusProbe {
     let vps_host = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-        .unwrap_or_else(|_| "157.230.3.183".into());
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_HOST.into());
 
-    let fed_addr = format!("{vps_host}:7700");
-    let turn_addr = format!("{vps_host}:3478");
+    let fed_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    let turn_port = cellmembrane_types::service::DEFAULT_TURN_PORT;
+    let fed_addr = format!("{vps_host}:{fed_port}");
+    let turn_addr = format!("{vps_host}:{turn_port}");
 
     let (fed_ok, turn_ok) = tokio::join!(tcp_reachable(&fed_addr), tcp_reachable(&turn_addr),);
 

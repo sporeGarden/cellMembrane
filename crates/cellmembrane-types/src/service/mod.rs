@@ -212,10 +212,19 @@ pub const ENV_WAN_DEPOT_URL: &str = "WAN_DEPOT_URL";
 /// Default WAN depot base URL served by Caddy on the sovereign membrane surface.
 pub const DEFAULT_WAN_DEPOT_URL: &str = "https://membrane.primals.eco/depot";
 
+/// Default VPS host (golgiBody sovereign surface).
+pub const DEFAULT_VPS_HOST: &str = "157.230.3.183";
+
+/// Default songbird federation port.
+pub const DEFAULT_FEDERATION_PORT: u16 = 7700;
+
+/// Default TURN relay port.
+pub const DEFAULT_TURN_PORT: u16 = 3478;
+
 /// Default VPS mesh peer address (golgiBody songbird federation endpoint).
 pub const DEFAULT_VPS_MESH_PEER: &str = "157.230.3.183:7700";
 
-/// Environment variable override for the VPS mesh peer address.
+/// Environment variable override for the VPS mesh peer address (host only).
 pub const ENV_VPS_MESH_PEER: &str = "MEMBRANE_VPS_PEER";
 
 // ── Standard system environment variables ────────────────────────────
