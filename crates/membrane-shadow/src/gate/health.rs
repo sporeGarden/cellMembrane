@@ -402,13 +402,13 @@ async fn probe_s4_auth() -> StatusProbe {
             continue;
         }
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if response.contains("\"status\"") {
+            if response.contains("\"jsonrpc\"") || response.contains("\"result\"") || response.contains("\"error\"") {
                 let enforced =
                     response.contains("enforced") || response.contains("\"auth_mode\":\"btsp\"");
                 let detail = if enforced {
                     "ENFORCED — BearDog BTSP active".to_string()
                 } else {
-                    "RESPONDING — BearDog alive (auth mode unconfirmed)".to_string()
+                    format!("RESPONDING — BearDog alive ({})", &response[..response.len().min(80)])
                 };
                 return StatusProbe {
                     name: "sovereignty.s4_auth".into(),
@@ -486,8 +486,14 @@ fn resolve_mesh_relay_socket() -> String {
     .map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
         s.binary
     });
-    let socket_dir = resolve_biomeos_socket_dir();
-    format!("{socket_dir}/{binary_name}.sock")
+    let paths = resolve_primal_socket_paths(binary_name);
+    paths
+        .into_iter()
+        .find(|p| Path::new(p).exists())
+        .unwrap_or_else(|| {
+            let socket_dir = resolve_biomeos_socket_dir();
+            format!("{socket_dir}/{binary_name}.sock")
+        })
 }
 
 pub(super) fn resolve_biomeos_socket_dir() -> String {

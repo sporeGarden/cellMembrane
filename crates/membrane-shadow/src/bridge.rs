@@ -254,7 +254,8 @@ mod tests {
 
     #[test]
     fn discover_with_tmp_socket() {
-        let tmp = std::env::temp_dir().join("biomeos");
+        let tmp = std::env::temp_dir()
+            .join(format!("biomeos-test-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
         let sock_path = tmp.join(NEURAL_API_SOCKET_NAME);
         std::fs::write(&sock_path, b"").unwrap();
