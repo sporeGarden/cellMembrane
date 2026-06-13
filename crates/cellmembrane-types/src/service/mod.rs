@@ -166,6 +166,12 @@ pub const ENV_PRODUCTION_BIND: &str = "SONGBIRD_PRODUCTION_BIND_ADDRESS";
 pub const ENV_WEBHOOK_SECRET: &str = "WEBHOOK_SECRET";
 /// Environment variable for the `NeuralBridge` API socket path.
 pub const ENV_NEURAL_API_SOCKET: &str = "NEURAL_API_SOCKET";
+
+/// Default socket filename for the biomeOS Neural API.
+pub const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
+
+/// Namespace directory for biomeOS runtime sockets (under `XDG_RUNTIME_DIR` or /tmp).
+pub const NEURAL_API_NAMESPACE: &str = "biomeos";
 /// Environment variable for the peptidoglycan SSH host.
 pub const ENV_PEPTI_SSH_HOST: &str = "PEPTI_SSH_HOST";
 /// Environment variable for the Forgejo API token.

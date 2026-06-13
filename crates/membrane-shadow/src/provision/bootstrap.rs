@@ -107,7 +107,10 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
             continue;
         }
 
-        let remote_path = format!("{}/{primal}", cellmembrane_types::service::DEFAULT_INSTALL_BASE);
+        let remote_path = format!(
+            "{}/{primal}",
+            cellmembrane_types::service::DEFAULT_INSTALL_BASE
+        );
         let scp_result = tokio::process::Command::new("scp")
             .args([
                 "-o",

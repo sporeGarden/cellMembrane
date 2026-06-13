@@ -15,6 +15,7 @@
 //! online, membrane-shadow automatically delegates without code changes.
 
 mod data;
+mod gate;
 mod impulse;
 mod infra;
 mod temporal;
@@ -65,7 +66,9 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("repo.") => infra::dispatch_repo(config, cmd, args).await,
         c if c.starts_with("mirror.") => infra::dispatch_mirror(config, cmd, args).await,
         c if c.starts_with("service.") => infra::dispatch_service(config, cmd, args).await,
-        c if c.starts_with("gate.") => infra::dispatch_gate(config, cmd, args).await,
+        c if c.starts_with("gate.") || c == "health.audit" => {
+            gate::dispatch(config, cmd, args).await
+        }
         c if c.starts_with("token.") => infra::dispatch_token(config, cmd, args).await,
         c if c.starts_with("temporal.") => temporal::dispatch_temporal(config, cmd, args).await,
         c if c.starts_with("manifest.") => data::dispatch_manifest(cmd, args),

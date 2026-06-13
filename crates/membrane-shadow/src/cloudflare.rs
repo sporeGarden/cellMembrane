@@ -451,8 +451,7 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
             let record_type = extract_flag(args, "--type");
             let name = extract_flag(args, "--name");
             let records = dns_list(&cf, zone, record_type, name).await?;
-            let json = serde_json::to_string_pretty(&records)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&records)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "cloudflare.dns.create" => {
@@ -465,8 +464,7 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
                 .unwrap_or(1);
             let proxied = extract_flag(args, "--proxied").is_some_and(|v| v == "true" || v == "1");
             let record = dns_create(&cf, zone, rtype, name, content, ttl, proxied).await?;
-            let json = serde_json::to_string_pretty(&record)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&record)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "cloudflare.dns.update" => {
@@ -483,8 +481,7 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
                 proxied: extract_flag(args, "--proxied").is_some_and(|v| v == "true" || v == "1"),
             };
             let record = dns_update(&cf, record_id, &params).await?;
-            let json = serde_json::to_string_pretty(&record)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&record)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "cloudflare.dns.delete" => {
@@ -508,15 +505,13 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
         "cloudflare.ssl.settings" => {
             let zone = extract_zone_arg(args)?;
             let settings = ssl_settings(&cf, zone).await?;
-            let json = serde_json::to_string_pretty(&settings)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&settings)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "cloudflare.zone.settings" => {
             let zone = extract_zone_arg(args)?;
             let settings = zone_settings(&cf, zone).await?;
-            let json = serde_json::to_string_pretty(&settings)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&settings)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         _ => Ok(crate::ShadowOutcome::fail(format!(

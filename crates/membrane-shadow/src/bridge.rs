@@ -23,9 +23,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
 /// Default socket name for the Neural API (biomeOS convention).
-const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
+const NEURAL_API_SOCKET_NAME: &str = cellmembrane_types::service::NEURAL_API_SOCKET_NAME;
 /// Directory component under XDG and /tmp for biomeOS runtime sockets.
-const NEURAL_API_NAMESPACE: &str = "biomeos";
+const NEURAL_API_NAMESPACE: &str = cellmembrane_types::service::NEURAL_API_NAMESPACE;
 
 /// Lightweight JSON-RPC 2.0 client for biomeOS Neural API.
 ///

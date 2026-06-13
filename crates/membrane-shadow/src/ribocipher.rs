@@ -78,6 +78,8 @@ pub struct RiboCipherConfig {
     pub signal_tier: SignalTier,
     /// Policy for inbound connections without a riboCipher signal.
     pub unsignalled_policy: UnsignalledPolicy,
+    /// Derived mito key (32 bytes from HKDF), if family seed is available.
+    mito_key: Option<[u8; 32]>,
 }
 
 /// Signal tier for outbound connections.
@@ -107,6 +109,7 @@ impl Default for RiboCipherConfig {
         Self {
             signal_tier: SignalTier::Clear,
             unsignalled_policy: UnsignalledPolicy::Warn,
+            mito_key: None,
         }
     }
 }
@@ -143,10 +146,20 @@ impl RiboCipherConfig {
                 _ => UnsignalledPolicy::Warn,
             });
 
+        let mito_key = derive_mito_key_from_env();
+
         Self {
             signal_tier,
             unsignalled_policy,
+            mito_key,
         }
+    }
+
+    /// Construct with an explicit mito key (for testing or pre-derived contexts).
+    #[must_use]
+    pub const fn with_mito_key(mut self, key: [u8; 32]) -> Self {
+        self.mito_key = Some(key);
+        self
     }
 
     /// Returns the wire prefix bytes for the configured tier and protocol.
@@ -154,17 +167,107 @@ impl RiboCipherConfig {
     pub fn outbound_prefix(&self, protocol_type: u8) -> Vec<u8> {
         match self.signal_tier {
             SignalTier::Clear => vec![signal::CLEAR, protocol_type],
-            SignalTier::Mito | SignalTier::Nuclear => {
-                // Mito/Nuclear tiers require key material — not yet implemented.
-                // Fall back to clear for now (safe: over-declaring is harmless).
-                eprintln!(
-                    "riboCipher: mito/nuclear tier configured but key derivation not yet \
-                     implemented — falling back to clear signal"
-                );
-                vec![signal::CLEAR, protocol_type]
+            SignalTier::Mito => {
+                if let Some(key) = &self.mito_key {
+                    let tag = mito_hmac_tag(key, protocol_type);
+                    let mut prefix = Vec::with_capacity(5);
+                    prefix.push(signal::MITO);
+                    prefix.extend_from_slice(&tag);
+                    prefix
+                } else {
+                    vec![signal::CLEAR, protocol_type]
+                }
+            }
+            SignalTier::Nuclear => {
+                // Nuclear tier requires per-peer lineage keys (deferred).
+                // Fall back to mito if key material available, otherwise clear.
+                if let Some(key) = &self.mito_key {
+                    let tag = mito_hmac_tag(key, protocol_type);
+                    let mut prefix = Vec::with_capacity(5);
+                    prefix.push(signal::MITO);
+                    prefix.extend_from_slice(&tag);
+                    prefix
+                } else {
+                    vec![signal::CLEAR, protocol_type]
+                }
             }
         }
     }
+
+    /// Verify a mito-tier signal tag against known protocol types.
+    ///
+    /// Returns the protocol type if the tag matches any known type, or `None`.
+    #[must_use]
+    pub fn verify_mito_tag(&self, tag: &[u8; 4]) -> Option<u8> {
+        let key = self.mito_key.as_ref()?;
+        (0x00..=0x07).find(|&proto| mito_hmac_tag(key, proto) == *tag)
+    }
+}
+
+// ── Key derivation ─────────────────────────────────────────────────────
+
+/// HKDF-SHA256 salt for riboCipher key derivation.
+const HKDF_SALT: &[u8] = b"ribocipher-v1";
+
+/// HKDF info parameter for mito-tier signal key.
+const HKDF_INFO_MITO: &[u8] = b"mito-signal";
+
+/// Derive the mito key from the `FAMILY_SEED` environment variable.
+///
+/// Reads family seed from:
+/// 1. `FAMILY_SEED` env var (may be a path to a key file, or inline seed)
+/// 2. Falls back gracefully to `None` if unavailable.
+fn derive_mito_key_from_env() -> Option<[u8; 32]> {
+    let seed_source = std::env::var("FAMILY_SEED").ok()?;
+    let seed_bytes = if std::path::Path::new(&seed_source).exists() {
+        std::fs::read(&seed_source).ok()?
+    } else {
+        seed_source.into_bytes()
+    };
+    Some(hkdf_sha256(&seed_bytes, HKDF_SALT, HKDF_INFO_MITO))
+}
+
+/// HKDF-SHA256 key derivation (extract-then-expand, single output block).
+///
+/// Produces a 32-byte derived key. Uses HMAC-SHA256 internally per RFC 5869.
+fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
+    use hmac::{Hmac, KeyInit, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    // Extract: PRK = HMAC-SHA256(salt, IKM)
+    let mut extract_mac = HmacSha256::new_from_slice(salt).expect("HMAC can take key of any size");
+    extract_mac.update(ikm);
+    let prk = extract_mac.finalize().into_bytes();
+
+    // Expand: OKM = HMAC-SHA256(PRK, info || 0x01)  [single block, 32 bytes]
+    let mut expand_mac = HmacSha256::new_from_slice(&prk).expect("HMAC can take key of any size");
+    expand_mac.update(info);
+    expand_mac.update(&[0x01]);
+    let okm = expand_mac.finalize().into_bytes();
+
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&okm);
+    key
+}
+
+/// Compute the 4-byte HMAC tag for a mito-tier signal.
+///
+/// `tag = HMAC-SHA256(mito_key, [protocol_type])[0..4]`
+fn mito_hmac_tag(mito_key: &[u8; 32], protocol_type: u8) -> [u8; 4] {
+    use hmac::{Hmac, KeyInit, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = HmacSha256::new_from_slice(mito_key).expect("HMAC can take key of any size");
+    mac.update(&[protocol_type]);
+    let result = mac.finalize().into_bytes();
+
+    let mut tag = [0u8; 4];
+    tag.copy_from_slice(&result[..4]);
+    tag
 }
 
 #[cfg(test)]
@@ -222,6 +325,85 @@ name = "test"
         let cfg = RiboCipherConfig::default();
         let prefix = cfg.outbound_prefix(protocol::NDJSON_JSONRPC);
         assert_eq!(prefix, vec![0xEC, 0x01]);
+    }
+
+    #[test]
+    fn outbound_prefix_mito_with_key() {
+        let key = hkdf_sha256(b"test-family-seed", HKDF_SALT, HKDF_INFO_MITO);
+        let cfg = RiboCipherConfig {
+            signal_tier: SignalTier::Mito,
+            unsignalled_policy: UnsignalledPolicy::Warn,
+            mito_key: Some(key),
+        };
+        let prefix = cfg.outbound_prefix(protocol::NDJSON_JSONRPC);
+        assert_eq!(prefix.len(), 5);
+        assert_eq!(prefix[0], signal::MITO);
+    }
+
+    #[test]
+    fn outbound_prefix_mito_without_key_falls_back() {
+        let cfg = RiboCipherConfig {
+            signal_tier: SignalTier::Mito,
+            unsignalled_policy: UnsignalledPolicy::Warn,
+            mito_key: None,
+        };
+        let prefix = cfg.outbound_prefix(protocol::NDJSON_JSONRPC);
+        assert_eq!(prefix, vec![signal::CLEAR, protocol::NDJSON_JSONRPC]);
+    }
+
+    #[test]
+    fn mito_tag_is_deterministic() {
+        let key = hkdf_sha256(b"determinism-test", HKDF_SALT, HKDF_INFO_MITO);
+        let tag1 = mito_hmac_tag(&key, protocol::NDJSON_JSONRPC);
+        let tag2 = mito_hmac_tag(&key, protocol::NDJSON_JSONRPC);
+        assert_eq!(tag1, tag2);
+    }
+
+    #[test]
+    fn mito_tags_differ_by_protocol() {
+        let key = hkdf_sha256(b"protocol-diff", HKDF_SALT, HKDF_INFO_MITO);
+        let tag_json = mito_hmac_tag(&key, protocol::NDJSON_JSONRPC);
+        let tag_http = mito_hmac_tag(&key, protocol::HTTP);
+        assert_ne!(tag_json, tag_http);
+    }
+
+    #[test]
+    fn verify_mito_tag_roundtrip() {
+        let key = hkdf_sha256(b"verify-roundtrip", HKDF_SALT, HKDF_INFO_MITO);
+        let cfg = RiboCipherConfig {
+            signal_tier: SignalTier::Mito,
+            unsignalled_policy: UnsignalledPolicy::Warn,
+            mito_key: Some(key),
+        };
+        let tag = mito_hmac_tag(&key, protocol::BTSP_BINARY);
+        let verified = cfg.verify_mito_tag(&tag);
+        assert_eq!(verified, Some(protocol::BTSP_BINARY));
+    }
+
+    #[test]
+    fn verify_mito_tag_rejects_invalid() {
+        let key = hkdf_sha256(b"reject-test", HKDF_SALT, HKDF_INFO_MITO);
+        let cfg = RiboCipherConfig {
+            signal_tier: SignalTier::Mito,
+            unsignalled_policy: UnsignalledPolicy::Warn,
+            mito_key: Some(key),
+        };
+        let bad_tag = [0xFF, 0xFF, 0xFF, 0xFF];
+        assert_eq!(cfg.verify_mito_tag(&bad_tag), None);
+    }
+
+    #[test]
+    fn hkdf_produces_32_bytes() {
+        let key = hkdf_sha256(b"input-material", b"salt", b"info");
+        assert_eq!(key.len(), 32);
+        assert_ne!(key, [0u8; 32]);
+    }
+
+    #[test]
+    fn hkdf_different_info_different_key() {
+        let k1 = hkdf_sha256(b"same-ikm", b"same-salt", b"info-a");
+        let k2 = hkdf_sha256(b"same-ikm", b"same-salt", b"info-b");
+        assert_ne!(k1, k2);
     }
 
     #[test]

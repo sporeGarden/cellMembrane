@@ -489,8 +489,7 @@ pub async fn dispatch(
     match cmd {
         "caddy.status" => {
             let health = status(config).await?;
-            let json = serde_json::to_string_pretty(&health)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&health)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "caddy.tls.check" => {
@@ -498,14 +497,12 @@ pub async fn dispatch(
                 ShadowError::Parse("domain required: membrane caddy.tls.check <domain>".into())
             })?;
             let cert = tls_check(config, domain).await?;
-            let json = serde_json::to_string_pretty(&cert)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&cert)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "caddy.vhosts" => {
             let entries = vhosts(config).await?;
-            let json = serde_json::to_string_pretty(&entries)
-                .map_err(|e| ShadowError::Parse(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&entries)?;
             Ok(crate::ShadowOutcome::ok(json))
         }
         "caddy.reload" => {
