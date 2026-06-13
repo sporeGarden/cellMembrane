@@ -156,6 +156,7 @@ fn uds_send(socket_path: &Path, request: &str) {
         return;
     };
     let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
+    let _ = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL);
     let _ = writeln!(stream, "{request}");
 }
 
@@ -170,6 +171,9 @@ fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
         .ok()?;
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .ok()?;
+    stream
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
         .ok()?;
     writeln!(stream, "{request}").ok()?;
     stream.shutdown(std::net::Shutdown::Write).ok()?;

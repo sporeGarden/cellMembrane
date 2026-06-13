@@ -374,7 +374,11 @@ async fn sync_converge(
                 }
             } else if has_dirty_worktree(local_path).await {
                 // CASCADE-STALE-RECOVERY: auto-stash, pull, pop
-                let stashed = git_ok(local_path, &["stash", "push", "-m", "temporal-cascade-auto"]).await;
+                let stashed = git_ok(
+                    local_path,
+                    &["stash", "push", "-m", "temporal-cascade-auto"],
+                )
+                .await;
                 if stashed {
                     eprintln!("temporal: auto-stashed dirty worktree in {repo_path}");
                     let pull_ok = git_ok(

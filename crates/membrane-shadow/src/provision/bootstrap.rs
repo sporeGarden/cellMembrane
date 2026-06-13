@@ -14,9 +14,12 @@ const SSH_MAX_RETRIES: u32 = 12;
 async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
     let output = tokio::process::Command::new("ssh")
         .args([
-            "-o", "ConnectTimeout=10",
-            "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
             &format!("root@{ip}"),
             command,
         ])
@@ -104,12 +107,15 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
             continue;
         }
 
-        let remote_path = format!("/opt/membrane/{primal}");
+        let remote_path = format!("{}/{primal}", cellmembrane_types::service::DEFAULT_INSTALL_BASE);
         let scp_result = tokio::process::Command::new("scp")
             .args([
-                "-o", "ConnectTimeout=10",
-                "-o", "BatchMode=yes",
-                "-o", "StrictHostKeyChecking=accept-new",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
                 &local_path.to_string_lossy(),
                 &format!("root@{ip}:{remote_path}"),
             ])
@@ -297,8 +303,8 @@ async fn start_services(ip: &str) -> Result<String> {
 
 /// Phase 6: Join the mesh by peering with main production VPS.
 async fn join_mesh(ip: &str) -> Result<String> {
-    let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-        .unwrap_or_else(|_| {
+    let vps_peer =
+        std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER).unwrap_or_else(|_| {
             format!(
                 "{}:{}",
                 cellmembrane_types::service::DEFAULT_VPS_HOST,
@@ -341,10 +347,7 @@ async fn health_sweep(ip: &str) -> Result<String> {
 }
 
 /// Full bootstrap pipeline — takes a fresh droplet from bare OS to operational gate.
-pub async fn bootstrap_droplet(
-    droplet: &DropletState,
-    gate_name: &str,
-) -> ProvisionOutcome {
+pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> ProvisionOutcome {
     let ip = match &droplet.ip {
         Some(ip) => ip.clone(),
         None => {
@@ -433,12 +436,7 @@ pub async fn bootstrap_droplet(
         .into_iter()
         .map(Into::into)
         .collect();
-    crate::plasmid::canary::register_remote_canary(
-        gate_name,
-        &ip,
-        Some(droplet.id),
-        primals,
-    );
+    crate::plasmid::canary::register_remote_canary(gate_name, &ip, Some(droplet.id), primals);
     phases.push("registry: remote canary registered".into());
 
     ProvisionOutcome {

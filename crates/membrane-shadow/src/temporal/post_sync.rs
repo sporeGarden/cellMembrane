@@ -31,26 +31,23 @@ pub(super) async fn run_post_sync_phases(
                 );
 
                 if wants_refresh && built > 0 {
-                    let refresh_targets =
-                        if opts.post_sync == PostSyncPhase::SandboxRebuild {
-                            let passed = run_post_cascade_sandbox(&built_primals, lines).await;
-                            let _ = write!(
-                                harvest_info,
-                                " sandbox={}/{}passed",
-                                passed.len(),
-                                built_primals.len()
-                            );
-                            if passed.is_empty() {
-                                lines.push(
-                                    "  [sandbox] ALL BLOCKED — no binaries promoted".into(),
-                                );
-                                Vec::new()
-                            } else {
-                                passed
-                            }
+                    let refresh_targets = if opts.post_sync == PostSyncPhase::SandboxRebuild {
+                        let passed = run_post_cascade_sandbox(&built_primals, lines).await;
+                        let _ = write!(
+                            harvest_info,
+                            " sandbox={}/{}passed",
+                            passed.len(),
+                            built_primals.len()
+                        );
+                        if passed.is_empty() {
+                            lines.push("  [sandbox] ALL BLOCKED — no binaries promoted".into());
+                            Vec::new()
                         } else {
-                            built_primals
-                        };
+                            passed
+                        }
+                    } else {
+                        built_primals
+                    };
 
                     if !refresh_targets.is_empty() {
                         match run_post_cascade_refresh(Some(&refresh_targets), lines).await {
@@ -87,9 +84,8 @@ pub(super) async fn run_post_sync_phases(
         if !do_harvest {
             if let Ok(report) = crate::plasmid::detect_depot_staleness() {
                 if report.stale_count > 0 {
-                    let auto_rebuild =
-                        std::env::var(cellmembrane_types::service::ENV_AUTO_REBUILD)
-                            .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+                    let auto_rebuild = std::env::var(cellmembrane_types::service::ENV_AUTO_REBUILD)
+                        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
 
                     if auto_rebuild {
                         lines.push(format!(
@@ -121,9 +117,7 @@ pub(super) async fn run_post_sync_phases(
 
 /// Run harvest after cascade sync — build any drifted primals locally.
 /// Returns `(built_count, built_primal_names, current_count, failure_count)`.
-async fn run_post_cascade_harvest(
-    lines: &mut Vec<String>,
-) -> Result<(u32, Vec<String>, u32, u32)> {
+async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, Vec<String>, u32, u32)> {
     let harvest_args = crate::plasmid::HarvestArgs {
         primal: None,
         force: false,
@@ -246,19 +240,20 @@ async fn run_post_cascade_refresh(
             };
             match crate::plasmid::refresh(&config, &refresh_args).await {
                 Ok(outcome) => {
-                    let pushed = outcome
-                        .data
-                        .as_ref()
-                        .and_then(|d| d.as_array())
-                        .map_or(0u32, |arr| {
-                            arr.iter()
-                                .filter(|e| {
-                                    e.get("status")
-                                        .and_then(|s| s.as_str())
-                                        .is_some_and(|s| s == "Pushed")
-                                })
-                                .count() as u32
-                        });
+                    let pushed =
+                        outcome
+                            .data
+                            .as_ref()
+                            .and_then(|d| d.as_array())
+                            .map_or(0u32, |arr| {
+                                arr.iter()
+                                    .filter(|e| {
+                                        e.get("status")
+                                            .and_then(|s| s.as_str())
+                                            .is_some_and(|s| s == "Pushed")
+                                    })
+                                    .count() as u32
+                            });
                     total_pushed += pushed;
                 }
                 Err(e) => lines.push(format!("  [refresh] {primal}: FAIL — {e}")),

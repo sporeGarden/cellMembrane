@@ -440,8 +440,8 @@ async fn tcp_reachable(addr: &str) -> bool {
 
 /// Send a JSON-RPC request over a Unix Domain Socket, read the response.
 ///
-/// This replaces all `bash -c 'echo ... | socat ...'` patterns with a
-/// native async implementation using `tokio::net::UnixStream`.
+/// Prepends the riboCipher clear signal `[0xEC, 0x01]` (Tier 1, NDJSON JSON-RPC)
+/// before the payload, per the riboCipher Transport Signal Standard.
 async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Result<String, String> {
     let stream = tokio::time::timeout(
         std::time::Duration::from_secs(3),
@@ -453,6 +453,10 @@ async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Resu
 
     let (mut reader, mut writer) = stream.into_split();
 
+    writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .map_err(|e| format!("signal write error: {e}"))?;
     writer
         .write_all(request.as_bytes())
         .await

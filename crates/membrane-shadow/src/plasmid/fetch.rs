@@ -278,9 +278,7 @@ async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
         .await;
 
     match output {
-        Ok(o) if o.status.success() && !o.stdout.is_empty() => {
-            atomic_write(dest, &o.stdout).await
-        }
+        Ok(o) if o.status.success() && !o.stdout.is_empty() => atomic_write(dest, &o.stdout).await,
         _ => false,
     }
 }

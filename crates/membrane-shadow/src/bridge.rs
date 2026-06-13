@@ -146,6 +146,10 @@ impl NeuralBridge {
         payload.push('\n');
 
         writer
+            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+            .await
+            .map_err(ShadowError::Io)?;
+        writer
             .write_all(payload.as_bytes())
             .await
             .map_err(ShadowError::Io)?;

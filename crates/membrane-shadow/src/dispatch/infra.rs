@@ -221,7 +221,10 @@ pub(super) async fn dispatch_service(
 
 // ── Gate domain ──────────────────────────────────────────────────────
 
-#[allow(clippy::too_many_lines, reason = "match dispatch hub — each arm is trivial")]
+#[allow(
+    clippy::too_many_lines,
+    reason = "match dispatch hub — each arm is trivial"
+)]
 pub(super) async fn dispatch_gate(
     config: &ShadowConfig,
     cmd: &str,
@@ -449,10 +452,7 @@ async fn gate_health(config: &ShadowConfig) -> crate::Result<ShadowOutcome> {
 ///
 /// Probes the local depot provenance and compares commit versions.
 /// With `--mesh`, queries the VPS depot checksums for remote comparison.
-async fn health_audit(
-    config: &ShadowConfig,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+async fn health_audit(config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
     use crate::plasmid;
 
     let include_mesh = args.contains(&"--mesh");
@@ -529,7 +529,11 @@ async fn health_audit(
     Ok(if ok {
         ShadowOutcome::ok_with(msg, data)
     } else {
-        ShadowOutcome { ok: false, message: msg, data: Some(data) }
+        ShadowOutcome {
+            ok: false,
+            message: msg,
+            data: Some(data),
+        }
     })
 }
 
@@ -578,7 +582,7 @@ pub(super) async fn dispatch_token(
 
 #[cfg(feature = "http")]
 async fn dispatch_gate_provision(args: &[&str]) -> crate::Result<ShadowOutcome> {
-    use crate::provision::{self, digitalocean, ProvisionRequest};
+    use crate::provision::{self, ProvisionRequest, digitalocean};
 
     let provider_str = cli::extract_flag_value(args, "--provider").unwrap_or("digitalocean");
     let _provider: provision::Provider = provider_str
@@ -631,7 +635,10 @@ async fn dispatch_gate_provision(args: &[&str]) -> crate::Result<ShadowOutcome> 
     };
 
     let droplet = digitalocean::create_droplet(&req).await?;
-    eprintln!("provision: droplet {} created (id={}), waiting for active...", droplet.name, droplet.id);
+    eprintln!(
+        "provision: droplet {} created (id={}), waiting for active...",
+        droplet.name, droplet.id
+    );
 
     let active = digitalocean::wait_until_active(droplet.id, &profile).await?;
     let ip = active.ip.clone().unwrap_or_default();

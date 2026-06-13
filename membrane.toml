@@ -98,3 +98,8 @@ fail2ban = true
 unattended_upgrades = true
 remove_mail_agent = true
 remove_provider_agent = true
+
+[transport.ribocipher]
+signal_tier = "clear"
+unsignalled_policy = "warn"
+mito_key_source = "family_seed"

@@ -171,8 +171,9 @@ pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
 
     for slot in &pool.slots {
         let stale = is_stale(slot);
-        let age_hours = chrono::DateTime::parse_from_rfc3339(&slot.promoted_at)
-            .map_or(-1, |t| chrono::Utc::now().signed_duration_since(t).num_hours());
+        let age_hours = chrono::DateTime::parse_from_rfc3339(&slot.promoted_at).map_or(-1, |t| {
+            chrono::Utc::now().signed_duration_since(t).num_hours()
+        });
 
         reports.push(StalenessReport {
             primal: slot.primal.clone(),
@@ -215,10 +216,7 @@ pub struct StalenessReport {
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum FailoverTarget {
     /// Local canary (same host, isolated UDS socket).
-    Local {
-        primal: String,
-        socket: PathBuf,
-    },
+    Local { primal: String, socket: PathBuf },
     /// Remote canary (SSH-reachable VPS droplet).
     Remote {
         primal: String,
@@ -426,9 +424,12 @@ async fn remote_health_check(ip: &str) -> bool {
         std::time::Duration::from_secs(10),
         tokio::process::Command::new("ssh")
             .args([
-                "-o", "ConnectTimeout=5",
-                "-o", "BatchMode=yes",
-                "-o", "StrictHostKeyChecking=accept-new",
+                "-o",
+                "ConnectTimeout=5",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
                 &format!("root@{ip}"),
                 &probe_cmd,
             ])
@@ -543,6 +544,10 @@ async fn uds_probe(socket_path: &Path, request: &str) -> Result<String, String> 
     let (mut reader, mut writer) = stream.into_split();
 
     writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .map_err(|e| format!("signal: {e}"))?;
+    writer
         .write_all(request.as_bytes())
         .await
         .map_err(|e| format!("write: {e}"))?;
@@ -607,8 +612,7 @@ mod tests {
         };
 
         let serialized = toml::to_string_pretty(&registry).expect("serialize");
-        let deserialized: RemoteCanaryRegistry =
-            toml::from_str(&serialized).expect("deserialize");
+        let deserialized: RemoteCanaryRegistry = toml::from_str(&serialized).expect("deserialize");
         assert_eq!(deserialized.entries.len(), 1);
         assert_eq!(deserialized.entries[0].gate_name, "canary-fieldmouse");
         assert_eq!(deserialized.entries[0].ip, "1.2.3.4");

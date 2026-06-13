@@ -231,10 +231,7 @@ async fn sandbox_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 
     let ok = failed == 0;
-    let detail = format!(
-        "{passed} passed, {failed} failed [{}]",
-        details.join(", ")
-    );
+    let detail = format!("{passed} passed, {failed} failed [{}]", details.join(", "));
     BootstrapPhase {
         name: "sandbox.validate".into(),
         ok,
@@ -387,10 +384,9 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
     let relay = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    let relay_binary =
-        relay.map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-            s.binary
-        });
+    let relay_binary = relay.map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
+        s.binary
+    });
 
     let dest_root = super::health::resolve_plasmidbin_dir();
     let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);
@@ -439,6 +435,16 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
 
     let (mut reader, mut writer) = stream.into_split();
 
+    if writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .is_err()
+    {
+        return (
+            false,
+            format!("failed to write signal to {relay_binary} socket"),
+        );
+    }
     if writer.write_all(request.as_bytes()).await.is_err() {
         return (false, format!("failed to write to {relay_binary} socket"));
     }

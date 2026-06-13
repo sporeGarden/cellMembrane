@@ -78,6 +78,7 @@ pub mod plasmid;
 #[cfg(feature = "http")]
 pub mod provision;
 pub mod relay;
+pub mod ribocipher;
 pub mod service;
 pub mod ssh;
 pub mod temporal;

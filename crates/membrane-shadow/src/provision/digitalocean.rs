@@ -173,8 +173,7 @@ pub async fn create_droplet(req: &ProvisionRequest) -> Result<DropletState> {
 pub async fn wait_until_active(droplet_id: u64, profile: &str) -> Result<DropletState> {
     let token = resolve_token()?;
     let http = client()?;
-    let deadline =
-        tokio::time::Instant::now() + std::time::Duration::from_secs(POLL_TIMEOUT_SECS);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(POLL_TIMEOUT_SECS);
 
     loop {
         if tokio::time::Instant::now() >= deadline {

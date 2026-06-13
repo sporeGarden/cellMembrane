@@ -69,9 +69,8 @@ pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Re
             let has_dynamic_needed = (0..ph_num).any(|i| {
                 let offset = ph_off + i * ph_ent_size;
                 offset + 4 <= data.len()
-                    && u32::from_le_bytes(
-                        data[offset..offset + 4].try_into().unwrap_or([0; 4]),
-                    ) == 2 // PT_DYNAMIC
+                    && u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap_or([0; 4]))
+                        == 2 // PT_DYNAMIC
             });
             if has_dynamic_needed {
                 // Check if .dynamic section has DT_NEEDED entries (offset varies)

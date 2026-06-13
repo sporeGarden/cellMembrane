@@ -42,7 +42,6 @@ pub struct SandboxInstance {
     pub started_at: Option<Instant>,
 }
 
-
 /// Result of sandbox validation for a single primal.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SandboxResult {
@@ -257,8 +256,8 @@ pub async fn validate(args: &SandboxArgs) -> Result<SandboxResult, String> {
 /// the required security provider.
 #[must_use]
 pub fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
-    use cellmembrane_types::service::ServiceCapability;
     use cellmembrane_types::MembraneComposition;
+    use cellmembrane_types::service::ServiceCapability;
 
     let service = cellmembrane_types::MembraneService::all()
         .iter()
@@ -270,9 +269,8 @@ pub fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
     }
 
     // All non-Tower primals depend on the crypto signer for security-socket
-    let signer = cellmembrane_types::MembraneService::with_capability(
-        ServiceCapability::CryptoSigner,
-    )?;
+    let signer =
+        cellmembrane_types::MembraneService::with_capability(ServiceCapability::CryptoSigner)?;
     Some(signer.binary)
 }
 
@@ -344,7 +342,10 @@ pub async fn validate_with_deps(args: &SandboxArgs) -> Result<SandboxResult, Str
 /// Locate the binary for a dependency (looks in production install, then depot).
 fn resolve_dependency_binary_path(binary: &str) -> Result<PathBuf, String> {
     // First: check if production binary exists (live system has it installed)
-    let production = PathBuf::from(format!("/opt/membrane/{binary}"));
+    let production = PathBuf::from(format!(
+        "{}/{binary}",
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE
+    ));
     if production.exists() {
         return Ok(production);
     }
@@ -470,6 +471,7 @@ pub fn list_active() -> Vec<SandboxInstance> {
 // ── Internal helpers ──────────────────────────────────────────────────────
 
 /// JSON-RPC call over UDS with timeout.
+/// Prepends riboCipher clear signal `[0xEC, 0x01]` per transport standard.
 async fn uds_jsonrpc_probe(socket_path: &Path, request: &str) -> Result<String, String> {
     let stream = tokio::time::timeout(
         std::time::Duration::from_secs(3),
@@ -481,6 +483,10 @@ async fn uds_jsonrpc_probe(socket_path: &Path, request: &str) -> Result<String, 
 
     let (mut reader, mut writer) = stream.into_split();
 
+    writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .map_err(|e| format!("signal: {e}"))?;
     writer
         .write_all(request.as_bytes())
         .await
