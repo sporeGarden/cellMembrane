@@ -443,6 +443,22 @@ async fn tcp_reachable(addr: &str) -> bool {
 /// Prepends the riboCipher clear signal `[0xEC, 0x01]` (Tier 1, NDJSON JSON-RPC)
 /// before the payload, per the riboCipher Transport Signal Standard.
 async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Result<String, String> {
+    if let Ok(response) = uds_jsonrpc_raw(socket_path, request, true).await {
+        if !response.is_empty() {
+            return Ok(response);
+        }
+    }
+    uds_jsonrpc_raw(socket_path, request, false).await
+}
+
+/// Raw UDS JSON-RPC transport. When `with_signal` is true, prepends riboCipher
+/// clear signal. Falls back to raw JSON when the primal hasn't been restarted
+/// with riboCipher support yet.
+async fn uds_jsonrpc_raw(
+    socket_path: &str,
+    request: &str,
+    with_signal: bool,
+) -> std::result::Result<String, String> {
     let stream = tokio::time::timeout(
         std::time::Duration::from_secs(3),
         tokio::net::UnixStream::connect(socket_path),
@@ -453,10 +469,12 @@ async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Resu
 
     let (mut reader, mut writer) = stream.into_split();
 
-    writer
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .await
-        .map_err(|e| format!("signal write error: {e}"))?;
+    if with_signal {
+        writer
+            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+            .await
+            .map_err(|e| format!("signal write error: {e}"))?;
+    }
     writer
         .write_all(request.as_bytes())
         .await
