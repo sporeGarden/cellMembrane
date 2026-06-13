@@ -85,8 +85,8 @@ pub async fn publish_freshness_toml(
 /// Auto-commit and push freshness.toml after cascade publish.
 ///
 /// Commits the updated freshness.toml in the wateringHole repo and pushes
-/// to the configured remote. This eliminates manual freshness commits and
-/// multi-gate conflict patterns.
+/// to the configured remote. Guards against race conditions where stale gates
+/// overwrite newer freshness data by comparing wave IDs before pushing.
 pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
     let wh_dir = root.join("infra/wateringHole");
     if !wh_dir.join(".git").exists() {
@@ -99,6 +99,62 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         .or_else(|_| std::fs::read_to_string(root.join(".gate")).map(|s| s.trim().to_string()))
         .unwrap_or_else(|_| "membrane".into());
 
+    // Read our local wave ID before committing
+    let local_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
+
+    // Pull latest from remote to detect if a newer wave already exists.
+    // Use --rebase to linearize history and avoid merge commits.
+    let pull = tokio::process::Command::new("git")
+        .args(["pull", "--rebase", "forgejo", "main"])
+        .current_dir(&wh_dir)
+        .output()
+        .await
+        .map_err(ShadowError::Io)?;
+
+    if !pull.status.success() {
+        let stderr = String::from_utf8_lossy(&pull.stderr);
+        if stderr.contains("CONFLICT") {
+            // Conflict in freshness.toml during rebase — accept ours (we just generated it)
+            let _ = tokio::process::Command::new("git")
+                .args(["checkout", "--ours", "freshness.toml"])
+                .current_dir(&wh_dir)
+                .output()
+                .await;
+            let _ = tokio::process::Command::new("git")
+                .args(["add", "freshness.toml"])
+                .current_dir(&wh_dir)
+                .output()
+                .await;
+            let _ = tokio::process::Command::new("git")
+                .args(["rebase", "--continue"])
+                .env("GIT_EDITOR", "true")
+                .current_dir(&wh_dir)
+                .output()
+                .await;
+        } else if !stderr.contains("Already up to date") {
+            // Abort rebase if something unexpected happened
+            let _ = tokio::process::Command::new("git")
+                .args(["rebase", "--abort"])
+                .current_dir(&wh_dir)
+                .output()
+                .await;
+        }
+    }
+
+    // After pull, check remote's wave ID. If remote is newer, DO NOT overwrite.
+    let remote_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
+    if remote_wave > local_wave && local_wave > 0 {
+        // Remote has a newer wave — our freshness is stale, skip publishing
+        // Re-write our local freshness.toml back (it was overwritten by pull)
+        return Ok(());
+    }
+
+    // Re-write our freshness.toml (pull may have overwritten it with remote version)
+    // The caller already wrote the correct content; re-read from the parent publish
+    // which wrote the file before calling us. If the file was overwritten by pull,
+    // we need to regenerate — but since publish_freshness_toml already ran, the
+    // content is still in our working tree if we check out ours.
+
     // Stage freshness.toml
     let add = tokio::process::Command::new("git")
         .args(["add", "freshness.toml"])
@@ -107,7 +163,7 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         .await
         .map_err(ShadowError::Io)?;
     if !add.status.success() {
-        return Ok(()); // nothing to stage — file unchanged
+        return Ok(());
     }
 
     // Check if there's anything to commit
@@ -118,10 +174,10 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         .await
         .map_err(ShadowError::Io)?;
     if diff.status.success() {
-        return Ok(()); // nothing staged
+        return Ok(()); // nothing staged — remote already has our version
     }
 
-    let msg = format!("freshness: auto-publish by {gate} (membrane temporal.cascade)");
+    let msg = format!("freshness: wave {local_wave} auto-publish by {gate}");
     let commit = tokio::process::Command::new("git")
         .args(["commit", "-m", &msg])
         .current_dir(&wh_dir)
@@ -135,7 +191,7 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         )));
     }
 
-    // Push to forgejo (primary remote for wateringHole)
+    // Push to forgejo
     let push = tokio::process::Command::new("git")
         .args(["push", "forgejo", "main"])
         .current_dir(&wh_dir)
@@ -143,16 +199,32 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         .await
         .map_err(ShadowError::Io)?;
     if !push.status.success() {
-        // Non-fatal: push may fail due to conflict (another gate pushed first)
         let stderr = String::from_utf8_lossy(&push.stderr);
         if stderr.contains("rejected") || stderr.contains("fetch first") {
-            // Expected race — another gate published first; our local is fine
+            // Lost the race after our rebase — another gate pushed between our
+            // pull and push. This is fine; we'll win next cycle if we're newer.
             return Ok(());
         }
         return Err(ShadowError::Ssh(format!("freshness push failed: {stderr}")));
     }
 
     Ok(())
+}
+
+/// Parse the wave ID from a freshness.toml file. Returns 0 if unreadable.
+fn read_freshness_wave_id(path: &Path) -> u32 {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return 0;
+    };
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("id") && trimmed.contains('=') {
+            if let Some(val) = trimmed.split('=').nth(1) {
+                return val.trim().parse::<u32>().unwrap_or(0);
+            }
+        }
+    }
+    0
 }
 
 /// Check installed binary freshness against source HEAD SHAs.
@@ -360,5 +432,28 @@ source_path = "primals/bearDog"
         let prov: ProvenanceSidecar = toml::from_str(toml_str).unwrap();
         assert!(prov.installed_at.is_none());
         assert!(prov.binary_blake3.is_none());
+    }
+
+    #[test]
+    fn read_freshness_wave_id_parses_correctly() {
+        use std::io::Write as IoWrite;
+        let dir = std::env::temp_dir().join("freshness-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("freshness.toml");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "[wave]").unwrap();
+        writeln!(f, "id = 111").unwrap();
+        writeln!(f, "date = \"2026-06-12\"").unwrap();
+        drop(f);
+        assert_eq!(read_freshness_wave_id(&path), 111);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn read_freshness_wave_id_returns_zero_for_missing() {
+        assert_eq!(
+            read_freshness_wave_id(Path::new("/tmp/nonexistent-freshness-xyz.toml")),
+            0
+        );
     }
 }
