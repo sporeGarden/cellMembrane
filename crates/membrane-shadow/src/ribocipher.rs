@@ -94,11 +94,12 @@ pub enum SignalTier {
 }
 
 /// Policy for unsignalled (legacy) inbound connections.
+/// Deprecation schedule: WARN (111) → ERROR (112) → REJECT (113) → REMOVE (114).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnsignalledPolicy {
-    /// Log warning, fall through to legacy peek logic (Wave 111-112).
+    /// Log warning, fall through to legacy peek logic (deprecated — Wave 111 only).
     Warn,
-    /// Log error, fall through to legacy peek logic (Wave 112).
+    /// Log error, fall through to legacy peek logic (Wave 112 default).
     Error,
     /// Reject with JSON-RPC error -32002 (Wave 113+).
     Reject,
@@ -108,7 +109,7 @@ impl Default for RiboCipherConfig {
     fn default() -> Self {
         Self {
             signal_tier: SignalTier::Clear,
-            unsignalled_policy: UnsignalledPolicy::Warn,
+            unsignalled_policy: UnsignalledPolicy::Error,
             mito_key: None,
         }
     }
@@ -140,10 +141,10 @@ impl RiboCipherConfig {
         let unsignalled_policy = rc
             .get("unsignalled_policy")
             .and_then(|v| v.as_str())
-            .map_or(UnsignalledPolicy::Warn, |s| match s {
-                "error" => UnsignalledPolicy::Error,
+            .map_or(UnsignalledPolicy::Error, |s| match s {
+                "warn" => UnsignalledPolicy::Warn,
                 "reject" => UnsignalledPolicy::Reject,
-                _ => UnsignalledPolicy::Warn,
+                _ => UnsignalledPolicy::Error,
             });
 
         let mito_key = derive_mito_key_from_env();
@@ -289,10 +290,10 @@ mod tests {
     }
 
     #[test]
-    fn default_config_is_clear_warn() {
+    fn default_config_is_clear_error() {
         let cfg = RiboCipherConfig::default();
         assert_eq!(cfg.signal_tier, SignalTier::Clear);
-        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Warn);
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Error);
     }
 
     #[test]
@@ -317,6 +318,18 @@ name = "test"
         let parsed: toml::Table = toml_str.parse().unwrap();
         let cfg = RiboCipherConfig::from_toml(&parsed);
         assert_eq!(cfg.signal_tier, SignalTier::Clear);
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Error);
+    }
+
+    #[test]
+    fn from_toml_explicit_warn_still_valid() {
+        let toml_str = r#"
+[transport.ribocipher]
+signal_tier = "clear"
+unsignalled_policy = "warn"
+"#;
+        let parsed: toml::Table = toml_str.parse().unwrap();
+        let cfg = RiboCipherConfig::from_toml(&parsed);
         assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Warn);
     }
 

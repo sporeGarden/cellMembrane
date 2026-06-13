@@ -4,7 +4,7 @@
 //!
 //! guideStone P3 (Self-Verifying): dual independent verification of binary integrity.
 
-use super::health::resolve_plasmidbin_dir;
+use super::resolve_plasmidbin_dir;
 
 /// Verify local depot binaries against the git-tracked `checksums.toml`.
 #[must_use]

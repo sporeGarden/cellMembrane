@@ -5,7 +5,7 @@
 //! Replaces shell-based socat/bash/pgrep probes with native async Rust.
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// A single status probe (e.g. depot integrity, mesh connectivity).
@@ -159,8 +159,8 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
 
 /// Probe a primal via native async UDS JSON-RPC `health` method.
 ///
-/// Tries standard socket paths: `/run/membrane/{primal}.sock` first,
-/// then `$XDG_RUNTIME_DIR/biomeos/{primal}.sock`.
+/// Any valid JSON-RPC response (including method-not-found errors) proves
+/// the primal is alive. Only connection failures indicate a dead primal.
 async fn probe_primal_jsonrpc(primal: &str) -> bool {
     let socket_paths = resolve_primal_socket_paths(primal);
     let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
@@ -171,7 +171,7 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
         }
 
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if response.contains("\"result\"") || response.contains("\"status\"") {
+            if response.contains("\"jsonrpc\"") || response.contains("\"result\"") || response.contains("\"error\"") {
                 return true;
             }
         }
@@ -183,7 +183,7 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
 /// Fallback: detect running process via pgrep.
 async fn probe_primal_pgrep(primal: &str) -> bool {
     tokio::process::Command::new("pgrep")
-        .args(["-f", &format!("{primal}.*server")])
+        .args(["-x", primal])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -517,17 +517,4 @@ fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         format!("{socket_base}/{primal}.sock"),
         format!("{xdg_runtime}/biomeos/{primal}.sock"),
     ]
-}
-
-/// Resolve the plasmidBin directory (shared with verify and bootstrap).
-pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
-    crate::plasmid::resolve_path(None, "ECOPRIMALS_PLASMID_BIN", || {
-        let data_home = std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME)
-            .unwrap_or_else(|_| {
-                let home = std::env::var(cellmembrane_types::service::ENV_HOME)
-                    .unwrap_or_else(|_| "/tmp".into());
-                format!("{home}/.local/share")
-            });
-        PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
-    })
 }

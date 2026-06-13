@@ -388,7 +388,7 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
         s.binary
     });
 
-    let dest_root = super::health::resolve_plasmidbin_dir();
+    let dest_root = super::resolve_plasmidbin_dir();
     let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);
 
     if !relay_bin.exists() {
@@ -477,7 +477,7 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
 // ── NUCLEUS start ──────────────────────────────────────────────────────
 
 fn start_nucleus_primals(arch: &str) -> (bool, String) {
-    let dest_root = super::health::resolve_plasmidbin_dir();
+    let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
     let primals = crate::plasmid::nucleus_primals();

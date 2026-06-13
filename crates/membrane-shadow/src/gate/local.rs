@@ -36,14 +36,31 @@ fn dirs_home() -> PathBuf {
 }
 
 /// Resolve the plasmidBin depot directory.
+///
+/// Resolution: env `ECOPRIMALS_PLASMID_BIN` → workspace-relative → `/opt/ecoPrimals/plasmidBin`
+/// → XDG data home fallback.
 pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
-    crate::plasmid::resolve_path(None, "ECOPRIMALS_PLASMID_BIN", || {
-        let data_home = std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME)
-            .unwrap_or_else(|_| {
-                let home = std::env::var(cellmembrane_types::service::ENV_HOME)
-                    .unwrap_or_else(|_| "/tmp".into());
-                format!("{home}/.local/share")
-            });
-        PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
-    })
+    if let Ok(val) = std::env::var("ECOPRIMALS_PLASMID_BIN") {
+        return PathBuf::from(val);
+    }
+
+    if let Ok(root) = crate::resolve_workspace_root() {
+        let ws_depot = root.join("plasmidBin");
+        if ws_depot.join("checksums.toml").exists() {
+            return ws_depot;
+        }
+    }
+
+    let opt_depot = PathBuf::from("/opt/ecoPrimals/plasmidBin");
+    if opt_depot.join("checksums.toml").exists() {
+        return opt_depot;
+    }
+
+    let data_home = std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME)
+        .unwrap_or_else(|_| {
+            let home = std::env::var(cellmembrane_types::service::ENV_HOME)
+                .unwrap_or_else(|_| "/tmp".into());
+            format!("{home}/.local/share")
+        });
+    PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
 }
