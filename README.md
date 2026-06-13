@@ -55,10 +55,18 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 365 tests — pedantic clippy clean
+cargo test                  # 391 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 111 (riboCipher + Dispatch SRP + Deep Debt Evolution):**
+riboCipher Transport Signal Standard: complete mito-tier implementation (HKDF-SHA256
+key derivation from FAMILY_SEED, HMAC tag generation/verification). All outbound UDS
+JSON-RPC connections prepend `[0xEC, 0x01]` clear signal. `dispatch/infra.rs` smart
+refactored (762L → 264L remote VPS API + 518L local gate.rs). Error propagation
+modernized (redundant `map_err` → `#[from]` conversion). Neural API constants elevated
+to shared types crate. Freshness auto-publish race-fix (wave-ID guard). 391 tests.
 
 **Wave 111 (Gate Expansion + Robustness Hardening):**
 `gate.bootstrap` sandbox integration — Tower primals sandbox-validated before install.
@@ -200,6 +208,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Deep debt evolution (Wave 110): native UDS (tokio::net::UnixStream), gate/ modular split, agnostic config, agentic resolver, dual checksum, cascade-restart | DONE |
 | Primal composition grade (Wave 110+): ServiceCapability discovery, temporal/resolve.rs + plasmid/toolchain.rs extracted, all paths env-configurable, DRY socket resolution, zero prod unwrap/TODO/allow | DONE |
 | Sandbox NUCLEUS + canary pool (Wave 110+): sandbox.rs ephemeral validation, canary.rs fallback pool, atomic blue/green promotion, cascade-restart with canary retirement, service/registry.rs extracted | DONE |
+| riboCipher + dispatch SRP (Wave 111): mito-tier HKDF+HMAC complete, dispatch gate.rs extracted (762L→264+518L), error propagation modernized, Neural API constants shared, 391 tests | DONE |
 
 ---
 
@@ -307,11 +316,12 @@ gardens/cellMembrane/
         integration.rs        # Cross-module: config parsing, validation, topology (23 tests)
     membrane-shadow/          # Sovereign shadow functions CLI (#![forbid(unsafe_code)])
       src/
-        dispatch/             # CLI command router (5 domain submodules, all <340L)
-          mod.rs              # Top-level run() router
+        dispatch/             # CLI command router (6 domain submodules)
+          mod.rs              # Top-level run() router + Neural Bridge delegation
           temporal.rs         # cascade, check, sync dispatch
           impulse.rs          # impulse + potential sense dispatch
-          infra.rs            # repo, mirror, service, gate, token
+          infra.rs            # repo, mirror, service, token (remote VPS API)
+          gate.rs             # gate status, health, bootstrap, provision (local self-management)
           data.rs             # manifest, identity, context, plasmid, relay
         gate/                 # Gate operations (modular: bootstrap, health, verify)
           mod.rs              # VPS-oriented: info, pull, check

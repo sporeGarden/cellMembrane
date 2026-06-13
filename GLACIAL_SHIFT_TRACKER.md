@@ -1,14 +1,17 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-12 (Wave 111)
+**Last updated:** 2026-06-13 (Wave 111)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
-**Wave 111 update:** Gate expansion + robustness hardening. `gate.bootstrap` now
-sandbox-validates Tower primals before `nucleus.start`. CASCADE-STALE-RECOVERY
-(auto-stash + ff-only + pop). PARTIAL-FETCH-RESUME (atomic `.tmp` → rename, cleanup,
-retry with backoff). Pure Rust ELF validation (no `file` command dependency).
-Hardcoded ports → named constants (`DEFAULT_FEDERATION_PORT`, `DEFAULT_TURN_PORT`,
-`DEFAULT_VPS_HOST`). All env vars use types crate constants. 365 tests, zero clippy.
+**Wave 111 update (riboCipher + Deep Debt):** riboCipher Transport Signal Standard
+complete (mito-tier HKDF-SHA256 + HMAC tag generation/verification). All outbound UDS
+connections prepend clear signal `[0xEC, 0x01]`. `dispatch/infra.rs` smart refactored
+(762L → 264L remote VPS API + 518L gate.rs local self-management). Error propagation
+modernized. Neural API constants shared via types crate. Freshness auto-publish
+race-fix (wave-ID guard prevents stale overwrites). 391 tests, zero clippy.
+**Wave 111 update (Gate Expansion):** `gate.bootstrap` sandbox integration. CASCADE-STALE-RECOVERY
+(auto-stash + ff-only + pop). PARTIAL-FETCH-RESUME (atomic `.tmp` → rename, retry with backoff).
+Pure Rust ELF validation. Hardcoded ports → named constants. 391 tests, zero clippy.
 **Wave 110+ update:** Primal composition grade + sandbox/canary pipeline achieved.
 `ServiceCapability` enum — capability-based service discovery replaces all hardcoded primal
 names. `temporal/resolve.rs` extracted (authority-first push + agentic divergence resolution).

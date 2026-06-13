@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 110+ (primal composition grade, capability discovery, configurable paths, 2026-06-11)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 6-gate mesh, capability-based registry
+**Last validated:** Wave 111 (riboCipher mito-tier, dispatch SRP, deep debt evolution, 2026-06-13)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 6-gate mesh, capability-based registry, riboCipher transport signals
 
 ---
 
