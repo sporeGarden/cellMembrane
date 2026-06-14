@@ -110,21 +110,38 @@ fn parse_mesh_response(response: &str) -> (bool, String) {
         return (false, format!("unexpected: {}", response.trim()));
     };
 
-    let peers = json
-        .get("result")
-        .and_then(|r| r.get("peers"))
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
-    let reachable = json
-        .get("result")
-        .and_then(|r| r.get("reachable"))
+    if let Some(err) = json.get("error") {
+        let msg = err
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown error");
+        return (false, format!("mesh error: {msg}"));
+    }
+
+    let result = json.get("result");
+    let peers = result
+        .and_then(|r| r.get("reachable_peers").or_else(|| r.get("peers")))
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_array().map(|a| a.len() as u64))
+        })
+        .unwrap_or(0);
+    let reachable = result
+        .and_then(|r| r.get("reachable").or_else(|| r.get("reachable_peers")))
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
+    let federation = result
+        .and_then(|r| r.get("relay_enabled"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
 
-    (
-        reachable > 0 || peers > 0,
-        format!("{peers} peers, {reachable} reachable"),
-    )
+    let detail = if federation && peers == 0 {
+        format!("hub listening, {reachable} reachable (no inbound peers yet)")
+    } else {
+        format!("{peers} peers, {reachable} reachable")
+    };
+
+    (reachable > 0 || peers > 0 || federation, detail)
 }
 
 /// Health sweep: probe each primal via JSON-RPC, fall back to process detection.
