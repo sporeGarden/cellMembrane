@@ -72,6 +72,7 @@ pub mod freshness;
 pub mod gate;
 pub mod git_ops;
 pub mod identity;
+pub mod jsonrpc;
 pub mod impulse;
 pub mod manifest;
 pub mod plasmid;
@@ -137,4 +138,16 @@ pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
     Err(ShadowError::Parse(
         "cannot resolve ecoPrimals workspace root — set ECOPRIMALS_ROOT".into(),
     ))
+}
+
+/// Atomically write contents to a file via temp + rename.
+///
+/// Prevents partial/corrupt reads by writing to a sibling `.tmp` file and
+/// renaming only on success. On failure, the `.tmp` file is cleaned up.
+pub fn atomic_write(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
 }

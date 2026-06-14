@@ -87,7 +87,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
 
     let filepath = active.join(&filename);
     let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
-    std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
+    crate::atomic_write(&filepath, toml_str.as_bytes()).map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");
     let push = crate::git_ops::add_commit_push(
@@ -240,7 +240,7 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
     let ack_path = acks_dir.join(&ack_filename);
 
     let ack_toml = toml::to_string_pretty(&ack_entry).map_err(ShadowError::Serialize)?;
-    std::fs::write(&ack_path, &ack_toml).map_err(ShadowError::Io)?;
+    crate::atomic_write(&ack_path, ack_toml.as_bytes()).map_err(ShadowError::Io)?;
 
     // Also append to in-memory representation for return value
     impulse.acks.push(ack_entry);

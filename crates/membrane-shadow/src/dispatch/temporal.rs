@@ -87,10 +87,10 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
 
     let gate_name = if gate_name == "auto" || gate_name.is_empty() {
         identity::resolve(&root)
-            .map_err(|_| {
-                crate::ShadowError::Parse(
-                    "cannot resolve gate identity — set GATE_NAME or configure identity".into(),
-                )
+            .map_err(|e| {
+                crate::ShadowError::Parse(format!(
+                    "cannot resolve gate identity — set GATE_NAME or configure identity: {e}"
+                ))
             })?
             .name
     } else {

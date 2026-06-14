@@ -10,7 +10,6 @@
 //! - Pool size defaults to 1 per primal (configurable via `membrane.toml`)
 
 use std::path::{Path, PathBuf};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Base directory for canary sockets.
 const CANARY_SOCKET_DIR: &str = "/run/membrane/canary";
@@ -529,39 +528,7 @@ async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
 }
 
 async fn uds_probe(socket_path: &Path, request: &str) -> Result<String, String> {
-    let stream = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        tokio::net::UnixStream::connect(socket_path),
-    )
-    .await
-    .map_err(|_| "connect timeout".to_string())?
-    .map_err(|e| format!("connect: {e}"))?;
-
-    let (mut reader, mut writer) = stream.into_split();
-
-    writer
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .await
-        .map_err(|e| format!("signal: {e}"))?;
-    writer
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|e| format!("write: {e}"))?;
-    writer
-        .shutdown()
-        .await
-        .map_err(|e| format!("shutdown: {e}"))?;
-
-    let mut buf = Vec::with_capacity(4096);
-    tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        reader.read_to_end(&mut buf),
-    )
-    .await
-    .map_err(|_| "read timeout".to_string())?
-    .map_err(|e| format!("read: {e}"))?;
-
-    String::from_utf8(buf).map_err(|e| format!("utf8: {e}"))
+    crate::jsonrpc::call(socket_path, request).await
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 
 /// Default time (seconds) to wait for sandbox instance to become healthy.
 const SANDBOX_HEALTH_TIMEOUT_SECS: u64 = 15;
@@ -342,10 +342,7 @@ pub async fn validate_with_deps(args: &SandboxArgs) -> Result<SandboxResult, Str
 /// Locate the binary for a dependency (looks in production install, then depot).
 fn resolve_dependency_binary_path(binary: &str) -> Result<PathBuf, String> {
     // First: check if production binary exists (live system has it installed)
-    let production = PathBuf::from(format!(
-        "{}/{binary}",
-        cellmembrane_types::service::DEFAULT_INSTALL_BASE
-    ));
+    let production = Path::new(cellmembrane_types::service::DEFAULT_INSTALL_BASE).join(binary);
     if production.exists() {
         return Ok(production);
     }
@@ -470,42 +467,8 @@ pub fn list_active() -> Vec<SandboxInstance> {
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
-/// JSON-RPC call over UDS with timeout.
-/// Prepends riboCipher clear signal `[0xEC, 0x01]` per transport standard.
 async fn uds_jsonrpc_probe(socket_path: &Path, request: &str) -> Result<String, String> {
-    let stream = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        tokio::net::UnixStream::connect(socket_path),
-    )
-    .await
-    .map_err(|_| "connect timeout".to_string())?
-    .map_err(|e| format!("connect: {e}"))?;
-
-    let (mut reader, mut writer) = stream.into_split();
-
-    writer
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .await
-        .map_err(|e| format!("signal: {e}"))?;
-    writer
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|e| format!("write: {e}"))?;
-    writer
-        .shutdown()
-        .await
-        .map_err(|e| format!("shutdown: {e}"))?;
-
-    let mut buf = Vec::with_capacity(4096);
-    tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        reader.read_to_end(&mut buf),
-    )
-    .await
-    .map_err(|_| "read timeout".to_string())?
-    .map_err(|e| format!("read: {e}"))?;
-
-    String::from_utf8(buf).map_err(|e| format!("utf8: {e}"))
+    crate::jsonrpc::call(socket_path, request).await
 }
 
 /// Extract human-readable detail from a health JSON-RPC response.

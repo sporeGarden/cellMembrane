@@ -6,7 +6,41 @@
 //! - `check_installed_freshness()` — compares installed binary provenance against source.
 
 use crate::error::{Result, ShadowError};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+const FRESHNESS_HEADER: &str = "\
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# freshness.toml — Ecosystem state snapshot at wave publish time
+#
+# Authority: primalSpring coordination (published each wave)
+# Consumed by: membrane temporal.cascade --check, s_ecosystem_freshness scenario
+#
+# Regenerate: membrane temporal.cascade --publish-freshness
+";
+
+/// Serializable representation of `freshness.toml`.
+#[derive(Debug, Serialize, Deserialize)]
+struct FreshnessFile {
+    wave: WaveSection,
+    #[serde(default)]
+    heads: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WaveSection {
+    id: u32,
+    #[serde(default)]
+    date: String,
+    #[serde(default)]
+    ssot: String,
+    #[serde(default)]
+    notes: String,
+    #[serde(default)]
+    publisher: String,
+}
 
 /// Publish `freshness.toml` — snapshot of HEAD SHAs after cascade.
 ///
@@ -17,67 +51,32 @@ pub async fn publish_freshness_toml(
     manifest: &crate::manifest::EcosystemManifest,
     repos: &[(&str, &crate::manifest::RepoEntry)],
 ) -> Result<()> {
-    use std::fmt::Write;
-
     let freshness_path = root.join("infra/wateringHole/freshness.toml");
-    let today = chrono_today();
 
-    let mut content = String::with_capacity(2048);
-    writeln!(content, "# SPDX-License-Identifier: CC-BY-SA-4.0").ok();
-    writeln!(content, "#").ok();
-    writeln!(
-        content,
-        "# freshness.toml — Ecosystem state snapshot at wave publish time"
-    )
-    .ok();
-    writeln!(content, "#").ok();
-    writeln!(
-        content,
-        "# Authority: primalSpring coordination (published each wave)"
-    )
-    .ok();
-    writeln!(
-        content,
-        "# Consumed by: membrane temporal.cascade --check, s_ecosystem_freshness scenario"
-    )
-    .ok();
-    writeln!(content, "#").ok();
-    writeln!(
-        content,
-        "# Regenerate: membrane temporal.cascade --publish-freshness"
-    )
-    .ok();
-    writeln!(content).ok();
-    writeln!(content, "[wave]").ok();
-    writeln!(content, "id = {}", manifest.meta.wave).ok();
-    writeln!(content, "date = \"{today}\"").ok();
-    writeln!(content, "ssot = \"specs/WATERFALL_TEMPORAL_SYNC.md\"").ok();
-    writeln!(
-        content,
-        "notes = \"Auto-published by membrane temporal.cascade --publish-freshness\""
-    )
-    .ok();
-    writeln!(content, "publisher = \"membrane\"").ok();
-    writeln!(content).ok();
-    writeln!(content, "[heads]").ok();
-
-    // Collect HEAD SHAs for each repo, sorted by name
-    let mut heads: Vec<(String, String)> = Vec::with_capacity(repos.len());
+    let mut heads = BTreeMap::new();
     for (name, entry) in repos {
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
             if let Ok(sha) = git_rev_parse_head(&repo_dir).await {
-                heads.push(((*name).to_string(), sha));
+                heads.insert((*name).to_string(), sha);
             }
         }
     }
-    heads.sort_by(|a, b| a.0.cmp(&b.0));
 
-    for (name, sha) in &heads {
-        writeln!(content, "{name} = \"{sha}\"").ok();
-    }
+    let file = FreshnessFile {
+        wave: WaveSection {
+            id: manifest.meta.wave,
+            date: chrono_today(),
+            ssot: "specs/WATERFALL_TEMPORAL_SYNC.md".into(),
+            notes: "Auto-published by membrane temporal.cascade --publish-freshness".into(),
+            publisher: "membrane".into(),
+        },
+        heads,
+    };
 
-    std::fs::write(&freshness_path, &content).map_err(ShadowError::Io)?;
+    let body = toml::to_string_pretty(&file).map_err(ShadowError::Serialize)?;
+    let content = format!("{FRESHNESS_HEADER}\n{body}");
+    crate::atomic_write(&freshness_path, content.as_bytes()).map_err(ShadowError::Io)?;
 
     Ok(())
 }
@@ -227,15 +226,8 @@ fn read_freshness_wave_id(path: &Path) -> u32 {
     let Ok(content) = std::fs::read_to_string(path) else {
         return 0;
     };
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("id") && trimmed.contains('=') {
-            if let Some(val) = trimmed.split('=').nth(1) {
-                return val.trim().parse::<u32>().unwrap_or(0);
-            }
-        }
-    }
-    0
+    toml::from_str::<FreshnessFile>(&content)
+        .map_or(0, |f| f.wave.id)
 }
 
 /// Check installed binary freshness against source HEAD SHAs.

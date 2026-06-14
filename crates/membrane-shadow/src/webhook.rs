@@ -200,7 +200,7 @@ pub async fn handle_push(
                     .unwrap_or_else(|_| "/tmp".into());
                 format!("{home}/.local/share")
             });
-        std::path::PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
+        std::path::PathBuf::from(data_home).join("ecoPrimals").join("plasmidBin")
     })
     .join("primals")
     .join(&arch)

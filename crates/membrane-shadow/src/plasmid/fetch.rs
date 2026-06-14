@@ -150,7 +150,7 @@ fn resolve_dest(override_dest: Option<&str>) -> PathBuf {
             let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
             format!("{home}/.local/share")
         });
-        PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
+        PathBuf::from(data_home).join("ecoPrimals").join("plasmidBin")
     })
 }
 

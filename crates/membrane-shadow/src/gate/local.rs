@@ -15,7 +15,7 @@ pub fn resolve_local_gate_identity() -> String {
     let ecoprimals_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
     let candidates = [
-        PathBuf::from(format!("{ecoprimals_root}/.gate")),
+        PathBuf::from(&ecoprimals_root).join(".gate"),
         dirs_home().join(".gate"),
     ];
     for path in &candidates {
@@ -61,5 +61,5 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
                 .unwrap_or_else(|_| "/tmp".into());
             format!("{home}/.local/share")
         });
-    PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin"))
+    PathBuf::from(data_home).join("ecoPrimals").join("plasmidBin")
 }

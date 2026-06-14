@@ -308,7 +308,7 @@ fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
          [ \"$2\" = \"up\" ] && membrane gate.status --quiet 2>/dev/null &\n"
     );
 
-    let ok = std::fs::write(&hook_path, &hook_content).is_ok()
+    let ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok()
         && std::process::Command::new("chmod")
             .args(["755", &hook_path.display().to_string()])
             .status()
@@ -365,7 +365,7 @@ fn emit_deployment_toml(
         env!("CARGO_PKG_VERSION"),
     );
 
-    let ok = std::fs::write(&deployment_path, content).is_ok();
+    let ok = crate::atomic_write(&deployment_path, content.as_bytes()).is_ok();
 
     BootstrapPhase {
         name: "deployment.emit".into(),
@@ -392,7 +392,10 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
     }
 
     let socket_dir = super::health::resolve_biomeos_socket_dir();
-    let socket_path = format!("{socket_dir}/{relay_binary}.sock");
+    let socket_path = std::path::PathBuf::from(&socket_dir)
+        .join(format!("{relay_binary}.sock"))
+        .display()
+        .to_string();
 
     if !std::path::Path::new(&socket_path).exists() {
         return (

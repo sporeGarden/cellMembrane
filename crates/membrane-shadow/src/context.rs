@@ -270,7 +270,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
 
     let filepath = braid_filepath(workspace_root, &gate_id.name, args.project);
     let toml_str = toml::to_string_pretty(&braid).map_err(ShadowError::Serialize)?;
-    std::fs::write(&filepath, &toml_str).map_err(ShadowError::Io)?;
+    crate::atomic_write(&filepath, toml_str.as_bytes()).map_err(ShadowError::Io)?;
 
     let slug = project_slug(args.project);
     let rel_path = format!("context/{}/{slug}.toml", gate_id.name);

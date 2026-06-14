@@ -6,7 +6,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// A single status probe (e.g. depot integrity, mesh connectivity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -454,64 +453,10 @@ async fn tcp_reachable(addr: &str) -> bool {
     .is_ok_and(|r| r.is_ok())
 }
 
-// ── Native UDS JSON-RPC client ─────────────────────────────────────────
+// ── Native UDS JSON-RPC client (delegates to crate::jsonrpc) ──────────
 
-/// Send a JSON-RPC request over a Unix Domain Socket, read the response.
-///
-/// Prepends the riboCipher clear signal `[0xEC, 0x01]` (Tier 1, NDJSON JSON-RPC)
-/// before the payload, per the riboCipher Transport Signal Standard.
 async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Result<String, String> {
-    if let Ok(response) = uds_jsonrpc_raw(socket_path, request, true).await {
-        if !response.is_empty() {
-            return Ok(response);
-        }
-    }
-    uds_jsonrpc_raw(socket_path, request, false).await
-}
-
-/// Raw UDS JSON-RPC transport. When `with_signal` is true, prepends riboCipher
-/// clear signal. Falls back to raw JSON when the primal hasn't been restarted
-/// with riboCipher support yet.
-async fn uds_jsonrpc_raw(
-    socket_path: &str,
-    request: &str,
-    with_signal: bool,
-) -> std::result::Result<String, String> {
-    let stream = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        tokio::net::UnixStream::connect(socket_path),
-    )
-    .await
-    .map_err(|_| format!("connect timeout: {socket_path}"))?
-    .map_err(|e| format!("connect error: {e}"))?;
-
-    let (mut reader, mut writer) = stream.into_split();
-
-    if with_signal {
-        writer
-            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-            .await
-            .map_err(|e| format!("signal write error: {e}"))?;
-    }
-    writer
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|e| format!("write error: {e}"))?;
-    writer
-        .shutdown()
-        .await
-        .map_err(|e| format!("shutdown error: {e}"))?;
-
-    let mut buf = Vec::with_capacity(4096);
-    tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        reader.read_to_end(&mut buf),
-    )
-    .await
-    .map_err(|_| "read timeout".to_string())?
-    .map_err(|e| format!("read error: {e}"))?;
-
-    String::from_utf8(buf).map_err(|e| format!("utf8 error: {e}"))
+    crate::jsonrpc::call(Path::new(socket_path), request).await
 }
 
 /// Resolve the mesh relay UDS socket path via capability discovery.

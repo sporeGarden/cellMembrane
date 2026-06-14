@@ -452,7 +452,7 @@ pub async fn token_list(config: &ShadowConfig) -> Result<Vec<TokenInfo>> {
             let id = parts[0]
                 .trim()
                 .parse()
-                .map_err(|_| ShadowError::Parse(format!("bad token id: {:?}", parts[0])))?;
+                .map_err(|e| ShadowError::Parse(format!("bad token id {:?}: {e}", parts[0])))?;
             tokens.push(TokenInfo {
                 id,
                 name: parts[1].trim().to_string(),

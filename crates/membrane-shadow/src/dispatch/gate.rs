@@ -423,7 +423,7 @@ async fn dispatch_provision_status(args: &[&str]) -> crate::Result<ShadowOutcome
     if let Some(id_str) = cli::extract_flag_value(args, "--id") {
         let id: u64 = id_str
             .parse()
-            .map_err(|_| crate::ShadowError::Parse(format!("invalid droplet id: {id_str}")))?;
+            .map_err(|e| crate::ShadowError::Parse(format!("invalid droplet id '{id_str}': {e}")))?;
         let state = digitalocean::get_droplet(id).await?;
         let msg = format!(
             "{} (id={}) — {} @ {}",
@@ -492,7 +492,7 @@ async fn dispatch_provision_destroy(args: &[&str]) -> crate::Result<ShadowOutcom
     })?;
     let id: u64 = id_str
         .parse()
-        .map_err(|_| crate::ShadowError::Parse(format!("invalid droplet id: {id_str}")))?;
+        .map_err(|e| crate::ShadowError::Parse(format!("invalid droplet id '{id_str}': {e}")))?;
 
     let gate_name = cli::extract_flag_value(args, "--gate");
 

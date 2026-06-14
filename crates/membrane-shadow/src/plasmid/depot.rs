@@ -102,7 +102,7 @@ fn update_checksums(
         }
     }
 
-    std::fs::write(&checksums_path, &out).map_err(ShadowError::Io)?;
+    crate::atomic_write(&checksums_path, out.as_bytes()).map_err(ShadowError::Io)?;
     Ok(())
 }
 
@@ -157,7 +157,7 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
         prov_out.push('\n');
     }
 
-    std::fs::write(&provenance_path, &prov_out).map_err(ShadowError::Io)?;
+    crate::atomic_write(&provenance_path, prov_out.as_bytes()).map_err(ShadowError::Io)?;
     Ok(())
 }
 

@@ -378,7 +378,11 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
                 let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
                 format!("{home}/.local/share")
             });
-            std::path::PathBuf::from(format!("{data_home}/ecoPrimals/plasmidBin/primals/{arch}"))
+            std::path::PathBuf::from(data_home)
+                .join("ecoPrimals")
+                .join("plasmidBin")
+                .join("primals")
+                .join(arch)
         },
         std::path::PathBuf::from,
     );
