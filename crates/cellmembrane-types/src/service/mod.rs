@@ -66,6 +66,55 @@ impl fmt::Display for TransportMode {
     }
 }
 
+/// Server CLI contract — describes what args a primal's `server` subcommand accepts.
+///
+/// Each primal has evolved independently, resulting in CLI divergence. This enum
+/// captures the actual capabilities so template systemd units can generate correct
+/// `ExecStart` lines without trial and error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerContract {
+    /// Full guideStone P4 contract: `server --socket <path> --security-socket <path> --pid-dir <path>`
+    /// Used by: songbird, skunkbat
+    Full,
+    /// Socket + audit-dir: `server --socket <path> --audit-dir <path>`
+    /// Used by: beardog (crypto spine)
+    SocketAuditDir,
+    /// Socket-only: `server --socket <path>`
+    /// Used by: sweetgrass, nestgate, coralreef, squirrel, petaltongue, barracuda, toadstool
+    SocketOnly,
+    /// biomeOS-style: `api --socket <path>` or `neural-api --socket <path>`
+    /// Used by: biomeos
+    BiomeosApi,
+    /// External binary with no `server` subcommand — started by systemd with args in the unit.
+    /// Used by: hbbs, hbbr, caddy
+    External,
+    /// Tarpc server (non-JSON-RPC) — uses port binding, not socket.
+    /// Used by: loamspine, rhizocrypt
+    Tarpc,
+}
+
+impl ServerContract {
+    /// Generate the `ExecStart` args for a primal given socket/security paths.
+    #[must_use]
+    pub fn exec_args(&self, binary: &str, socket_path: &str, security_socket: &str) -> String {
+        match self {
+            Self::Full => format!(
+                "/opt/membrane/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir /run/membrane"
+            ),
+            Self::SocketAuditDir => format!(
+                "/opt/membrane/{binary} server --socket {socket_path} --audit-dir /var/lib/membrane/{binary}"
+            ),
+            Self::SocketOnly | Self::Tarpc => format!(
+                "/opt/membrane/{binary} server --socket {socket_path}"
+            ),
+            Self::BiomeosApi => format!(
+                "/opt/membrane/{binary} api --socket {socket_path}"
+            ),
+            Self::External => format!("/opt/membrane/{binary}"),
+        }
+    }
+}
+
 /// Capability tag for runtime discovery.
 ///
 /// Instead of hardcoding binary names ("songbird", "beardog") in production
@@ -409,6 +458,9 @@ pub struct MembraneService {
     pub vps_transport: TransportMode,
     /// Declared capabilities — used for runtime discovery instead of name matching.
     pub capabilities: &'static [ServiceCapability],
+    /// Server CLI contract — describes which args the primal's `server` subcommand accepts.
+    /// Used by NUCLEUS template units to generate correct `ExecStart` lines per-primal.
+    pub server_contract: ServerContract,
 }
 
 mod registry;

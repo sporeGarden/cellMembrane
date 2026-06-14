@@ -241,12 +241,47 @@ WantedBy=multi-user.target
 ///
 /// Unit names and paths are derived from the service registry — the crypto spine
 /// and mesh relay are discovered by capability, not hardcoded by name.
+/// Non-Tower primals get individual units based on their `ServerContract`.
 async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
     let spine =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
     let relay =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
-    let (bearer_unit, songbird_unit, nucleus_template) = generate_systemd_units(gate_name);
+    let (bearer_unit, songbird_unit, _nucleus_template) = generate_systemd_units(gate_name);
+
+    let spine_socket = format!("/run/membrane/{spine}.sock");
+
+    // Generate per-primal units for non-Tower services using their ServerContract
+    let mut primal_units = String::new();
+    for svc in cellmembrane_types::MembraneService::all() {
+        if !svc.is_primal || svc.binary == spine || svc.binary == relay {
+            continue;
+        }
+        let socket_path = format!("/run/membrane/{}.sock", svc.binary);
+        let exec_start = svc.server_contract.exec_args(svc.binary, &socket_path, &spine_socket);
+        let unit = format!(
+            r"
+cat > /etc/systemd/system/{bin}-membrane.service << 'UNIT'
+[Unit]
+Description={bin} NUCLEUS Primal (Membrane)
+After={spine}-membrane.service {relay}-membrane.service
+Wants={relay}-membrane.service
+
+[Service]
+Type=simple
+ExecStart={exec_start}
+Restart=always
+RestartSec=5
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+",
+            bin = svc.binary,
+        );
+        primal_units.push_str(&unit);
+    }
 
     let install_script = format!(
         r#"
@@ -258,9 +293,7 @@ cat > /etc/systemd/system/{relay}-membrane.service << 'UNIT'
 {songbird_unit}
 UNIT
 
-cat > /etc/systemd/system/membrane-nucleus@.service << 'UNIT'
-{nucleus_template}
-UNIT
+{primal_units}
 
 systemctl daemon-reload
 systemctl enable {spine}-membrane {relay}-membrane
@@ -274,20 +307,23 @@ echo "units installed"
 /// Phase 5: Start Tower services and NUCLEUS primals.
 ///
 /// Tower services (crypto spine + mesh relay) are started first via their
-/// dedicated systemd units. Remaining NUCLEUS primals are started via the
-/// template unit, discovered from the service registry rather than hardcoded.
+/// dedicated systemd units. Remaining NUCLEUS primals are started via their
+/// individual units, discovered from the service registry rather than hardcoded.
 async fn start_services(ip: &str) -> Result<String> {
     let spine =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
     let relay =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
 
-    // Non-Tower NUCLEUS primals to start via template unit
     let nucleus_others: Vec<&str> = crate::plasmid::nucleus_primals()
         .into_iter()
         .filter(|p| *p != spine && *p != relay)
         .collect();
-    let primal_list = nucleus_others.join(" ");
+    let enable_cmds: String = nucleus_others
+        .iter()
+        .map(|p| format!("systemctl enable --now '{p}-membrane' 2>/dev/null || true"))
+        .collect::<Vec<_>>()
+        .join("\n        ");
 
     let script = format!(
         r"
@@ -296,11 +332,7 @@ async fn start_services(ip: &str) -> Result<String> {
         systemctl start {relay}-membrane
         sleep 2
 
-        for primal in {primal_list}; do
-            if [ -f '/opt/membrane/$primal' ]; then
-                systemctl enable --now 'membrane-nucleus@$primal' 2>/dev/null || true
-            fi
-        done
+        {enable_cmds}
 
         echo 'services started'
     "
@@ -470,6 +502,12 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
     crate::plasmid::canary::register_remote_canary(gate_name, &ip, Some(droplet.id), primals);
     phases.push("registry: remote canary registered".into());
 
+    // Write gate identity file for remote verification
+    match write_gate_identity(&ip, gate_name, &droplet.profile).await {
+        Ok(_) => phases.push("identity: written".into()),
+        Err(e) => phases.push(format!("identity: FAIL — {e}")),
+    }
+
     ProvisionOutcome {
         success: true,
         droplet: Some(droplet.clone()),
@@ -478,12 +516,43 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
     }
 }
 
+/// Write a gate identity file at `/etc/membrane/gate_identity` for remote verification.
+async fn write_gate_identity(ip: &str, gate_name: &str, profile: &str) -> Result<String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let script = format!(
+        r#"
+mkdir -p /etc/membrane
+cat > /etc/membrane/gate_identity << 'IDENTITY'
+[gate]
+name = "{gate_name}"
+profile = "{profile}"
+provisioned_at = "{now}"
+arch = "x86_64-unknown-linux-musl"
+IDENTITY
+echo "identity written"
+"#
+    );
+    ssh_exec(ip, &script).await
+}
+
 /// Remotely verify a provisioned gate — checks health, federation, and canary state.
 ///
 /// Used by `gate.provision.verify` to validate a remote gate without needing
 /// physical access, replacing the "canary.audit on NUC" convergence criterion.
-pub async fn verify_remote_gate(ip: &str, gate_name: &str) -> ProvisionOutcome {
+/// When `profile` is provided, health expectations are derived from the composition tier.
+pub async fn verify_remote_gate(ip: &str, gate_name: &str, profile: Option<&str>) -> ProvisionOutcome {
     let mut phases: Vec<String> = Vec::new();
+
+    // Derive expected healthy count from profile
+    let expected_healthy = match profile {
+        Some("canary-fieldmouse" | "tower" | "relay") => 2,
+        Some("nest") => 7,
+        Some("full" | "nucleus") => 13,
+        _ => 0, // unknown profile — don't enforce minimum
+    };
+    if expected_healthy > 0 {
+        phases.push(format!("profile: expects {expected_healthy} healthy ({})", profile.unwrap_or("unknown")));
+    }
 
     // SSH reachability
     if ssh_exec(ip, "echo ready").await.is_err() {
@@ -497,16 +566,35 @@ pub async fn verify_remote_gate(ip: &str, gate_name: &str) -> ProvisionOutcome {
     phases.push("ssh: reachable".into());
 
     // Health sweep
-    match health_sweep(ip).await {
-        Ok(detail) => phases.push(format!("health: {detail}")),
-        Err(e) => phases.push(format!("health: FAIL — {e}")),
-    }
+    let health_count = match health_sweep(ip).await {
+        Ok(detail) => {
+            let count = detail
+                .split('/')
+                .next()
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .unwrap_or(0);
+            phases.push(format!("health: {detail}"));
+            count
+        }
+        Err(e) => {
+            phases.push(format!("health: FAIL — {e}"));
+            0
+        }
+    };
 
     // Federation status
-    match verify_federation(ip).await {
-        Ok(detail) => phases.push(detail.trim().to_string()),
-        Err(e) => phases.push(format!("federation: {e}")),
-    }
+    let has_federation = match verify_federation(ip).await {
+        Ok(detail) => {
+            let trimmed = detail.trim().to_string();
+            let has_peers = trimmed.contains("peers=1") || trimmed.contains("peers=2");
+            phases.push(trimmed);
+            has_peers
+        }
+        Err(e) => {
+            phases.push(format!("federation: {e}"));
+            false
+        }
+    };
 
     // Canary freshness — check if any stale binaries exist
     let canary_result = ssh_exec(
@@ -539,8 +627,15 @@ echo "canary.audit: stale=$STALE"
         Err(e) => phases.push(format!("identity: {e}")),
     }
 
-    let success = phases.iter().any(|p| p.contains("peers=") || p.contains("connections="))
-        && !phases.iter().any(|p| p.contains("health: FAIL"));
+    // Determine success based on profile expectations
+    let health_ok = expected_healthy == 0 || health_count >= expected_healthy;
+    let success = has_federation && health_ok && !phases.iter().any(|p| p.contains("health: FAIL"));
+
+    if !health_ok {
+        phases.push(format!(
+            "EXPECTATION MISS: health {health_count}/{expected_healthy} (profile requires {expected_healthy})"
+        ));
+    }
 
     ProvisionOutcome {
         success,

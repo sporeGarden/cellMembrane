@@ -16,16 +16,42 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Send a JSON-RPC request over UDS with riboCipher signal and fallback.
+/// Send a JSON-RPC request over UDS with riboCipher signal.
 ///
-/// Tries with riboCipher clear signal first. If the response is empty (primal
-/// hasn't been restarted with riboCipher support), retries with raw JSON.
+/// In Reject mode (Wave 113 default): sends signal, no fallback.
+/// In Error/Warn mode: tries with signal first, falls back to raw JSON
+/// if the response is empty (legacy primal without riboCipher support).
 pub async fn call(socket_path: &Path, request: &str) -> Result<String, String> {
-    if let Ok(response) = raw(socket_path, request, true).await {
-        if !response.is_empty() {
-            return Ok(response);
+    let policy = crate::ribocipher::RiboCipherConfig::default();
+    call_with_policy(socket_path, request, &policy).await
+}
+
+/// Send a JSON-RPC request respecting the given riboCipher policy.
+///
+/// This allows callers that need explicit policy control (e.g. health probes
+/// during transitional deployments) to specify the fallback behavior.
+pub async fn call_with_policy(
+    socket_path: &Path,
+    request: &str,
+    policy: &crate::ribocipher::RiboCipherConfig,
+) -> Result<String, String> {
+    match raw(socket_path, request, true).await {
+        Ok(response) if !response.is_empty() => return Ok(response),
+        Ok(_) => {} // empty response — legacy primal
+        Err(e) => {
+            if !policy.allows_fallback() {
+                return Err(e);
+            }
         }
     }
+
+    if !policy.allows_fallback() {
+        return Err(format!(
+            "riboCipher REJECT: peer at {} did not respond to signal (policy=reject, no fallback)",
+            socket_path.display()
+        ));
+    }
+
     raw(socket_path, request, false).await
 }
 

@@ -66,6 +66,7 @@ pub(super) async fn dispatch_temporal(
             ))
         }
         "temporal.cascade" => dispatch_cascade(config, args).await,
+        "temporal.cascade.stress" => dispatch_cascade_stress(config, args).await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown temporal command: {cmd}"
         ))),
@@ -144,4 +145,69 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     }
 
     Ok(outcome)
+}
+
+/// `temporal.cascade.stress` — run N cascade cycles and report per-cycle version skew.
+///
+/// Validates zero-intervention cascading by running repeated cycles and asserting
+/// zero version skew after each. Any skew > 0 halts and reports the failure.
+///
+/// Usage: `membrane temporal.cascade.stress --cycles 3 [--gate <name>]`
+async fn dispatch_cascade_stress(
+    config: &ShadowConfig,
+    args: &[&str],
+) -> crate::Result<ShadowOutcome> {
+    let cycles: u32 = cli::extract_flag_value(args, "--cycles")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2);
+
+    let mut reports: Vec<String> = Vec::new();
+    let mut all_green = true;
+
+    for cycle in 1..=cycles {
+        eprintln!("=== Cascade Stress: cycle {cycle}/{cycles} ===");
+
+        let result = dispatch_cascade(config, args).await?;
+        let skew = result
+            .data
+            .as_ref()
+            .and_then(|d| d.get("parity_miss"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+
+        let status = if result.ok && skew == 0 {
+            "GREEN"
+        } else {
+            all_green = false;
+            "SKEW"
+        };
+
+        reports.push(format!(
+            "  cycle {cycle}: {status} — skew={skew} ({})",
+            result.message.lines().next().unwrap_or("")
+        ));
+
+        if !all_green {
+            break;
+        }
+
+        if cycle < cycles {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    }
+
+    let summary = if all_green {
+        format!("CASCADE STRESS: {cycles}/{cycles} GREEN — zero-skew validated")
+    } else {
+        format!("CASCADE STRESS: FAIL — skew detected before completing {cycles} cycles")
+    };
+
+    Ok(ShadowOutcome::ok_with(
+        format!("{summary}\n{}", reports.join("\n")),
+        serde_json::json!({
+            "cycles_requested": cycles,
+            "cycles_completed": reports.len(),
+            "all_green": all_green,
+        }),
+    ))
 }

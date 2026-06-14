@@ -109,7 +109,7 @@ impl Default for RiboCipherConfig {
     fn default() -> Self {
         Self {
             signal_tier: SignalTier::Clear,
-            unsignalled_policy: UnsignalledPolicy::Error,
+            unsignalled_policy: UnsignalledPolicy::Reject,
             mito_key: None,
         }
     }
@@ -141,10 +141,10 @@ impl RiboCipherConfig {
         let unsignalled_policy = rc
             .get("unsignalled_policy")
             .and_then(|v| v.as_str())
-            .map_or(UnsignalledPolicy::Error, |s| match s {
+            .map_or(UnsignalledPolicy::Reject, |s| match s {
                 "warn" => UnsignalledPolicy::Warn,
-                "reject" => UnsignalledPolicy::Reject,
-                _ => UnsignalledPolicy::Error,
+                "error" => UnsignalledPolicy::Error,
+                _ => UnsignalledPolicy::Reject,
             });
 
         let mito_key = derive_mito_key_from_env();
@@ -162,6 +162,21 @@ impl RiboCipherConfig {
         self.mito_key = Some(key);
         self
     }
+
+    /// Whether legacy fallback (raw JSON without signal) should be attempted.
+    ///
+    /// In `Reject` mode (Wave 113+), no fallback — if the peer doesn't respond
+    /// to the riboCipher signal, the connection fails immediately.
+    #[must_use]
+    pub const fn allows_fallback(&self) -> bool {
+        matches!(
+            self.unsignalled_policy,
+            UnsignalledPolicy::Warn | UnsignalledPolicy::Error
+        )
+    }
+
+    /// JSON-RPC error code for rejected unsignalled connections.
+    pub const REJECT_ERROR_CODE: i32 = -32002;
 
     /// Returns the wire prefix bytes for the configured tier and protocol.
     #[must_use]
@@ -290,10 +305,10 @@ mod tests {
     }
 
     #[test]
-    fn default_config_is_clear_error() {
+    fn default_config_is_clear_reject() {
         let cfg = RiboCipherConfig::default();
         assert_eq!(cfg.signal_tier, SignalTier::Clear);
-        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Error);
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Reject);
     }
 
     #[test]
@@ -301,12 +316,12 @@ mod tests {
         let toml_str = r#"
 [transport.ribocipher]
 signal_tier = "clear"
-unsignalled_policy = "error"
+unsignalled_policy = "reject"
 "#;
         let parsed: toml::Table = toml_str.parse().unwrap();
         let cfg = RiboCipherConfig::from_toml(&parsed);
         assert_eq!(cfg.signal_tier, SignalTier::Clear);
-        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Error);
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Reject);
     }
 
     #[test]
@@ -318,7 +333,7 @@ name = "test"
         let parsed: toml::Table = toml_str.parse().unwrap();
         let cfg = RiboCipherConfig::from_toml(&parsed);
         assert_eq!(cfg.signal_tier, SignalTier::Clear);
-        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Error);
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Reject);
     }
 
     #[test]
@@ -331,6 +346,24 @@ unsignalled_policy = "warn"
         let parsed: toml::Table = toml_str.parse().unwrap();
         let cfg = RiboCipherConfig::from_toml(&parsed);
         assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Warn);
+    }
+
+    #[test]
+    fn reject_disallows_fallback() {
+        let cfg = RiboCipherConfig::default();
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Reject);
+        assert!(!cfg.allows_fallback());
+    }
+
+    #[test]
+    fn error_allows_fallback() {
+        let toml_str = r#"
+[transport.ribocipher]
+unsignalled_policy = "error"
+"#;
+        let parsed: toml::Table = toml_str.parse().unwrap();
+        let cfg = RiboCipherConfig::from_toml(&parsed);
+        assert!(cfg.allows_fallback());
     }
 
     #[test]

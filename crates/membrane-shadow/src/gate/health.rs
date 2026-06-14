@@ -80,8 +80,18 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     })
 }
 
-/// Probe mesh status via JSON-RPC on the mesh relay UDS socket.
+/// Probe mesh status via neuralAPI-routed `capability.call` with fallback to direct UDS.
 async fn probe_mesh_status() -> (bool, String) {
+    if let Some(result) = crate::bridge::try_bridge(
+        "mesh_relay",
+        "mesh.status",
+        serde_json::json!({}),
+    )
+    .await
+    {
+        return parse_mesh_json(&result);
+    }
+
     let socket_path = resolve_mesh_relay_socket();
 
     if !Path::new(&socket_path).exists() {
@@ -99,6 +109,34 @@ async fn probe_mesh_status() -> (bool, String) {
         Ok(response) => parse_mesh_response(&response),
         Err(e) => (false, e),
     }
+}
+
+fn parse_mesh_json(result: &serde_json::Value) -> (bool, String) {
+    let peers = result
+        .get("reachable_peers")
+        .or_else(|| result.get("peers"))
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_array().map(|a| a.len() as u64))
+        })
+        .unwrap_or(0);
+    let reachable = result
+        .get("reachable")
+        .or_else(|| result.get("reachable_peers"))
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    let federation = result
+        .get("relay_enabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    let detail = if federation && peers == 0 {
+        format!("hub listening, {reachable} reachable (no inbound peers yet)")
+    } else {
+        format!("{peers} peers, {reachable} reachable")
+    };
+
+    (reachable > 0 || peers > 0 || federation, detail)
 }
 
 fn parse_mesh_response(response: &str) -> (bool, String) {
@@ -173,11 +211,23 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
     (ok, format!("{alive}/{total} primals alive"))
 }
 
-/// Probe a primal via native async UDS JSON-RPC `health` method.
+/// Probe a primal via neuralAPI `capability.call` with fallback to direct UDS JSON-RPC.
 ///
+/// Prefers routing through biomeOS neuralAPI when available — validates the full
+/// orchestration stack. Falls back to direct UDS when neuralAPI is unavailable.
 /// Any valid JSON-RPC response (including method-not-found errors) proves
-/// the primal is alive. Only connection failures indicate a dead primal.
+/// the primal is alive.
 async fn probe_primal_jsonrpc(primal: &str) -> bool {
+    if let Some(result) = crate::bridge::try_bridge(
+        primal,
+        "health",
+        serde_json::json!({}),
+    )
+    .await
+    {
+        return result.get("status").is_some() || result.is_object();
+    }
+
     let socket_paths = resolve_primal_socket_paths(primal);
     let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
 

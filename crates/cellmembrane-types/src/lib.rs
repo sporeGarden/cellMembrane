@@ -57,7 +57,8 @@ pub use firewall::{FirewallRule, FirewallRuleset};
 pub use identity::{GateMobility, MembraneIdentity};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
-    BinaryIntegrity, HashAlgorithm, MembraneService, ServiceCapability, binary_integrity_for,
+    BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
+    binary_integrity_for,
 };
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};

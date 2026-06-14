@@ -549,7 +549,8 @@ async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<ShadowOutcome
         }
     };
 
-    let outcome = bootstrap::verify_remote_gate(&target_ip, &gate_name).await;
+    let profile = cli::extract_flag_value(args, "--profile");
+    let outcome = bootstrap::verify_remote_gate(&target_ip, &gate_name, profile).await;
     let summary = outcome
         .phases
         .iter()
