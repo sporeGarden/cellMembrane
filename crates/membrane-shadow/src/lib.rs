@@ -140,6 +140,20 @@ pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
     ))
 }
 
+/// Resolve the XDG data home directory (`$XDG_DATA_HOME` or `$HOME/.local/share`).
+#[must_use]
+pub fn resolve_xdg_data_home() -> std::path::PathBuf {
+    use std::path::PathBuf;
+    std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME).map_or_else(
+        |_| {
+            let home = std::env::var(cellmembrane_types::service::ENV_HOME)
+                .unwrap_or_else(|_| "/tmp".into());
+            PathBuf::from(home).join(".local").join("share")
+        },
+        PathBuf::from,
+    )
+}
+
 /// Atomically write contents to a file via temp + rename.
 ///
 /// Prevents partial/corrupt reads by writing to a sibling `.tmp` file and

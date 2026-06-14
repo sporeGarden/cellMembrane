@@ -8,7 +8,6 @@
 use crate::config::ShadowConfig;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Result of a single bootstrap phase.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -409,67 +408,24 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
     let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
 
-    let mesh_init = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": "mesh.init",
-        "params": {
-            "node_id": gate_name,
-            "peers": [vps_peer],
-        },
-        "id": 1
+    let params = serde_json::json!({
+        "node_id": gate_name,
+        "peers": [vps_peer],
     });
+    let request = crate::jsonrpc::request_with_params("mesh.init", &params, 1);
 
-    let request = mesh_init.to_string();
-    let connect_result = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        tokio::net::UnixStream::connect(&socket_path),
-    )
-    .await;
-
-    let stream = match connect_result {
-        Ok(Ok(s)) => s,
-        Ok(Err(e)) => return (false, format!("connect error: {e}")),
-        Err(_) => return (false, "connect timeout".into()),
-    };
-
-    let (mut reader, mut writer) = stream.into_split();
-
-    if writer
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .await
-        .is_err()
-    {
-        return (
-            false,
-            format!("failed to write signal to {relay_binary} socket"),
-        );
-    }
-    if writer.write_all(request.as_bytes()).await.is_err() {
-        return (false, format!("failed to write to {relay_binary} socket"));
-    }
-    let _ = writer.shutdown().await;
-
-    let mut buf = Vec::with_capacity(4096);
-    let read_result = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        reader.read_to_end(&mut buf),
-    )
-    .await;
-
-    match read_result {
-        Ok(Ok(_)) => {
-            let stdout = String::from_utf8_lossy(&buf);
-            if stdout.contains("\"result\"") || stdout.contains("\"ok\"") {
+    match crate::jsonrpc::call(std::path::Path::new(&socket_path), &request).await {
+        Ok(response) => {
+            if response.contains("\"result\"") || response.contains("\"ok\"") {
                 (true, format!("mesh.init sent to {vps_peer} as {gate_name}"))
             } else {
                 (
                     true,
-                    format!("mesh.init sent (response: {})", stdout.trim()),
+                    format!("mesh.init sent (response: {})", response.trim()),
                 )
             }
         }
-        Ok(Err(e)) => (false, format!("read error: {e}")),
-        Err(_) => (false, "mesh.init response timed out".into()),
+        Err(e) => (false, format!("mesh.init failed: {e}")),
     }
 }
 

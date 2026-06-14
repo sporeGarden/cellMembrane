@@ -327,12 +327,7 @@ struct ProvenanceSidecar {
 
 /// Standard provenance directory (XDG data dir).
 fn dirs_provenance() -> PathBuf {
-    use cellmembrane_types::service::{ENV_HOME, ENV_XDG_DATA_HOME};
-    let base = std::env::var(ENV_XDG_DATA_HOME).unwrap_or_else(|_| {
-        let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
-        format!("{home}/.local/share")
-    });
-    PathBuf::from(base).join("ecoPrimals/provenance")
+    crate::resolve_xdg_data_home().join("ecoPrimals").join("provenance")
 }
 
 /// Get HEAD SHA of a source repo given its path.

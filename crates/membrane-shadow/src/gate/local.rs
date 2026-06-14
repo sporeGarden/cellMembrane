@@ -55,11 +55,5 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
         return opt_depot;
     }
 
-    let data_home = std::env::var(cellmembrane_types::service::ENV_XDG_DATA_HOME)
-        .unwrap_or_else(|_| {
-            let home = std::env::var(cellmembrane_types::service::ENV_HOME)
-                .unwrap_or_else(|_| "/tmp".into());
-            format!("{home}/.local/share")
-        });
-    PathBuf::from(data_home).join("ecoPrimals").join("plasmidBin")
+    crate::resolve_xdg_data_home().join("ecoPrimals").join("plasmidBin")
 }

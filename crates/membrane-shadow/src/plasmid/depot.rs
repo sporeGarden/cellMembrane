@@ -54,21 +54,15 @@ fn update_checksums(
 
     let checksums_path = depot_dir.join("checksums.toml");
     let mut all_targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>> = BTreeMap::new();
-    let pre_existing_targets: Vec<String> = if checksums_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&checksums_path) {
-            if let Ok(parsed) = toml::from_str::<ChecksumFile>(&content) {
-                let keys = parsed.targets.keys().cloned().collect();
-                all_targets = parsed.targets;
-                keys
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
+    let pre_existing_targets: Vec<String> = std::fs::read_to_string(&checksums_path)
+        .ok()
+        .and_then(|content| toml::from_str::<ChecksumFile>(&content).ok())
+        .map(|parsed| {
+            let keys = parsed.targets.keys().cloned().collect();
+            all_targets = parsed.targets;
+            keys
+        })
+        .unwrap_or_default();
 
     let target_checksums = all_targets.entry(target.to_string()).or_default();
     for result in built {
@@ -121,14 +115,10 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
         rustc_version().await,
     );
 
-    let mut existing_prov: BTreeMap<String, ProvenanceEntry> = BTreeMap::new();
-    if provenance_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&provenance_path) {
-            if let Ok(parsed) = toml::from_str::<ProvenanceFile>(&content) {
-                existing_prov = parsed.entries;
-            }
-        }
-    }
+    let mut existing_prov: BTreeMap<String, ProvenanceEntry> = std::fs::read_to_string(&provenance_path)
+        .ok()
+        .and_then(|content| toml::from_str::<ProvenanceFile>(&content).ok())
+        .map_or_else(BTreeMap::new, |parsed| parsed.entries);
 
     for result in built {
         if let Some(commit) = result.detail.split("commit=").nth(1) {

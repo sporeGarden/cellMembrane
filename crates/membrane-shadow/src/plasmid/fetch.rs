@@ -144,13 +144,8 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 // ── Path resolution ──────────────────────────────────────────────────────────
 
 fn resolve_dest(override_dest: Option<&str>) -> PathBuf {
-    use cellmembrane_types::service::{ENV_HOME, ENV_XDG_DATA_HOME};
     super::resolve_path(override_dest, "ECOPRIMALS_PLASMID_BIN", || {
-        let data_home = std::env::var(ENV_XDG_DATA_HOME).unwrap_or_else(|_| {
-            let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
-            format!("{home}/.local/share")
-        });
-        PathBuf::from(data_home).join("ecoPrimals").join("plasmidBin")
+        crate::resolve_xdg_data_home().join("ecoPrimals").join("plasmidBin")
     })
 }
 

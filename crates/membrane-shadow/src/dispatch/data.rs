@@ -374,11 +374,7 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
     let arch = plasmid::detect_target_triple();
     let depot_dir = std::env::var("PLASMIDBIN_DEPOT").map_or_else(
         |_| {
-            let data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-                format!("{home}/.local/share")
-            });
-            std::path::PathBuf::from(data_home)
+            crate::resolve_xdg_data_home()
                 .join("ecoPrimals")
                 .join("plasmidBin")
                 .join("primals")
