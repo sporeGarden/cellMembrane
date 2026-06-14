@@ -289,6 +289,83 @@ impl EcosystemManifest {
     }
 }
 
+// ── Wave Lifecycle ───────────────────────────────────────────────────
+
+/// Typed representation of a wave's lifecycle state.
+///
+/// Evolves the raw `meta.wave` u32 into a domain object that can track
+/// lifecycle progression. Freshness and cascade become derived views of
+/// the wave state rather than hand-crafted TOML fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WaveState {
+    /// Wave numeric identifier.
+    pub id: u32,
+    /// ISO-8601 date when the wave was opened (first cascade at this ID).
+    #[serde(default)]
+    pub opened: Option<String>,
+    /// ISO-8601 date when exit criteria were met and wave was closed.
+    #[serde(default)]
+    pub closed: Option<String>,
+    /// Exit criteria with their satisfaction state.
+    #[serde(default)]
+    pub exit_criteria: Vec<ExitCriterion>,
+    /// Last rootPulse session committed for this wave (sovereignty proof).
+    #[serde(default)]
+    pub last_rootpulse_session: Option<String>,
+}
+
+/// A single exit criterion for wave closure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExitCriterion {
+    /// Human-readable description of the criterion.
+    pub description: String,
+    /// Whether this criterion has been satisfied.
+    #[serde(default)]
+    pub satisfied: bool,
+}
+
+impl WaveState {
+    /// Create a new open wave.
+    #[must_use]
+    pub fn open(id: u32) -> Self {
+        Self {
+            id,
+            opened: Some(chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            closed: None,
+            exit_criteria: Vec::new(),
+            last_rootpulse_session: None,
+        }
+    }
+
+    /// Construct from manifest meta (backward compatible with raw wave ID).
+    #[must_use]
+    pub const fn from_manifest(meta: &ManifestMeta) -> Self {
+        Self {
+            id: meta.wave,
+            opened: None,
+            closed: None,
+            exit_criteria: Vec::new(),
+            last_rootpulse_session: None,
+        }
+    }
+
+    /// Whether all exit criteria are satisfied.
+    #[must_use]
+    pub fn is_closeable(&self) -> bool {
+        !self.exit_criteria.is_empty() && self.exit_criteria.iter().all(|c| c.satisfied)
+    }
+
+    /// Mark the wave as closed with the current timestamp.
+    pub fn close(&mut self) {
+        self.closed = Some(chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+    }
+
+    /// Record a rootpulse session.
+    pub fn record_rootpulse(&mut self, session_id: &str) {
+        self.last_rootpulse_session = Some(session_id.to_string());
+    }
+}
+
 /// Convenience: load manifest from workspace root.
 ///
 /// # Errors

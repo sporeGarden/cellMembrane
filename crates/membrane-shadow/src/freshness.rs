@@ -53,7 +53,12 @@ pub async fn publish_freshness_toml(
 ) -> Result<()> {
     let freshness_path = root.join("infra/wateringHole/freshness.toml");
 
-    let mut heads = BTreeMap::new();
+    // Preserve existing heads from repos this gate doesn't track (merge, not overwrite).
+    let mut heads = std::fs::read_to_string(&freshness_path)
+        .ok()
+        .and_then(|c| toml::from_str::<FreshnessFile>(&c).ok())
+        .map_or_else(BTreeMap::new, |f| f.heads);
+
     for (name, entry) in repos {
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
@@ -83,10 +88,14 @@ pub async fn publish_freshness_toml(
 
 /// Auto-commit and push freshness.toml after cascade publish.
 ///
-/// Commits the updated freshness.toml in the wateringHole repo and pushes
-/// to the configured remote. Guards against race conditions where stale gates
-/// overwrite newer freshness data by comparing wave IDs before pushing.
-pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
+/// Pulls from remote first (to get full freshness as merge base), re-publishes
+/// the freshness with our local heads merged in, then commits and pushes.
+/// Guards against race conditions where stale gates overwrite newer data.
+pub async fn auto_commit_freshness(
+    root: &Path,
+    manifest: &crate::manifest::EcosystemManifest,
+    repos: &[(&str, &crate::manifest::RepoEntry)],
+) -> Result<()> {
     let wh_dir = root.join("infra/wateringHole");
     if !wh_dir.join(".git").exists() {
         return Err(ShadowError::Config(
@@ -98,27 +107,19 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         .or_else(|_| std::fs::read_to_string(root.join(".gate")).map(|s| s.trim().to_string()))
         .unwrap_or_else(|_| crate::gate::resolve_local_gate_identity());
 
-    // Read our local wave ID before committing
     let local_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
 
-    // Pull latest from both remotes to detect if a newer wave already exists.
+    // Pull latest from remotes — this brings in the full freshness from other gates.
     pull_rebase_both_remotes(&wh_dir).await;
 
-    // After pull, check remote's wave ID. If remote is newer, DO NOT overwrite.
     let remote_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
     if remote_wave > local_wave && local_wave > 0 {
-        // Remote has a newer wave — our freshness is stale, skip publishing
-        // Re-write our local freshness.toml back (it was overwritten by pull)
         return Ok(());
     }
 
-    // Re-write our freshness.toml (pull may have overwritten it with remote version)
-    // The caller already wrote the correct content; re-read from the parent publish
-    // which wrote the file before calling us. If the file was overwritten by pull,
-    // we need to regenerate — but since publish_freshness_toml already ran, the
-    // content is still in our working tree if we check out ours.
+    // Re-publish freshness after pull so we merge our heads into the full remote set.
+    publish_freshness_toml(root, manifest, repos).await?;
 
-    // Stage freshness.toml
     let add = tokio::process::Command::new("git")
         .args(["add", "freshness.toml"])
         .current_dir(&wh_dir)
@@ -129,7 +130,6 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    // Check if there's anything to commit
     let diff = tokio::process::Command::new("git")
         .args(["diff", "--cached", "--quiet"])
         .current_dir(&wh_dir)
@@ -137,7 +137,7 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         .await
         .map_err(ShadowError::Io)?;
     if diff.status.success() {
-        return Ok(()); // nothing staged — remote already has our version
+        return Ok(());
     }
 
     let msg = format!("freshness: wave {local_wave} auto-publish by {gate}");
@@ -154,7 +154,6 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         )));
     }
 
-    // Push to forgejo
     let push = tokio::process::Command::new("git")
         .args(["push", "forgejo", "main"])
         .current_dir(&wh_dir)
@@ -169,7 +168,6 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
         return Err(ShadowError::Ssh(format!("freshness push failed: {stderr}")));
     }
 
-    // Also push to origin to keep both remotes aligned
     let _ = tokio::process::Command::new("git")
         .args(["push", "origin", "main"])
         .current_dir(&wh_dir)
@@ -307,6 +305,175 @@ pub fn check_installed_freshness() -> Result<String> {
 
     writeln!(report, "\nfresh={fresh} stale={stale} unknown={unknown}").ok();
     Ok(report)
+}
+
+// ── RootPulse Sovereignty ────────────────────────────────────────────
+
+/// Register cascade state with the rootPulse provenance trio via NUCLEUS neural-api.
+///
+/// Calls the `rootpulse_commit` graph which orchestrates:
+/// `rhizoCrypt` (dehydrate) → `BearDog` (sign) → `NestGate` (store) → `LoamSpine` (commit) → `sweetGrass` (attribute)
+///
+/// Returns `Ok(session_id)` on success or an error if NUCLEUS is unreachable.
+pub async fn rootpulse_commit(wave_id: u32, gate: &str, heads: &BTreeMap<String, String>) -> Result<String> {
+    let socket_path = resolve_neural_api_socket();
+    if !socket_path.exists() {
+        return Err(ShadowError::Config(
+            "NUCLEUS neural-api socket not found — rootpulse commit skipped".into(),
+        ));
+    }
+
+    let session_id = format!(
+        "wave-{wave_id}-cascade-{}",
+        chrono::Utc::now().format("%Y%m%dT%H%M%S")
+    );
+    let agent_did = format!("did:primal:cellMembrane:{gate}");
+
+    let params = serde_json::json!({
+        "session_id": session_id,
+        "agent_did": agent_did,
+        "wave_id": wave_id,
+        "heads": heads,
+        "gate": gate,
+    });
+
+    let request = crate::jsonrpc::request_with_params(
+        "graph.execute",
+        &serde_json::json!({
+            "graph_id": "rootpulse_commit",
+            "params": {
+                "SESSION_ID": session_id,
+                "AGENT_DID": agent_did,
+                "FAMILY_ID": "default",
+            },
+            "metadata": params,
+        }),
+        42,
+    );
+
+    match crate::jsonrpc::call(&socket_path, &request).await {
+        Ok(response) => {
+            if response.contains("error") && !response.contains("result") {
+                return Err(ShadowError::Config(format!(
+                    "rootpulse commit graph error: {response}"
+                )));
+            }
+            Ok(session_id)
+        }
+        Err(e) => Err(ShadowError::Ssh(format!("rootpulse commit failed: {e}"))),
+    }
+}
+
+/// Sovereignty verification result for a single repo.
+#[derive(Debug)]
+pub struct SovereigntyCheck {
+    /// Repository name.
+    pub repo: String,
+    /// Whether the repo HEAD matches the rootPulse ledger record.
+    pub verified: bool,
+    /// Human-readable verification detail.
+    pub detail: String,
+}
+
+/// Verify cascade HEADs against the rootPulse ledger.
+///
+/// Queries the last rootpulse-committed state via the neural-api and compares
+/// each repo HEAD against the ledger record. Any mismatch indicates potential
+/// VCS tampering (GitHub/Forgejo diverged from sovereign record).
+///
+/// Returns per-repo verification results. If NUCLEUS is unavailable, returns
+/// an empty vec (graceful degradation).
+pub async fn sovereignty_verify(
+    wave_id: u32,
+    heads: &BTreeMap<String, String>,
+) -> Vec<SovereigntyCheck> {
+    let socket_path = resolve_neural_api_socket();
+    if !socket_path.exists() {
+        return Vec::new();
+    }
+
+    let request = crate::jsonrpc::request_with_params(
+        "graph.execute",
+        &serde_json::json!({
+            "graph_id": "rootpulse_diff",
+            "params": {
+                "WAVE_ID": wave_id.to_string(),
+                "CURRENT_HEADS": heads,
+            },
+        }),
+        43,
+    );
+
+    let Ok(response) = crate::jsonrpc::call(&socket_path, &request).await else {
+        return Vec::new();
+    };
+
+    // Parse the response — if the graph returned ledger state, compare HEADs
+    let parsed: serde_json::Value = match serde_json::from_str(&response) {
+        Ok(v) => v,
+        Err(_) => return mark_all_unverified(heads, "ledger unreachable"),
+    };
+
+    // If there's an error response from the graph, all repos are unverified
+    if parsed.get("error").is_some() {
+        return mark_all_unverified(heads, "rootpulse ledger not yet initialized");
+    }
+
+    // If the graph returns a result with ledger_heads, compare them
+    let ledger_heads = parsed
+        .get("result")
+        .and_then(|r| r.get("ledger_heads"))
+        .and_then(|h| h.as_object());
+
+    match ledger_heads {
+        Some(ledger) => heads
+            .iter()
+            .map(|(repo, head)| {
+                let verified = ledger
+                    .get(repo)
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|ledger_head| ledger_head == head);
+                let detail = if verified {
+                    "sovereign match".into()
+                } else {
+                    let ledger_val = ledger
+                        .get(repo)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("(not in ledger)");
+                    format!("MISMATCH: VCS={} ledger={ledger_val}", &head[..8.min(head.len())])
+                };
+                SovereigntyCheck {
+                    repo: repo.clone(),
+                    verified,
+                    detail,
+                }
+            })
+            .collect(),
+        None => mark_all_unverified(heads, "no ledger state returned"),
+    }
+}
+
+fn mark_all_unverified(heads: &BTreeMap<String, String>, reason: &str) -> Vec<SovereigntyCheck> {
+    heads
+        .keys()
+        .map(|repo| SovereigntyCheck {
+            repo: repo.clone(),
+            verified: false,
+            detail: format!("unverified: {reason}"),
+        })
+        .collect()
+}
+
+/// Resolve the NUCLEUS neural-api socket path.
+fn resolve_neural_api_socket() -> PathBuf {
+    if let Ok(path) = std::env::var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET) {
+        return PathBuf::from(path);
+    }
+
+    let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
+
+    PathBuf::from(&socket_base).join("neural-api.sock")
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

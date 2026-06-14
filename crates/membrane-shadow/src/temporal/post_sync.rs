@@ -67,10 +67,13 @@ pub(super) async fn run_post_sync_phases(
         match crate::freshness::publish_freshness_toml(root, m, repos).await {
             Ok(()) => {
                 lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
-                match crate::freshness::auto_commit_freshness(root).await {
+                match crate::freshness::auto_commit_freshness(root, m, repos).await {
                     Ok(()) => {}
                     Err(e) => lines.push(format!("  [freshness] auto-push: {e}")),
                 }
+
+                let heads = collect_cascade_heads(root, repos).await;
+                run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
             }
             Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
         }
@@ -463,6 +466,56 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
     lines.push(format!(
         "  [cascade-restart] {tag} — {restarted} restarted, {skipped} current, {failed} failed"
     ));
+}
+
+/// Commit cascade state to rootPulse and verify sovereignty.
+async fn run_rootpulse_sovereignty(
+    wave_id: u32,
+    gate: &str,
+    heads: &std::collections::BTreeMap<String, String>,
+    lines: &mut Vec<String>,
+) {
+    match crate::freshness::rootpulse_commit(wave_id, gate, heads).await {
+        Ok(session) => {
+            lines.push(format!("  [rootpulse] COMMITTED {session}"));
+        }
+        Err(e) => {
+            lines.push(format!("  [rootpulse] SKIP: {e}"));
+        }
+    }
+
+    let checks = crate::freshness::sovereignty_verify(wave_id, heads).await;
+    if !checks.is_empty() {
+        let verified = checks.iter().filter(|c| c.verified).count();
+        let total = checks.len();
+        if verified == total {
+            lines.push(format!("  [sovereignty] VERIFIED {verified}/{total}"));
+        } else {
+            lines.push(format!("  [sovereignty] {verified}/{total} verified"));
+            for check in &checks {
+                if !check.verified {
+                    lines.push(format!("    \u{26a0} {}: {}", check.repo, check.detail));
+                }
+            }
+        }
+    }
+}
+
+/// Collect HEAD SHAs for all cloned repos in the cascade set.
+async fn collect_cascade_heads(
+    root: &std::path::Path,
+    repos: &[(&str, &crate::manifest::RepoEntry)],
+) -> std::collections::BTreeMap<String, String> {
+    let mut heads = std::collections::BTreeMap::new();
+    for (name, entry) in repos {
+        let repo_dir = root.join(&entry.local_path);
+        if repo_dir.join(".git").exists() {
+            if let Ok(sha) = crate::git_ops::git_output(&repo_dir, &["rev-parse", "HEAD"]).await {
+                heads.insert((*name).to_string(), sha);
+            }
+        }
+    }
+    heads
 }
 
 /// Quick depot freshness summary — reports how many binaries exist and are recent.
