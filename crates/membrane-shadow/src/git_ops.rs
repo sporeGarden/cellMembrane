@@ -58,7 +58,11 @@ pub async fn add_all_commit_push(
     Ok(push_all_remotes(repo_dir).await)
 }
 
-/// Push to all configured remotes, returning per-remote results.
+/// Push to all configured remotes with auto-reconciliation on non-fast-forward.
+///
+/// For each remote: attempt push. If rejected (non-ff), fetch + rebase + retry.
+/// This eliminates the chronic diderm divergence where parallel gate pushes
+/// create non-ff rejections requiring manual `--force-with-lease`.
 pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
     let remotes = resolve_push_remotes();
     let mut result = PushResult {
@@ -66,12 +70,8 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
         failed: Vec::new(),
     };
     for remote in &remotes {
-        let ok = tokio::process::Command::new("git")
-            .args(["push", remote, "main", "--quiet"])
-            .current_dir(repo_dir)
-            .status()
-            .await
-            .is_ok_and(|s| s.success());
+        let ok = try_push(repo_dir, remote).await
+            || reconcile_and_push(repo_dir, remote).await;
         if ok {
             result.succeeded += 1;
         } else {
@@ -79,6 +79,65 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
         }
     }
     result
+}
+
+/// Attempt a single push to a remote.
+async fn try_push(repo_dir: &Path, remote: &str) -> bool {
+    tokio::process::Command::new("git")
+        .args(["push", remote, "main", "--quiet"])
+        .current_dir(repo_dir)
+        .env("GIT_SSH_COMMAND", SSH_CMD_WITH_TIMEOUT)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+        .is_ok_and(|s| s.success())
+}
+
+/// Auto-reconcile a non-ff rejection: fetch, rebase, retry push.
+///
+/// Maximum 2 retries to prevent infinite loops on persistent conflicts.
+async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
+    for _attempt in 0..2 {
+        let fetch_ok = tokio::process::Command::new("git")
+            .args(["fetch", remote, "main"])
+            .current_dir(repo_dir)
+            .env("GIT_SSH_COMMAND", SSH_CMD_WITH_TIMEOUT)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await
+            .is_ok_and(|s| s.success());
+
+        if !fetch_ok {
+            return false;
+        }
+
+        let rebase_ref = format!("{remote}/main");
+        let rebase_ok = tokio::process::Command::new("git")
+            .args(["rebase", &rebase_ref])
+            .current_dir(repo_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await
+            .is_ok_and(|s| s.success());
+
+        if !rebase_ok {
+            // Abort the failed rebase and give up
+            let _ = tokio::process::Command::new("git")
+                .args(["rebase", "--abort"])
+                .current_dir(repo_dir)
+                .status()
+                .await;
+            return false;
+        }
+
+        if try_push(repo_dir, remote).await {
+            return true;
+        }
+    }
+    false
 }
 
 /// Run a git command, returning an error on non-zero exit.

@@ -154,25 +154,13 @@ pub async fn auto_commit_freshness(
         )));
     }
 
-    let push = tokio::process::Command::new("git")
-        .args(["push", "forgejo", "main"])
-        .current_dir(&wh_dir)
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !push.status.success() {
-        let stderr = String::from_utf8_lossy(&push.stderr);
-        if stderr.contains("rejected") || stderr.contains("fetch first") {
-            return Ok(());
-        }
-        return Err(ShadowError::Ssh(format!("freshness push failed: {stderr}")));
+    let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
+    if !push_result.failed.is_empty() {
+        eprintln!(
+            "freshness: push failed to {} (reconciliation attempted)",
+            push_result.failed.join(", ")
+        );
     }
-
-    let _ = tokio::process::Command::new("git")
-        .args(["push", "origin", "main"])
-        .current_dir(&wh_dir)
-        .output()
-        .await;
 
     Ok(())
 }
