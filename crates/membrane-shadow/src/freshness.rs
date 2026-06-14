@@ -102,44 +102,8 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
     // Read our local wave ID before committing
     let local_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
 
-    // Pull latest from remote to detect if a newer wave already exists.
-    // Use --rebase to linearize history and avoid merge commits.
-    let pull = tokio::process::Command::new("git")
-        .args(["pull", "--rebase", "forgejo", "main"])
-        .current_dir(&wh_dir)
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
-
-    if !pull.status.success() {
-        let stderr = String::from_utf8_lossy(&pull.stderr);
-        if stderr.contains("CONFLICT") {
-            // Conflict in freshness.toml during rebase — accept ours (we just generated it)
-            let _ = tokio::process::Command::new("git")
-                .args(["checkout", "--ours", "freshness.toml"])
-                .current_dir(&wh_dir)
-                .output()
-                .await;
-            let _ = tokio::process::Command::new("git")
-                .args(["add", "freshness.toml"])
-                .current_dir(&wh_dir)
-                .output()
-                .await;
-            let _ = tokio::process::Command::new("git")
-                .args(["rebase", "--continue"])
-                .env("GIT_EDITOR", "true")
-                .current_dir(&wh_dir)
-                .output()
-                .await;
-        } else if !stderr.contains("Already up to date") {
-            // Abort rebase if something unexpected happened
-            let _ = tokio::process::Command::new("git")
-                .args(["rebase", "--abort"])
-                .current_dir(&wh_dir)
-                .output()
-                .await;
-        }
-    }
+    // Pull latest from both remotes to detect if a newer wave already exists.
+    pull_rebase_both_remotes(&wh_dir).await;
 
     // After pull, check remote's wave ID. If remote is newer, DO NOT overwrite.
     let remote_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
@@ -201,14 +165,61 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
     if !push.status.success() {
         let stderr = String::from_utf8_lossy(&push.stderr);
         if stderr.contains("rejected") || stderr.contains("fetch first") {
-            // Lost the race after our rebase — another gate pushed between our
-            // pull and push. This is fine; we'll win next cycle if we're newer.
             return Ok(());
         }
         return Err(ShadowError::Ssh(format!("freshness push failed: {stderr}")));
     }
 
+    // Also push to origin to keep both remotes aligned
+    let _ = tokio::process::Command::new("git")
+        .args(["push", "origin", "main"])
+        .current_dir(&wh_dir)
+        .output()
+        .await;
+
     Ok(())
+}
+
+/// Pull-rebase from both forgejo and origin to sync before publishing.
+async fn pull_rebase_both_remotes(wh_dir: &Path) {
+    for remote in &["forgejo", "origin"] {
+        let Ok(pull) = tokio::process::Command::new("git")
+            .args(["pull", "--rebase", remote, "main"])
+            .current_dir(wh_dir)
+            .output()
+            .await
+        else {
+            continue;
+        };
+
+        if !pull.status.success() {
+            let stderr = String::from_utf8_lossy(&pull.stderr);
+            if stderr.contains("CONFLICT") {
+                let _ = tokio::process::Command::new("git")
+                    .args(["checkout", "--ours", "freshness.toml"])
+                    .current_dir(wh_dir)
+                    .output()
+                    .await;
+                let _ = tokio::process::Command::new("git")
+                    .args(["add", "freshness.toml"])
+                    .current_dir(wh_dir)
+                    .output()
+                    .await;
+                let _ = tokio::process::Command::new("git")
+                    .args(["rebase", "--continue"])
+                    .env("GIT_EDITOR", "true")
+                    .current_dir(wh_dir)
+                    .output()
+                    .await;
+            } else if !stderr.contains("Already up to date") {
+                let _ = tokio::process::Command::new("git")
+                    .args(["rebase", "--abort"])
+                    .current_dir(wh_dir)
+                    .output()
+                    .await;
+            }
+        }
+    }
 }
 
 /// Parse the wave ID from a freshness.toml file. Returns 0 if unreadable.
