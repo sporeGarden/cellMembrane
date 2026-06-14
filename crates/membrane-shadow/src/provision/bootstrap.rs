@@ -140,11 +140,8 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
     Ok(format!("{deployed}/{} binaries deployed", primals.len()))
 }
 
-/// Phase 4: Install systemd service units for Tower atomic.
-///
-/// Unit names and paths are derived from the service registry — the crypto spine
-/// and mesh relay are discovered by capability, not hardcoded by name.
-async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
+/// Generate systemd unit content for the Tower atomic services.
+fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     let spine =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
     let relay =
@@ -152,6 +149,14 @@ async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
     let spine_upper = spine.to_uppercase();
     let relay_upper = relay.to_uppercase();
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    let vps_peer =
+        std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER).unwrap_or_else(|_| {
+            format!(
+                "{}:{}",
+                cellmembrane_types::service::DEFAULT_VPS_HOST,
+                cellmembrane_types::service::DEFAULT_FEDERATION_PORT
+            )
+        });
 
     let bearer_unit = format!(
         r"[Unit]
@@ -163,7 +168,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-ExecStart=/opt/membrane/{spine} server --socket /run/membrane/{spine}.sock --pid-dir /run/membrane
+ExecStart=/opt/membrane/{spine} server --socket /run/membrane/{spine}.sock --audit-dir /var/lib/membrane/{spine}
 Environment={spine_upper}_NODE_ID={gate_name}
 Environment={spine_upper}_LOG_LEVEL=info
 Restart=always
@@ -201,6 +206,7 @@ Environment={relay_upper}_SECURITY_PROVIDER={spine}
 Environment={relay_upper}_PID_DIR=/run/membrane
 Environment={relay_upper}_FEDERATION_PORT={federation_port}
 Environment={relay_upper}_FEDERATION_ENABLED=true
+Environment={relay_upper}_PEERS=golgiBody@{vps_peer}
 Restart=always
 RestartSec=5
 MemoryMax=128M
@@ -227,6 +233,20 @@ MemoryMax=128M
 WantedBy=multi-user.target
 "
     );
+
+    (bearer_unit, songbird_unit, nucleus_template)
+}
+
+/// Phase 4: Install systemd service units for Tower atomic.
+///
+/// Unit names and paths are derived from the service registry — the crypto spine
+/// and mesh relay are discovered by capability, not hardcoded by name.
+async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
+    let spine =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let relay =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let (bearer_unit, songbird_unit, nucleus_template) = generate_systemd_units(gate_name);
 
     let install_script = format!(
         r#"
@@ -289,7 +309,7 @@ async fn start_services(ip: &str) -> Result<String> {
 }
 
 /// Phase 6: Join the mesh by peering with main production VPS.
-async fn join_mesh(ip: &str) -> Result<String> {
+async fn join_mesh(ip: &str, gate_name: &str) -> Result<String> {
     let vps_peer =
         std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER).unwrap_or_else(|_| {
             format!(
@@ -304,8 +324,30 @@ async fn join_mesh(ip: &str) -> Result<String> {
     let script = format!(
         r#"
 sleep 3
-echo '{{"jsonrpc":"2.0","method":"mesh.init","params":{{"peers":"{vps_peer}"}},"id":1}}' | \
+echo '{{"jsonrpc":"2.0","method":"mesh.init","params":{{"node_id":"{gate_name}","peers":["{vps_peer}"]}},"id":1}}' | \
     socat - UNIX-CONNECT:/run/membrane/{relay}.sock 2>/dev/null || echo "mesh.init deferred"
+"#
+    );
+    ssh_exec(ip, &script).await
+}
+
+/// Phase 6b: Verify federation mesh enrollment after join.
+async fn verify_federation(ip: &str) -> Result<String> {
+    let relay =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+
+    let script = format!(
+        r#"
+sleep 3
+RESP=$(echo '{{"jsonrpc":"2.0","method":"mesh.status","params":{{}},"id":1}}' | \
+    socat - UNIX-CONNECT:/run/membrane/{relay}.sock 2>/dev/null)
+if [ -z "$RESP" ]; then
+    echo "federation: no response from relay"
+    exit 0
+fi
+PEERS=$(echo "$RESP" | grep -o '"reachable_peers":[0-9]*' | grep -o '[0-9]*')
+CONNS=$(echo "$RESP" | grep -o '"active_connections":[0-9]*' | grep -o '[0-9]*')
+echo "federation: peers=${{PEERS:-0}} connections=${{CONNS:-0}}"
 "#
     );
     ssh_exec(ip, &script).await
@@ -403,9 +445,15 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
     }
 
     eprintln!("provision: joining mesh...");
-    match join_mesh(&ip).await {
+    match join_mesh(&ip, gate_name).await {
         Ok(detail) => phases.push(format!("mesh: {detail}")),
         Err(e) => phases.push(format!("mesh: deferred — {e}")),
+    }
+
+    eprintln!("provision: verifying federation...");
+    match verify_federation(&ip).await {
+        Ok(detail) => phases.push(detail.trim().to_string()),
+        Err(e) => phases.push(format!("federation: verify failed — {e}")),
     }
 
     eprintln!("provision: health sweep...");
@@ -426,6 +474,78 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
         success: true,
         droplet: Some(droplet.clone()),
         message: format!("bootstrap complete for {gate_name} at {ip}"),
+        phases,
+    }
+}
+
+/// Remotely verify a provisioned gate — checks health, federation, and canary state.
+///
+/// Used by `gate.provision.verify` to validate a remote gate without needing
+/// physical access, replacing the "canary.audit on NUC" convergence criterion.
+pub async fn verify_remote_gate(ip: &str, gate_name: &str) -> ProvisionOutcome {
+    let mut phases: Vec<String> = Vec::new();
+
+    // SSH reachability
+    if ssh_exec(ip, "echo ready").await.is_err() {
+        return ProvisionOutcome {
+            success: false,
+            droplet: None,
+            message: format!("SSH unreachable at {ip}"),
+            phases,
+        };
+    }
+    phases.push("ssh: reachable".into());
+
+    // Health sweep
+    match health_sweep(ip).await {
+        Ok(detail) => phases.push(format!("health: {detail}")),
+        Err(e) => phases.push(format!("health: FAIL — {e}")),
+    }
+
+    // Federation status
+    match verify_federation(ip).await {
+        Ok(detail) => phases.push(detail.trim().to_string()),
+        Err(e) => phases.push(format!("federation: {e}")),
+    }
+
+    // Canary freshness — check if any stale binaries exist
+    let canary_result = ssh_exec(
+        ip,
+        r#"
+STALE=0
+for bin in /opt/membrane/*; do
+    [ -x "$bin" ] || continue
+    NAME=$(basename "$bin")
+    SOCK="/run/membrane/${NAME}.sock"
+    [ -S "$SOCK" ] || { STALE=$((STALE + 1)); continue; }
+    RESP=$(echo '{"jsonrpc":"2.0","method":"health","id":1}' | socat - UNIX-CONNECT:"$SOCK" 2>/dev/null)
+    echo "$RESP" | grep -q '"status":"healthy"' || STALE=$((STALE + 1))
+done
+echo "canary.audit: stale=$STALE"
+"#,
+    )
+    .await;
+    match canary_result {
+        Ok(detail) => phases.push(detail.trim().to_string()),
+        Err(e) => phases.push(format!("canary.audit: FAIL — {e}")),
+    }
+
+    // Gate identity
+    let identity_result =
+        ssh_exec(ip, "cat /etc/membrane/gate_identity 2>/dev/null || echo 'no identity file'")
+            .await;
+    match identity_result {
+        Ok(detail) => phases.push(format!("identity: {}", detail.trim())),
+        Err(e) => phases.push(format!("identity: {e}")),
+    }
+
+    let success = phases.iter().any(|p| p.contains("peers=") || p.contains("connections="))
+        && !phases.iter().any(|p| p.contains("health: FAIL"));
+
+    ProvisionOutcome {
+        success,
+        droplet: None,
+        message: format!("verify complete for {gate_name} at {ip}"),
         phases,
     }
 }

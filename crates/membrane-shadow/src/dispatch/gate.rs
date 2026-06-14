@@ -90,6 +90,8 @@ pub(super) async fn dispatch(
         "gate.provision.status" => dispatch_provision_status(args).await,
         #[cfg(feature = "http")]
         "gate.provision.destroy" => dispatch_provision_destroy(args).await,
+        #[cfg(feature = "http")]
+        "gate.provision.verify" => dispatch_provision_verify(args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
     }
 }
@@ -515,4 +517,54 @@ async fn dispatch_provision_destroy(args: &[&str]) -> crate::Result<ShadowOutcom
     }
 
     Ok(ShadowOutcome::ok(format!("DESTROYED droplet id={id}")))
+}
+
+#[cfg(feature = "http")]
+async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use crate::plasmid::canary;
+    use crate::provision::bootstrap;
+
+    let ip = cli::extract_flag_value(args, "--ip");
+    let gate = cli::extract_flag_value(args, "--gate");
+
+    let (target_ip, gate_name) = match (ip, gate) {
+        (Some(ip), name) => (ip.to_string(), name.unwrap_or("unknown").to_string()),
+        (None, Some(name)) => {
+            let registry = canary::load_remote_canaries();
+            let entry = registry
+                .entries
+                .iter()
+                .find(|e| e.gate_name == name)
+                .ok_or_else(|| {
+                    crate::ShadowError::Parse(format!(
+                        "gate '{name}' not found in remote canary registry"
+                    ))
+                })?;
+            (entry.ip.clone(), name.to_string())
+        }
+        (None, None) => {
+            return Err(crate::ShadowError::Parse(
+                "gate.provision.verify requires --ip <addr> or --gate <name>".into(),
+            ));
+        }
+    };
+
+    let outcome = bootstrap::verify_remote_gate(&target_ip, &gate_name).await;
+    let summary = outcome
+        .phases
+        .iter()
+        .map(|p| format!("  {p}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let status = if outcome.success { "PASS" } else { "FAIL" };
+    let msg = format!(
+        "gate.provision.verify [{status}] {gate_name}@{target_ip}\n{summary}"
+    );
+
+    if outcome.success {
+        Ok(ShadowOutcome::ok(msg))
+    } else {
+        Ok(ShadowOutcome::fail(msg))
+    }
 }
