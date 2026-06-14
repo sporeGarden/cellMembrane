@@ -330,7 +330,7 @@ fn dirs_provenance() -> PathBuf {
     crate::resolve_xdg_data_home().join("ecoPrimals").join("provenance")
 }
 
-/// Get HEAD SHA of a source repo given its path.
+/// Get full HEAD SHA of a source repo given its path (sync).
 fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<String> {
     let repo_dir = if PathBuf::from(source_path).is_absolute() {
         PathBuf::from(source_path)
@@ -343,35 +343,16 @@ fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<Strin
     }
 
     std::process::Command::new("git")
-        .arg("-C")
-        .arg(&repo_dir)
-        .args(["rev-parse", "HEAD"])
+        .args(["-C", &repo_dir.display().to_string(), "rev-parse", "HEAD"])
         .output()
         .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
 /// Async git rev-parse HEAD.
 async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
-    let output = tokio::process::Command::new("git")
-        .arg("-C")
-        .arg(repo_dir)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
-
-    if !output.status.success() {
-        return Err(ShadowError::Parse("git rev-parse HEAD failed".into()));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
 }
 
 #[cfg(test)]

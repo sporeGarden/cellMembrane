@@ -383,18 +383,9 @@ fn stage_to_depot(
 }
 
 async fn get_local_head(repo_dir: &Path) -> Option<String> {
-    let output = tokio::process::Command::new("git")
-        .args(["rev-parse", "--short=8", "HEAD"])
-        .current_dir(repo_dir)
-        .output()
+    crate::git_ops::git_output(repo_dir, &["rev-parse", "--short=8", "HEAD"])
         .await
-        .ok()?;
-
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        None
-    }
+        .ok()
 }
 
 pub(super) use super::depot::{
@@ -404,29 +395,16 @@ pub(super) use super::depot::{
 /// Commit and push updated checksums.toml + provenance.toml to git.
 /// Non-fatal — harvest succeeds even if git publish fails.
 async fn publish_depot_checksums(depot_dir: &std::path::Path) {
-    let git_dir = depot_dir.to_path_buf();
-    if !git_dir.join(".git").is_dir() {
+    if !depot_dir.join(".git").is_dir() {
         return;
     }
 
-    let git = |args: &[&str]| {
-        tokio::process::Command::new("git")
-            .args(args)
-            .current_dir(&git_dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-    };
+    if !crate::git_ops::git_success(depot_dir, &["add", "checksums.toml", "provenance.toml"]).await
+    {
+        return;
+    }
 
-    let _ = git(&["add", "checksums.toml", "provenance.toml"]).await;
-
-    let diff = tokio::process::Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .current_dir(&git_dir)
-        .status()
-        .await;
-
-    let has_staged = diff.is_ok_and(|s| !s.success());
+    let has_staged = !crate::git_ops::git_success(depot_dir, &["diff", "--cached", "--quiet"]).await;
     if !has_staged {
         return;
     }
@@ -436,12 +414,8 @@ async fn publish_depot_checksums(depot_dir: &std::path::Path) {
         chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
     );
 
-    let _ = git(&["commit", "-m", &commit_msg]).await;
-
-    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| "forgejo".into());
-    let _ = git(&["push", &forgejo_host, "main"]).await;
-    let _ = git(&["push", "origin", "main"]).await;
+    let _ = crate::git_ops::git_output(depot_dir, &["commit", "-m", &commit_msg]).await;
+    let _ = crate::git_ops::push_all_remotes(depot_dir).await;
 }
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
