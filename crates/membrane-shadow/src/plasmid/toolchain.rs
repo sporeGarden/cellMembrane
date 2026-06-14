@@ -188,10 +188,14 @@ pub async fn build_binary(
     }
 
     let output = cmd.output().await;
-    if output.as_ref().is_ok_and(|o| o.status.success()) {
-        Ok(())
-    } else {
-        Err("cargo build failed".into())
+    match output {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let tail: String = stderr.lines().rev().take(5).collect::<Vec<_>>().join("\n");
+            Err(format!("cargo build failed:\n{tail}"))
+        }
+        Err(e) => Err(format!("cargo build spawn failed: {e}")),
     }
 }
 

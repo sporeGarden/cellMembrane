@@ -20,11 +20,11 @@
 
 use crate::ShadowOutcome;
 use crate::error::{Result, ShadowError};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::depot::{compute_blake3_file, load_sources, resolve_depot, update_depot_metadata};
 use super::detect_target_triple;
-use super::harvest::{self, ENV_ANDROID_NDK_HOME, HarvestResult, HarvestStatus, validate_elf_arch};
+use super::harvest::{self, HarvestResult, HarvestStatus, validate_elf_arch};
 
 /// CLI arguments for `plasmid.build`.
 pub struct BuildArgs {
@@ -202,16 +202,7 @@ async fn clone_source(
 }
 
 async fn try_clone(url: &str, clone_dir: &Path) -> bool {
-    if clone_dir.exists() {
-        let _ = std::fs::remove_dir_all(clone_dir);
-    }
-    tokio::process::Command::new("git")
-        .args(["clone", "--depth", "1", url, &clone_dir.to_string_lossy()])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|s| s.success())
+    super::toolchain::try_clone(url, clone_dir).await
 }
 
 async fn compile(
@@ -219,75 +210,11 @@ async fn compile(
     target: &str,
     clone_dir: &Path,
 ) -> std::result::Result<(), String> {
-    let target_dir = clone_dir.join("target");
-    let mut cmd = tokio::process::Command::new("cargo");
-    cmd.args([
-        "build",
-        "--release",
-        "--target",
-        target,
-        "--manifest-path",
-        &clone_dir.join("Cargo.toml").to_string_lossy(),
-        "--target-dir",
-        &target_dir.to_string_lossy(),
-    ]);
-
-    if let Some(extra) = &source.build_args {
-        for arg in extra.split_whitespace() {
-            cmd.arg(arg);
-        }
-    }
-
-    // NDK configuration for Android targets
-    if target.contains("android") {
-        if let Some(linker) = harvest::resolve_ndk_linker() {
-            let target_upper = target.to_uppercase().replace('-', "_");
-            cmd.env(format!("CARGO_TARGET_{target_upper}_LINKER"), &linker);
-
-            let cc_env = format!("CC_{}", target.replace('-', "_"));
-            let ar_env = format!("AR_{}", target.replace('-', "_"));
-            let bin_dir = linker.parent().unwrap_or_else(|| Path::new("."));
-            cmd.env(&cc_env, &linker);
-            cmd.env(&ar_env, bin_dir.join("llvm-ar"));
-
-            if let Ok(ndk_home) = std::env::var(ENV_ANDROID_NDK_HOME) {
-                cmd.env("ANDROID_NDK_HOME", &ndk_home);
-            }
-        } else {
-            return Err(format!(
-                "NDK linker not found for {target}. Set {ENV_ANDROID_NDK_HOME}"
-            ));
-        }
-    }
-
-    let output = cmd.output().await;
-    match output {
-        Ok(o) if o.status.success() => Ok(()),
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            let tail: String = stderr.lines().rev().take(5).collect::<Vec<_>>().join("\n");
-            Err(format!("cargo build failed:\n{tail}"))
-        }
-        Err(e) => Err(format!("cargo build spawn failed: {e}")),
-    }
+    super::toolchain::build_binary(source, target, clone_dir).await
 }
 
 async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
-    let strip_cmd: PathBuf = if target.contains("android") {
-        harvest::resolve_ndk_linker()
-            .and_then(|l| l.parent().map(|p| p.join("llvm-strip")))
-            .unwrap_or_else(|| "llvm-strip".into())
-    } else {
-        "strip".into()
-    };
-
-    let result = tokio::process::Command::new(&strip_cmd)
-        .arg(bin_path)
-        .output()
-        .await;
-    if result.is_err() {
-        eprintln!("warn: strip failed for {primal} — proceeding unstripped");
-    }
+    super::toolchain::strip_binary(bin_path, primal, target).await;
 }
 
 fn stage_to_depot(
