@@ -97,7 +97,7 @@ pub async fn auto_commit_freshness(root: &Path) -> Result<()> {
 
     let gate = std::env::var(cellmembrane_types::service::ENV_GATE_NAME)
         .or_else(|_| std::fs::read_to_string(root.join(".gate")).map(|s| s.trim().to_string()))
-        .unwrap_or_else(|_| "membrane".into());
+        .unwrap_or_else(|_| crate::gate::resolve_local_gate_identity());
 
     // Read our local wave ID before committing
     let local_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));

@@ -18,7 +18,7 @@ pub mod verify;
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
 pub use health::{GateStatus, StatusProbe, status};
 
-use local::resolve_local_gate_identity;
+pub use local::resolve_local_gate_identity;
 use local::resolve_plasmidbin_dir;
 
 use crate::config::ShadowConfig;

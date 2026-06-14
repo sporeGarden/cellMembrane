@@ -7,7 +7,8 @@ use std::path::PathBuf;
 /// Resolve the local gate identity from env or filesystem.
 ///
 /// Priority: `GATE_NAME` env → `/opt/ecoPrimals/.gate` → `~/.gate` → "unknown".
-pub(super) fn resolve_local_gate_identity() -> String {
+#[must_use]
+pub fn resolve_local_gate_identity() -> String {
     if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
         return name;
     }

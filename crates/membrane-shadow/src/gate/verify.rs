@@ -45,9 +45,8 @@ pub fn verify_local_depot(arch: &str) -> (bool, String) {
         return (false, "cannot read checksums.toml".into());
     };
 
-    let parsed: ChecksumFile = match toml::from_str(&content) {
-        Ok(p) => p,
-        Err(e) => return (false, format!("parse error: {e}")),
+    let Ok(parsed) = toml::from_str::<ChecksumFile>(&content) else {
+        return (false, "checksums.toml parse error".into());
     };
 
     let Some(entries) = parsed.targets.get(arch) else {

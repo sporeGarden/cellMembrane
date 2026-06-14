@@ -125,15 +125,19 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
         return Some(vps_path);
     }
 
+    let socket_dir_name = Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("membrane");
     let xdg = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR).unwrap_or_default();
     if !xdg.is_empty() {
-        let p = PathBuf::from(format!("{xdg}/membrane/{socket_name}"));
+        let p = PathBuf::from(&xdg).join(socket_dir_name).join(socket_name);
         if p.exists() {
             return Some(p);
         }
     }
 
-    let fallback = std::env::temp_dir().join("membrane").join(socket_name);
+    let fallback = std::env::temp_dir().join(socket_dir_name).join(socket_name);
     if fallback.exists() {
         return Some(fallback);
     }
