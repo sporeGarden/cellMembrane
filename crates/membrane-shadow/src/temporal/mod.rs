@@ -385,12 +385,18 @@ async fn sync_converge(
                         local_path,
                         &["pull", leader, branch, "--ff-only", "--quiet"],
                     )
-                    .await;
+                    .await
+                        || git_ok(
+                            local_path,
+                            &["pull", "--rebase", leader, branch, "--quiet"],
+                        )
+                        .await;
                     let _ = git_ok(local_path, &["stash", "pop", "--quiet"]).await;
                     if pull_ok {
                         pulled_from = Some(leader.clone());
                         eprintln!("temporal: stash-recovery succeeded for {repo_path}");
                     } else {
+                        let _ = git_ok(local_path, &["rebase", "--abort"]).await;
                         return Ok(TemporalSyncResult {
                             repo_path: repo_path.to_string(),
                             ok: false,
@@ -409,13 +415,26 @@ async fn sync_converge(
                     });
                 }
             } else {
-                return Ok(TemporalSyncResult {
-                    repo_path: repo_path.to_string(),
-                    ok: false,
-                    summary: format!("pull {leader} failed (ff-only — diverged)"),
-                    pulled_from: None,
-                    pushed_to: vec![],
-                });
+                // Clean tree but ff-only failed → local has commits ahead.
+                // Diderm reconciliation: rebase local on top of remote.
+                if git_ok(
+                    local_path,
+                    &["pull", "--rebase", leader, branch, "--quiet"],
+                )
+                .await
+                {
+                    pulled_from = Some(leader.clone());
+                    eprintln!("temporal: diderm rebase reconciled {repo_path}");
+                } else {
+                    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+                    return Ok(TemporalSyncResult {
+                        repo_path: repo_path.to_string(),
+                        ok: false,
+                        summary: format!("pull {leader} failed (ff-only — diverged, rebase conflicted)"),
+                        pulled_from: None,
+                        pushed_to: vec![],
+                    });
+                }
             }
         }
         SyncAction::Push | SyncAction::None => {}
