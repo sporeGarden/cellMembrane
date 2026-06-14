@@ -381,12 +381,8 @@ fn emit_deployment_toml(
 // ── Mesh configuration (native UDS) ───────────────────────────────────
 
 async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
-    let relay = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-    let relay_binary = relay.map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-        s.binary
-    });
+    let relay_binary =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
 
     let dest_root = super::resolve_plasmidbin_dir();
     let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);

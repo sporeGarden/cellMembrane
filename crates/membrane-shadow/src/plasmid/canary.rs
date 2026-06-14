@@ -409,12 +409,8 @@ pub fn deregister_remote_canary(gate_name: &str) {
 /// SSH-based health check for a remote canary droplet.
 /// Discovers the crypto spine binary via capability registry for the probe socket.
 async fn remote_health_check(ip: &str) -> bool {
-    let spine_binary = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
-        s.binary
-    });
+    let spine_binary =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
 
     let probe_cmd = format!(
         "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:/run/membrane/{spine_binary}.sock 2>/dev/null"

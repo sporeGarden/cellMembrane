@@ -510,7 +510,7 @@ async fn dispatch_provision_destroy(args: &[&str]) -> crate::Result<ShadowOutcom
     } else {
         let registry = canary::load_remote_canaries();
         if let Some(entry) = registry.entries.iter().find(|e| e.droplet_id == Some(id)) {
-            canary::deregister_remote_canary(&entry.gate_name.clone());
+            canary::deregister_remote_canary(&entry.gate_name);
         }
     }
 

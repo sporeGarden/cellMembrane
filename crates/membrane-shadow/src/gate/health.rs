@@ -162,7 +162,7 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
             continue;
         }
 
-        if probe_primal_jsonrpc(primal).await || probe_primal_pgrep(primal).await {
+        if probe_primal_jsonrpc(primal).await || probe_primal_pgrep(primal) {
             alive += 1;
         } else {
             dead += 1;
@@ -197,15 +197,24 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
     false
 }
 
-/// Fallback: detect running process via pgrep.
-async fn probe_primal_pgrep(primal: &str) -> bool {
-    tokio::process::Command::new("pgrep")
-        .args(["-x", primal])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|s| s.success())
+/// Fallback: detect running process via /proc/*/comm (no external deps).
+fn probe_primal_pgrep(primal: &str) -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if !name.to_str().is_some_and(|s| s.chars().all(|c| c.is_ascii_digit())) {
+            continue;
+        }
+        let comm_path = entry.path().join("comm");
+        if let Ok(comm) = std::fs::read_to_string(&comm_path) {
+            if comm.trim() == primal {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn probe_depot_freshness(arch: &str) -> (bool, String) {
@@ -343,12 +352,8 @@ async fn probe_s2_relay() -> StatusProbe {
 /// over sovereign TLS. Uses the crypto spine binary as probe target (always present).
 async fn probe_s3_content() -> StatusProbe {
     let arch = crate::plasmid::detect_target_triple();
-    let probe_binary = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
-        s.binary
-    });
+    let probe_binary =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
     let domain = resolve_sovereign_domain();
     let url = format!("https://{domain}/depot/{arch}/{probe_binary}");
     let start = std::time::Instant::now();
@@ -404,12 +409,8 @@ async fn probe_s3_content() -> StatusProbe {
 
 /// S4: Sovereign Auth — probe `BearDog` BTSP enforcement via local UDS health.
 async fn probe_s4_auth() -> StatusProbe {
-    let signer = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-    let binary_name = signer.map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
-        s.binary
-    });
+    let binary_name =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
     let socket_paths = resolve_primal_socket_paths(binary_name);
 
     let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
@@ -515,12 +516,8 @@ async fn uds_jsonrpc_raw(
 
 /// Resolve the mesh relay UDS socket path via capability discovery.
 fn resolve_mesh_relay_socket() -> String {
-    let binary_name = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-        s.binary
-    });
+    let binary_name =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
     let paths = resolve_primal_socket_paths(binary_name);
     paths
         .into_iter()

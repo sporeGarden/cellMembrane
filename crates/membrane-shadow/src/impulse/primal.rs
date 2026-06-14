@@ -15,18 +15,12 @@ use chrono::Local;
 use super::types::{ImpulseFile, ImpulseSignature};
 
 fn relay_socket_name() -> String {
-    let svc = cellmembrane_types::MembraneService::with_capability(ServiceCapability::MeshRelay);
-    let binary = svc.map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-        s.binary
-    });
+    let binary = cellmembrane_types::MembraneService::binary_for(ServiceCapability::MeshRelay);
     format!("{binary}-default.sock")
 }
 
 fn signer_socket_name() -> String {
-    let svc = cellmembrane_types::MembraneService::with_capability(ServiceCapability::CryptoSigner);
-    let binary = svc.map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
-        s.binary
-    });
+    let binary = cellmembrane_types::MembraneService::binary_for(ServiceCapability::CryptoSigner);
     format!("{binary}-default.sock")
 }
 

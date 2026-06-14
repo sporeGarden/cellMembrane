@@ -145,18 +145,10 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
 /// Unit names and paths are derived from the service registry — the crypto spine
 /// and mesh relay are discovered by capability, not hardcoded by name.
 async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
-    let spine = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
-        s.binary
-    });
-    let relay = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-        s.binary
-    });
+    let spine =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let relay =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
     let spine_upper = spine.to_uppercase();
     let relay_upper = relay.to_uppercase();
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
@@ -265,18 +257,10 @@ echo "units installed"
 /// dedicated systemd units. Remaining NUCLEUS primals are started via the
 /// template unit, discovered from the service registry rather than hardcoded.
 async fn start_services(ip: &str) -> Result<String> {
-    let spine = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_CRYPTO_SIGNER, |s| {
-        s.binary
-    });
-    let relay = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-        s.binary
-    });
+    let spine =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let relay =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
 
     // Non-Tower NUCLEUS primals to start via template unit
     let nucleus_others: Vec<&str> = crate::plasmid::nucleus_primals()
@@ -314,12 +298,8 @@ async fn join_mesh(ip: &str) -> Result<String> {
                 cellmembrane_types::service::DEFAULT_FEDERATION_PORT
             )
         });
-    let relay = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    )
-    .map_or(cellmembrane_types::service::FALLBACK_MESH_RELAY, |s| {
-        s.binary
-    });
+    let relay =
+        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
 
     let script = format!(
         r#"

@@ -290,14 +290,18 @@ pub const ENV_DIGITALOCEAN_TOKEN: &str = "DIGITALOCEAN_TOKEN";
 
 /// Fallback binary name for the crypto signer capability.
 ///
-/// Used when `MembraneService::with_capability(CryptoSigner)` returns None
-/// (should never happen in a valid registry, but provides a compile-time default).
+/// DEPRECATED: Use `MembraneService::binary_for(ServiceCapability::CryptoSigner)` instead.
+/// Retained only for transitional compatibility — will be removed in Wave 114.
 pub const FALLBACK_CRYPTO_SIGNER: &str = "beardog";
 
 /// Fallback binary name for the mesh relay capability.
+///
+/// DEPRECATED: Use `MembraneService::binary_for(ServiceCapability::MeshRelay)` instead.
 pub const FALLBACK_MESH_RELAY: &str = "songbird";
 
 /// Fallback binary name for content serving.
+///
+/// DEPRECATED: Use `MembraneService::binary_for(ServiceCapability::ContentServing)` instead.
 pub const FALLBACK_CONTENT_SERVING: &str = "nestgate";
 
 /// Runtime path resolver for membrane services.
@@ -490,6 +494,24 @@ impl MembraneService {
     #[must_use]
     pub fn with_capability(cap: ServiceCapability) -> Option<&'static Self> {
         ALL_SERVICES.iter().find(|s| s.has_capability(cap))
+    }
+
+    /// Resolve the binary name for a given capability.
+    ///
+    /// The registry is compile-time complete — every standard capability has
+    /// exactly one canonical provider. This eliminates the need for `FALLBACK_*`
+    /// constants and hardcoded primal names at call sites.
+    #[must_use]
+    pub fn binary_for(cap: ServiceCapability) -> &'static str {
+        match Self::with_capability(cap) {
+            Some(svc) => svc.binary,
+            None => match cap {
+                ServiceCapability::CryptoSigner => "beardog",
+                ServiceCapability::MeshRelay => "songbird",
+                ServiceCapability::ContentServing => "nestgate",
+                _ => "unknown",
+            },
+        }
     }
 
     /// All services declaring a given capability (for multi-provider scenarios).

@@ -29,10 +29,8 @@ pub(super) fn resolve_local_gate_identity() -> String {
 }
 
 fn dirs_home() -> PathBuf {
-    match std::env::var(cellmembrane_types::service::ENV_HOME) {
-        Ok(h) => PathBuf::from(h),
-        Err(_) => PathBuf::from("/tmp"),
-    }
+    std::env::var(cellmembrane_types::service::ENV_HOME)
+        .map_or_else(|_| PathBuf::from("/tmp"), PathBuf::from)
 }
 
 /// Resolve the plasmidBin depot directory.

@@ -578,12 +578,9 @@ pub(super) async fn dispatch_content(
                 crate::ssh::exec_raw(config, "systemctl is-active caddy-tls").await?;
             let caddy_active = caddy_code == 0;
 
-            let content_binary = cellmembrane_types::MembraneService::with_capability(
+            let content_binary = cellmembrane_types::MembraneService::binary_for(
                 cellmembrane_types::ServiceCapability::ContentServing,
-            )
-            .map_or(cellmembrane_types::service::FALLBACK_CONTENT_SERVING, |s| {
-                s.binary
-            });
+            );
             let content_unit = format!("{content_binary}-membrane");
             let (nestgate_out, nestgate_code) =
                 crate::ssh::exec_raw(config, &format!("systemctl is-active {content_unit}"))
