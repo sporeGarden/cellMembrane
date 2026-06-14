@@ -457,11 +457,32 @@ async fn probe_s3_content() -> StatusProbe {
 }
 
 /// S4: Sovereign Auth — probe `BearDog` BTSP enforcement via local UDS health.
+///
+/// Tries neuralAPI capability routing first, then direct UDS. Any JSON-RPC
+/// response (including `-32601 method_not_found` or BTSP errors) proves
+/// the crypto spine is alive and enforcing.
 async fn probe_s4_auth() -> StatusProbe {
     let binary_name =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
-    let socket_paths = resolve_primal_socket_paths(binary_name);
 
+    // Try neuralAPI routing first
+    if let Some(result) = crate::bridge::try_bridge(binary_name, "health", serde_json::json!({})).await {
+        let status = result.get("status").and_then(|v| v.as_str()).unwrap_or("alive");
+        let btsp = result.get("auth_mode").and_then(|v| v.as_str()).unwrap_or("");
+        let detail = if btsp == "btsp" {
+            "ENFORCED — BearDog BTSP active (via neuralAPI)".to_string()
+        } else {
+            format!("RESPONDING — {binary_name} {status} (via neuralAPI)")
+        };
+        return StatusProbe {
+            name: "sovereignty.s4_auth".into(),
+            ok: true,
+            detail,
+        };
+    }
+
+    // Direct UDS probe — any JSON-RPC response (even errors) proves alive
+    let socket_paths = resolve_primal_socket_paths(binary_name);
     let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
 
     for socket_path in &socket_paths {
@@ -469,13 +490,20 @@ async fn probe_s4_auth() -> StatusProbe {
             continue;
         }
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if response.contains("\"jsonrpc\"") || response.contains("\"result\"") || response.contains("\"error\"") {
-                let enforced =
-                    response.contains("enforced") || response.contains("\"auth_mode\":\"btsp\"");
+            if response.contains("\"jsonrpc\"")
+                || response.contains("\"result\"")
+                || response.contains("\"error\"")
+                || response.contains("BTSP")
+            {
+                let enforced = response.contains("BTSP handshake required")
+                    || response.contains("\"auth_mode\":\"btsp\"");
                 let detail = if enforced {
-                    "ENFORCED — BearDog BTSP active".to_string()
+                    "ENFORCED — BearDog BTSP active (direct UDS)".to_string()
                 } else {
-                    format!("RESPONDING — BearDog alive ({})", &response[..response.len().min(80)])
+                    format!(
+                        "RESPONDING — {binary_name} alive ({})",
+                        &response[..response.len().min(80)]
+                    )
                 };
                 return StatusProbe {
                     name: "sovereignty.s4_auth".into(),

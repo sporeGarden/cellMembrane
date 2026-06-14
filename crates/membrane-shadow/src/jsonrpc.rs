@@ -83,18 +83,23 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
         .write_all(b"\n")
         .await
         .map_err(|e| format!("newline: {e}"))?;
-    writer
-        .shutdown()
-        .await
-        .map_err(|e| format!("shutdown: {e}"))?;
 
+    // Read the NDJSON response line BEFORE shutting down write side.
+    // Some primals (beardog) close on seeing write EOF before responding.
     let mut buf_reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
 
-    tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
+    let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
         .await
         .map_err(|_| format!("read timeout: {}", socket_path.display()))?
         .map_err(|e| format!("read: {e}"))?;
+
+    // Shutdown write side after read (cleanup)
+    let _ = writer.shutdown().await;
+
+    if read_result == 0 && line.is_empty() {
+        return Err(format!("empty response: {}", socket_path.display()));
+    }
 
     Ok(line)
 }
