@@ -64,6 +64,8 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.publish_freshness && opts.mode == CascadeMode::Sync {
+        let is_designated_publisher = is_freshness_publisher();
+        if is_designated_publisher {
         match crate::freshness::publish_freshness_toml(root, m, repos).await {
             Ok(()) => {
                 lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
@@ -76,6 +78,9 @@ pub(super) async fn run_post_sync_phases(
                 run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
             }
             Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
+        }
+        } else {
+            lines.push("  [freshness] SKIP — not designated publisher (golgiBody only)".to_string());
         }
     }
 
@@ -553,4 +558,17 @@ pub(super) fn summarize_depot_freshness() -> String {
     } else {
         format!("  [depot] {present}/{total} binaries present ({missing} missing)")
     }
+}
+
+/// Check if this gate is the designated freshness publisher.
+///
+/// Single-writer policy: only golgiBody (VPS) publishes freshness.toml to avoid
+/// multi-writer race conditions where sparse local freshness overwrites the full manifest.
+/// Gates can opt in via `FRESHNESS_PUBLISHER=1` env var.
+fn is_freshness_publisher() -> bool {
+    if std::env::var("FRESHNESS_PUBLISHER").is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")) {
+        return true;
+    }
+    let gate_name = std::env::var(cellmembrane_types::service::ENV_GATE_NAME).unwrap_or_default();
+    gate_name == "golgiBody"
 }

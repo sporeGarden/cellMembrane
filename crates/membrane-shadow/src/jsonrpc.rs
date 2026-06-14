@@ -12,7 +12,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -67,7 +67,7 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
     .map_err(|_| format!("connect timeout: {}", socket_path.display()))?
     .map_err(|e| format!("connect {}: {e}", socket_path.display()))?;
 
-    let (mut reader, mut writer) = stream.into_split();
+    let (reader, mut writer) = stream.into_split();
 
     if with_signal {
         writer
@@ -80,17 +80,23 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
         .await
         .map_err(|e| format!("write: {e}"))?;
     writer
+        .write_all(b"\n")
+        .await
+        .map_err(|e| format!("newline: {e}"))?;
+    writer
         .shutdown()
         .await
         .map_err(|e| format!("shutdown: {e}"))?;
 
-    let mut buf = Vec::with_capacity(4096);
-    tokio::time::timeout(DEFAULT_TIMEOUT, reader.read_to_end(&mut buf))
+    let mut buf_reader = tokio::io::BufReader::new(reader);
+    let mut line = String::new();
+
+    tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
         .await
         .map_err(|_| format!("read timeout: {}", socket_path.display()))?
         .map_err(|e| format!("read: {e}"))?;
 
-    String::from_utf8(buf).map_err(|e| format!("utf8: {e}"))
+    Ok(line)
 }
 
 /// Convenience: build a JSON-RPC request object for a method with no params.
