@@ -280,18 +280,42 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
     let primals = crate::plasmid::nucleus_primals();
     let mut present = 0u32;
     let mut missing = 0u32;
+    let mut oldest_age_secs: u64 = 0;
 
+    let now = std::time::SystemTime::now();
     for primal in &primals {
-        if bin_dir.join(primal).is_file() {
+        let path = bin_dir.join(primal);
+        if path.is_file() {
             present += 1;
+            if let Ok(meta) = std::fs::metadata(&path) {
+                if let Ok(modified) = meta.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        oldest_age_secs = oldest_age_secs.max(age.as_secs());
+                    }
+                }
+            }
         } else {
             missing += 1;
         }
     }
 
     let total = present + missing;
-    let ok = missing == 0;
-    (ok, format!("{present}/{total} binaries present"))
+    let age_days = oldest_age_secs / 86400;
+    let stale_threshold_days = 7;
+    let ok = missing == 0 && age_days < stale_threshold_days;
+
+    let age_str = if oldest_age_secs > 0 {
+        if age_days > 0 {
+            format!(", oldest {age_days}d")
+        } else {
+            let hours = oldest_age_secs / 3600;
+            format!(", oldest {hours}h")
+        }
+    } else {
+        String::new()
+    };
+
+    (ok, format!("{present}/{total} binaries present{age_str}"))
 }
 
 /// VCS parity probe: check that origin and forgejo are at the same commit for
