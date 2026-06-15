@@ -268,6 +268,10 @@ async fn harvest_one(
 
     let head_commit = get_local_head(&clone_dir).await.unwrap_or_default();
 
+    if let Some(warning) = check_clone_freshness(primal, source, &clone_dir, &head_commit).await {
+        eprintln!("harvest: freshness warning for {primal}: {warning}");
+    }
+
     if let Err(detail) = toolchain::build_binary(source, target, &clone_dir).await {
         return HarvestResult {
             binary: primal.into(),
@@ -356,6 +360,53 @@ async fn clone_source(
         ))
     } else {
         Err("git clone failed on both Forgejo and GitHub".into())
+    }
+}
+
+/// Verify the clone is at the same HEAD as the upstream origin.
+/// Returns `Some(warning)` if the clone appears stale, `None` if fresh or unverifiable.
+async fn check_clone_freshness(
+    _primal: &str,
+    source: &SourceEntry,
+    clone_dir: &Path,
+    local_head: &str,
+) -> Option<String> {
+    if local_head.is_empty() {
+        return Some("could not determine local HEAD".into());
+    }
+
+    let github_url = format!("https://github.com/{}.git", source.repo);
+    let output = tokio::process::Command::new("git")
+        .args(["ls-remote", &github_url, "HEAD"])
+        .current_dir(clone_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        return None; // Can't verify — skip gracefully
+    }
+
+    let remote_head = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_string();
+
+    if remote_head.is_empty() {
+        return None;
+    }
+
+    if !remote_head.starts_with(local_head) && !local_head.starts_with(&remote_head) {
+        Some(format!(
+            "clone at {short_local} but origin HEAD is {short_remote} — source may be stale",
+            short_local = &local_head[..8.min(local_head.len())],
+            short_remote = &remote_head[..8.min(remote_head.len())],
+        ))
+    } else {
+        None
     }
 }
 
