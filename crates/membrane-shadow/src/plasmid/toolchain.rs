@@ -185,6 +185,12 @@ pub async fn build_binary(
                  to the NDK root (e.g. /opt/android-ndk-r26d)"
             ));
         }
+    } else if target == "aarch64-unknown-linux-musl" {
+        let target_upper = target.to_uppercase().replace('-', "_");
+        let linker_env = format!("CARGO_TARGET_{target_upper}_LINKER");
+        if std::env::var(&linker_env).is_err() {
+            cmd.env(&linker_env, "aarch64-linux-gnu-gcc");
+        }
     }
 
     let output = cmd.output().await;
