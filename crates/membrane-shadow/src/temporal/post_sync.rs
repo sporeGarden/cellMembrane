@@ -538,26 +538,41 @@ pub(super) fn summarize_depot_freshness() -> String {
         },
     );
 
-    let primals_dir = depot_dir.join("primals");
+    let arch = crate::plasmid::detect_target_triple();
+    let primals_dir = depot_dir.join("primals").join(&arch);
     if !primals_dir.is_dir() {
         return String::new();
     }
 
     let mut present = 0u32;
     let mut total = 0u32;
+    let mut stale = 0u32;
+    let now = std::time::SystemTime::now();
+    let stale_threshold = std::time::Duration::from_secs(7 * 86400);
+
     for name in crate::plasmid::nucleus_primals() {
         total += 1;
-        if primals_dir.join(name).exists() {
+        let path = primals_dir.join(name);
+        if path.exists() {
             present += 1;
+            if let Ok(meta) = std::fs::metadata(&path) {
+                if let Ok(modified) = meta.modified() {
+                    if now.duration_since(modified).unwrap_or_default() > stale_threshold {
+                        stale += 1;
+                    }
+                }
+            }
         }
     }
 
     let missing = total - present;
-    if missing == 0 {
-        format!("  [depot] {present}/{total} binaries present")
-    } else {
-        format!("  [depot] {present}/{total} binaries present ({missing} missing)")
-    }
+    let suffix = match (missing, stale) {
+        (0, 0) => String::new(),
+        (0, s) => format!(" ({s} stale — run with --with-rebuild to auto-fix)"),
+        (m, 0) => format!(" ({m} missing)"),
+        (m, s) => format!(" ({m} missing, {s} stale)"),
+    };
+    format!("  [depot] {present}/{total} binaries present{suffix}")
 }
 
 /// Check if this gate is the designated freshness publisher.
