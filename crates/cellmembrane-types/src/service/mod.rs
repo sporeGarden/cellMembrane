@@ -276,6 +276,11 @@ pub const DEFAULT_FEDERATION_PORT: u16 = 7700;
 /// Default TURN relay port.
 pub const DEFAULT_TURN_PORT: u16 = 3478;
 
+/// RustDesk hbbs (ID/rendezvous server) port.
+pub const RUSTDESK_HBBS_PORT: u16 = 21115;
+/// RustDesk hbbr (relay server) port.
+pub const RUSTDESK_HBBR_PORT: u16 = 21117;
+
 /// Default VPS mesh peer address (golgiBody songbird federation endpoint).
 pub const DEFAULT_VPS_MESH_PEER: &str = "157.230.3.183:7700";
 

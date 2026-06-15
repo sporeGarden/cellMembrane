@@ -70,6 +70,9 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let sovereignty_probes = probe_sovereignty().await;
     probes.extend(sovereignty_probes);
 
+    let vcs_probe = probe_vcs_parity().await;
+    probes.push(vcs_probe);
+
     let healthy = probes.iter().all(|p| p.ok);
 
     Ok(GateStatus {
@@ -291,6 +294,71 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
     (ok, format!("{present}/{total} binaries present"))
 }
 
+/// VCS parity probe: check that origin and forgejo are at the same commit for
+/// locally-cloned repos. Reports drift count — any drift is a WARN that auto-
+/// reconciliation should resolve within the next cascade cycle.
+async fn probe_vcs_parity() -> StatusProbe {
+    let workspace = match crate::temporal::resolve_workspace_root() {
+        Ok(w) => w,
+        Err(_) => {
+            return StatusProbe {
+                name: "vcs.parity".into(),
+                ok: true,
+                detail: "workspace not found (VPS/minimal)".into(),
+            };
+        }
+    };
+
+    let local_paths: Vec<String> = crate::manifest::EcosystemManifest::find_in_workspace(&workspace)
+        .and_then(|p| crate::manifest::EcosystemManifest::load(&p).ok())
+        .map_or_else(
+            || vec!["infra/plasmidBin".into(), "infra/wateringHole".into()],
+            |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
+        );
+
+    let mut drift_count = 0u32;
+    let mut checked = 0u32;
+
+    for repo_path in &local_paths {
+        let repo_dir = workspace.join(repo_path);
+        if !repo_dir.join(".git").exists() {
+            continue;
+        }
+        let origin_head = git_rev_parse(&repo_dir, "origin/main").await;
+        let forgejo_head = git_rev_parse(&repo_dir, "forgejo/main").await;
+        if let (Some(o), Some(f)) = (origin_head, forgejo_head) {
+            checked += 1;
+            if o != f {
+                drift_count += 1;
+            }
+        }
+    }
+
+    let ok = drift_count == 0;
+    let detail = format!("{checked} repos checked, {drift_count} drifted");
+    StatusProbe {
+        name: "vcs.parity".into(),
+        ok,
+        detail,
+    }
+}
+
+async fn git_rev_parse(repo_dir: &Path, refspec: &str) -> Option<String> {
+    let output = tokio::process::Command::new("git")
+        .args(["rev-parse", refspec])
+        .current_dir(repo_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
 // ── Sovereignty probes (S1-S4 live validation) ───────────────────────────
 
 /// Resolve the sovereign domain for TLS and content probes.
@@ -373,24 +441,36 @@ async fn probe_s2_relay() -> StatusProbe {
 
     let fed_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
     let turn_port = cellmembrane_types::service::DEFAULT_TURN_PORT;
+    let hbbs_port = cellmembrane_types::service::RUSTDESK_HBBS_PORT;
+    let hbbr_port = cellmembrane_types::service::RUSTDESK_HBBR_PORT;
+
     let fed_addr = format!("{vps_host}:{fed_port}");
     let turn_addr = format!("{vps_host}:{turn_port}");
+    let hbbs_addr = format!("{vps_host}:{hbbs_port}");
+    let hbbr_addr = format!("{vps_host}:{hbbr_port}");
 
-    let (fed_ok, turn_ok) = tokio::join!(tcp_reachable(&fed_addr), tcp_reachable(&turn_addr),);
+    let (fed_ok, turn_ok, hbbs_ok, hbbr_ok) = tokio::join!(
+        tcp_reachable(&fed_addr),
+        tcp_reachable(&turn_addr),
+        tcp_reachable(&hbbs_addr),
+        tcp_reachable(&hbbr_addr),
+    );
 
     let detail = format!(
-        "federation:{} TURN:{}",
+        "federation:{} TURN:{} RustDesk:hbbs={},hbbr={}",
         if fed_ok { "REACHABLE" } else { "UNREACHABLE" },
         if turn_ok {
             "TCP-OK"
         } else {
             "TCP-CLOSED(UDP-only)"
         },
+        if hbbs_ok { "OK" } else { "DOWN" },
+        if hbbr_ok { "OK" } else { "DOWN" },
     );
 
     StatusProbe {
         name: "sovereignty.s2_relay".into(),
-        ok: fed_ok,
+        ok: fed_ok && hbbs_ok,
         detail,
     }
 }

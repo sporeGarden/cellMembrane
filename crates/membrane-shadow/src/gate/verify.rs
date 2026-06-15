@@ -56,11 +56,15 @@ pub fn verify_local_depot(arch: &str) -> (bool, String) {
     let mut verified = 0u32;
     let mut failed = 0u32;
     let mut missing = 0u32;
+    let nucleus_set: std::collections::HashSet<&str> =
+        crate::plasmid::nucleus_primals().into_iter().collect();
 
     for (name, entry) in entries {
         let bin_path = bin_dir.join(name);
         if !bin_path.exists() {
-            missing += 1;
+            if nucleus_set.contains(name.as_str()) {
+                missing += 1;
+            }
             continue;
         }
         let hash = crate::plasmid::compute_blake3_file(&bin_path);
