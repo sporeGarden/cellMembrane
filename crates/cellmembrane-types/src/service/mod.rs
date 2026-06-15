@@ -461,6 +461,9 @@ pub struct MembraneService {
     /// Server CLI contract — describes which args the primal's `server` subcommand accepts.
     /// Used by NUCLEUS template units to generate correct `ExecStart` lines per-primal.
     pub server_contract: ServerContract,
+    /// Alternative socket name for JSON-RPC probing (e.g. `"neural-api"` for biomeOS).
+    /// When `Some`, health probes prefer this over `{binary}.sock`.
+    pub api_socket: Option<&'static str>,
 }
 
 mod registry;

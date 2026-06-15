@@ -579,9 +579,11 @@ fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         format!("{socket_base}/{primal}.sock"),
         format!("{xdg_runtime}/biomeos/{primal}.sock"),
     ];
-    // biomeOS exposes neural-api.sock as its JSON-RPC endpoint
-    if primal == "biomeos" {
-        paths.insert(0, format!("{socket_base}/neural-api.sock"));
+    // Check registry for alternative API socket (capability-driven, not hardcoded)
+    if let Some(svc) = cellmembrane_types::MembraneService::all().iter().find(|s| s.binary == primal) {
+        if let Some(api) = svc.api_socket {
+            paths.insert(0, format!("{socket_base}/{api}.sock"));
+        }
     }
     paths
 }

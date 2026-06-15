@@ -32,7 +32,7 @@ pub async fn post_sync_diverge(
     let mut diverge_summary_parts = Vec::new();
 
     for (remote, ahead, behind) in &args.positions {
-        let sha = resolve_remote_head(workspace_root, &args.repo_path, remote);
+        let sha = resolve_remote_head(workspace_root, &args.repo_path, remote).await;
         remotes_map.insert(remote.clone(), sha);
         ahead_map.insert(remote.clone(), *ahead);
         if *ahead > 0 || *behind > 0 {
@@ -117,20 +117,9 @@ pub async fn post_sync_diverge(
     Ok(impulse)
 }
 
-fn resolve_remote_head(workspace_root: &Path, repo_path: &str, remote: &str) -> String {
+async fn resolve_remote_head(workspace_root: &Path, repo_path: &str, remote: &str) -> String {
     let local_path = workspace_root.join(repo_path);
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&local_path)
-        .args(["rev-parse", "--short", &format!("{remote}/main")])
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        });
-    output.unwrap_or_default()
+    crate::git_ops::git_output(&local_path, &["rev-parse", "--short", &format!("{remote}/main")])
+        .await
+        .unwrap_or_default()
 }

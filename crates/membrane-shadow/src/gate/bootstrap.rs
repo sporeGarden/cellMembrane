@@ -308,10 +308,10 @@ fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
     );
 
     let ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok()
-        && std::process::Command::new("chmod")
-            .args(["755", &hook_path.display().to_string()])
-            .status()
-            .is_ok_and(|s| s.success());
+        && {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).is_ok()
+        };
 
     BootstrapPhase {
         name: "mobility.hook".into(),
@@ -344,10 +344,10 @@ fn emit_deployment_toml(
     }
 
     let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
-    let hostname = match std::process::Command::new("hostname").output() {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        Err(_) => "unknown".into(),
-    };
+    let hostname = std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .map(|s| s.trim().to_string())
+        .or_else(|_| std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()))
+        .unwrap_or_else(|_| "unknown".into());
 
     let content = format!(
         "# deployment.toml — gate.bootstrap provenance record\n\
