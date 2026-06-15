@@ -183,7 +183,7 @@ impl RiboCipherConfig {
     /// Health probes need to detect *any* alive primal regardless of riboCipher
     /// compliance. This uses Error-level policy (signal first, raw fallback).
     #[must_use]
-    pub fn probe_policy() -> Self {
+    pub const fn probe_policy() -> Self {
         Self {
             signal_tier: SignalTier::Clear,
             unsignalled_policy: UnsignalledPolicy::Error,

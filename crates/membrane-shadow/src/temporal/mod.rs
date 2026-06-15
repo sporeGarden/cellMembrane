@@ -357,80 +357,13 @@ async fn sync_converge(
 
     match &matrix.action {
         SyncAction::Pull { leader } => {
-            let discarded = discard_regenerable_dirty_files(local_path).await;
-            if git_ok(
-                local_path,
-                &["pull", leader, branch, "--ff-only", "--quiet"],
-            )
-            .await
-            {
-                pulled_from = Some(leader.clone());
-                if !discarded.is_empty() {
-                    eprintln!(
-                        "temporal: auto-discarded {} regenerable file(s) in {repo_path}: {}",
-                        discarded.len(),
-                        discarded.join(", "),
-                    );
-                }
-            } else if has_dirty_worktree(local_path).await {
-                // CASCADE-STALE-RECOVERY: auto-stash, pull, pop
-                let stashed = git_ok(
-                    local_path,
-                    &["stash", "push", "-m", "temporal-cascade-auto"],
-                )
-                .await;
-                if stashed {
-                    eprintln!("temporal: auto-stashed dirty worktree in {repo_path}");
-                    let pull_ok = git_ok(
-                        local_path,
-                        &["pull", leader, branch, "--ff-only", "--quiet"],
-                    )
-                    .await
-                        || git_ok(
-                            local_path,
-                            &["pull", "--rebase", leader, branch, "--quiet"],
-                        )
-                        .await;
-                    let _ = git_ok(local_path, &["stash", "pop", "--quiet"]).await;
-                    if pull_ok {
-                        pulled_from = Some(leader.clone());
-                        eprintln!("temporal: stash-recovery succeeded for {repo_path}");
-                    } else {
-                        let _ = git_ok(local_path, &["rebase", "--abort"]).await;
-                        return Ok(TemporalSyncResult {
-                            repo_path: repo_path.to_string(),
-                            ok: false,
-                            summary: format!("pull {leader} failed after stash (diverged)"),
-                            pulled_from: None,
-                            pushed_to: vec![],
-                        });
-                    }
-                } else {
+            match try_pull_converge(local_path, repo_path, leader, branch).await {
+                PullOutcome::Ok(l) => pulled_from = Some(l),
+                PullOutcome::Err(summary) => {
                     return Ok(TemporalSyncResult {
                         repo_path: repo_path.to_string(),
                         ok: false,
-                        summary: format!("pull {leader} blocked (stash failed)"),
-                        pulled_from: None,
-                        pushed_to: vec![],
-                    });
-                }
-            } else {
-                // Clean tree but ff-only failed → local has commits ahead.
-                // Diderm reconciliation: rebase local on top of remote.
-                if git_ok(
-                    local_path,
-                    &["pull", "--rebase", leader, branch, "--quiet"],
-                )
-                .await
-                {
-                    pulled_from = Some(leader.clone());
-                    eprintln!("temporal: diderm rebase reconciled {repo_path}");
-                } else {
-                    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
-                    return Ok(TemporalSyncResult {
-                        repo_path: repo_path.to_string(),
-                        ok: false,
-                        summary: format!("pull {leader} failed (ff-only — diverged, rebase conflicted)"),
+                        summary,
                         pulled_from: None,
                         pushed_to: vec![],
                     });
@@ -472,6 +405,59 @@ async fn sync_converge(
         pulled_from,
         pushed_to,
     })
+}
+
+enum PullOutcome {
+    Ok(String),
+    Err(String),
+}
+
+/// Attempt pull with graduated fallbacks: ff-only → stash+pull → rebase.
+async fn try_pull_converge(
+    local_path: &Path,
+    repo_path: &str,
+    leader: &str,
+    branch: &str,
+) -> PullOutcome {
+    let discarded = discard_regenerable_dirty_files(local_path).await;
+
+    // Fast path: ff-only
+    if git_ok(local_path, &["pull", leader, branch, "--ff-only", "--quiet"]).await {
+        if !discarded.is_empty() {
+            eprintln!(
+                "temporal: auto-discarded {} regenerable file(s) in {repo_path}: {}",
+                discarded.len(),
+                discarded.join(", "),
+            );
+        }
+        return PullOutcome::Ok(leader.to_string());
+    }
+
+    // Dirty worktree: stash → pull → pop
+    if has_dirty_worktree(local_path).await {
+        let stashed = git_ok(local_path, &["stash", "push", "-m", "temporal-cascade-auto"]).await;
+        if !stashed {
+            return PullOutcome::Err(format!("pull {leader} blocked (stash failed)"));
+        }
+        eprintln!("temporal: auto-stashed dirty worktree in {repo_path}");
+        let pull_ok = git_ok(local_path, &["pull", leader, branch, "--ff-only", "--quiet"]).await
+            || git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await;
+        let _ = git_ok(local_path, &["stash", "pop", "--quiet"]).await;
+        if pull_ok {
+            eprintln!("temporal: stash-recovery succeeded for {repo_path}");
+            return PullOutcome::Ok(leader.to_string());
+        }
+        let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+        return PullOutcome::Err(format!("pull {leader} failed after stash (diverged)"));
+    }
+
+    // Clean tree, ff-only failed → diderm rebase reconciliation
+    if git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
+        eprintln!("temporal: diderm rebase reconciled {repo_path}");
+        return PullOutcome::Ok(leader.to_string());
+    }
+    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+    PullOutcome::Err(format!("pull {leader} failed (ff-only — diverged, rebase conflicted)"))
 }
 
 async fn sync_diverge(
