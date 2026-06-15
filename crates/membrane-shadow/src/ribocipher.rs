@@ -178,6 +178,19 @@ impl RiboCipherConfig {
     /// JSON-RPC error code for rejected unsignalled connections.
     pub const REJECT_ERROR_CODE: i32 = -32002;
 
+    /// Policy for health probes — allows raw JSON fallback even in Wave 113+.
+    ///
+    /// Health probes need to detect *any* alive primal regardless of riboCipher
+    /// compliance. This uses Error-level policy (signal first, raw fallback).
+    #[must_use]
+    pub fn probe_policy() -> Self {
+        Self {
+            signal_tier: SignalTier::Clear,
+            unsignalled_policy: UnsignalledPolicy::Error,
+            mito_key: None,
+        }
+    }
+
     /// Returns the wire prefix bytes for the configured tier and protocol.
     #[must_use]
     pub fn outbound_prefix(&self, protocol_type: u8) -> Vec<u8> {

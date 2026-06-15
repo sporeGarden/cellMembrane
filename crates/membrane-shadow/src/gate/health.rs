@@ -534,7 +534,8 @@ async fn tcp_reachable(addr: &str) -> bool {
 // ── Native UDS JSON-RPC client (delegates to crate::jsonrpc) ──────────
 
 async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Result<String, String> {
-    crate::jsonrpc::call(Path::new(socket_path), request).await
+    let policy = crate::ribocipher::RiboCipherConfig::probe_policy();
+    crate::jsonrpc::call_with_policy(Path::new(socket_path), request, &policy).await
 }
 
 /// Resolve the mesh relay UDS socket path via capability discovery.
@@ -574,8 +575,13 @@ fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
     let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
         .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
-    vec![
+    let mut paths = vec![
         format!("{socket_base}/{primal}.sock"),
         format!("{xdg_runtime}/biomeos/{primal}.sock"),
-    ]
+    ];
+    // biomeOS exposes neural-api.sock as its JSON-RPC endpoint
+    if primal == "biomeos" {
+        paths.insert(0, format!("{socket_base}/neural-api.sock"));
+    }
+    paths
 }
