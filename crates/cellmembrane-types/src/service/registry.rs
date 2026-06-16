@@ -31,6 +31,7 @@ const BEARDOG: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::CryptoSigner, ServiceCapability::Security],
     server_contract: ServerContract::SocketAuditDir,
     api_socket: None,
+    socket_aliases: &["crypto", "security", "ed25519", "x25519", "btsp"],
 };
 
 const SONGBIRD: MembraneService = MembraneService {
@@ -49,6 +50,7 @@ const SONGBIRD: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::MeshRelay, ServiceCapability::TurnServer],
     server_contract: ServerContract::Full,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const SKUNKBAT: MembraneService = MembraneService {
@@ -67,6 +69,7 @@ const SKUNKBAT: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::Observability],
     server_contract: ServerContract::Full,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 // ── Nest tier (provenance + content) ────────────────────────────────────────
@@ -87,6 +90,7 @@ const NESTGATE: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::ContentServing],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const RHIZOCRYPT: MembraneService = MembraneService {
@@ -105,6 +109,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::Storage],
     server_contract: ServerContract::Tarpc,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const LOAMSPINE: MembraneService = MembraneService {
@@ -123,6 +128,7 @@ const LOAMSPINE: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::Storage],
     server_contract: ServerContract::Tarpc,
     api_socket: None,
+    socket_aliases: &["ledger", "permanence"],
 };
 
 const SWEETGRASS: MembraneService = MembraneService {
@@ -141,6 +147,7 @@ const SWEETGRASS: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::Identity],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &["provenance"],
 };
 
 // ── Compute tier (Nucleus) ──────────────────────────────────────────────────
@@ -161,6 +168,7 @@ const TOADSTOOL: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::ComputeOrchestration],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &["compute-tarpc"],
 };
 
 const BARRACUDA: MembraneService = MembraneService {
@@ -179,6 +187,7 @@ const BARRACUDA: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::ComputeOrchestration],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const CORALREEF: MembraneService = MembraneService {
@@ -197,6 +206,7 @@ const CORALREEF: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::Storage],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &["coralreef-tarpc"],
 };
 
 // ── Meta tier (orchestration) ────────────────────────────────────────────────
@@ -217,6 +227,7 @@ const BIOMEOS: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::ComputeOrchestration],
     server_contract: ServerContract::BiomeosApi,
     api_socket: Some("neural-api"),
+    socket_aliases: &["ai"],
 };
 
 const SQUIRREL: MembraneService = MembraneService {
@@ -235,6 +246,7 @@ const SQUIRREL: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::Storage],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const PETALTONGUE: MembraneService = MembraneService {
@@ -253,6 +265,7 @@ const PETALTONGUE: MembraneService = MembraneService {
     capabilities: &[ServiceCapability::ContentServing],
     server_contract: ServerContract::SocketOnly,
     api_socket: None,
+    socket_aliases: &["visualization"],
 };
 
 // ── Symbiotic partners (not ecoPrimals) ──────────────────────────────────────
@@ -273,6 +286,7 @@ const HBBS: MembraneService = MembraneService {
     capabilities: &[],
     server_contract: ServerContract::External,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const HBBR: MembraneService = MembraneService {
@@ -291,6 +305,7 @@ const HBBR: MembraneService = MembraneService {
     capabilities: &[],
     server_contract: ServerContract::External,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const CADDY: MembraneService = MembraneService {
@@ -309,6 +324,7 @@ const CADDY: MembraneService = MembraneService {
     capabilities: &[],
     server_contract: ServerContract::External,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 const KNOTDNS: MembraneService = MembraneService {
@@ -327,6 +343,7 @@ const KNOTDNS: MembraneService = MembraneService {
     capabilities: &[],
     server_contract: ServerContract::External,
     api_socket: None,
+    socket_aliases: &[],
 };
 
 /// All known membrane services. Runtime discovery starts here.

@@ -156,6 +156,12 @@ async fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    if args[0] == "--version" || args[0] == "version" {
+        let sha = option_env!("MEMBRANE_BUILD_SHA").unwrap_or("dev");
+        println!("membrane {} ({sha})", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+
     let config = ShadowConfig::from_env().await;
     let cmd = args[0];
     let rest = &args[1..];

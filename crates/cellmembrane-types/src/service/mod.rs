@@ -495,6 +495,12 @@ pub struct MembraneService {
     /// Alternative socket name for JSON-RPC probing (e.g. `"neural-api"` for biomeOS).
     /// When `Some`, health probes prefer this over `{binary}.sock`.
     pub api_socket: Option<&'static str>,
+    /// Capability socket aliases this primal exposes (in addition to `{binary}.sock`).
+    ///
+    /// Each primal may create additional sockets named by capability rather than
+    /// binary. This registry allows bootstrap to predict the full socket set and
+    /// health probes to verify capability presence.
+    pub socket_aliases: &'static [&'static str],
 }
 
 mod registry;
