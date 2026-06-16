@@ -42,6 +42,7 @@ pub mod firewall;
 pub mod identity;
 pub mod provider;
 pub mod service;
+pub mod signal;
 pub mod transport;
 pub mod validation;
 
