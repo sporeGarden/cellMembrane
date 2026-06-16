@@ -2,8 +2,9 @@
 
 //! Gate bootstrap — full enrollment orchestration.
 //!
-//! Phases: detect arch → fetch depot → verify checksums (git + WAN) →
-//! configure mesh → start NUCLEUS → health sweep → emit deployment.toml.
+//! Phases: detect arch → permissions → fetch depot → verify checksums (git + WAN) →
+//! sandbox validate → install (hardlink to /opt/membrane) → start NUCLEUS (systemd) →
+//! mesh.init (songbird → VPS peer) → health sweep → emit deployment.toml.
 
 use crate::config::ShadowConfig;
 use crate::error::Result;
@@ -35,8 +36,10 @@ pub struct BootstrapResult {
 
 /// Orchestrate full gate enrollment in one command.
 ///
-/// Phases: detect arch → fetch depot → verify checksums → configure mesh →
-/// start NUCLEUS → health sweep → emit deployment.toml.
+/// Phases: detect arch → set permissions → fetch depot → verify checksums →
+/// sandbox validate → install primals → generate secrets → write systemd units →
+/// start NUCLEUS → mesh.init → health sweep → emit deployment.toml.
+///
 /// With `dry_run = true`, reports what would happen without executing side effects.
 pub async fn bootstrap(
     config: &ShadowConfig,
@@ -507,6 +510,14 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
         .display()
         .to_string();
 
+    // Retry up to 5 times (10s total) waiting for songbird socket
+    for _ in 0..5 {
+        if std::path::Path::new(&socket_path).exists() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+
     if !std::path::Path::new(&socket_path).exists() {
         return (
             false,
@@ -605,7 +616,7 @@ fn start_nucleus_primals(arch: &str) -> (bool, String) {
         let exec_start = svc.server_contract.exec_args(svc.binary, &socket_path, &security_socket);
 
         let extra_args = match svc.binary {
-            "songbird" => " --federation-port 7700 --bind 0.0.0.0 --dark-forest",
+            "songbird" => " --federation-port 7700 --bind 0.0.0.0",
             "nestgate" => " --port 9500 --bind 127.0.0.1",
             "sweetgrass" => " --http-address 127.0.0.1:0",
             _ => "",
