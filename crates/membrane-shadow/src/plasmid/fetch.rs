@@ -129,6 +129,9 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     let mut checksums = load_checksums(&bin_dir, &tag);
     if checksums.is_empty() && args.source == FetchSource::Wan {
         checksums = fetch_wan_checksums(&arch).await;
+        if !checksums.is_empty() {
+            persist_checksums(&dest_root, &arch, &checksums);
+        }
     }
     let results = fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
 
@@ -441,6 +444,22 @@ fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String
     toml::from_str::<FlatChecksumFile>(&contents)
         .map(|f| f.checksums)
         .unwrap_or_default()
+}
+
+fn persist_checksums(
+    depot_root: &Path,
+    arch: &str,
+    checksums: &std::collections::HashMap<String, String>,
+) {
+    use std::fmt::Write;
+    let mut content = format!("[{arch}]\n");
+    let mut sorted: Vec<_> = checksums.iter().collect();
+    sorted.sort_by_key(|(k, _)| k.as_str());
+    for (name, hash) in sorted {
+        let _ = writeln!(content, "{name} = \"{hash}\"");
+    }
+    let path = depot_root.join("checksums.toml");
+    std::fs::write(&path, content.as_bytes()).ok();
 }
 
 // ── Fetch orchestration ──────────────────────────────────────────────────────

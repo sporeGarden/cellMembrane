@@ -55,6 +55,8 @@ pub async fn bootstrap(
         detail: format!("{arch} ({mobility}) transport={transport}"),
     });
 
+    phases.push(permissions_phase(dry_run));
+
     phases.push(fetch_phase(config, &transport, dry_run).await);
 
     let verify_result = super::verify::verify_local_depot(&arch);
@@ -72,8 +74,15 @@ pub async fn bootstrap(
 
     phases.push(sandbox_phase(&arch, dry_run).await);
 
-    phases.push(mesh_phase(gate_name, &arch, dry_run).await);
+    phases.push(install_phase(&arch, dry_run));
+
     phases.push(nucleus_phase(&arch, dry_run));
+
+    // mesh.init requires songbird to be running — must come after nucleus start
+    if !dry_run {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    phases.push(mesh_phase(gate_name, &arch, dry_run).await);
     phases.push(health_phase(&arch, dry_run).await);
 
     if mobility.needs_reconnect_hook() {
@@ -95,6 +104,108 @@ pub async fn bootstrap(
 }
 
 // ── Phase implementations ──────────────────────────────────────────────
+
+fn permissions_phase(dry_run: bool) -> BootstrapPhase {
+    const MEMBRANE_DIR: &str = "/opt/membrane";
+    const DEPOT_DIR: &str = "/opt/ecoPrimals/plasmidBin";
+
+    if dry_run {
+        return BootstrapPhase {
+            name: "permissions.set".into(),
+            ok: true,
+            detail: format!("dry-run: would ensure {MEMBRANE_DIR} + {DEPOT_DIR} exist with correct perms"),
+        };
+    }
+
+    let mut ok = true;
+    let mut details = Vec::new();
+
+    for dir in [MEMBRANE_DIR, DEPOT_DIR] {
+        if std::fs::create_dir_all(dir).is_ok() {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o755);
+            if std::fs::set_permissions(dir, perms).is_ok() {
+                details.push(format!("{dir}:OK"));
+            } else {
+                details.push(format!("{dir}:perms-failed"));
+                ok = false;
+            }
+        } else {
+            details.push(format!("{dir}:mkdir-failed"));
+            ok = false;
+        }
+    }
+
+    BootstrapPhase {
+        name: "permissions.set".into(),
+        ok,
+        detail: details.join(", "),
+    }
+}
+
+fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
+    const INSTALL_DIR: &str = "/opt/membrane";
+
+    if dry_run {
+        return BootstrapPhase {
+            name: "install.link".into(),
+            ok: true,
+            detail: format!("dry-run: would hardlink primals from depot → {INSTALL_DIR}"),
+        };
+    }
+
+    let depot_root = super::resolve_plasmidbin_dir();
+    let bin_dir = depot_root.join("primals").join(arch);
+    let install_dir = std::path::Path::new(INSTALL_DIR);
+
+    if !bin_dir.is_dir() {
+        return BootstrapPhase {
+            name: "install.link".into(),
+            ok: false,
+            detail: format!("no binaries at {}", bin_dir.display()),
+        };
+    }
+
+    let mut installed = 0u32;
+    let mut failed = 0u32;
+
+    let primals = crate::plasmid::nucleus_primals();
+    for primal in &primals {
+        let src = bin_dir.join(primal);
+        if !src.exists() {
+            continue;
+        }
+        let dest = install_dir.join(primal);
+        let _ = std::fs::remove_file(&dest);
+        if std::fs::hard_link(&src, &dest).is_ok() || std::fs::copy(&src, &dest).is_ok() {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755)).ok();
+            installed += 1;
+        } else {
+            failed += 1;
+        }
+    }
+
+    // Also install self (membrane) if present
+    let membrane_src = bin_dir.join("membrane");
+    let membrane_dest = install_dir.join("membrane");
+    if membrane_src.exists() {
+        let _ = std::fs::remove_file(&membrane_dest);
+        if std::fs::hard_link(&membrane_src, &membrane_dest).is_ok()
+            || std::fs::copy(&membrane_src, &membrane_dest).is_ok()
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&membrane_dest, std::fs::Permissions::from_mode(0o755)).ok();
+        }
+    }
+
+    let ok = failed == 0 && installed > 0;
+    BootstrapPhase {
+        name: "install.link".into(),
+        ok,
+        detail: format!("{installed} primals installed → {INSTALL_DIR}, {failed} failed"),
+    }
+}
 
 fn resolve_gate_transport(gate_name: &str) -> String {
     let Ok(workspace_root) = crate::temporal::resolve_workspace_root() else {
@@ -431,45 +542,125 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
 
 // ── NUCLEUS start ──────────────────────────────────────────────────────
 
+fn generate_secrets_env() {
+    use std::io::Write as _;
+    use std::os::unix::fs::PermissionsExt;
+
+    let env_dir = std::path::Path::new("/etc/membrane");
+    std::fs::create_dir_all(env_dir).ok();
+    let env_file = env_dir.join("secrets.env");
+    if env_file.exists() {
+        return;
+    }
+
+    let mut secret = String::with_capacity(128);
+    for _ in 0..64 {
+        use std::fmt::Write;
+        let _ = write!(secret, "{:02x}", rand_byte());
+    }
+    let content = format!("NESTGATE_JWT_SECRET={secret}\n");
+    if let Ok(mut f) = std::fs::File::create(&env_file) {
+        f.write_all(content.as_bytes()).ok();
+    }
+    std::fs::set_permissions(&env_file, std::fs::Permissions::from_mode(0o600)).ok();
+}
+
+fn rand_byte() -> u8 {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let tick = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    #[allow(clippy::cast_possible_truncation)]
+    let byte = u64::from(now).wrapping_mul(6_364_136_223_846_793_005).wrapping_add(tick) as u8;
+    byte
+}
+
 fn start_nucleus_primals(arch: &str) -> (bool, String) {
+    generate_secrets_env();
+
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
+    let run_dir = std::path::Path::new("/run/membrane");
+    let systemd_dir = std::path::Path::new("/etc/systemd/system");
 
-    let primals = crate::plasmid::nucleus_primals();
-    let mut started = 0u32;
+    std::fs::create_dir_all(run_dir).ok();
+
+    let services = cellmembrane_types::MembraneService::all();
+    let mut installed = 0u32;
     let mut failed = 0u32;
-    let mut skipped = 0u32;
 
-    for primal in &primals {
-        let bin_path = bin_dir.join(primal);
+    for svc in services {
+        if !svc.is_primal {
+            continue;
+        }
+        let bin_path = bin_dir.join(svc.binary);
         if !bin_path.exists() {
-            failed += 1;
             continue;
         }
 
-        if let Some(svc) = cellmembrane_types::MembraneService::for_binary(primal) {
-            if svc.is_mesh_infrastructure() {
-                skipped += 1;
-                continue;
-            }
-        }
+        let socket_path = format!("/run/membrane/{}.sock", svc.binary);
+        let security_socket = "/run/membrane/beardog.sock".to_string();
+        let exec_start = svc.server_contract.exec_args(svc.binary, &socket_path, &security_socket);
 
-        let spawn_result = tokio::process::Command::new(&bin_path)
-            .arg("server")
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
+        let extra_args = match svc.binary {
+            "songbird" => " --federation-port 7700 --bind 0.0.0.0 --dark-forest",
+            "nestgate" => " --port 9500 --bind 127.0.0.1",
+            "sweetgrass" => " --http-address 127.0.0.1:0",
+            _ => "",
+        };
 
-        match spawn_result {
-            Ok(_) => started += 1,
-            Err(_) => failed += 1,
+        let unit_name = format!("{}-membrane.service", svc.binary);
+        let env_file_line = if svc.binary == "nestgate" {
+            "EnvironmentFile=-/etc/membrane/secrets.env\n"
+        } else {
+            ""
+        };
+
+        let unit_content = format!(
+            "[Unit]\n\
+             Description={binary} primal (membrane NUCLEUS)\n\
+             After=network.target\n\n\
+             [Service]\n\
+             Type=simple\n\
+             {env_file_line}\
+             ExecStart={exec_start}{extra_args}\n\
+             Restart=on-failure\n\
+             RestartSec=3\n\
+             RuntimeDirectory=membrane\n\
+             RuntimeDirectoryPreserve=yes\n\n\
+             [Install]\n\
+             WantedBy=multi-user.target\n",
+            binary = svc.binary,
+        );
+
+        let unit_path = systemd_dir.join(&unit_name);
+        if std::fs::write(&unit_path, &unit_content).is_ok() {
+            installed += 1;
+        } else {
+            failed += 1;
         }
     }
 
-    let ok = failed == 0;
-    (
-        ok,
-        format!("{started} started, {skipped} skipped (pre-running), {failed} failed"),
-    )
+    if installed > 0 {
+        std::process::Command::new("systemctl")
+            .args(["daemon-reload"])
+            .output()
+            .ok();
+
+        for svc in services {
+            if !svc.is_primal || !bin_dir.join(svc.binary).exists() {
+                continue;
+            }
+            let unit = format!("{}-membrane.service", svc.binary);
+            std::process::Command::new("systemctl")
+                .args(["enable", "--now", &unit])
+                .output()
+                .ok();
+        }
+    }
+
+    let ok = failed == 0 && installed > 0;
+    (ok, format!("{installed} units installed, {failed} failed"))
 }
