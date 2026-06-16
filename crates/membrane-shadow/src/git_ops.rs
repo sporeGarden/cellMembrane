@@ -94,9 +94,13 @@ async fn try_push(repo_dir: &Path, remote: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Auto-reconcile a non-ff rejection: fetch, rebase, retry push.
+/// Auto-reconcile a non-ff rejection: fetch, try ff-merge, fallback to rebase.
 ///
-/// Maximum 2 retries to prevent infinite loops on persistent conflicts.
+/// Strategy (SHA-preserving when possible):
+/// 1. Fetch the remote
+/// 2. Try `merge --ff-only` — preserves SHA identity if local is simply behind
+/// 3. If ff-merge fails (diverged), fall back to rebase
+/// 4. Push (retry up to 2 times)
 async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
     for _attempt in 0..2 {
         let fetch_ok = tokio::process::Command::new("git")
@@ -113,9 +117,11 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
             return false;
         }
 
-        let rebase_ref = format!("{remote}/main");
-        let rebase_ok = tokio::process::Command::new("git")
-            .args(["rebase", &rebase_ref])
+        let merge_ref = format!("{remote}/main");
+
+        // Try fast-forward merge first — preserves SHA identity
+        let ff_ok = tokio::process::Command::new("git")
+            .args(["merge", "--ff-only", &merge_ref])
             .current_dir(repo_dir)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -123,14 +129,25 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
             .await
             .is_ok_and(|s| s.success());
 
-        if !rebase_ok {
-            // Abort the failed rebase and give up
-            let _ = tokio::process::Command::new("git")
-                .args(["rebase", "--abort"])
+        if !ff_ok {
+            // Diverged — fall back to rebase
+            let rebase_ok = tokio::process::Command::new("git")
+                .args(["rebase", &merge_ref])
                 .current_dir(repo_dir)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
                 .status()
-                .await;
-            return false;
+                .await
+                .is_ok_and(|s| s.success());
+
+            if !rebase_ok {
+                let _ = tokio::process::Command::new("git")
+                    .args(["rebase", "--abort"])
+                    .current_dir(repo_dir)
+                    .status()
+                    .await;
+                return false;
+            }
         }
 
         if try_push(repo_dir, remote).await {
