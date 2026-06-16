@@ -95,23 +95,37 @@ pub enum ServerContract {
 
 impl ServerContract {
     /// Generate the `ExecStart` args for a primal given socket/security paths.
+    ///
+    /// Uses `install_base` to allow deployment to non-standard locations.
     #[must_use]
-    pub fn exec_args(&self, binary: &str, socket_path: &str, security_socket: &str) -> String {
+    pub fn exec_args_with_base(
+        &self,
+        install_base: &str,
+        binary: &str,
+        socket_path: &str,
+        security_socket: &str,
+    ) -> String {
         match self {
             Self::Full => format!(
-                "/opt/membrane/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir /run/membrane"
+                "{install_base}/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir /run/membrane"
             ),
             Self::SocketAuditDir => format!(
-                "/opt/membrane/{binary} server --socket {socket_path} --audit-dir /var/lib/membrane/{binary}"
+                "{install_base}/{binary} server --socket {socket_path} --audit-dir /var/lib/membrane/{binary}"
             ),
             Self::SocketOnly | Self::Tarpc => format!(
-                "/opt/membrane/{binary} server --socket {socket_path}"
+                "{install_base}/{binary} server --socket {socket_path}"
             ),
             Self::BiomeosApi => format!(
-                "/opt/membrane/{binary} api --socket {socket_path}"
+                "{install_base}/{binary} api --socket {socket_path}"
             ),
-            Self::External => format!("/opt/membrane/{binary}"),
+            Self::External => format!("{install_base}/{binary}"),
         }
+    }
+
+    /// Generate the `ExecStart` args using the default install base.
+    #[must_use]
+    pub fn exec_args(&self, binary: &str, socket_path: &str, security_socket: &str) -> String {
+        self.exec_args_with_base(DEFAULT_INSTALL_BASE, binary, socket_path, security_socket)
     }
 }
 
@@ -281,11 +295,23 @@ pub const RUSTDESK_HBBS_PORT: u16 = 21115;
 /// RustDesk hbbr (relay server) port.
 pub const RUSTDESK_HBBR_PORT: u16 = 21117;
 
-/// Default VPS mesh peer address (golgiBody songbird federation endpoint).
+/// Default VPS mesh peer address (hub songbird federation endpoint).
 pub const DEFAULT_VPS_MESH_PEER: &str = "157.230.3.183:7700";
+
+/// Default mesh hub node identifier for peer addressing.
+pub const DEFAULT_MESH_HUB_ID: &str = "hub";
 
 /// Environment variable override for the VPS mesh peer address (host only).
 pub const ENV_VPS_MESH_PEER: &str = "MEMBRANE_VPS_PEER";
+
+/// Environment variable override for the mesh hub node identifier.
+pub const ENV_MESH_HUB_ID: &str = "MEMBRANE_MESH_HUB_ID";
+
+/// Environment variable for additional mesh peers (comma-separated `host:port`).
+///
+/// Used alongside `MEMBRANE_VPS_PEER` to bootstrap multi-peer mesh topologies.
+/// Example: `MEMBRANE_MESH_PEERS=192.168.1.100:7700,10.0.0.5:7700`
+pub const ENV_MESH_PEERS: &str = "MEMBRANE_MESH_PEERS";
 
 // ── Standard system environment variables ────────────────────────────
 

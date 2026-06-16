@@ -19,7 +19,7 @@ pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
 pub use health::{GateStatus, StatusProbe, status};
 
 pub use local::resolve_local_gate_identity;
-use local::resolve_plasmidbin_dir;
+use local::{resolve_install_base, resolve_plasmidbin_dir};
 
 use crate::config::ShadowConfig;
 use crate::error::Result;

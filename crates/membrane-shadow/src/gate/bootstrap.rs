@@ -109,21 +109,22 @@ pub async fn bootstrap(
 // ── Phase implementations ──────────────────────────────────────────────
 
 fn permissions_phase(dry_run: bool) -> BootstrapPhase {
-    const MEMBRANE_DIR: &str = "/opt/membrane";
-    const DEPOT_DIR: &str = "/opt/ecoPrimals/plasmidBin";
+    let membrane_dir = super::resolve_install_base();
+    let depot_dir = super::resolve_plasmidbin_dir();
+    let depot_str = depot_dir.to_string_lossy().to_string();
 
     if dry_run {
         return BootstrapPhase {
             name: "permissions.set".into(),
             ok: true,
-            detail: format!("dry-run: would ensure {MEMBRANE_DIR} + {DEPOT_DIR} exist with correct perms"),
+            detail: format!("dry-run: would ensure {membrane_dir} + {depot_str} exist with correct perms"),
         };
     }
 
     let mut ok = true;
     let mut details = Vec::new();
 
-    for dir in [MEMBRANE_DIR, DEPOT_DIR] {
+    for dir in [membrane_dir.as_str(), depot_str.as_str()] {
         if std::fs::create_dir_all(dir).is_ok() {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(0o755);
@@ -147,19 +148,19 @@ fn permissions_phase(dry_run: bool) -> BootstrapPhase {
 }
 
 fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
-    const INSTALL_DIR: &str = "/opt/membrane";
+    let install_dir = super::resolve_install_base();
 
     if dry_run {
         return BootstrapPhase {
             name: "install.link".into(),
             ok: true,
-            detail: format!("dry-run: would hardlink primals from depot → {INSTALL_DIR}"),
+            detail: format!("dry-run: would hardlink primals from depot → {install_dir}"),
         };
     }
 
     let depot_root = super::resolve_plasmidbin_dir();
     let bin_dir = depot_root.join("primals").join(arch);
-    let install_dir = std::path::Path::new(INSTALL_DIR);
+    let target_dir = std::path::Path::new(install_dir.as_str());
 
     if !bin_dir.is_dir() {
         return BootstrapPhase {
@@ -178,7 +179,7 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
         if !src.exists() {
             continue;
         }
-        let dest = install_dir.join(primal);
+        let dest = target_dir.join(primal);
         let _ = std::fs::remove_file(&dest);
         if std::fs::hard_link(&src, &dest).is_ok() || std::fs::copy(&src, &dest).is_ok() {
             use std::os::unix::fs::PermissionsExt;
@@ -189,9 +190,8 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
         }
     }
 
-    // Also install self (membrane) if present
     let membrane_src = bin_dir.join("membrane");
-    let membrane_dest = install_dir.join("membrane");
+    let membrane_dest = target_dir.join("membrane");
     if membrane_src.exists() {
         let _ = std::fs::remove_file(&membrane_dest);
         if std::fs::hard_link(&membrane_src, &membrane_dest).is_ok()
@@ -206,7 +206,7 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     BootstrapPhase {
         name: "install.link".into(),
         ok,
-        detail: format!("{installed} primals installed → {INSTALL_DIR}, {failed} failed"),
+        detail: format!("{installed} primals installed → {install_dir}, {failed} failed"),
     }
 }
 
@@ -356,10 +356,17 @@ async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> BootstrapPhas
     if dry_run {
         let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
             .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
+        let extra = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS).unwrap_or_default();
+        let peer_info = if extra.is_empty() {
+            format!("1 peer ({vps_peer})")
+        } else {
+            let count = 1 + extra.split(',').filter(|p| !p.trim().is_empty()).count();
+            format!("{count} peers ({vps_peer} + LAN)")
+        };
         return BootstrapPhase {
             name: "mesh.configure".into(),
             ok: true,
-            detail: format!("dry-run: would mesh.init to {vps_peer} as {gate_name}"),
+            detail: format!("dry-run: would mesh.init {peer_info} as {gate_name}"),
         };
     }
     let (ok, detail) = configure_mesh(gate_name, arch).await;
@@ -530,20 +537,31 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
     let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
 
+    let mut peers: Vec<String> = vec![vps_peer.clone()];
+    if let Ok(extra) = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS) {
+        for p in extra.split(',') {
+            let trimmed = p.trim().to_string();
+            if !trimmed.is_empty() && !peers.contains(&trimmed) {
+                peers.push(trimmed);
+            }
+        }
+    }
+
     let params = serde_json::json!({
         "node_id": gate_name,
-        "peers": [vps_peer],
+        "peers": peers,
     });
     let request = crate::jsonrpc::request_with_params("mesh.init", &params, 1);
 
     match crate::jsonrpc::call(std::path::Path::new(&socket_path), &request).await {
         Ok(response) => {
+            let peer_count = peers.len();
             if response.contains("\"result\"") || response.contains("\"ok\"") {
-                (true, format!("mesh.init sent to {vps_peer} as {gate_name}"))
+                (true, format!("mesh.init sent ({peer_count} peers) as {gate_name}"))
             } else {
                 (
                     true,
-                    format!("mesh.init sent (response: {})", response.trim()),
+                    format!("mesh.init sent ({peer_count} peers, response: {})", response.trim()),
                 )
             }
         }
@@ -591,6 +609,7 @@ fn rand_byte() -> u8 {
 fn start_nucleus_primals(arch: &str) -> (bool, String) {
     generate_secrets_env();
 
+    let install_base = super::resolve_install_base();
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
     let run_dir = std::path::Path::new("/run/membrane");
@@ -613,7 +632,12 @@ fn start_nucleus_primals(arch: &str) -> (bool, String) {
 
         let socket_path = format!("/run/membrane/{}.sock", svc.binary);
         let security_socket = "/run/membrane/beardog.sock".to_string();
-        let exec_start = svc.server_contract.exec_args(svc.binary, &socket_path, &security_socket);
+        let exec_start = svc.server_contract.exec_args_with_base(
+            &install_base,
+            svc.binary,
+            &socket_path,
+            &security_socket,
+        );
 
         let extra_args = match svc.binary {
             "songbird" => " --federation-port 7700 --bind 0.0.0.0",

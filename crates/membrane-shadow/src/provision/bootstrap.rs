@@ -75,14 +75,18 @@ async fn harden(ip: &str) -> Result<String> {
 
 /// Phase 2: Create directory structure.
 async fn setup_directories(ip: &str) -> Result<String> {
-    let script = r#"
-        mkdir -p /opt/membrane /run/membrane /opt/ecoPrimals \
-                 /opt/membrane/sandbox /run/membrane/sandbox \
-                 /opt/membrane/canary /run/membrane/canary \
+    let base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let script = format!(
+        r#"
+        mkdir -p {base} /run/membrane /opt/ecoPrimals \
+                 {base}/sandbox /run/membrane/sandbox \
+                 {base}/canary /run/membrane/canary \
                  /var/lib/membrane/songbird /etc/membrane
         echo "directories created"
-    "#;
-    ssh_exec(ip, script).await
+    "#
+    );
+    ssh_exec(ip, &script).await
 }
 
 /// Phase 3: Deploy binaries from local depot via SCP.
@@ -135,7 +139,7 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
         }
     }
 
-    ssh_exec(ip, "chmod +x /opt/membrane/*").await?;
+    ssh_exec(ip, &format!("chmod +x {}/*", cellmembrane_types::service::DEFAULT_INSTALL_BASE)).await?;
 
     Ok(format!("{deployed}/{} binaries deployed", primals.len()))
 }
@@ -157,6 +161,10 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
                 cellmembrane_types::service::DEFAULT_FEDERATION_PORT
             )
         });
+    let hub_id = std::env::var(cellmembrane_types::service::ENV_MESH_HUB_ID)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_MESH_HUB_ID.into());
+    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
 
     let bearer_unit = format!(
         r"[Unit]
@@ -168,7 +176,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-ExecStart=/opt/membrane/{spine} server --socket /run/membrane/{spine}.sock --audit-dir /var/lib/membrane/{spine}
+ExecStart={install_base}/{spine} server --socket /run/membrane/{spine}.sock --audit-dir /var/lib/membrane/{spine}
 Environment={spine_upper}_NODE_ID={gate_name}
 Environment={spine_upper}_LOG_LEVEL=info
 Restart=always
@@ -192,7 +200,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStartPre=-/bin/rm -f /run/membrane/{relay}.sock
-ExecStart=/opt/membrane/{relay} server \
+ExecStart={install_base}/{relay} server \
     --socket /run/membrane/{relay}.sock \
     --security-socket /run/membrane/{spine}.sock \
     --federation-port {federation_port} \
@@ -206,7 +214,7 @@ Environment={relay_upper}_SECURITY_PROVIDER={spine}
 Environment={relay_upper}_PID_DIR=/run/membrane
 Environment={relay_upper}_FEDERATION_PORT={federation_port}
 Environment={relay_upper}_FEDERATION_ENABLED=true
-Environment={relay_upper}_PEERS=golgiBody@{vps_peer}
+Environment={relay_upper}_PEERS={hub_id}@{vps_peer}
 Restart=always
 RestartSec=5
 MemoryMax=128M
@@ -224,7 +232,7 @@ Wants={relay}-membrane.service
 
 [Service]
 Type=simple
-ExecStart=/opt/membrane/%i server --socket /run/membrane/%i.sock --security-socket /run/membrane/{spine}.sock --pid-dir /run/membrane
+ExecStart={install_base}/%i server --socket /run/membrane/%i.sock --security-socket /run/membrane/{spine}.sock --pid-dir /run/membrane
 Restart=always
 RestartSec=5
 MemoryMax=128M
@@ -599,18 +607,21 @@ pub async fn verify_remote_gate(ip: &str, gate_name: &str, profile: Option<&str>
     // Canary freshness — check if any stale binaries exist
     let canary_result = ssh_exec(
         ip,
-        r#"
+        &format!(
+            r#"
 STALE=0
-for bin in /opt/membrane/*; do
+for bin in {}/*; do
     [ -x "$bin" ] || continue
     NAME=$(basename "$bin")
-    SOCK="/run/membrane/${NAME}.sock"
-    [ -S "$SOCK" ] || { STALE=$((STALE + 1)); continue; }
-    RESP=$(echo '{"jsonrpc":"2.0","method":"health","id":1}' | socat - UNIX-CONNECT:"$SOCK" 2>/dev/null)
+    SOCK="/run/membrane/${{NAME}}.sock"
+    [ -S "$SOCK" ] || {{ STALE=$((STALE + 1)); continue; }}
+    RESP=$(echo '{{"jsonrpc":"2.0","method":"health","id":1}}' | socat - UNIX-CONNECT:"$SOCK" 2>/dev/null)
     echo "$RESP" | grep -q '"status":"healthy"' || STALE=$((STALE + 1))
 done
 echo "canary.audit: stale=$STALE"
 "#,
+            cellmembrane_types::service::DEFAULT_INSTALL_BASE
+        ),
     )
     .await;
     match canary_result {

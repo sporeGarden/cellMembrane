@@ -22,8 +22,9 @@ const SANDBOX_PROBE_INTERVAL_MS: u64 = 2000;
 /// Base directory for sandbox sockets.
 const SANDBOX_SOCKET_DIR: &str = "/run/membrane/sandbox";
 
-/// Base directory for sandbox binaries (VPS-side staging).
-const SANDBOX_BIN_DIR: &str = "/opt/membrane/sandbox";
+/// Default base directory for sandbox binaries (VPS-side staging).
+/// Override via `MEMBRANE_SANDBOX_BIN_DIR` env var for non-standard installs.
+const SANDBOX_BIN_DIR_DEFAULT: &str = "/opt/membrane/sandbox";
 
 /// Environment variable to override the sandbox socket directory.
 const ENV_SANDBOX_SOCKET_DIR: &str = "MEMBRANE_SANDBOX_SOCKET_DIR";
@@ -68,7 +69,9 @@ fn resolve_sandbox_socket_dir() -> PathBuf {
 }
 
 fn resolve_sandbox_bin_dir() -> PathBuf {
-    PathBuf::from(std::env::var(ENV_SANDBOX_BIN_DIR).unwrap_or_else(|_| SANDBOX_BIN_DIR.into()))
+    PathBuf::from(
+        std::env::var(ENV_SANDBOX_BIN_DIR).unwrap_or_else(|_| SANDBOX_BIN_DIR_DEFAULT.into()),
+    )
 }
 
 /// Spin up a sandboxed instance, returning the handle.

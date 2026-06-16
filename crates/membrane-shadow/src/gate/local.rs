@@ -36,11 +36,32 @@ fn dirs_home() -> PathBuf {
 
 /// Resolve the plasmidBin depot directory.
 ///
-/// Resolution: env `ECOPRIMALS_PLASMID_BIN` → workspace-relative → `/opt/ecoPrimals/plasmidBin`
-/// → XDG data home fallback.
+/// Resolution priority (first existing wins):
+/// 1. `PLASMIDBIN_DEPOT` env var (shared with harvest)
+/// 2. `ECOPRIMALS_PLASMID_BIN` env var (gate-specific legacy)
+/// 3. `{eco_root}/infra/plasmidBin` (canonical harvest output)
+/// 4. `{eco_root}/plasmidBin` (backwards compat)
+/// 5. workspace-relative `plasmidBin/`
+/// 6. XDG data home fallback
 pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
+    if let Ok(val) = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT) {
+        return PathBuf::from(val);
+    }
     if let Ok(val) = std::env::var("ECOPRIMALS_PLASMID_BIN") {
         return PathBuf::from(val);
+    }
+
+    let eco_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
+
+    let infra_depot = PathBuf::from(&eco_root).join("infra").join("plasmidBin");
+    if infra_depot.join("checksums.toml").exists() || infra_depot.join("primals").is_dir() {
+        return infra_depot;
+    }
+
+    let flat_depot = PathBuf::from(&eco_root).join("plasmidBin");
+    if flat_depot.join("checksums.toml").exists() || flat_depot.join("primals").is_dir() {
+        return flat_depot;
     }
 
     if let Ok(root) = crate::resolve_workspace_root() {
@@ -50,10 +71,13 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
         }
     }
 
-    let opt_depot = PathBuf::from("/opt/ecoPrimals/plasmidBin");
-    if opt_depot.join("checksums.toml").exists() {
-        return opt_depot;
-    }
-
     crate::resolve_xdg_data_home().join("ecoPrimals").join("plasmidBin")
+}
+
+/// Resolve the membrane install base directory.
+///
+/// Priority: `MEMBRANE_INSTALL_BASE` env → default `/opt/membrane`.
+pub(super) fn resolve_install_base() -> String {
+    std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into())
 }

@@ -14,8 +14,9 @@ use std::path::{Path, PathBuf};
 /// Base directory for canary sockets.
 const CANARY_SOCKET_DIR: &str = "/run/membrane/canary";
 
-/// Base directory for canary binaries.
-const CANARY_BIN_DIR: &str = "/opt/membrane/canary";
+/// Default base directory for canary binaries.
+/// Override via `MEMBRANE_CANARY_BIN_DIR` env var for non-standard installs.
+const CANARY_BIN_DIR_DEFAULT: &str = "/opt/membrane/canary";
 
 /// Environment variable to override canary socket directory.
 const ENV_CANARY_SOCKET_DIR: &str = "MEMBRANE_CANARY_SOCKET_DIR";
@@ -54,7 +55,9 @@ fn resolve_canary_socket_dir() -> PathBuf {
 }
 
 fn resolve_canary_bin_dir() -> PathBuf {
-    PathBuf::from(std::env::var(ENV_CANARY_BIN_DIR).unwrap_or_else(|_| CANARY_BIN_DIR.into()))
+    PathBuf::from(
+        std::env::var(ENV_CANARY_BIN_DIR).unwrap_or_else(|_| CANARY_BIN_DIR_DEFAULT.into()),
+    )
 }
 
 fn pool_state_path() -> PathBuf {

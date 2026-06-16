@@ -52,13 +52,19 @@ pub(super) async fn dispatch(
         "gate.health" => dispatch_health(config).await,
         "health.audit" => dispatch_health_audit(config, args).await,
         "gate.bootstrap" => {
-            let gate_name = cli::require_arg(args, 0, "gate-name")?;
             let dry_run = args.contains(&"--dry-run");
             let mobility = if args.contains(&"--mobile") {
                 cellmembrane_types::GateMobility::Mobile
             } else {
                 cellmembrane_types::GateMobility::Fixed
             };
+            let positional: Vec<&&str> =
+                args.iter().filter(|a| !a.starts_with("--")).collect();
+            let gate_name = positional
+                .first()
+                .copied()
+                .copied()
+                .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
             let result = gate::bootstrap(config, gate_name, dry_run, mobility).await?;
             let msg = format!(
                 "bootstrap {}: {}/{} phases passed{}{}{}",
