@@ -14,8 +14,13 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
-/// Caddy admin API endpoint (localhost-only control plane).
-const CADDY_ADMIN_ENDPOINT: &str = "localhost:2019";
+fn caddy_admin_endpoint() -> &'static str {
+    static ENDPOINT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ENDPOINT.get_or_init(|| {
+        std::env::var(cellmembrane_types::service::ENV_CADDY_ADMIN_ENDPOINT)
+            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CADDY_ADMIN_ENDPOINT.into())
+    })
+}
 
 fn caddy_bin_path() -> &'static str {
     static BIN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
@@ -99,7 +104,8 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     let (api_out, api_code) = caddy_exec(
         config,
         &format!(
-            "curl -sf http://{CADDY_ADMIN_ENDPOINT}/config/ 2>/dev/null | head -c 100 || echo FAIL"
+            "curl -sf http://{}/config/ 2>/dev/null | head -c 100 || echo FAIL",
+            caddy_admin_endpoint()
         ),
     )
     .await?;
@@ -139,9 +145,10 @@ pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus
         .and_then(|s| s.port)
         .unwrap_or(443);
     let cmd = format!(
-        "curl -sf 'http://{CADDY_ADMIN_ENDPOINT}/id/{domain}/tls' 2>/dev/null || \
+        "curl -sf 'http://{endpoint}/id/{domain}/tls' 2>/dev/null || \
          openssl s_client -connect {domain}:{tls_port} -servername {domain} </dev/null 2>/dev/null | \
-         openssl x509 -noout -dates -issuer 2>/dev/null || echo ERROR"
+         openssl x509 -noout -dates -issuer 2>/dev/null || echo ERROR",
+        endpoint = caddy_admin_endpoint()
     );
 
     let (out, _) = caddy_exec(config, &cmd).await?;

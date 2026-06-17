@@ -143,3 +143,100 @@ pub async fn verify_wan_checksums(arch: &str, dry_run: bool) -> super::bootstrap
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mirror of the `ChecksumFile` / `ChecksumEntry` structs inside
+    /// `verify_local_depot` — used to validate our TOML format expectations.
+    #[derive(serde::Deserialize)]
+    struct ChecksumFile {
+        #[serde(flatten)]
+        targets:
+            std::collections::BTreeMap<String, std::collections::BTreeMap<String, ChecksumEntry>>,
+    }
+    #[derive(serde::Deserialize)]
+    struct ChecksumEntry {
+        blake3: String,
+        #[serde(rename = "size")]
+        _size: u64,
+    }
+
+    #[test]
+    fn checksums_toml_parses_correctly() {
+        let toml_str = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", size = 4096 }
+songbird = { blake3 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", size = 8192 }
+
+[aarch64-unknown-linux-musl]
+beardog = { blake3 = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321", size = 4100 }
+"#;
+        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
+        let x86 = parsed.targets.get("x86_64-unknown-linux-musl").unwrap();
+        assert_eq!(x86.len(), 2);
+        assert!(x86.contains_key("beardog"));
+        assert!(x86.contains_key("songbird"));
+        assert_eq!(x86["beardog"].blake3.len(), 64);
+
+        let aarch64 = parsed.targets.get("aarch64-unknown-linux-musl").unwrap();
+        assert_eq!(aarch64.len(), 1);
+    }
+
+    #[test]
+    fn checksums_toml_missing_arch_section() {
+        let toml_str = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", size = 4096 }
+"#;
+        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
+        assert!(parsed.targets.get("riscv64").is_none());
+    }
+
+    #[test]
+    fn checksums_toml_rejects_invalid() {
+        let bad = "this is not valid toml [[[";
+        assert!(toml::from_str::<ChecksumFile>(bad).is_err());
+    }
+
+    #[test]
+    fn checksums_toml_blake3_hash_roundtrip() {
+        let content = b"hello membrane";
+        let hash = blake3::hash(content).to_hex().to_string();
+        assert_eq!(hash.len(), 64, "blake3 hex hash should be 64 chars");
+
+        let toml_str = format!(
+            "[x86_64-unknown-linux-musl]\nbeardog = {{ blake3 = \"{hash}\", size = {} }}\n",
+            content.len()
+        );
+        let parsed: ChecksumFile = toml::from_str(&toml_str).unwrap();
+        let entry = &parsed.targets["x86_64-unknown-linux-musl"]["beardog"];
+        assert_eq!(entry.blake3, hash, "TOML round-trip should preserve hash");
+    }
+
+    #[test]
+    fn checksums_toml_multiple_archs_and_binaries() {
+        let toml_str = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "aaaa000000000000000000000000000000000000000000000000000000000000", size = 100 }
+songbird = { blake3 = "bbbb000000000000000000000000000000000000000000000000000000000000", size = 200 }
+nestgate = { blake3 = "cccc000000000000000000000000000000000000000000000000000000000000", size = 300 }
+
+[aarch64-unknown-linux-musl]
+beardog = { blake3 = "dddd000000000000000000000000000000000000000000000000000000000000", size = 110 }
+"#;
+        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
+        assert_eq!(parsed.targets.len(), 2);
+        assert_eq!(parsed.targets["x86_64-unknown-linux-musl"].len(), 3);
+        assert_eq!(parsed.targets["aarch64-unknown-linux-musl"].len(), 1);
+    }
+
+    #[tokio::test]
+    async fn verify_wan_checksums_dry_run_returns_ok() {
+        let phase = verify_wan_checksums("x86_64-unknown-linux-musl", true).await;
+        assert!(phase.ok);
+        assert_eq!(phase.name, "checksum.wan");
+        assert!(phase.detail.contains("dry-run"));
+    }
+}

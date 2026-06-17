@@ -275,6 +275,14 @@ pub const ENV_FORGEJO_ADMIN_USER: &str = "FORGEJO_ADMIN_USER";
 pub const ENV_SERVICE_FILTER: &str = "MEMBRANE_SERVICE_FILTER";
 /// Environment variable for the WAN depot base URL (outer membrane HTTPS endpoint).
 pub const ENV_WAN_DEPOT_URL: &str = "WAN_DEPOT_URL";
+/// Environment variable for the SSH user on provisioned gates.
+pub const ENV_PROVISION_SSH_USER: &str = "MEMBRANE_PROVISION_SSH_USER";
+/// Default SSH user for gate provisioning (DigitalOcean/Hetzner default).
+pub const DEFAULT_PROVISION_SSH_USER: &str = "root";
+/// Environment variable to override the Caddy admin API endpoint.
+pub const ENV_CADDY_ADMIN_ENDPOINT: &str = "CADDY_ADMIN_ENDPOINT";
+/// Default Caddy admin API endpoint (Caddy convention: localhost-only control plane).
+pub const DEFAULT_CADDY_ADMIN_ENDPOINT: &str = "localhost:2019";
 
 /// Default WAN depot base URL served by Caddy on the sovereign membrane surface.
 pub const DEFAULT_WAN_DEPOT_URL: &str = "https://membrane.primals.eco/depot";
@@ -365,22 +373,6 @@ pub const ENV_AUTO_REBUILD: &str = "MEMBRANE_AUTO_REBUILD";
 /// `DigitalOcean` API token for cloud provisioning (fieldMouse droplets).
 /// Fallback: `DO_TOKEN` (doctl-compatible).
 pub const ENV_DIGITALOCEAN_TOKEN: &str = "DIGITALOCEAN_TOKEN";
-
-/// Fallback binary name for the crypto signer capability.
-///
-/// DEPRECATED: Use `MembraneService::binary_for(ServiceCapability::CryptoSigner)` instead.
-/// Retained only for transitional compatibility — will be removed in Wave 114.
-pub const FALLBACK_CRYPTO_SIGNER: &str = "beardog";
-
-/// Fallback binary name for the mesh relay capability.
-///
-/// DEPRECATED: Use `MembraneService::binary_for(ServiceCapability::MeshRelay)` instead.
-pub const FALLBACK_MESH_RELAY: &str = "songbird";
-
-/// Fallback binary name for content serving.
-///
-/// DEPRECATED: Use `MembraneService::binary_for(ServiceCapability::ContentServing)` instead.
-pub const FALLBACK_CONTENT_SERVING: &str = "nestgate";
 
 /// Runtime path resolver for membrane services.
 ///

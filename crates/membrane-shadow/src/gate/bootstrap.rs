@@ -37,7 +37,7 @@ pub struct BootstrapResult {
     pub all_pass: bool,
 }
 
-async fn timed_phase<F>(name: &str, fut: F) -> BootstrapPhase
+pub(super) async fn timed_phase<F>(name: &str, fut: F) -> BootstrapPhase
 where
     F: std::future::Future<Output = BootstrapPhase>,
 {
@@ -47,6 +47,20 @@ where
             name: name.into(),
             ok: false,
             detail: format!("timeout after {}s", PHASE_TIMEOUT.as_secs()),
+        })
+}
+
+/// Run a sync phase on the blocking threadpool to avoid stalling the executor.
+async fn blocking_phase<F>(name: &'static str, f: F) -> BootstrapPhase
+where
+    F: FnOnce() -> BootstrapPhase + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .unwrap_or_else(|_| BootstrapPhase {
+            name: name.into(),
+            ok: false,
+            detail: "task panicked".into(),
         })
 }
 
@@ -66,7 +80,7 @@ pub async fn bootstrap(
     let arch = crate::plasmid::detect_target_triple();
     let mut phases: Vec<BootstrapPhase> = Vec::new();
 
-    let transport = resolve_gate_transport(gate_name);
+    let transport = super::mesh::resolve_gate_transport(gate_name);
 
     phases.push(BootstrapPhase {
         name: "arch.detect".into(),
@@ -74,9 +88,8 @@ pub async fn bootstrap(
         detail: format!("{arch} ({mobility}) transport={transport}"),
     });
 
-    phases.push(permissions_phase(dry_run));
-
-    phases.push(identity_phase());
+    phases.push(blocking_phase("permissions.set", move || permissions_phase(dry_run)).await);
+    phases.push(blocking_phase("identity.git", identity_phase).await);
 
     phases.push(timed_phase("depot.fetch", fetch_phase(config, &transport, dry_run)).await);
 
@@ -101,26 +114,51 @@ pub async fn bootstrap(
 
     phases.push(timed_phase("sandbox.validate", sandbox_phase(&arch, dry_run)).await);
 
-    phases.push(install_phase(&arch, dry_run));
+    let install_arch = arch.clone();
+    phases.push(
+        blocking_phase("install.link", move || {
+            install_phase(&install_arch, dry_run)
+        })
+        .await,
+    );
 
-    phases.push(nucleus_phase(&arch, dry_run));
+    let nucleus_arch = arch.clone();
+    phases.push(
+        blocking_phase("nucleus.start", move || {
+            super::nucleus::nucleus_phase(&nucleus_arch, dry_run)
+        })
+        .await,
+    );
 
-    // mesh.init requires songbird to be running — must come after nucleus start
     if !dry_run {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
-    phases.push(timed_phase("mesh.configure", mesh_phase(gate_name, &arch, dry_run)).await);
+    phases.push(
+        timed_phase(
+            "mesh.configure",
+            super::mesh::mesh_phase(gate_name, &arch, dry_run),
+        )
+        .await,
+    );
     phases.push(timed_phase("health.sweep", health_phase(&arch, dry_run)).await);
 
     if mobility.needs_reconnect_hook() {
-        phases.push(mobility_phase(gate_name, dry_run));
+        let mob_gate = gate_name.to_string();
+        phases.push(
+            blocking_phase("mobility.hook", move || mobility_phase(&mob_gate, dry_run)).await,
+        );
     }
 
     let all_pass = phases.iter().all(|p| p.ok);
 
-    phases.push(emit_deployment_toml(
-        gate_name, &arch, mobility, dry_run, all_pass,
-    ));
+    let emit_gate = gate_name.to_string();
+    let emit_arch = arch.clone();
+    phases.push(
+        blocking_phase("deployment.emit", move || {
+            emit_deployment_toml(&emit_gate, &emit_arch, mobility, dry_run, all_pass)
+        })
+        .await,
+    );
 
     Ok(BootstrapResult {
         gate_name: gate_name.to_string(),
@@ -296,34 +334,8 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
-fn resolve_gate_transport(gate_name: &str) -> String {
-    let Ok(workspace_root) = crate::temporal::resolve_workspace_root() else {
-        return "wan".into();
-    };
-    let Ok(manifest) = crate::manifest::load_from_workspace(&workspace_root) else {
-        return "wan".into();
-    };
-    manifest
-        .gates
-        .get(gate_name)
-        .and_then(|p| p.transport.clone())
-        .unwrap_or_else(|| "wan".into())
-}
-
-/// Map a profile transport string to the appropriate `FetchSource`.
-///
-/// `local` uses SSH/rsync (VPS layer). All remote transports currently
-/// resolve to WAN HTTPS. As LAN rsync and ADB push mature, they will
-/// diverge from the WAN fallback.
-fn transport_to_fetch_source(transport: &str) -> crate::plasmid::FetchSource {
-    match transport {
-        "local" => crate::plasmid::FetchSource::Vps,
-        _ => crate::plasmid::FetchSource::Wan,
-    }
-}
-
 async fn fetch_phase(config: &ShadowConfig, transport: &str, dry_run: bool) -> BootstrapPhase {
-    let source = transport_to_fetch_source(transport);
+    let source = super::mesh::transport_to_fetch_source(transport);
     if dry_run {
         return BootstrapPhase {
             name: "depot.fetch".into(),
@@ -438,47 +450,6 @@ async fn sandbox_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
-async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> BootstrapPhase {
-    if dry_run {
-        let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
-        let extra = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS).unwrap_or_default();
-        let peer_info = if extra.is_empty() {
-            format!("1 peer ({vps_peer})")
-        } else {
-            let count = 1 + extra.split(',').filter(|p| !p.trim().is_empty()).count();
-            format!("{count} peers ({vps_peer} + LAN)")
-        };
-        return BootstrapPhase {
-            name: "mesh.configure".into(),
-            ok: true,
-            detail: format!("dry-run: would mesh.init {peer_info} as {gate_name}"),
-        };
-    }
-    let (ok, detail) = configure_mesh(gate_name, arch).await;
-    BootstrapPhase {
-        name: "mesh.configure".into(),
-        ok,
-        detail,
-    }
-}
-
-fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
-    if dry_run {
-        return BootstrapPhase {
-            name: "nucleus.start".into(),
-            ok: true,
-            detail: "dry-run: would start NUCLEUS primals".into(),
-        };
-    }
-    let (ok, detail) = start_nucleus_primals(arch);
-    BootstrapPhase {
-        name: "nucleus.start".into(),
-        ok,
-        detail,
-    }
-}
-
 async fn health_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     if dry_run {
         return BootstrapPhase {
@@ -581,281 +552,4 @@ fn emit_deployment_toml(
             format!("failed to write {}", deployment_path.display())
         },
     }
-}
-
-// ── Mesh configuration (native UDS) ───────────────────────────────────
-
-async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
-    let relay_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-
-    let dest_root = super::resolve_plasmidbin_dir();
-    let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);
-
-    if !relay_bin.exists() {
-        return (false, format!("{relay_binary} binary not found"));
-    }
-
-    let socket_dir = super::health::resolve_biomeos_socket_dir();
-    let socket_path = std::path::PathBuf::from(&socket_dir)
-        .join(format!("{relay_binary}.sock"))
-        .display()
-        .to_string();
-
-    // Retry up to 5 times (10s total) waiting for songbird socket
-    for _ in 0..5 {
-        if std::path::Path::new(&socket_path).exists() {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    }
-
-    if !std::path::Path::new(&socket_path).exists() {
-        return (
-            false,
-            format!(
-                "{relay_binary} socket not found at {socket_path} — start {relay_binary} first"
-            ),
-        );
-    }
-
-    let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
-
-    let mut peers: Vec<String> = vec![vps_peer.clone()];
-    if let Ok(extra) = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS) {
-        for p in extra.split(',') {
-            let trimmed = p.trim().to_string();
-            if !trimmed.is_empty() && !peers.contains(&trimmed) {
-                peers.push(trimmed);
-            }
-        }
-    }
-
-    let params = serde_json::json!({
-        "node_id": gate_name,
-        "peers": peers,
-    });
-    let request = crate::jsonrpc::request_with_params("mesh.init", &params, 1);
-
-    match crate::jsonrpc::call(std::path::Path::new(&socket_path), &request).await {
-        Ok(response) => {
-            let peer_count = peers.len();
-            if response.contains("\"result\"") || response.contains("\"ok\"") {
-                (
-                    true,
-                    format!("mesh.init sent ({peer_count} peers) as {gate_name}"),
-                )
-            } else {
-                (
-                    true,
-                    format!(
-                        "mesh.init sent ({peer_count} peers, response: {})",
-                        response.trim()
-                    ),
-                )
-            }
-        }
-        Err(e) => (false, format!("mesh.init failed: {e}")),
-    }
-}
-
-// ── NUCLEUS start ──────────────────────────────────────────────────────
-
-fn generate_secrets_env() {
-    use std::io::Write as _;
-    use std::os::unix::fs::PermissionsExt;
-
-    let env_dir = std::path::Path::new("/etc/membrane");
-    std::fs::create_dir_all(env_dir).ok();
-    let env_file = env_dir.join("secrets.env");
-    if env_file.exists() {
-        return;
-    }
-
-    let mut secret = String::with_capacity(128);
-    for _ in 0..64 {
-        use std::fmt::Write;
-        let _ = write!(secret, "{:02x}", rand_byte());
-    }
-    let content = format!("NESTGATE_JWT_SECRET={secret}\n");
-    if let Ok(mut f) = std::fs::File::create(&env_file) {
-        f.write_all(content.as_bytes()).ok();
-    }
-    std::fs::set_permissions(&env_file, std::fs::Permissions::from_mode(0o600)).ok();
-}
-
-fn rand_byte() -> u8 {
-    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let tick = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    #[allow(clippy::cast_possible_truncation)]
-    let byte = u64::from(now)
-        .wrapping_mul(6_364_136_223_846_793_005)
-        .wrapping_add(tick) as u8;
-    byte
-}
-
-/// Resolve extra CLI args for a primal's systemd `ExecStart`, based on capability.
-fn extra_exec_args(svc: &cellmembrane_types::MembraneService) -> String {
-    let relay_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-    let content_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::ContentServing,
-    );
-    let identity_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::Identity,
-    );
-
-    if svc.binary == relay_binary {
-        format!(
-            " --federation-port {} --bind {}",
-            cellmembrane_types::service::DEFAULT_FEDERATION_PORT,
-            cellmembrane_types::service::BIND_ALL,
-        )
-    } else if svc.binary == content_binary {
-        let port = cellmembrane_types::MembraneService::for_binary(content_binary)
-            .and_then(|s| s.port)
-            .unwrap_or(cellmembrane_types::service::DEFAULT_FEDERATION_PORT);
-        format!(
-            " --port {} --bind {}",
-            port,
-            cellmembrane_types::service::BIND_LOOPBACK,
-        )
-    } else if svc.binary == identity_binary {
-        format!(
-            " --http-address {}:0",
-            cellmembrane_types::service::BIND_LOOPBACK,
-        )
-    } else {
-        String::new()
-    }
-}
-
-/// Generate the systemd unit file content for a NUCLEUS primal.
-fn generate_unit_content(
-    svc: &cellmembrane_types::MembraneService,
-    exec_start: &str,
-    extra_args: &str,
-) -> String {
-    let content_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::ContentServing,
-    );
-    let env_file_line = if svc.binary == content_binary {
-        "EnvironmentFile=-/etc/membrane/secrets.env\n"
-    } else {
-        ""
-    };
-
-    format!(
-        "[Unit]\n\
-         Description={binary} primal (membrane NUCLEUS)\n\
-         After=network.target\n\n\
-         [Service]\n\
-         Type=simple\n\
-         {env_file_line}\
-         ExecStart={exec_start}{extra_args}\n\
-         Restart=on-failure\n\
-         RestartSec=3\n\
-         RuntimeDirectory=membrane\n\
-         RuntimeDirectoryPreserve=yes\n\n\
-         [Install]\n\
-         WantedBy=multi-user.target\n",
-        binary = svc.binary,
-    )
-}
-
-fn start_nucleus_primals(arch: &str) -> (bool, String) {
-    generate_secrets_env();
-
-    let install_base = super::resolve_install_base();
-    let dest_root = super::resolve_plasmidbin_dir();
-    let bin_dir = dest_root.join("primals").join(arch);
-    let paths = cellmembrane_types::service::ServicePaths::from_env();
-    let systemd_dir = std::path::Path::new("/etc/systemd/system");
-
-    std::fs::create_dir_all(std::path::Path::new(
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    ))
-    .ok();
-
-    let security_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-    let security_socket = paths
-        .socket_path(
-            cellmembrane_types::MembraneService::with_capability(
-                cellmembrane_types::ServiceCapability::CryptoSigner,
-            )
-            .expect("registry must have CryptoSigner"),
-        )
-        .unwrap_or_else(|| {
-            format!(
-                "{}/{security_binary}.sock",
-                cellmembrane_types::service::DEFAULT_SOCKET_BASE
-            )
-        });
-
-    let services = cellmembrane_types::MembraneService::all();
-    let mut installed = 0u32;
-    let mut failed = 0u32;
-
-    for svc in services {
-        if !svc.is_primal || !bin_dir.join(svc.binary).exists() {
-            continue;
-        }
-
-        let socket_path = paths.socket_path(svc).unwrap_or_else(|| {
-            format!(
-                "{}/{}.sock",
-                cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-                svc.binary
-            )
-        });
-        let exec_start = svc.server_contract.exec_args_with_base(
-            &install_base,
-            svc.binary,
-            &socket_path,
-            &security_socket,
-        );
-        let extra_args = extra_exec_args(svc);
-        let unit_content = generate_unit_content(svc, &exec_start, &extra_args);
-        let unit_path = systemd_dir.join(format!("{}-membrane.service", svc.binary));
-
-        if std::fs::write(&unit_path, &unit_content).is_ok() {
-            installed += 1;
-        } else {
-            failed += 1;
-        }
-    }
-
-    if installed > 0 {
-        std::process::Command::new("systemctl")
-            .args(["daemon-reload"])
-            .output()
-            .ok();
-
-        for svc in services {
-            if !svc.is_primal || !bin_dir.join(svc.binary).exists() {
-                continue;
-            }
-            let unit = format!("{}-membrane.service", svc.binary);
-            std::process::Command::new("systemctl")
-                .args(["enable", "--now", &unit])
-                .output()
-                .ok();
-        }
-    }
-
-    if installed == 0 && failed == 0 {
-        return (true, "no primal binaries found in depot — skipped".into());
-    }
-
-    let ok = failed == 0 && installed > 0;
-    (ok, format!("{installed} units installed, {failed} failed"))
 }

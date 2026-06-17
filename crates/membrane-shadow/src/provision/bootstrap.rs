@@ -11,8 +11,14 @@ use tracing::{error, info, warn};
 const SSH_RETRY_DELAY_SECS: u64 = 10;
 const SSH_MAX_RETRIES: u32 = 12;
 
+fn provision_ssh_user() -> String {
+    std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into())
+}
+
 /// Run a command on the remote host via SSH with retry logic for fresh droplets.
 async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
+    let user = provision_ssh_user();
     let output = tokio::process::Command::new("ssh")
         .args([
             "-o",
@@ -21,7 +27,7 @@ async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
             "BatchMode=yes",
             "-o",
             "StrictHostKeyChecking=accept-new",
-            &format!("root@{ip}"),
+            &format!("{user}@{ip}"),
             command,
         ])
         .output()
@@ -126,7 +132,7 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
                 "-o",
                 "StrictHostKeyChecking=accept-new",
                 &local_path.to_string_lossy(),
-                &format!("root@{ip}:{remote_path}"),
+                &format!("{}@{ip}:{remote_path}", provision_ssh_user()),
             ])
             .output()
             .await;
@@ -271,15 +277,15 @@ async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
     );
     let (bearer_unit, songbird_unit, _nucleus_template) = generate_systemd_units(gate_name);
 
-    let spine_socket = format!("/run/membrane/{spine}.sock");
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
+    let spine_socket = format!("{socket_base}/{spine}.sock");
 
-    // Generate per-primal units for non-Tower services using their ServerContract
     let mut primal_units = String::new();
     for svc in cellmembrane_types::MembraneService::all() {
         if !svc.is_primal || svc.binary == spine || svc.binary == relay {
             continue;
         }
-        let socket_path = format!("/run/membrane/{}.sock", svc.binary);
+        let socket_path = format!("{socket_base}/{}.sock", svc.binary);
         let exec_start = svc
             .server_contract
             .exec_args(svc.binary, &socket_path, &spine_socket);
@@ -637,17 +643,18 @@ pub async fn verify_remote_gate(
         &format!(
             r#"
 STALE=0
-for bin in {}/*; do
+for bin in {install_base}/*; do
     [ -x "$bin" ] || continue
     NAME=$(basename "$bin")
-    SOCK="/run/membrane/${{NAME}}.sock"
+    SOCK="{socket_base}/${{NAME}}.sock"
     [ -S "$SOCK" ] || {{ STALE=$((STALE + 1)); continue; }}
     RESP=$(echo '{{"jsonrpc":"2.0","method":"health","id":1}}' | socat - UNIX-CONNECT:"$SOCK" 2>/dev/null)
     echo "$RESP" | grep -q '"status":"healthy"' || STALE=$((STALE + 1))
 done
 echo "canary.audit: stale=$STALE"
 "#,
-            cellmembrane_types::service::DEFAULT_INSTALL_BASE
+            install_base = cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+            socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE
         ),
     )
     .await;

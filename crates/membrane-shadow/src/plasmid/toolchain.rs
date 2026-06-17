@@ -54,12 +54,12 @@ pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Re
     // Static linkage: check for absence of PT_INTERP program header (type=3)
     // which indicates dynamically linked. ELF64 phoff at offset 32, phentsize at 54, phnum at 56.
     if target.contains("musl") {
-        #[allow(clippy::cast_possible_truncation)] // validated ELF phoff field
-        let ph_off = u64::from_le_bytes(data[32..40].try_into().unwrap_or([0; 8])) as usize;
-        #[allow(clippy::cast_possible_truncation)] // ELF phentsize is always small
-        let ph_ent_size = u16::from_le_bytes([data[54], data[55]]) as usize;
-        #[allow(clippy::cast_possible_truncation)] // ELF phnum is always small
-        let ph_num = u16::from_le_bytes([data[56], data[57]]) as usize;
+        let ph_off = usize::try_from(u64::from_le_bytes(
+            data[32..40].try_into().unwrap_or([0; 8]),
+        ))
+        .map_err(|_| "BUILD-ELF-01: phoff exceeds addressable range".to_string())?;
+        let ph_ent_size = usize::from(u16::from_le_bytes([data[54], data[55]]));
+        let ph_num = usize::from(u16::from_le_bytes([data[56], data[57]]));
 
         let has_interp = (0..ph_num).any(|i| {
             let offset = ph_off + i * ph_ent_size;

@@ -56,7 +56,10 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
     let root = resolve_workspace_root()?;
     let m = crate::manifest::load_from_workspace(&root)?;
 
-    let repos: Vec<(&str, &crate::manifest::RepoEntry)> = m.gate_repos(opts.gate);
+    let push_target: Arc<str> = Arc::from(m.sync.push_target.as_str());
+    let shared_manifest = Arc::new(m);
+
+    let repos: Vec<(&str, &crate::manifest::RepoEntry)> = shared_manifest.gate_repos(opts.gate);
     let total = u32::try_from(repos.len()).unwrap_or(u32::MAX);
 
     if opts.mode == CascadeMode::DryRun {
@@ -72,34 +75,34 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
         )));
     }
 
-    let owned_repos: Vec<(String, crate::manifest::RepoEntry)> = repos
-        .iter()
-        .map(|(name, entry)| ((*name).to_string(), (*entry).clone()))
-        .collect();
+    let repo_names: Vec<String> = repos.iter().map(|(name, _)| (*name).to_string()).collect();
 
-    let push_target = m.sync.push_target.clone();
-    let shared_manifest = Arc::new(m.clone());
+    let root: Arc<Path> = root.into();
 
     let mut join_set = tokio::task::JoinSet::new();
 
-    for (name, entry) in owned_repos {
-        let root = root.clone();
-        let push_target = push_target.clone();
+    for name in repo_names {
+        let root = Arc::clone(&root);
+        let push_target = Arc::clone(&push_target);
         let manifest = Arc::clone(&shared_manifest);
         let mode = opts.mode;
         let clone_missing = opts.clone_missing;
 
         join_set.spawn(async move {
-            let result = process_repo(
-                &root,
-                &name,
-                &entry,
-                mode,
-                clone_missing,
-                &push_target,
-                &manifest,
-            )
-            .await;
+            let result = if let Some(entry) = manifest.repos.get(&name) {
+                process_repo(
+                    &root,
+                    &name,
+                    entry,
+                    mode,
+                    clone_missing,
+                    &push_target,
+                    &manifest,
+                )
+                .await
+            } else {
+                RepoResult::Skipped(format!("  {name:<35} SKIP (not in manifest)"))
+            };
             (name, result)
         });
     }
@@ -115,7 +118,8 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
 
     let (synced, failed, cloned, mut lines) = tally_results(results);
 
-    let harvest_info = post_sync::run_post_sync_phases(opts, &root, &m, &repos, &mut lines).await;
+    let harvest_info =
+        post_sync::run_post_sync_phases(opts, &root, &shared_manifest, &repos, &mut lines).await;
 
     let action = if opts.mode == CascadeMode::CheckOnly {
         "checked"
@@ -135,7 +139,11 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
          Repos:   {total}\n\
          \n\
          {action}={synced} failed={failed}{clone_info}{harvest_info}",
-        m.meta.version, m.meta.wave, m.meta.total_repos, opts.gate, opts.source,
+        shared_manifest.meta.version,
+        shared_manifest.meta.wave,
+        shared_manifest.meta.total_repos,
+        opts.gate,
+        opts.source,
     );
 
     Ok(crate::ShadowOutcome::ok_with(

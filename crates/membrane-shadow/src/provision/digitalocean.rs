@@ -32,13 +32,13 @@ fn client() -> Result<reqwest::Client> {
 }
 
 #[derive(Debug, Serialize)]
-struct CreateDropletBody {
-    name: String,
-    region: String,
-    size: String,
-    image: String,
-    ssh_keys: Vec<String>,
-    tags: Vec<String>,
+struct CreateDropletBody<'a> {
+    name: &'a str,
+    region: &'a str,
+    size: &'a str,
+    image: &'a str,
+    ssh_keys: &'a [String],
+    tags: &'a [String],
     monitoring: bool,
     ipv6: bool,
 }
@@ -104,18 +104,12 @@ pub struct SshKeyInfo {
 }
 
 impl DropletApiObject {
-    fn public_ipv4(&self) -> Option<String> {
-        self.networks.as_ref()?.v4.as_ref()?.iter().find_map(|n| {
-            if n.net_type == "public" {
-                Some(n.ip_address.clone())
-            } else {
-                None
-            }
-        })
-    }
-
     fn into_state(self, profile: &str) -> DropletState {
-        let ip = self.public_ipv4();
+        let ip = self
+            .networks
+            .and_then(|n| n.v4)
+            .and_then(|v4| v4.into_iter().find(|n| n.net_type == "public"))
+            .map(|n| n.ip_address);
         DropletState {
             id: self.id,
             name: self.name,
@@ -134,12 +128,12 @@ pub async fn create_droplet(req: &ProvisionRequest) -> Result<DropletState> {
     let http = client()?;
 
     let body = CreateDropletBody {
-        name: req.name.clone(),
-        region: req.region.clone(),
-        size: req.size.clone(),
-        image: req.image.clone(),
-        ssh_keys: req.ssh_keys.clone(),
-        tags: req.tags.clone(),
+        name: &req.name,
+        region: &req.region,
+        size: &req.size,
+        image: &req.image,
+        ssh_keys: &req.ssh_keys,
+        tags: &req.tags,
         monitoring: true,
         ipv6: false,
     };
@@ -367,7 +361,8 @@ mod tests {
                 ]),
             }),
         };
-        assert_eq!(obj.public_ipv4(), Some("1.2.3.4".to_string()));
+        let state = obj.into_state("test");
+        assert_eq!(state.ip, Some("1.2.3.4".to_string()));
     }
 
     #[test]
@@ -382,7 +377,8 @@ mod tests {
             created_at: "2026-06-12T00:00:00Z".into(),
             networks: None,
         };
-        assert_eq!(obj.public_ipv4(), None);
+        let state = obj.into_state("test");
+        assert_eq!(state.ip, None);
     }
 
     #[test]

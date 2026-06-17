@@ -154,7 +154,7 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
 
     // Check 1: SSH reachable
     let ssh_ok = crate::ssh::check_connectivity(&pepti_host).await;
-    checks.push(("ssh.reachable", ssh_ok, pepti_host.clone()));
+    checks.push(("ssh.reachable", ssh_ok, pepti_host));
 
     if !ssh_ok {
         let msg = format_pepti_report(&checks);

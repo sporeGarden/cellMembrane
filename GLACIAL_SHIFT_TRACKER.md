@@ -1,8 +1,17 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-13 (Wave 111)
+**Last updated:** 2026-06-17 (Wave 115)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
+**Wave 115 update (Sovereign Mesh & Gate Hardening):** `gate.bootstrap` per-phase
+timeouts (120s) + `identity.git` phase (detects missing git config + SSH keys).
+`depot.integrity` command (generate/verify BLAKE3 checksums). Smart refactor:
+`bootstrap.rs` 861L → 555L via `gate/nucleus.rs` + `gate/mesh.rs`. All sync phases
+evolved to `spawn_blocking`. Zero `as` casts, zero `.expect()` in production.
+`option_if_let_else` promoted to warn. SSH user and Caddy endpoint env-driven.
+55 new tests (416 → 471). All deps pure Rust (ring tracked in deny.toml).
+**Wave 113 update (Deep Debt + Zero-Copy):** Arc manifest in cascade, Cow relay
+defaults, safe casts (TryFrom), idiomatic error handling, SPDX headers, cargo-deny CI.
 **Wave 111 update (riboCipher + Deep Debt):** riboCipher Transport Signal Standard
 complete (mito-tier HKDF-SHA256 + HMAC tag generation/verification). All outbound UDS
 connections prepend clear signal `[0xEC, 0x01]`. `dispatch/infra.rs` smart refactored

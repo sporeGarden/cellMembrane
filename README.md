@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107, 2026-06-10) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 115) |
 
 ---
 
@@ -55,42 +55,20 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 391 tests — pedantic clippy clean
-cargo clippy                # Zero warnings (pedantic + nursery), #![forbid(unsafe_code)]
+cargo test                  # 471 tests — pedantic clippy clean
+cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-**Wave 111 (riboCipher + Dispatch SRP + Deep Debt Evolution):**
-riboCipher Transport Signal Standard: complete mito-tier implementation (HKDF-SHA256
-key derivation from FAMILY_SEED, HMAC tag generation/verification). All outbound UDS
-JSON-RPC connections prepend `[0xEC, 0x01]` clear signal. `dispatch/infra.rs` smart
-refactored (762L → 264L remote VPS API + 518L local gate.rs). Error propagation
-modernized (redundant `map_err` → `#[from]` conversion). Neural API constants elevated
-to shared types crate. Freshness auto-publish race-fix (wave-ID guard). 391 tests.
-
-**Wave 111 (Gate Expansion + Robustness Hardening):**
-`gate.bootstrap` sandbox integration — Tower primals sandbox-validated before install.
-CASCADE-STALE-RECOVERY (auto-stash + ff-only pull + pop for dirty worktrees).
-PARTIAL-FETCH-RESUME (atomic `.tmp` → rename, stale partial cleanup, retry with backoff).
-Pure Rust ELF validation (no external `file` command — reads e_machine + PT_INTERP directly).
-Hardcoded ports evolved to named constants (`DEFAULT_FEDERATION_PORT`, `DEFAULT_TURN_PORT`,
-`DEFAULT_VPS_HOST`). All env vars centralized to types crate.
-
-**Wave 110+ (Deep Debt Evolution + Sandbox/Canary Pipeline):**
-Native async UDS JSON-RPC probes (replaces all bash/socat). `gate/` split into
-`bootstrap.rs` + `health.rs` + `verify.rs` (868L → 4 focused modules). Dual-checksum
-verification (git + WAN). `temporal.cascade --with-restart` (selective NUCLEUS restart).
-Transport-driven bootstrap (profile `transport` field routes fetch). Agentic divergence
-resolver (authority-first graduated ff → rebase → signal, SOVEREIGN_REMOTE configurable).
-`temporal/resolve.rs` extracted (push logic + divergence policy). `plasmid/toolchain.rs`
-extracted (ELF validation + NDK cross-compile). **`ServiceCapability` enum** — primals
-discovered by capability (`MeshRelay`, `TurnServer`, `CryptoSigner`, etc.) not name.
-**Sandbox NUCLEUS**: ephemeral isolated validation before promotion (spin-up → UDS probe →
-teardown). **Canary pool**: previous-good binaries retained as fallback instances.
-Atomic blue/green promotion with canary retirement. `service/registry.rs` extracted
-(pure data). All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`, `MEMBRANE_SOCKET_BASE`,
-`VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`). Zero production `unwrap()`, zero
-`#[allow]`, zero `unsafe`, zero TODO/FIXME, all deps pure Rust. 365 tests, zero clippy.
+**Wave 115 (Sovereign Mesh & Gate Hardening):**
+`gate.bootstrap` per-phase timeouts (120s) + `identity.git` phase (detects missing git
+config + SSH keys). `depot.integrity` command (generate/verify checksums.toml with
+BLAKE3). Smart refactor: `bootstrap.rs` 861L → 555L via `gate/nucleus.rs` (systemd
+unit management) + `gate/mesh.rs` (mesh peer configuration). All sync phases evolved
+to `spawn_blocking` (prevents executor stalls on binary copy). Zero `as` casts in
+production, zero `.expect()` in production. `option_if_let_else` promoted from allow
+to warn. SSH user `root@` evolved to `MEMBRANE_PROVISION_SSH_USER` env var. Caddy
+admin endpoint evolved to `CADDY_ADMIN_ENDPOINT` env var. 471 tests, zero clippy.
 
 **Wave 107–109 (Deterministic Deployment + guideStone):**
 `gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),
@@ -136,6 +114,8 @@ membrane plasmid.canary.list              # Show canary pool state (previous-goo
 membrane plasmid.canary.health            # Health-check all canary instances
 membrane plasmid.canary.promote --primal X  # Rollback: canary → production
 membrane plasmid.canary.failover          # List healthy failover targets
+membrane depot.integrity                  # Generate checksums.toml (BLAKE3) for all depot binaries
+membrane depot.integrity --verify         # Verify existing checksums against depot
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
@@ -155,7 +135,7 @@ membrane gate.status
 # VPS health + service summary
 membrane gate.health
 
-# Cascade sync (manifest-driven, 22 repos)
+# Cascade sync (manifest-driven)
 membrane temporal.cascade
 
 # Fetch all primals from WAN depot (BLAKE3 verified)
@@ -209,6 +189,8 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Primal composition grade (Wave 110+): ServiceCapability discovery, temporal/resolve.rs + plasmid/toolchain.rs extracted, all paths env-configurable, DRY socket resolution, zero prod unwrap/TODO/allow | DONE |
 | Sandbox NUCLEUS + canary pool (Wave 110+): sandbox.rs ephemeral validation, canary.rs fallback pool, atomic blue/green promotion, cascade-restart with canary retirement, service/registry.rs extracted | DONE |
 | riboCipher + dispatch SRP (Wave 111): mito-tier HKDF+HMAC complete, dispatch gate.rs extracted (762L→264+518L), error propagation modernized, Neural API constants shared, 391 tests | DONE |
+| Deep debt evolution (Wave 113): zero-copy temporal (Arc manifest, Cow defaults), idiomatic Rust (safe casts, structured logging), ecosystem compliance (SPDX headers, cargo-deny CI) | DONE |
+| Bootstrap robustness + depot integrity (Wave 115): per-phase timeouts, identity detection, depot.integrity command, bootstrap 861→555L smart refactor, spawn_blocking for fs ops, 471 tests | DONE |
 
 ---
 
@@ -302,7 +284,7 @@ gardens/cellMembrane/
         identity.rs           # Family ID, gate ID
         provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
         service/              # Static service registry — zero allocation, const fn
-          mod.rs              # Types, enums, ServicePaths, impl MembraneService (550L)
+          mod.rs              # Types, enums, ServicePaths, impl MembraneService (705L)
           registry.rs         # 17 const service entries + ALL_SERVICES array (304L)
         validation.rs         # Report pattern (pass/fail/warn) + doc-tests
       tests/
@@ -323,11 +305,13 @@ gardens/cellMembrane/
           infra.rs            # repo, mirror, service, token (remote VPS API)
           gate.rs             # gate status, health, bootstrap, provision (local self-management)
           data.rs             # manifest, identity, context, plasmid, relay
-        gate/                 # Gate operations (modular: bootstrap, health, verify)
+        gate/                 # Gate operations (modular: bootstrap, health, verify, mesh, nucleus)
           mod.rs              # VPS-oriented: info, pull, check
-          bootstrap.rs        # Local enrollment (7-phase, transport-driven)
+          bootstrap.rs        # Local enrollment (per-phase timeouts, spawn_blocking)
           health.rs           # Native async UDS JSON-RPC probes + status
           verify.rs           # Dual checksum verification (git + WAN)
+          mesh.rs             # Mesh peer configuration (transport resolution, songbird UDS)
+          nucleus.rs          # NUCLEUS systemd management (unit generation, secrets)
           local.rs            # Shared helpers (identity, depot path resolution)
         relay.rs              # K-Derm relay chain (SSH+cat, no rsync)
         impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)

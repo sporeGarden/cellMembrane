@@ -13,6 +13,8 @@
 pub mod bootstrap;
 pub mod health;
 mod local;
+mod mesh;
+mod nucleus;
 pub mod verify;
 
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};

@@ -319,3 +319,73 @@ pub(super) fn select_leader(positions: &[RemotePosition]) -> (String, u32) {
         .max_by_key(|p| p.behind)
         .map_or_else(|| (String::new(), 0), |p| (p.remote.clone(), p.behind))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pos(remote: &str, ahead: u32, behind: u32) -> RemotePosition {
+        RemotePosition {
+            remote: remote.into(),
+            ahead,
+            behind,
+        }
+    }
+
+    #[test]
+    fn select_leader_prefers_sovereign_when_behind() {
+        let positions = vec![pos("forgejo", 0, 5), pos("origin", 0, 10)];
+        let (leader, count) = select_leader(&positions);
+        assert_eq!(leader, "forgejo", "sovereign remote should be preferred");
+        assert_eq!(count, 5);
+    }
+
+    #[test]
+    fn select_leader_falls_back_to_most_behind_when_sovereign_parity() {
+        let positions = vec![
+            pos("forgejo", 0, 0),
+            pos("origin", 0, 3),
+            pos("github", 0, 7),
+        ];
+        let (leader, count) = select_leader(&positions);
+        assert_eq!(leader, "github", "should pick remote with most behind");
+        assert_eq!(count, 7);
+    }
+
+    #[test]
+    fn select_leader_empty_positions() {
+        let (leader, count) = select_leader(&[]);
+        assert!(leader.is_empty());
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn select_leader_all_parity() {
+        let positions = vec![pos("forgejo", 0, 0), pos("origin", 0, 0)];
+        let (leader, count) = select_leader(&positions);
+        assert!(leader.is_empty(), "no leader when all at parity");
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn select_leader_single_remote_behind() {
+        let positions = vec![pos("origin", 0, 2)];
+        let (leader, count) = select_leader(&positions);
+        assert_eq!(leader, "origin");
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn select_leader_sovereign_at_parity_but_mirror_behind() {
+        let positions = vec![pos("forgejo", 0, 0), pos("github", 0, 4)];
+        let (leader, count) = select_leader(&positions);
+        assert_eq!(leader, "github");
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn sovereign_remote_is_not_empty() {
+        let sov = sovereign_remote();
+        assert!(!sov.is_empty(), "sovereign remote should never be empty");
+    }
+}

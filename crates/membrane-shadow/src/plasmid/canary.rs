@@ -442,7 +442,13 @@ async fn remote_health_check(ip: &str) -> bool {
                 "BatchMode=yes",
                 "-o",
                 "StrictHostKeyChecking=accept-new",
-                &format!("root@{ip}"),
+                &format!(
+                    "{}@{ip}",
+                    std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
+                        .unwrap_or_else(|_| {
+                            cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into()
+                        })
+                ),
                 &probe_cmd,
             ])
             .output(),

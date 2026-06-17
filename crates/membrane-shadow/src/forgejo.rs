@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 const API_TIMEOUT_WRITE: std::time::Duration = std::time::Duration::from_secs(30);
 const API_TIMEOUT_READ: std::time::Duration = std::time::Duration::from_secs(15);
 const API_TIMEOUT_FAST: std::time::Duration = std::time::Duration::from_secs(5);
-const PAGE_SIZE: u32 = 50;
+const PAGE_SIZE: usize = 50;
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ pub async fn repo_list(config: &ShadowConfig, org: &str) -> Result<Vec<RepoInfo>
         let batch: Vec<RepoInfo> = resp.json().await?;
         let count = batch.len();
         all_repos.extend(batch);
-        if count < PAGE_SIZE as usize {
+        if count < PAGE_SIZE {
             break;
         }
         page += 1;

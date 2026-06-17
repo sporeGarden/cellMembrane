@@ -155,3 +155,253 @@ pub struct TemporalReport {
     /// Per-repo results.
     pub repos: Vec<TemporalMatrix>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_position_serde_roundtrip() {
+        let pos = RemotePosition {
+            remote: "origin".into(),
+            ahead: 3,
+            behind: 1,
+        };
+        let json = serde_json::to_string(&pos).unwrap();
+        let deser: RemotePosition = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.remote, "origin");
+        assert_eq!(deser.ahead, 3);
+        assert_eq!(deser.behind, 1);
+    }
+
+    #[test]
+    fn remote_position_is_parity() {
+        let parity = RemotePosition {
+            remote: "forgejo".into(),
+            ahead: 0,
+            behind: 0,
+        };
+        assert!(parity.is_parity());
+
+        let ahead = RemotePosition {
+            remote: "origin".into(),
+            ahead: 1,
+            behind: 0,
+        };
+        assert!(!ahead.is_parity());
+
+        let behind = RemotePosition {
+            remote: "origin".into(),
+            ahead: 0,
+            behind: 2,
+        };
+        assert!(!behind.is_parity());
+    }
+
+    #[test]
+    fn remote_position_display() {
+        let pos = RemotePosition {
+            remote: "origin".into(),
+            ahead: 5,
+            behind: 2,
+        };
+        assert_eq!(pos.to_string(), "origin(+5,-2)");
+    }
+
+    #[test]
+    fn sync_classification_serde_roundtrip_all_variants() {
+        let variants = [
+            SyncClassification::Parity,
+            SyncClassification::Converge,
+            SyncClassification::Diverge,
+            SyncClassification::Missing,
+            SyncClassification::NoRemote,
+        ];
+        for variant in &variants {
+            let json = serde_json::to_string(variant).unwrap();
+            let deser: SyncClassification = serde_json::from_str(&json).unwrap();
+            assert_eq!(&deser, variant);
+        }
+    }
+
+    #[test]
+    fn sync_classification_serializes_screaming_snake_case() {
+        assert_eq!(
+            serde_json::to_string(&SyncClassification::Parity).unwrap(),
+            "\"PARITY\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncClassification::NoRemote).unwrap(),
+            "\"NO_REMOTE\""
+        );
+    }
+
+    #[test]
+    fn sync_classification_display() {
+        assert_eq!(SyncClassification::Parity.to_string(), "PARITY");
+        assert_eq!(SyncClassification::Converge.to_string(), "CONVERGE");
+        assert_eq!(SyncClassification::Diverge.to_string(), "DIVERGE");
+        assert_eq!(SyncClassification::Missing.to_string(), "MISSING");
+        assert_eq!(SyncClassification::NoRemote.to_string(), "NO_REMOTE");
+    }
+
+    #[test]
+    fn sync_action_none_roundtrip() {
+        let action = SyncAction::None;
+        let json = serde_json::to_string(&action).unwrap();
+        let deser: SyncAction = serde_json::from_str(&json).unwrap();
+        assert!(matches!(deser, SyncAction::None));
+    }
+
+    #[test]
+    fn sync_action_pull_roundtrip() {
+        let action = SyncAction::Pull {
+            leader: "forgejo".into(),
+        };
+        let json = serde_json::to_string(&action).unwrap();
+        assert!(json.contains("\"leader\":\"forgejo\""));
+        let deser: SyncAction = serde_json::from_str(&json).unwrap();
+        if let SyncAction::Pull { leader } = deser {
+            assert_eq!(leader, "forgejo");
+        } else {
+            panic!("expected Pull variant");
+        }
+    }
+
+    #[test]
+    fn sync_action_push_roundtrip() {
+        let json = serde_json::to_string(&SyncAction::Push).unwrap();
+        let deser: SyncAction = serde_json::from_str(&json).unwrap();
+        assert!(matches!(deser, SyncAction::Push));
+    }
+
+    #[test]
+    fn sync_action_tree_parity_roundtrip() {
+        let action = SyncAction::TreeParity {
+            leader: "forgejo".into(),
+            followers: vec!["origin".into(), "github".into()],
+        };
+        let json = serde_json::to_string(&action).unwrap();
+        let deser: SyncAction = serde_json::from_str(&json).unwrap();
+        if let SyncAction::TreeParity { leader, followers } = deser {
+            assert_eq!(leader, "forgejo");
+            assert_eq!(followers, vec!["origin", "github"]);
+        } else {
+            panic!("expected TreeParity variant");
+        }
+    }
+
+    #[test]
+    fn sync_action_flag_roundtrip() {
+        let json = serde_json::to_string(&SyncAction::Flag).unwrap();
+        let deser: SyncAction = serde_json::from_str(&json).unwrap();
+        assert!(matches!(deser, SyncAction::Flag));
+    }
+
+    #[test]
+    fn sync_action_display() {
+        assert_eq!(SyncAction::None.to_string(), "ok");
+        assert_eq!(
+            SyncAction::Pull {
+                leader: "origin".into()
+            }
+            .to_string(),
+            "pull origin"
+        );
+        assert_eq!(SyncAction::Push.to_string(), "push followers");
+        assert_eq!(SyncAction::Flag.to_string(), "FLAG: human review");
+
+        let tp = SyncAction::TreeParity {
+            leader: "forgejo".into(),
+            followers: vec!["origin".into(), "github".into()],
+        };
+        assert_eq!(tp.to_string(), "tree-parity: forgejo → origin, github");
+    }
+
+    #[test]
+    fn temporal_matrix_serde_roundtrip() {
+        let matrix = TemporalMatrix {
+            repo_path: "primals/biomeOS".into(),
+            branch: "main".into(),
+            classification: SyncClassification::Converge,
+            positions: vec![
+                RemotePosition {
+                    remote: "origin".into(),
+                    ahead: 0,
+                    behind: 3,
+                },
+                RemotePosition {
+                    remote: "forgejo".into(),
+                    ahead: 3,
+                    behind: 0,
+                },
+            ],
+            action: SyncAction::Pull {
+                leader: "forgejo".into(),
+            },
+        };
+        let json = serde_json::to_string(&matrix).unwrap();
+        let deser: TemporalMatrix = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.repo_path, "primals/biomeOS");
+        assert_eq!(deser.branch, "main");
+        assert_eq!(deser.classification, SyncClassification::Converge);
+        assert_eq!(deser.positions.len(), 2);
+    }
+
+    #[test]
+    fn temporal_matrix_display() {
+        let matrix = TemporalMatrix {
+            repo_path: "primals/biomeOS".into(),
+            branch: "main".into(),
+            classification: SyncClassification::Parity,
+            positions: vec![RemotePosition {
+                remote: "origin".into(),
+                ahead: 0,
+                behind: 0,
+            }],
+            action: SyncAction::None,
+        };
+        let display = matrix.to_string();
+        assert!(display.contains("primals/biomeOS"));
+        assert!(display.contains("PARITY"));
+        assert!(display.contains("origin(+0,-0)"));
+        assert!(display.contains("ok"));
+    }
+
+    #[test]
+    fn temporal_sync_result_roundtrip() {
+        let result = TemporalSyncResult {
+            repo_path: "primals/songbird".into(),
+            ok: true,
+            summary: "converged via ff".into(),
+            pulled_from: Some("forgejo".into()),
+            pushed_to: vec!["origin".into()],
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let deser: TemporalSyncResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.repo_path, "primals/songbird");
+        assert!(deser.ok);
+        assert_eq!(deser.pulled_from.as_deref(), Some("forgejo"));
+        assert_eq!(deser.pushed_to, vec!["origin"]);
+    }
+
+    #[test]
+    fn temporal_report_roundtrip() {
+        let report = TemporalReport {
+            total: 10,
+            parity: 7,
+            converged: 2,
+            diverged: 1,
+            missing: 0,
+            repos: vec![],
+        };
+        let json = serde_json::to_string(&report).unwrap();
+        let deser: TemporalReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.total, 10);
+        assert_eq!(deser.parity, 7);
+        assert_eq!(deser.converged, 2);
+        assert_eq!(deser.diverged, 1);
+        assert_eq!(deser.missing, 0);
+        assert!(deser.repos.is_empty());
+    }
+}

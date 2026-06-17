@@ -142,3 +142,110 @@ fn format_bytes(bytes: u64) -> String {
         format!("{bytes}B")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_bytes_zero() {
+        assert_eq!(format_bytes(0), "0B");
+    }
+
+    #[test]
+    fn format_bytes_sub_kib() {
+        assert_eq!(format_bytes(1), "1B");
+        assert_eq!(format_bytes(1023), "1023B");
+    }
+
+    #[test]
+    fn format_bytes_exact_kib() {
+        assert_eq!(format_bytes(1024), "1.0Ki");
+    }
+
+    #[test]
+    fn format_bytes_kib_range() {
+        assert_eq!(format_bytes(1536), "1.5Ki");
+        assert_eq!(format_bytes(1024 * 1024 - 1), "1024.0Ki");
+    }
+
+    #[test]
+    fn format_bytes_exact_mib() {
+        assert_eq!(format_bytes(1024 * 1024), "1.0Mi");
+    }
+
+    #[test]
+    fn format_bytes_mib_range() {
+        let val = 1024 * 1024 * 12 + 1024 * 300;
+        let result = format_bytes(val);
+        assert!(result.ends_with("Mi"), "expected Mi suffix, got: {result}");
+    }
+
+    #[test]
+    fn format_bytes_exact_gib() {
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.0Gi");
+    }
+
+    #[test]
+    fn format_bytes_large_gib() {
+        let val = 1024 * 1024 * 1024 * 4;
+        assert_eq!(format_bytes(val), "4.0Gi");
+    }
+
+    #[test]
+    fn service_status_serialization_roundtrip() {
+        let status = ServiceStatus {
+            unit: "beardog-membrane.service".into(),
+            active: true,
+            sub_state: "running".into(),
+            description: "beardog primal (membrane NUCLEUS)".into(),
+            pid: Some(1234),
+            memory: Some("12.3Mi".into()),
+            uptime: Some("Thu 2025-01-01 00:00:00 UTC".into()),
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let deser: ServiceStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.unit, "beardog-membrane.service");
+        assert!(deser.active);
+        assert_eq!(deser.sub_state, "running");
+        assert_eq!(deser.pid, Some(1234));
+        assert_eq!(deser.memory.as_deref(), Some("12.3Mi"));
+    }
+
+    #[test]
+    fn service_status_with_none_fields() {
+        let status = ServiceStatus {
+            unit: "test.service".into(),
+            active: false,
+            sub_state: "dead".into(),
+            description: String::new(),
+            pid: None,
+            memory: None,
+            uptime: None,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let deser: ServiceStatus = serde_json::from_str(&json).unwrap();
+        assert!(!deser.active);
+        assert_eq!(deser.pid, None);
+        assert_eq!(deser.memory, None);
+        assert_eq!(deser.uptime, None);
+    }
+
+    #[test]
+    fn service_status_json_contains_expected_keys() {
+        let status = ServiceStatus {
+            unit: "x.service".into(),
+            active: true,
+            sub_state: "running".into(),
+            description: "desc".into(),
+            pid: Some(99),
+            memory: None,
+            uptime: None,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"unit\""));
+        assert!(json.contains("\"active\""));
+        assert!(json.contains("\"sub_state\""));
+        assert!(json.contains("\"pid\""));
+    }
+}
