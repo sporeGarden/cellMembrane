@@ -70,10 +70,7 @@ fn nftables_standalone_has_flush_and_chains() {
     assert!(script.contains("chain output"), "output chain");
     assert!(script.contains("policy drop"), "default drop");
     assert!(script.contains("tcp dport 22 accept"), "SSH rule");
-    assert!(
-        !script.contains("masquerade"),
-        "standalone must not NAT"
-    );
+    assert!(!script.contains("masquerade"), "standalone must not NAT");
     assert!(
         !script.contains("membrane-nat"),
         "standalone must not have NAT table"
@@ -121,14 +118,8 @@ fn nftables_plasma_membrane_trusts_lan() {
 fn nftables_plasma_membrane_has_wireguard() {
     let fw = FirewallRuleset::for_composition(MembraneComposition::Nucleus);
     let script = fw.to_nftables_script(Some(&sporegate_config()));
-    assert!(
-        script.contains("udp dport 51820 accept"),
-        "WireGuard port"
-    );
-    assert!(
-        script.contains("iifname \"wg0\" accept"),
-        "WireGuard input"
-    );
+    assert!(script.contains("udp dport 51820 accept"), "WireGuard port");
+    assert!(script.contains("iifname \"wg0\" accept"), "WireGuard input");
     assert!(
         script.contains("iifname \"wg0\" accept comment \"WireGuard overlay forward\""),
         "WireGuard forward"
@@ -153,10 +144,7 @@ fn nftables_plasma_membrane_forwards_lan_to_wan() {
 fn nftables_plasma_membrane_drops_ipv6_forward() {
     let fw = FirewallRuleset::for_composition(MembraneComposition::Nucleus);
     let script = fw.to_nftables_script(Some(&sporegate_config()));
-    assert!(
-        script.contains("table ip6 membrane-v6"),
-        "IPv6 table"
-    );
+    assert!(script.contains("table ip6 membrane-v6"), "IPv6 table");
 }
 
 #[test]
@@ -178,10 +166,7 @@ fn nftables_all_compositions_generate() {
             "standalone {comp} must flush"
         );
         let plasma = fw.to_nftables_script(Some(&sporegate_config()));
-        assert!(
-            plasma.contains("masquerade"),
-            "plasma {comp} must NAT"
-        );
+        assert!(plasma.contains("masquerade"), "plasma {comp} must NAT");
     }
 }
 
@@ -238,7 +223,10 @@ fn nftables_config_serde_defaults() {
     assert!(!parsed.trust_lan_input, "trust_lan_input defaults false");
     assert!(parsed.drop_ipv6_forward, "drop_ipv6_forward defaults true");
     assert_eq!(parsed.wireguard_port, 51820, "wg port defaults 51820");
-    assert!(parsed.wireguard_interface.is_none(), "wg interface defaults None");
+    assert!(
+        parsed.wireguard_interface.is_none(),
+        "wg interface defaults None"
+    );
 }
 
 #[test]
@@ -252,5 +240,8 @@ fn nftables_standalone_has_log_drop() {
 fn nftables_plasma_counter_drop_forward() {
     let fw = FirewallRuleset::for_composition(MembraneComposition::Nucleus);
     let script = fw.to_nftables_script(Some(&sporegate_config()));
-    assert!(script.contains("counter drop"), "forward chain should count drops");
+    assert!(
+        script.contains("counter drop"),
+        "forward chain should count drops"
+    );
 }

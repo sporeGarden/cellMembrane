@@ -588,15 +588,16 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let comp_str = cli::extract_flag_value(args, "--composition")
         .or_else(|| args.first().filter(|a| !a.starts_with("--")).copied())
         .unwrap_or("relay");
-    let composition = MembraneComposition::parse_name(comp_str)
-        .ok_or_else(|| crate::error::ShadowError::Parse(format!(
+    let composition = MembraneComposition::parse_name(comp_str).ok_or_else(|| {
+        crate::error::ShadowError::Parse(format!(
             "unknown composition: {comp_str} (expected: {})",
             MembraneComposition::all()
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(", ")
-        )))?;
+        ))
+    })?;
 
     let fw = FirewallRuleset::for_composition(composition);
 

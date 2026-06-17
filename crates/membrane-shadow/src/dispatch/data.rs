@@ -631,7 +631,11 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
     let nestgate_port = std::env::var(cellmembrane_types::service::ENV_NESTGATE_PORT)
         .ok()
         .and_then(|v| v.parse::<u16>().ok())
-        .unwrap_or_else(|| content_svc.and_then(|s| s.port).unwrap_or(cellmembrane_types::service::DEFAULT_NESTGATE_PORT));
+        .unwrap_or_else(|| {
+            content_svc
+                .and_then(|s| s.port)
+                .unwrap_or(cellmembrane_types::service::DEFAULT_NESTGATE_PORT)
+        });
     let bind = std::env::var(cellmembrane_types::service::ENV_NUCLEUS_BIND)
         .unwrap_or_else(|_| cellmembrane_types::service::BIND_LOOPBACK.into());
     let (curl_out, curl_code) = crate::ssh::exec_raw(

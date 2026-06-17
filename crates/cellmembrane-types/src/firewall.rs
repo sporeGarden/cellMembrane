@@ -166,7 +166,10 @@ impl FirewallRuleset {
 /// DHCP serving, and packet forwarding for interior gates. This config
 /// parameterizes the nftables ruleset for that role.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(clippy::struct_excessive_bools, reason = "each flag is an independent firewall toggle")]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each flag is an independent firewall toggle"
+)]
 pub struct NftablesConfig {
     /// WAN-facing interface name (e.g., `"enp1s0"`, `"eth0"`).
     pub wan_interface: String,
@@ -326,11 +329,7 @@ impl FirewallRuleset {
                 out.push_str("table ip membrane-nat {\n");
                 out.push_str("    chain postrouting {\n");
                 out.push_str("        type nat hook postrouting priority srcnat;\n");
-                let _ = writeln!(
-                    out,
-                    "        oifname \"{}\" masquerade",
-                    cfg.wan_interface
-                );
+                let _ = writeln!(out, "        oifname \"{}\" masquerade", cfg.wan_interface);
                 out.push_str("    }\n");
                 out.push_str("}\n");
             }

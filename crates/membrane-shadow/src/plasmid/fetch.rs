@@ -123,7 +123,9 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         return Ok(format_dry_run(&primals, &arch, &tag, &bin_dir, args.source));
     }
 
-    tokio::fs::create_dir_all(&bin_dir).await.map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&bin_dir)
+        .await
+        .map_err(ShadowError::Io)?;
 
     cleanup_partial_downloads(&bin_dir);
 
@@ -535,7 +537,8 @@ async fn fetch_primals(
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = tokio::fs::set_permissions(&local_path, std::fs::Permissions::from_mode(0o755)).await;
+            let _ = tokio::fs::set_permissions(&local_path, std::fs::Permissions::from_mode(0o755))
+                .await;
         }
 
         let is_verified = checksums
