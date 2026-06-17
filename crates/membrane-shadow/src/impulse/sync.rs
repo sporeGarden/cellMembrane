@@ -21,7 +21,7 @@ pub async fn post_sync_diverge(
     workspace_root: &Path,
     args: &SyncDivergeArgs,
 ) -> Result<SyncImpulseFile> {
-    let gate_id = identity::resolve(workspace_root)?;
+    let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
     let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();

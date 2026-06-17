@@ -77,6 +77,37 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
     ))
 }
 
+/// Async variant — reads `.gate` file via `tokio::fs` to avoid blocking the runtime.
+///
+/// # Errors
+/// Returns `ShadowError::Parse` if no identity can be resolved.
+pub async fn resolve_async(workspace_root: &Path) -> Result<GateIdentity> {
+    if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
+        let name = name.trim().to_string();
+        if !name.is_empty() {
+            return Ok(GateIdentity {
+                name,
+                source: IdentitySource::Environment,
+            });
+        }
+    }
+
+    let gate_file = workspace_root.join(".gate");
+    if let Ok(contents) = tokio::fs::read_to_string(&gate_file).await {
+        let name = contents.trim().to_string();
+        if !name.is_empty() {
+            return Ok(GateIdentity {
+                name,
+                source: IdentitySource::GateFile,
+            });
+        }
+    }
+
+    Err(ShadowError::Parse(
+        "cannot resolve gate identity — set GATE_NAME or create .gate file".into(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

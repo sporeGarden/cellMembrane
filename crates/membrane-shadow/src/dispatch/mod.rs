@@ -71,8 +71,8 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         }
         c if c.starts_with("token.") => infra::dispatch_token(config, cmd, args).await,
         c if c.starts_with("temporal.") => temporal::dispatch_temporal(config, cmd, args).await,
-        c if c.starts_with("manifest.") => data::dispatch_manifest(cmd, args),
-        "identity.resolve" => data::dispatch_identity(),
+        c if c.starts_with("manifest.") => data::dispatch_manifest(cmd, args).await,
+        "identity.resolve" => data::dispatch_identity().await,
         c if c.starts_with("impulse.") => impulse::dispatch_impulse(cmd, args).await,
         c if c.starts_with("potential.") => impulse::dispatch_potential(cmd, args),
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,

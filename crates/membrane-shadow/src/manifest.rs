@@ -223,6 +223,19 @@ impl EcosystemManifest {
         toml::from_str(&contents).map_err(ShadowError::Toml)
     }
 
+    /// Async variant — reads the file on a blocking thread to avoid stalling
+    /// the tokio runtime on file I/O.
+    ///
+    /// # Errors
+    /// Returns `ShadowError::Io` if the file can't be read, or
+    /// `ShadowError::Parse` if the TOML is malformed.
+    pub async fn load_async(path: PathBuf) -> Result<Self> {
+        let contents = tokio::fs::read_to_string(&path)
+            .await
+            .map_err(ShadowError::Io)?;
+        toml::from_str(&contents).map_err(ShadowError::Toml)
+    }
+
     /// Find the manifest file relative to a workspace root.
     /// Looks at `infra/wateringHole/ecosystem_manifest.toml`.
     #[must_use]
@@ -388,6 +401,20 @@ pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
         ))
     })?;
     EcosystemManifest::load(&path)
+}
+
+/// Async convenience: load manifest from workspace root without blocking the runtime.
+///
+/// # Errors
+/// Returns error if manifest not found or unparseable.
+pub async fn load_from_workspace_async(workspace_root: &Path) -> Result<EcosystemManifest> {
+    let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
+        ShadowError::Parse(format!(
+            "ecosystem_manifest.toml not found under {}",
+            workspace_root.display()
+        ))
+    })?;
+    EcosystemManifest::load_async(path).await
 }
 
 #[cfg(test)]

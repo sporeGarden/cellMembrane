@@ -54,10 +54,7 @@ pub struct CascadeOpts<'a> {
 /// Execute cascade with typed options.
 pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOutcome> {
     let root = resolve_workspace_root()?;
-    let root_owned = root.clone();
-    let m = tokio::task::spawn_blocking(move || crate::manifest::load_from_workspace(&root_owned))
-        .await
-        .map_err(|e| crate::error::ShadowError::Parse(format!("spawn failed: {e}")))??;
+    let m = crate::manifest::load_from_workspace_async(&root).await?;
 
     let push_target: Arc<str> = Arc::from(m.sync.push_target.as_str());
     let shared_manifest = Arc::new(m);

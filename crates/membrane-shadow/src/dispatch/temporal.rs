@@ -40,7 +40,8 @@ pub(super) async fn dispatch_temporal(
                     "temporal.sync requires at least one repo path".into(),
                 ));
             }
-            let push_target = manifest::load_from_workspace(&root)
+            let push_target = manifest::load_from_workspace_async(&root)
+                .await
                 .map_or_else(|_| "all".into(), |m| m.sync.push_target);
             let mut results = Vec::with_capacity(args.len());
             let mut synced = 0u32;
@@ -88,7 +89,8 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         .unwrap_or("auto");
 
     let gate_name = if gate_name == "auto" || gate_name.is_empty() {
-        identity::resolve(&root)
+        identity::resolve_async(&root)
+            .await
             .map_err(|e| {
                 crate::ShadowError::Parse(format!(
                     "cannot resolve gate identity — set GATE_NAME or configure identity: {e}"

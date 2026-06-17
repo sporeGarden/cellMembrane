@@ -212,7 +212,7 @@ pub async fn build_binary(
 /// Shallow-clone a git repository. Returns true on success.
 pub async fn try_clone(url: &str, clone_dir: &Path) -> bool {
     if clone_dir.exists() {
-        let _ = std::fs::remove_dir_all(clone_dir);
+        let _ = tokio::fs::remove_dir_all(clone_dir).await;
     }
     let result = tokio::process::Command::new("git")
         .args(["clone", "--depth", "1", url, &clone_dir.to_string_lossy()])

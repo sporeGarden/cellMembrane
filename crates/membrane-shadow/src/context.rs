@@ -197,7 +197,7 @@ fn current_wave(workspace_root: &Path) -> u32 {
 
 /// Weave a context braid — create or overwrite for this gate+project.
 pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<ContextBraid> {
-    let gate_id = identity::resolve(workspace_root)?;
+    let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
     let wave = current_wave(workspace_root);
@@ -382,7 +382,7 @@ pub async fn clear(
     let mut cleared = Vec::new();
 
     if let Some(proj) = project {
-        let gate_id = identity::resolve(workspace_root)?;
+        let gate_id = identity::resolve_async(workspace_root).await?;
         let filepath = braid_filepath(workspace_root, &gate_id.name, proj);
         if filepath.exists() {
             tokio::fs::remove_file(&filepath)

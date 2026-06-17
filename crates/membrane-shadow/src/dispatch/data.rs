@@ -11,11 +11,11 @@ use crate::{ShadowConfig, ShadowOutcome, context, identity, manifest, plasmid, r
 
 // ── Manifest domain ──────────────────────────────────────────────────
 
-pub(super) fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     match cmd {
         "manifest.info" => {
-            let m = manifest::load_from_workspace(&root)?;
+            let m = manifest::load_from_workspace_async(&root).await?;
             let topo = m.topology.as_ref().map_or_else(
                 || "monoderm (no topology section)".to_string(),
                 |t| {
@@ -50,7 +50,7 @@ pub(super) fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<Shado
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&m)?))
         }
         "manifest.repos" => {
-            let m = manifest::load_from_workspace(&root)?;
+            let m = manifest::load_from_workspace_async(&root).await?;
             let repos: Vec<(&str, &manifest::RepoEntry)> = if let Some(gate_name) = args.first() {
                 m.gate_repos(gate_name)
             } else {
@@ -72,7 +72,7 @@ pub(super) fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<Shado
             Ok(ShadowOutcome::ok(format!("{header}\n{}", lines.join("\n"))))
         }
         "manifest.orgs" => {
-            let m = manifest::load_from_workspace(&root)?;
+            let m = manifest::load_from_workspace_async(&root).await?;
             let orgs = m.orgs();
             Ok(ShadowOutcome::ok(format!(
                 "{} orgs: {}",
@@ -88,9 +88,9 @@ pub(super) fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result<Shado
 
 // ── Identity domain ──────────────────────────────────────────────────
 
-pub(super) fn dispatch_identity() -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_identity() -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
-    match identity::resolve(&root) {
+    match identity::resolve_async(&root).await {
         Ok(id) => Ok(ShadowOutcome::ok_with(
             format!("{} (via {:?})", id.name, id.source),
             serde_json::to_value(&id)?,
@@ -536,10 +536,7 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
 async fn relay_status() -> crate::Result<ShadowOutcome> {
     let relay_cfg = relay::RelayConfig::from_env();
     let root = temporal::resolve_workspace_root()?;
-    let root_owned = root.clone();
-    let m = tokio::task::spawn_blocking(move || manifest::load_from_workspace(&root_owned))
-        .await
-        .map_err(|e| crate::error::ShadowError::Parse(format!("spawn failed: {e}")))??;
+    let m = manifest::load_from_workspace_async(&root).await?;
 
     let ext_host = &relay_cfg.golgi_ext_host;
     let ssh_ok_ext = crate::ssh::check_connectivity(ext_host).await;

@@ -25,8 +25,13 @@ pub(super) struct SourcesFile {
 }
 
 pub(super) fn compute_blake3_file(path: &Path) -> String {
-    let data = std::fs::read(path).unwrap_or_default();
-    blake3::hash(&data).to_hex().to_string()
+    match std::fs::read(path) {
+        Ok(data) => blake3::hash(&data).to_hex().to_string(),
+        Err(e) => {
+            tracing::warn!(path = %path.display(), error = %e, "BLAKE3: cannot read file");
+            String::new()
+        }
+    }
 }
 
 pub(super) async fn update_depot_metadata(

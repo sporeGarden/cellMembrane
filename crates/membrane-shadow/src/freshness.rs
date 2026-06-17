@@ -117,12 +117,11 @@ pub async fn auto_commit_freshness(
             ),
     };
 
-    let local_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
+    let local_wave = read_freshness_wave_id_async(&wh_dir.join("freshness.toml")).await;
 
-    // Pull latest from remotes — this brings in the full freshness from other gates.
     pull_rebase_both_remotes(&wh_dir).await;
 
-    let remote_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
+    let remote_wave = read_freshness_wave_id_async(&wh_dir.join("freshness.toml")).await;
     if remote_wave > local_wave && local_wave > 0 {
         return Ok(());
     }
@@ -218,8 +217,17 @@ async fn pull_rebase_both_remotes(wh_dir: &Path) {
 }
 
 /// Parse the wave ID from a freshness.toml file. Returns 0 if unreadable.
+#[cfg(test)]
 fn read_freshness_wave_id(path: &Path) -> u32 {
     let Ok(content) = std::fs::read_to_string(path) else {
+        return 0;
+    };
+    toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
+}
+
+/// Async variant — reads the file without blocking the runtime.
+async fn read_freshness_wave_id_async(path: &Path) -> u32 {
+    let Ok(content) = tokio::fs::read_to_string(path).await else {
         return 0;
     };
     toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)

@@ -19,7 +19,7 @@ use tracing::warn;
 
 /// Fire a new impulse — rootPulse ACTION.
 pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseFile> {
-    let gate_id = identity::resolve(workspace_root)?;
+    let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
     let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
@@ -226,7 +226,7 @@ pub fn check(workspace_root: &Path) -> Result<PotentialHealth> {
 /// instead of appending to the original impulse TOML. This prevents ack loss
 /// during rebase operations (Wave 67 safety evolution).
 pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<ImpulseFile> {
-    let gate_id = identity::resolve(workspace_root)?;
+    let gate_id = identity::resolve_async(workspace_root).await?;
     let active = active_dir(workspace_root);
 
     let (_filepath, mut impulse) = find_impulse_by_id(&active, impulse_id)?;
