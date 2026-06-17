@@ -90,6 +90,7 @@ pub(super) async fn dispatch(
             })?;
             dispatch_profile(gate_name)
         }
+        "gate.preflight" => dispatch_preflight(args).await,
         "firewall.generate" => dispatch_firewall_generate(args),
         #[cfg(feature = "http")]
         "gate.provision" => dispatch_provision(args).await,
@@ -638,4 +639,60 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     };
 
     Ok(ShadowOutcome::ok(script))
+}
+
+// ── Pre-flight scanner ──────────────────────────────────────────────
+
+async fn dispatch_preflight(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let target_ip = cli::extract_flag_value(args, "--ip");
+    let report = gate::preflight::run_preflight(target_ip).await;
+
+    let mut lines = vec![
+        "╔══════════════════════════════════════════╗".to_string(),
+        "║   Gate Pre-flight — System Readiness     ║".to_string(),
+        "╚══════════════════════════════════════════╝".to_string(),
+        String::new(),
+    ];
+
+    if !report.interfaces.is_empty() {
+        lines.push("Interfaces:".to_string());
+        for iface in &report.interfaces {
+            let speed = iface
+                .speed_mbps
+                .map_or_else(|| "?".into(), |s| format!("{s}Mbps"));
+            let carrier = if iface.carrier { "UP" } else { "DOWN" };
+            let ips = if iface.ipv4.is_empty() {
+                "no-ip".into()
+            } else {
+                iface.ipv4.join(", ")
+            };
+            lines.push(format!(
+                "  {:<12} {:>8} {:>6}  {:<15}  {:?}  [{}]",
+                iface.name, speed, carrier, ips, iface.role_hint, iface.driver
+            ));
+        }
+        lines.push(String::new());
+    }
+
+    lines.push("Checks:".to_string());
+    for check in &report.checks {
+        let icon = if check.passed { "✓" } else { "✗" };
+        lines.push(format!("  {icon} {:<28} {}", check.name, check.detail));
+    }
+    lines.push(String::new());
+
+    let status = if report.all_pass {
+        "ALL CHECKS PASSED — ready for deployment"
+    } else {
+        "SOME CHECKS FAILED — review above before proceeding"
+    };
+    lines.push(status.to_string());
+
+    let msg = lines.join("\n");
+    let outcome = ShadowOutcome {
+        ok: report.all_pass,
+        message: msg,
+        data: Some(serde_json::to_value(&report)?),
+    };
+    Ok(outcome)
 }
