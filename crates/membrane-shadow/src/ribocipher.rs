@@ -21,46 +21,52 @@ pub mod signal {
     pub const CLEAR: u8 = 0xEC;
 
     /// Mito-obfuscated — cross-gate WAN connections (family seed HMAC).
-    #[allow(dead_code)]
     pub const MITO: u8 = 0xED;
 
     /// Nuclear-sealed — privileged protocol negotiation.
-    #[allow(dead_code)]
     pub const NUCLEAR: u8 = 0xEE;
+
+    /// All signal tier prefixes, ordered by tier.
+    pub const ALL: [u8; 3] = [CLEAR, MITO, NUCLEAR];
 }
 
 /// Protocol type identifiers (second byte after the signal prefix).
 pub mod protocol {
     /// Lightweight health probe.
-    #[allow(dead_code)]
     pub const PROBE: u8 = 0x00;
 
     /// NDJSON JSON-RPC — standard ecosystem IPC.
     pub const NDJSON_JSONRPC: u8 = 0x01;
 
     /// BTSP Binary — length-prefixed binary handshake.
-    #[allow(dead_code)]
     pub const BTSP_BINARY: u8 = 0x02;
 
     /// BTSP JSON-line — JSON-line `ClientHello` handshake.
-    #[allow(dead_code)]
     pub const BTSP_JSON_LINE: u8 = 0x03;
 
     /// HTTP/1.1 — axum/hyper over UDS.
-    #[allow(dead_code)]
     pub const HTTP: u8 = 0x04;
 
     /// Encrypted Resume — post-BTSP session resume.
-    #[allow(dead_code)]
     pub const ENCRYPTED_RESUME: u8 = 0x05;
 
     /// Dark Forest Beacon — birdsong beacon packet.
-    #[allow(dead_code)]
     pub const DARK_FOREST_BEACON: u8 = 0x06;
 
     /// Mesh Relay — songBird relay-routed frame.
-    #[allow(dead_code)]
     pub const MESH_RELAY: u8 = 0x07;
+
+    /// All protocol type identifiers, ordered by value.
+    pub const ALL: [u8; 8] = [
+        PROBE,
+        NDJSON_JSONRPC,
+        BTSP_BINARY,
+        BTSP_JSON_LINE,
+        HTTP,
+        ENCRYPTED_RESUME,
+        DARK_FOREST_BEACON,
+        MESH_RELAY,
+    ];
 }
 
 /// Clear signal prefix for NDJSON JSON-RPC over UDS.
@@ -196,30 +202,18 @@ impl RiboCipherConfig {
     pub fn outbound_prefix(&self, protocol_type: u8) -> Vec<u8> {
         match self.signal_tier {
             SignalTier::Clear => vec![signal::CLEAR, protocol_type],
-            SignalTier::Mito => {
-                if let Some(key) = &self.mito_key {
+            // Nuclear tier requires per-peer lineage keys (deferred) — falls
+            // through to mito when key material is available, clear otherwise.
+            SignalTier::Mito | SignalTier::Nuclear => self.mito_key.as_ref().map_or_else(
+                || vec![signal::CLEAR, protocol_type],
+                |key| {
                     let tag = mito_hmac_tag(key, protocol_type);
                     let mut prefix = Vec::with_capacity(5);
                     prefix.push(signal::MITO);
                     prefix.extend_from_slice(&tag);
                     prefix
-                } else {
-                    vec![signal::CLEAR, protocol_type]
-                }
-            }
-            SignalTier::Nuclear => {
-                // Nuclear tier requires per-peer lineage keys (deferred).
-                // Fall back to mito if key material available, otherwise clear.
-                if let Some(key) = &self.mito_key {
-                    let tag = mito_hmac_tag(key, protocol_type);
-                    let mut prefix = Vec::with_capacity(5);
-                    prefix.push(signal::MITO);
-                    prefix.extend_from_slice(&tag);
-                    prefix
-                } else {
-                    vec![signal::CLEAR, protocol_type]
-                }
-            }
+                },
+            ),
         }
     }
 
@@ -259,6 +253,7 @@ fn derive_mito_key_from_env() -> Option<[u8; 32]> {
 /// HKDF-SHA256 key derivation (extract-then-expand, single output block).
 ///
 /// Produces a 32-byte derived key. Uses HMAC-SHA256 internally per RFC 5869.
+/// HMAC-SHA256 accepts keys of any length, so construction is infallible.
 fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
     use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
@@ -266,12 +261,14 @@ fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
     type HmacSha256 = Hmac<Sha256>;
 
     // Extract: PRK = HMAC-SHA256(salt, IKM)
-    let mut extract_mac = HmacSha256::new_from_slice(salt).expect("HMAC can take key of any size");
+    let mut extract_mac = HmacSha256::new_from_slice(salt)
+        .unwrap_or_else(|_| unreachable!("HMAC-SHA256 accepts any key length"));
     extract_mac.update(ikm);
     let prk = extract_mac.finalize().into_bytes();
 
     // Expand: OKM = HMAC-SHA256(PRK, info || 0x01)  [single block, 32 bytes]
-    let mut expand_mac = HmacSha256::new_from_slice(&prk).expect("HMAC can take key of any size");
+    let mut expand_mac = HmacSha256::new_from_slice(&prk)
+        .unwrap_or_else(|_| unreachable!("HMAC-SHA256 accepts any key length"));
     expand_mac.update(info);
     expand_mac.update(&[0x01]);
     let okm = expand_mac.finalize().into_bytes();
@@ -290,7 +287,8 @@ fn mito_hmac_tag(mito_key: &[u8; 32], protocol_type: u8) -> [u8; 4] {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(mito_key).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(mito_key)
+        .unwrap_or_else(|_| unreachable!("HMAC-SHA256 accepts any key length"));
     mac.update(&[protocol_type]);
     let result = mac.finalize().into_bytes();
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # membrane-nucleus@.service — Template unit for NUCLEUS primal processes
 # Instance name (%i) is the primal binary name (e.g. beardog, biomeos).
 #

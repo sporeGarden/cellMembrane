@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # membrane-nucleus.target — Aggregate target for all NUCLEUS primals
 # Enables/disables the full NUCLEUS composition as a group.
 #

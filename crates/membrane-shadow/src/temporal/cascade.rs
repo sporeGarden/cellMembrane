@@ -56,7 +56,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
     let m = crate::manifest::load_from_workspace(&root)?;
 
     let repos: Vec<(&str, &crate::manifest::RepoEntry)> = m.gate_repos(opts.gate);
-    let total = repos.len() as u32;
+    let total = u32::try_from(repos.len()).unwrap_or(u32::MAX);
 
     if opts.mode == CascadeMode::DryRun {
         let lines: Vec<String> = repos

@@ -6,6 +6,7 @@
 
 use super::{DropletState, ProvisionOutcome};
 use crate::error::{Result, ShadowError};
+use tracing::{error, info, warn};
 
 const SSH_RETRY_DELAY_SECS: u64 = 10;
 const SSH_MAX_RETRIES: u32 = 12;
@@ -47,10 +48,11 @@ async fn wait_for_ssh(ip: &str) -> Result<()> {
         if ssh_exec(ip, "echo ready").await.is_ok() {
             return Ok(());
         }
-        eprintln!(
-            "provision: SSH not ready on {ip} (attempt {}/{})",
-            attempt + 1,
-            SSH_MAX_RETRIES
+        warn!(
+            ip,
+            attempt = attempt + 1,
+            max_retries = SSH_MAX_RETRIES,
+            "SSH not ready"
         );
     }
     Err(ShadowError::Parse(format!(
@@ -133,23 +135,32 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
             Ok(output) if output.status.success() => deployed += 1,
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                eprintln!("provision: SCP {primal} failed: {stderr}");
+                error!(primal, stderr = %stderr, "SCP failed");
             }
-            Err(e) => eprintln!("provision: SCP {primal} error: {e}"),
+            Err(e) => error!(primal, error = %e, "SCP error"),
         }
     }
 
-    ssh_exec(ip, &format!("chmod +x {}/*", cellmembrane_types::service::DEFAULT_INSTALL_BASE)).await?;
+    ssh_exec(
+        ip,
+        &format!(
+            "chmod +x {}/*",
+            cellmembrane_types::service::DEFAULT_INSTALL_BASE
+        ),
+    )
+    .await?;
 
     Ok(format!("{deployed}/{} binaries deployed", primals.len()))
 }
 
 /// Generate systemd unit content for the Tower atomic services.
 fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
-    let spine =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
-    let relay =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let spine = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let relay = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
     let spine_upper = spine.to_uppercase();
     let relay_upper = relay.to_uppercase();
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
@@ -188,6 +199,7 @@ WantedBy=multi-user.target
 "
     );
 
+    let bind_all = cellmembrane_types::service::BIND_ALL;
     let songbird_unit = format!(
         r"[Unit]
 Description={relay} Discovery + Federation (Membrane Tower)
@@ -204,7 +216,7 @@ ExecStart={install_base}/{relay} server \
     --socket /run/membrane/{relay}.sock \
     --security-socket /run/membrane/{spine}.sock \
     --federation-port {federation_port} \
-    --bind 0.0.0.0 \
+    --bind {bind_all} \
     --dark-forest \
     --pid-dir /run/membrane
 Environment={relay_upper}_NODE_ID={gate_name}
@@ -251,10 +263,12 @@ WantedBy=multi-user.target
 /// and mesh relay are discovered by capability, not hardcoded by name.
 /// Non-Tower primals get individual units based on their `ServerContract`.
 async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
-    let spine =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
-    let relay =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let spine = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let relay = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
     let (bearer_unit, songbird_unit, _nucleus_template) = generate_systemd_units(gate_name);
 
     let spine_socket = format!("/run/membrane/{spine}.sock");
@@ -266,7 +280,9 @@ async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
             continue;
         }
         let socket_path = format!("/run/membrane/{}.sock", svc.binary);
-        let exec_start = svc.server_contract.exec_args(svc.binary, &socket_path, &spine_socket);
+        let exec_start = svc
+            .server_contract
+            .exec_args(svc.binary, &socket_path, &spine_socket);
         let unit = format!(
             r"
 cat > /etc/systemd/system/{bin}-membrane.service << 'UNIT'
@@ -318,10 +334,12 @@ echo "units installed"
 /// dedicated systemd units. Remaining NUCLEUS primals are started via their
 /// individual units, discovered from the service registry rather than hardcoded.
 async fn start_services(ip: &str) -> Result<String> {
-    let spine =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
-    let relay =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let spine = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let relay = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
 
     let nucleus_others: Vec<&str> = crate::plasmid::nucleus_primals()
         .into_iter()
@@ -358,8 +376,9 @@ async fn join_mesh(ip: &str, gate_name: &str) -> Result<String> {
                 cellmembrane_types::service::DEFAULT_FEDERATION_PORT
             )
         });
-    let relay =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let relay = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
 
     let script = format!(
         r#"
@@ -373,8 +392,9 @@ echo '{{"jsonrpc":"2.0","method":"mesh.init","params":{{"node_id":"{gate_name}",
 
 /// Phase 6b: Verify federation mesh enrollment after join.
 async fn verify_federation(ip: &str) -> Result<String> {
-    let relay =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let relay = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
 
     let script = format!(
         r#"
@@ -427,7 +447,7 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
 
     let mut phases: Vec<String> = Vec::new();
 
-    eprintln!("provision: waiting for SSH on {ip}...");
+    info!(ip = %ip, "waiting for SSH");
     if let Err(e) = wait_for_ssh(&ip).await {
         return ProvisionOutcome {
             success: false,
@@ -438,7 +458,7 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
     }
     phases.push("ssh: ready".into());
 
-    eprintln!("provision: hardening...");
+    info!("hardening");
     match harden(&ip).await {
         Ok(_) => phases.push("harden: done".into()),
         Err(e) => {
@@ -452,13 +472,13 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
         }
     }
 
-    eprintln!("provision: creating directories...");
+    info!("creating directories");
     match setup_directories(&ip).await {
         Ok(_) => phases.push("directories: done".into()),
         Err(e) => phases.push(format!("directories: FAIL — {e}")),
     }
 
-    eprintln!("provision: deploying binaries...");
+    info!("deploying binaries");
     match deploy_binaries(&ip).await {
         Ok(detail) => phases.push(format!("binaries: {detail}")),
         Err(e) => {
@@ -472,31 +492,31 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
         }
     }
 
-    eprintln!("provision: installing systemd units...");
+    info!("installing systemd units");
     match install_systemd_units(&ip, gate_name).await {
         Ok(_) => phases.push("systemd: installed".into()),
         Err(e) => phases.push(format!("systemd: FAIL — {e}")),
     }
 
-    eprintln!("provision: starting services...");
+    info!("starting services");
     match start_services(&ip).await {
         Ok(_) => phases.push("services: started".into()),
         Err(e) => phases.push(format!("services: FAIL — {e}")),
     }
 
-    eprintln!("provision: joining mesh...");
+    info!("joining mesh");
     match join_mesh(&ip, gate_name).await {
         Ok(detail) => phases.push(format!("mesh: {detail}")),
         Err(e) => phases.push(format!("mesh: deferred — {e}")),
     }
 
-    eprintln!("provision: verifying federation...");
+    info!("verifying federation");
     match verify_federation(&ip).await {
         Ok(detail) => phases.push(detail.trim().to_string()),
         Err(e) => phases.push(format!("federation: verify failed — {e}")),
     }
 
-    eprintln!("provision: health sweep...");
+    info!("health sweep");
     match health_sweep(&ip).await {
         Ok(detail) => phases.push(format!("health: {detail}")),
         Err(e) => phases.push(format!("health: FAIL — {e}")),
@@ -548,7 +568,11 @@ echo "identity written"
 /// Used by `gate.provision.verify` to validate a remote gate without needing
 /// physical access, replacing the "canary.audit on NUC" convergence criterion.
 /// When `profile` is provided, health expectations are derived from the composition tier.
-pub async fn verify_remote_gate(ip: &str, gate_name: &str, profile: Option<&str>) -> ProvisionOutcome {
+pub async fn verify_remote_gate(
+    ip: &str,
+    gate_name: &str,
+    profile: Option<&str>,
+) -> ProvisionOutcome {
     let mut phases: Vec<String> = Vec::new();
 
     // Derive expected healthy count from profile
@@ -559,7 +583,10 @@ pub async fn verify_remote_gate(ip: &str, gate_name: &str, profile: Option<&str>
         _ => 0, // unknown profile — don't enforce minimum
     };
     if expected_healthy > 0 {
-        phases.push(format!("profile: expects {expected_healthy} healthy ({})", profile.unwrap_or("unknown")));
+        phases.push(format!(
+            "profile: expects {expected_healthy} healthy ({})",
+            profile.unwrap_or("unknown")
+        ));
     }
 
     // SSH reachability
@@ -630,9 +657,11 @@ echo "canary.audit: stale=$STALE"
     }
 
     // Gate identity
-    let identity_result =
-        ssh_exec(ip, "cat /etc/membrane/gate_identity 2>/dev/null || echo 'no identity file'")
-            .await;
+    let identity_result = ssh_exec(
+        ip,
+        "cat /etc/membrane/gate_identity 2>/dev/null || echo 'no identity file'",
+    )
+    .await;
     match identity_result {
         Ok(detail) => phases.push(format!("identity: {}", detail.trim())),
         Err(e) => phases.push(format!("identity: {e}")),

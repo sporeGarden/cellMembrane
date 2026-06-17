@@ -125,6 +125,8 @@ pub async fn logs(config: &ShadowConfig, unit: &str, lines: u32) -> Result<Strin
     .await
 }
 
+// Precision loss is acceptable here — values are for human-readable display only.
+#[allow(clippy::cast_precision_loss)]
 fn format_bytes(bytes: u64) -> String {
     const KIB: u64 = 1024;
     const MIB: u64 = KIB * 1024;

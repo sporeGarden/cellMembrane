@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # plasmid-pipeline.timer — Periodic zero-touch binary refresh
 # Runs harvest every 30 minutes; only rebuilds if upstream drift detected.
 [Unit]

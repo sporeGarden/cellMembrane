@@ -78,3 +78,16 @@ jobs:
 
       - name: Report binary size
         run: ls -lh target/x86_64-unknown-linux-musl/release/membrane
+
+  deny:
+    name: cargo-deny (licenses + bans)
+    runs-on: linux-x86_64
+    needs: [check, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: cargo deny check
+        run: cargo deny check

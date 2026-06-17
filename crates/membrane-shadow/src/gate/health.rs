@@ -85,12 +85,8 @@ pub async fn status() -> crate::error::Result<GateStatus> {
 
 /// Probe mesh status via neuralAPI-routed `capability.call` with fallback to direct UDS.
 async fn probe_mesh_status() -> (bool, String) {
-    if let Some(result) = crate::bridge::try_bridge(
-        "mesh_relay",
-        "mesh.status",
-        serde_json::json!({}),
-    )
-    .await
+    if let Some(result) =
+        crate::bridge::try_bridge("mesh_relay", "mesh.status", serde_json::json!({})).await
     {
         return parse_mesh_json(&result);
     }
@@ -120,7 +116,7 @@ fn parse_mesh_json(result: &serde_json::Value) -> (bool, String) {
         .or_else(|| result.get("peers"))
         .and_then(|v| {
             v.as_u64()
-                .or_else(|| v.as_array().map(|a| a.len() as u64))
+                .or_else(|| v.as_array().map(|a| u64::try_from(a.len()).unwrap_or(0)))
         })
         .unwrap_or(0);
     let reachable = result
@@ -163,7 +159,7 @@ fn parse_mesh_response(response: &str) -> (bool, String) {
         .and_then(|r| r.get("reachable_peers").or_else(|| r.get("peers")))
         .and_then(|v| {
             v.as_u64()
-                .or_else(|| v.as_array().map(|a| a.len() as u64))
+                .or_else(|| v.as_array().map(|a| u64::try_from(a.len()).unwrap_or(0)))
         })
         .unwrap_or(0);
     let reachable = result
@@ -221,13 +217,7 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
 /// Any valid JSON-RPC response (including method-not-found errors) proves
 /// the primal is alive.
 async fn probe_primal_jsonrpc(primal: &str) -> bool {
-    if let Some(result) = crate::bridge::try_bridge(
-        primal,
-        "health",
-        serde_json::json!({}),
-    )
-    .await
-    {
+    if let Some(result) = crate::bridge::try_bridge(primal, "health", serde_json::json!({})).await {
         return result.get("status").is_some() || result.is_object();
     }
 
@@ -240,7 +230,10 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
         }
 
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if response.contains("\"jsonrpc\"") || response.contains("\"result\"") || response.contains("\"error\"") {
+            if response.contains("\"jsonrpc\"")
+                || response.contains("\"result\"")
+                || response.contains("\"error\"")
+            {
                 return true;
             }
         }
@@ -256,7 +249,10 @@ fn probe_primal_pgrep(primal: &str) -> bool {
     };
     for entry in entries.flatten() {
         let name = entry.file_name();
-        if !name.to_str().is_some_and(|s| s.chars().all(|c| c.is_ascii_digit())) {
+        if !name
+            .to_str()
+            .is_some_and(|s| s.chars().all(|c| c.is_ascii_digit()))
+        {
             continue;
         }
         let comm_path = entry.path().join("comm");
@@ -322,23 +318,21 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
 /// locally-cloned repos. Reports drift count — any drift is a WARN that auto-
 /// reconciliation should resolve within the next cascade cycle.
 async fn probe_vcs_parity() -> StatusProbe {
-    let workspace = match crate::temporal::resolve_workspace_root() {
-        Ok(w) => w,
-        Err(_) => {
-            return StatusProbe {
-                name: "vcs.parity".into(),
-                ok: true,
-                detail: "workspace not found (VPS/minimal)".into(),
-            };
-        }
+    let Ok(workspace) = crate::temporal::resolve_workspace_root() else {
+        return StatusProbe {
+            name: "vcs.parity".into(),
+            ok: true,
+            detail: "workspace not found (VPS/minimal)".into(),
+        };
     };
 
-    let local_paths: Vec<String> = crate::manifest::EcosystemManifest::find_in_workspace(&workspace)
-        .and_then(|p| crate::manifest::EcosystemManifest::load(&p).ok())
-        .map_or_else(
-            || vec!["infra/plasmidBin".into(), "infra/wateringHole".into()],
-            |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
-        );
+    let local_paths: Vec<String> =
+        crate::manifest::EcosystemManifest::find_in_workspace(&workspace)
+            .and_then(|p| crate::manifest::EcosystemManifest::load(&p).ok())
+            .map_or_else(
+                || vec!["infra/plasmidBin".into(), "infra/wateringHole".into()],
+                |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
+            );
 
     let mut drift_count = 0u32;
     let mut checked = 0u32;
@@ -465,19 +459,19 @@ async fn probe_s2_relay() -> StatusProbe {
 
     let fed_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
     let turn_port = cellmembrane_types::service::DEFAULT_TURN_PORT;
-    let hbbs_port = cellmembrane_types::service::RUSTDESK_HBBS_PORT;
-    let hbbr_port = cellmembrane_types::service::RUSTDESK_HBBR_PORT;
+    let rendezvous_port = cellmembrane_types::service::RUSTDESK_HBBS_PORT;
+    let relay_port = cellmembrane_types::service::RUSTDESK_HBBR_PORT;
 
     let fed_addr = format!("{vps_host}:{fed_port}");
     let turn_addr = format!("{vps_host}:{turn_port}");
-    let hbbs_addr = format!("{vps_host}:{hbbs_port}");
-    let hbbr_addr = format!("{vps_host}:{hbbr_port}");
+    let rendezvous_addr = format!("{vps_host}:{rendezvous_port}");
+    let relay_addr = format!("{vps_host}:{relay_port}");
 
-    let (fed_ok, turn_ok, hbbs_ok, hbbr_ok) = tokio::join!(
+    let (fed_ok, turn_ok, rendezvous_ok, relay_ok) = tokio::join!(
         tcp_reachable(&fed_addr),
         tcp_reachable(&turn_addr),
-        tcp_reachable(&hbbs_addr),
-        tcp_reachable(&hbbr_addr),
+        tcp_reachable(&rendezvous_addr),
+        tcp_reachable(&relay_addr),
     );
 
     let detail = format!(
@@ -488,13 +482,13 @@ async fn probe_s2_relay() -> StatusProbe {
         } else {
             "TCP-CLOSED(UDP-only)"
         },
-        if hbbs_ok { "OK" } else { "DOWN" },
-        if hbbr_ok { "OK" } else { "DOWN" },
+        if rendezvous_ok { "OK" } else { "DOWN" },
+        if relay_ok { "OK" } else { "DOWN" },
     );
 
     StatusProbe {
         name: "sovereignty.s2_relay".into(),
-        ok: fed_ok && hbbs_ok,
+        ok: fed_ok && rendezvous_ok,
         detail,
     }
 }
@@ -505,8 +499,9 @@ async fn probe_s2_relay() -> StatusProbe {
 /// over sovereign TLS. Uses the crypto spine binary as probe target (always present).
 async fn probe_s3_content() -> StatusProbe {
     let arch = crate::plasmid::detect_target_triple();
-    let probe_binary =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let probe_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
     let domain = resolve_sovereign_domain();
     let url = format!("https://{domain}/depot/{arch}/{probe_binary}");
     let start = std::time::Instant::now();
@@ -566,13 +561,22 @@ async fn probe_s3_content() -> StatusProbe {
 /// response (including `-32601 method_not_found` or BTSP errors) proves
 /// the crypto spine is alive and enforcing.
 async fn probe_s4_auth() -> StatusProbe {
-    let binary_name =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let binary_name = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
 
     // Try neuralAPI routing first
-    if let Some(result) = crate::bridge::try_bridge(binary_name, "health", serde_json::json!({})).await {
-        let status = result.get("status").and_then(|v| v.as_str()).unwrap_or("alive");
-        let btsp = result.get("auth_mode").and_then(|v| v.as_str()).unwrap_or("");
+    if let Some(result) =
+        crate::bridge::try_bridge(binary_name, "health", serde_json::json!({})).await
+    {
+        let status = result
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("alive");
+        let btsp = result
+            .get("auth_mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let detail = if btsp == "btsp" {
             "ENFORCED — BearDog BTSP active (via neuralAPI)".to_string()
         } else {
@@ -644,8 +648,9 @@ async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> std::result::Resu
 
 /// Resolve the mesh relay UDS socket path via capability discovery.
 fn resolve_mesh_relay_socket() -> String {
-    let binary_name =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let binary_name = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
     let paths = resolve_primal_socket_paths(binary_name);
     paths
         .into_iter()
@@ -684,7 +689,10 @@ fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         format!("{xdg_runtime}/biomeos/{primal}.sock"),
     ];
     // Check registry for alternative API socket (capability-driven, not hardcoded)
-    if let Some(svc) = cellmembrane_types::MembraneService::all().iter().find(|s| s.binary == primal) {
+    if let Some(svc) = cellmembrane_types::MembraneService::all()
+        .iter()
+        .find(|s| s.binary == primal)
+    {
         if let Some(api) = svc.api_socket {
             paths.insert(0, format!("{socket_base}/{api}.sock"));
         }

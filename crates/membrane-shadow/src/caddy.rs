@@ -14,6 +14,9 @@ use crate::error::{Result, ShadowError};
 use crate::ssh;
 use serde::{Deserialize, Serialize};
 
+/// Caddy admin API endpoint (localhost-only control plane).
+const CADDY_ADMIN_ENDPOINT: &str = "localhost:2019";
+
 fn caddy_bin_path() -> &'static str {
     static BIN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     BIN.get_or_init(|| {
@@ -72,7 +75,7 @@ pub struct VhostEntry {
 pub struct CaddyHealth {
     /// Whether the Caddy systemd unit is active.
     pub service_active: bool,
-    /// Whether the admin API responds on :2019.
+    /// Whether the admin API responds.
     pub admin_api_ok: bool,
     /// Caddyfile path on VPS.
     pub config_path: String,
@@ -95,7 +98,9 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
 
     let (api_out, api_code) = caddy_exec(
         config,
-        "curl -sf http://localhost:2019/config/ 2>/dev/null | head -c 100 || echo FAIL",
+        &format!(
+            "curl -sf http://{CADDY_ADMIN_ENDPOINT}/config/ 2>/dev/null | head -c 100 || echo FAIL"
+        ),
     )
     .await?;
     let admin_api_ok = api_code == 0 && !api_out.contains("FAIL");
@@ -130,9 +135,12 @@ pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
 
 /// Check TLS certificate status for a domain via Caddy's admin API.
 pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus> {
+    let tls_port = cellmembrane_types::MembraneService::for_binary("caddy")
+        .and_then(|s| s.port)
+        .unwrap_or(443);
     let cmd = format!(
-        "curl -sf 'http://localhost:2019/id/{domain}/tls' 2>/dev/null || \
-         openssl s_client -connect {domain}:443 -servername {domain} </dev/null 2>/dev/null | \
+        "curl -sf 'http://{CADDY_ADMIN_ENDPOINT}/id/{domain}/tls' 2>/dev/null || \
+         openssl s_client -connect {domain}:{tls_port} -servername {domain} </dev/null 2>/dev/null | \
          openssl x509 -noout -dates -issuer 2>/dev/null || echo ERROR"
     );
 
@@ -253,6 +261,9 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
         return Ok("depot route already provisioned in Caddyfile".into());
     }
 
+    let depot_hostname = std::env::var(cellmembrane_types::service::ENV_DEPOT_HOSTNAME)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME.into());
+    let escaped_hostname = depot_hostname.replace('.', r"\.");
     let inject_cmd = format!(
         r"cat > /tmp/depot-snippet.caddy << 'SNIPPET'
     handle /depot/* {{
@@ -261,7 +272,7 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
         file_server browse
     }}
 SNIPPET
-sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {caddyfile} && rm -f /tmp/depot-snippet.caddy"
+sed -i '/^{escaped_hostname} {{/r /tmp/depot-snippet.caddy' {caddyfile} && rm -f /tmp/depot-snippet.caddy"
     );
 
     let (out, code) = caddy_exec(config, &inject_cmd).await?;
@@ -293,7 +304,7 @@ sed -i '/^membrane\.primals\.eco {{/r /tmp/depot-snippet.caddy' {caddyfile} && r
     }
 
     Ok(format!(
-        "depot route provisioned: https://membrane.primals.eco/depot/ → {depot_root}"
+        "depot route provisioned: https://{depot_hostname}/depot/ → {depot_root}"
     ))
 }
 
@@ -347,8 +358,10 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
         )));
     }
 
+    let depot_hostname = std::env::var(cellmembrane_types::service::ENV_DEPOT_HOSTNAME)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME.into());
     Ok(format!(
-        "checksums.toml route provisioned: https://membrane.primals.eco/depot/checksums.toml → {checksums_path}"
+        "checksums.toml route provisioned: https://{depot_hostname}/depot/checksums.toml → {checksums_path}"
     ))
 }
 

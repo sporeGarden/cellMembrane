@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+
 # fieldMouse Deployment Contract
 
 **Version**: 1.0.0

@@ -253,9 +253,9 @@ pub(super) async fn dispatch_token(
         }
         "token.revoke" => {
             let id_str = cli::require_arg(args, 0, "token-id")?;
-            let id: u64 = id_str
-                .parse()
-                .map_err(|e| crate::ShadowError::Parse(format!("invalid token id '{id_str}': {e}")))?;
+            let id: u64 = id_str.parse().map_err(|e| {
+                crate::ShadowError::Parse(format!("invalid token id '{id_str}': {e}"))
+            })?;
             forgejo::token_revoke(config, id).await?;
             Ok(ShadowOutcome::ok(format!("REVOKED token id={id}")))
         }

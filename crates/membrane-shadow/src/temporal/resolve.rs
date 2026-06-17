@@ -11,6 +11,7 @@ use std::path::Path;
 use super::types::{RemotePosition, TemporalMatrix, TemporalSyncResult};
 use crate::error::Result;
 use crate::git_ops::{git_success as git_ok, rev_list_count};
+use tracing::{error, warn};
 
 /// The sovereign remote name, resolved from `MEMBRANE_SOVEREIGN_REMOTE` env var
 /// or defaulting to "forgejo". Authority-first push always converges to this
@@ -72,7 +73,10 @@ pub(super) async fn apply_divergence_policy(
         "impulse-only" | "flag" => None,
         "agentic" => resolve_agentic(local_path, matrix, leader, push_target, branch).await,
         unknown => {
-            eprintln!("temporal: unknown divergence policy {unknown:?} — treating as flag");
+            warn!(
+                policy = unknown,
+                "unknown divergence policy — treating as flag"
+            );
             None
         }
     }
@@ -145,9 +149,10 @@ async fn resolve_agentic(
     let _ = git_ok(local_path, &["rebase", "--abort"]).await;
 
     // Phase 3: signal conflict — emit to stderr and return None for impulse handling
-    eprintln!(
-        "temporal: agentic resolver CONFLICT for {} — convergence to {authority} failed",
-        matrix.repo_path,
+    error!(
+        repo = %matrix.repo_path,
+        authority,
+        "agentic resolver CONFLICT — convergence failed"
     );
     None
 }

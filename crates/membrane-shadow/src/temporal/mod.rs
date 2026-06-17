@@ -21,6 +21,7 @@ pub use types::*;
 
 use crate::error::Result;
 use std::path::{Path, PathBuf};
+use tracing::info;
 
 // ── Git helpers (delegated to git_ops) ───────────────────────────────
 
@@ -200,15 +201,18 @@ async fn count_divergent_remotes(
     positions: &[RemotePosition],
     branch: &str,
 ) -> u32 {
+    let refs: Vec<String> = positions
+        .iter()
+        .map(|p| format!("{}/{branch}", p.remote))
+        .collect();
+
     let mut count = 0u32;
-    for pos_a in positions {
-        let ref_a = format!("{}/{branch}", pos_a.remote);
+    for (i, ref_a) in refs.iter().enumerate() {
         let mut is_ahead_of_any = false;
-        for pos_b in positions {
-            if pos_a.remote == pos_b.remote {
+        for (j, ref_b) in refs.iter().enumerate() {
+            if i == j {
                 continue;
             }
-            let ref_b = format!("{}/{branch}", pos_b.remote);
             let cross_range = format!("{ref_b}..{ref_a}");
             if rev_list_count(local_path, &cross_range).await > 0 {
                 is_ahead_of_any = true;
@@ -422,12 +426,18 @@ async fn try_pull_converge(
     let discarded = discard_regenerable_dirty_files(local_path).await;
 
     // Fast path: ff-only
-    if git_ok(local_path, &["pull", leader, branch, "--ff-only", "--quiet"]).await {
+    if git_ok(
+        local_path,
+        &["pull", leader, branch, "--ff-only", "--quiet"],
+    )
+    .await
+    {
         if !discarded.is_empty() {
-            eprintln!(
-                "temporal: auto-discarded {} regenerable file(s) in {repo_path}: {}",
-                discarded.len(),
-                discarded.join(", "),
+            info!(
+                repo = repo_path,
+                count = discarded.len(),
+                files = %discarded.join(", "),
+                "auto-discarded regenerable file(s)"
             );
         }
         return PullOutcome::Ok(leader.to_string());
@@ -435,16 +445,24 @@ async fn try_pull_converge(
 
     // Dirty worktree: stash → pull → pop
     if has_dirty_worktree(local_path).await {
-        let stashed = git_ok(local_path, &["stash", "push", "-m", "temporal-cascade-auto"]).await;
+        let stashed = git_ok(
+            local_path,
+            &["stash", "push", "-m", "temporal-cascade-auto"],
+        )
+        .await;
         if !stashed {
             return PullOutcome::Err(format!("pull {leader} blocked (stash failed)"));
         }
-        eprintln!("temporal: auto-stashed dirty worktree in {repo_path}");
-        let pull_ok = git_ok(local_path, &["pull", leader, branch, "--ff-only", "--quiet"]).await
+        info!(repo = repo_path, "auto-stashed dirty worktree");
+        let pull_ok = git_ok(
+            local_path,
+            &["pull", leader, branch, "--ff-only", "--quiet"],
+        )
+        .await
             || git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await;
         let _ = git_ok(local_path, &["stash", "pop", "--quiet"]).await;
         if pull_ok {
-            eprintln!("temporal: stash-recovery succeeded for {repo_path}");
+            info!(repo = repo_path, "stash-recovery succeeded");
             return PullOutcome::Ok(leader.to_string());
         }
         let _ = git_ok(local_path, &["rebase", "--abort"]).await;
@@ -453,11 +471,13 @@ async fn try_pull_converge(
 
     // Clean tree, ff-only failed → diderm rebase reconciliation
     if git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
-        eprintln!("temporal: diderm rebase reconciled {repo_path}");
+        info!(repo = repo_path, "diderm rebase reconciled");
         return PullOutcome::Ok(leader.to_string());
     }
     let _ = git_ok(local_path, &["rebase", "--abort"]).await;
-    PullOutcome::Err(format!("pull {leader} failed (ff-only — diverged, rebase conflicted)"))
+    PullOutcome::Err(format!(
+        "pull {leader} failed (ff-only — diverged, rebase conflicted)"
+    ))
 }
 
 async fn sync_diverge(
@@ -479,6 +499,8 @@ async fn sync_diverge(
         .await;
     }
 
+    let repo_path_owned = repo_path.to_string();
+
     if let Some(m) = manifest {
         let entry = m.repos.values().find(|e| e.local_path == repo_path);
         let policy = entry.map_or_else(
@@ -491,7 +513,7 @@ async fn sync_diverge(
             .map(|p| (p.remote.clone(), p.ahead, p.behind))
             .collect();
         let args = crate::impulse::SyncDivergeArgs {
-            repo_path: repo_path.to_string(),
+            repo_path: repo_path_owned.clone(),
             positions,
             repo_policy: policy.to_string(),
         };
@@ -502,7 +524,7 @@ async fn sync_diverge(
             resolve::apply_divergence_policy(local_path, matrix, policy, push_target).await;
         if let Some(summary) = resolved {
             return Ok(TemporalSyncResult {
-                repo_path: repo_path.to_string(),
+                repo_path: repo_path_owned,
                 ok: true,
                 summary,
                 pulled_from: None,
@@ -512,7 +534,7 @@ async fn sync_diverge(
     }
 
     Ok(TemporalSyncResult {
-        repo_path: repo_path.to_string(),
+        repo_path: repo_path_owned,
         ok: false,
         summary: format!("DIVERGE — {matrix}"),
         pulled_from: None,
@@ -523,7 +545,7 @@ async fn sync_diverge(
 /// Check temporal position for multiple repos, returning an aggregate report.
 pub async fn check_all(workspace_root: &Path, repo_paths: &[&str]) -> Result<TemporalReport> {
     let mut report = TemporalReport {
-        total: repo_paths.len() as u32,
+        total: u32::try_from(repo_paths.len()).unwrap_or(u32::MAX),
         parity: 0,
         converged: 0,
         diverged: 0,

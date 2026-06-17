@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # membrane-canary@.service — Template unit for canary (previous-good) instances
 # Instance name (%i) is the primal binary name (e.g. beardog, songbird).
 #

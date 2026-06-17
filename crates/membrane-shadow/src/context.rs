@@ -19,6 +19,7 @@ use crate::identity;
 use chrono::{Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use tracing::warn;
 
 // ── Schema ────────────────────────────────────────────────────────────────
 
@@ -184,7 +185,7 @@ fn current_wave(workspace_root: &Path) -> u32 {
         if let Ok(val) = contents.parse::<toml::Table>() {
             if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {
                 if let Some(id) = wave.get("id").and_then(toml::Value::as_integer) {
-                    return id as u32;
+                    return u32::try_from(id).unwrap_or(0);
                 }
             }
         }
@@ -451,11 +452,11 @@ fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> boo
 async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
     let push = crate::git_ops::add_commit_push(repo_dir, file_path, message).await?;
     if !push.failed.is_empty() {
-        eprintln!(
-            "⚠ context push: {}/{} remotes succeeded (failed: {:?})",
-            push.succeeded,
-            push.succeeded + push.failed.len() as u32,
-            push.failed,
+        warn!(
+            succeeded = push.succeeded,
+            total = push.succeeded + u32::try_from(push.failed.len()).unwrap_or(u32::MAX),
+            failed = ?push.failed,
+            "context push partial failure"
         );
     }
     Ok(())
@@ -464,11 +465,11 @@ async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) ->
 async fn git_add_all_commit_push(repo_dir: &Path, message: &str) -> Result<()> {
     let push = crate::git_ops::add_all_commit_push(repo_dir, "context/", message).await?;
     if !push.failed.is_empty() {
-        eprintln!(
-            "⚠ context push: {}/{} remotes succeeded (failed: {:?})",
-            push.succeeded,
-            push.succeeded + push.failed.len() as u32,
-            push.failed,
+        warn!(
+            succeeded = push.succeeded,
+            total = push.succeeded + u32::try_from(push.failed.len()).unwrap_or(u32::MAX),
+            failed = ?push.failed,
+            "context push partial failure"
         );
     }
     Ok(())

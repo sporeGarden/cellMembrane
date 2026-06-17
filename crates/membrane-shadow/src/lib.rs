@@ -51,12 +51,7 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-#![allow(
-    clippy::missing_errors_doc,
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
-)]
+#![allow(clippy::missing_errors_doc)]
 
 pub mod bridge;
 pub mod caddy;
@@ -72,8 +67,8 @@ pub mod freshness;
 pub mod gate;
 pub mod git_ops;
 pub mod identity;
-pub mod jsonrpc;
 pub mod impulse;
+pub mod jsonrpc;
 pub mod manifest;
 pub mod plasmid;
 #[cfg(feature = "http")]

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # membrane-sandbox@.service — Template unit for sandbox validation instances
 # Instance name (%i) is "{primal}-{commit_short}" (e.g. beardog-abc12345).
 #

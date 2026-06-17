@@ -16,6 +16,7 @@ use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
+use tracing::warn;
 
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
@@ -162,7 +163,7 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             .collect();
         if !built.is_empty() {
             if let Err(e) = update_depot_metadata(&depot_dir, &target, &built).await {
-                eprintln!("warn: failed to update depot metadata: {e}");
+                warn!(error = %e, "failed to update depot metadata");
             }
             publish_depot_checksums(&depot_dir).await;
         }
@@ -269,7 +270,7 @@ async fn harvest_one(
     let head_commit = get_local_head(&clone_dir).await.unwrap_or_default();
 
     if let Some(warning) = check_clone_freshness(primal, source, &clone_dir, &head_commit).await {
-        eprintln!("harvest: freshness warning for {primal}: {warning}");
+        warn!(primal, warning, "freshness warning");
     }
 
     if let Err(detail) = toolchain::build_binary(source, target, &clone_dir).await {
@@ -455,7 +456,8 @@ async fn publish_depot_checksums(depot_dir: &std::path::Path) {
         return;
     }
 
-    let has_staged = !crate::git_ops::git_success(depot_dir, &["diff", "--cached", "--quiet"]).await;
+    let has_staged =
+        !crate::git_ops::git_success(depot_dir, &["diff", "--cached", "--quiet"]).await;
     if !has_staged {
         return;
     }

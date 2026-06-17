@@ -7,8 +7,12 @@
 //! On pass, the caller promotes; on fail, production remains untouched.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+/// Saturating conversion from `Duration` millis to `u64`.
+fn millis_u64(d: Duration) -> u64 {
+    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
+}
 
 /// Default time (seconds) to wait for sandbox instance to become healthy.
 const SANDBOX_HEALTH_TIMEOUT_SECS: u64 = 15;
@@ -169,7 +173,7 @@ pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
                     commit: instance.commit.clone(),
                     health_ok: true,
                     detail: extract_health_detail(&response),
-                    elapsed_ms: start.elapsed().as_millis() as u64,
+                    elapsed_ms: millis_u64(start.elapsed()),
                 };
             }
             if response.contains("\"result\"") {
@@ -178,7 +182,7 @@ pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
                     commit: instance.commit.clone(),
                     health_ok: true,
                     detail: format!("responding (attempt {})", attempt + 1),
-                    elapsed_ms: start.elapsed().as_millis() as u64,
+                    elapsed_ms: millis_u64(start.elapsed()),
                 };
             }
         }
@@ -193,7 +197,7 @@ pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
             SANDBOX_PROBE_RETRIES,
             start.elapsed().as_millis()
         ),
-        elapsed_ms: start.elapsed().as_millis() as u64,
+        elapsed_ms: millis_u64(start.elapsed()),
     }
 }
 
@@ -241,7 +245,7 @@ pub async fn validate(args: &SandboxArgs) -> Result<SandboxResult, String> {
             commit: instance.commit.clone(),
             health_ok: false,
             detail: format!("timeout after {}s", timeout.as_secs()),
-            elapsed_ms: timeout.as_millis() as u64,
+            elapsed_ms: millis_u64(timeout),
         });
 
     teardown(&instance).await;
@@ -330,7 +334,7 @@ pub async fn validate_with_deps(args: &SandboxArgs) -> Result<SandboxResult, Str
             commit: instance.commit.clone(),
             health_ok: false,
             detail: format!("timeout after {}s", timeout.as_secs()),
-            elapsed_ms: timeout.as_millis() as u64,
+            elapsed_ms: millis_u64(timeout),
         });
 
     // Teardown: target first, then dependencies
@@ -401,13 +405,14 @@ pub async fn validate_and_promote(
 
     // Atomic promotion: copy new binary to production via .new + rename
     let new_path = production_path.with_extension("new");
-    std::fs::copy(&args.binary_path, &new_path)
+    tokio::fs::copy(&args.binary_path, &new_path)
+        .await
         .map_err(|e| format!("copy to production staging: {e}"))?;
 
     // Preserve the old binary path for canary retirement
     let old_binary = if production_path.exists() {
         let canary_dir = resolve_sandbox_bin_dir().join("retired");
-        std::fs::create_dir_all(&canary_dir).ok();
+        tokio::fs::create_dir_all(&canary_dir).await.ok();
         let retired_path = canary_dir.join(format!(
             "{}-prev",
             production_path
@@ -415,13 +420,14 @@ pub async fn validate_and_promote(
                 .unwrap_or_default()
                 .to_string_lossy()
         ));
-        std::fs::copy(production_path, &retired_path).ok();
+        tokio::fs::copy(production_path, &retired_path).await.ok();
         Some(retired_path)
     } else {
         None
     };
 
-    std::fs::rename(&new_path, production_path)
+    tokio::fs::rename(&new_path, production_path)
+        .await
         .map_err(|e| format!("atomic promote rename: {e}"))?;
 
     Ok((result, old_binary))
@@ -450,10 +456,10 @@ pub fn list_active() -> Vec<SandboxInstance> {
             .to_string();
 
         // Parse {primal}-{commit_short} from filename
-        let (primal, commit) = match stem.rfind('-') {
-            Some(pos) => (stem[..pos].to_string(), stem[pos + 1..].to_string()),
-            None => (stem.clone(), "unknown".to_string()),
-        };
+        let (primal, commit) = stem.rfind('-').map_or_else(
+            || (stem.clone(), "unknown".to_string()),
+            |pos| (stem[..pos].to_string(), stem[pos + 1..].to_string()),
+        );
 
         instances.push(SandboxInstance {
             primal,

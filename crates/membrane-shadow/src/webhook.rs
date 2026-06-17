@@ -16,6 +16,7 @@
 
 use crate::error::{Result, ShadowError};
 use serde::Deserialize;
+use tracing::{error, info, warn};
 
 /// Forgejo push webhook payload (subset of fields we need).
 #[derive(Debug, Clone, Deserialize)]
@@ -164,9 +165,11 @@ pub async fn handle_push(
         )));
     }
 
-    eprintln!(
-        "[webhook] {} pushed to {} — selective harvest for {}",
-        event.pusher.username, action.branch, action.repo_name
+    info!(
+        pusher = %event.pusher.username,
+        branch = %action.branch,
+        repo = %action.repo_name,
+        "selective harvest triggered"
     );
 
     let harvest_args = crate::plasmid::HarvestArgs {
@@ -194,7 +197,9 @@ pub async fn handle_push(
     let arch = crate::plasmid::detect_target_triple();
     let primal_lower = action.repo_name.to_lowercase();
     let depot_binary = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
-        crate::resolve_xdg_data_home().join("ecoPrimals").join("plasmidBin")
+        crate::resolve_xdg_data_home()
+            .join("ecoPrimals")
+            .join("plasmidBin")
     })
     .join("primals")
     .join(&arch)
@@ -216,9 +221,10 @@ pub async fn handle_push(
 
         match crate::plasmid::sandbox::validate(&sandbox_args).await {
             Ok(result) if !result.health_ok => {
-                eprintln!(
-                    "[webhook] sandbox FAIL for {} — {}",
-                    primal_lower, result.detail
+                error!(
+                    primal = %primal_lower,
+                    detail = %result.detail,
+                    "sandbox validation failed"
                 );
                 return Ok(crate::ShadowOutcome {
                     ok: false,
@@ -230,13 +236,15 @@ pub async fn handle_push(
                 });
             }
             Ok(result) => {
-                eprintln!(
-                    "[webhook] sandbox PASS for {} — {} ({}ms)",
-                    primal_lower, result.detail, result.elapsed_ms
+                info!(
+                    primal = %primal_lower,
+                    detail = %result.detail,
+                    elapsed_ms = result.elapsed_ms,
+                    "sandbox validation passed"
                 );
             }
             Err(e) => {
-                eprintln!("[webhook] sandbox infra error for {primal_lower}: {e} — proceeding");
+                warn!(primal = %primal_lower, error = %e, "sandbox infra error — proceeding");
             }
         }
     }

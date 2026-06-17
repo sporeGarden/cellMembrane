@@ -66,19 +66,19 @@ pub(super) async fn run_post_sync_phases(
     if opts.publish_freshness && opts.mode == CascadeMode::Sync {
         let is_designated_publisher = is_freshness_publisher();
         if is_designated_publisher {
-        match crate::freshness::publish_freshness_toml(root, m, repos).await {
-            Ok(()) => {
-                lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
-                match crate::freshness::auto_commit_freshness(root, m, repos).await {
-                    Ok(()) => {}
-                    Err(e) => lines.push(format!("  [freshness] auto-push: {e}")),
-                }
+            match crate::freshness::publish_freshness_toml(root, m, repos).await {
+                Ok(()) => {
+                    lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
+                    match crate::freshness::auto_commit_freshness(root, m, repos).await {
+                        Ok(()) => {}
+                        Err(e) => lines.push(format!("  [freshness] auto-push: {e}")),
+                    }
 
-                let heads = collect_cascade_heads(root, repos).await;
-                run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
+                    let heads = collect_cascade_heads(root, repos).await;
+                    run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
+                }
+                Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
             }
-            Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
-        }
         } else {
             lines.push("  [freshness] SKIP — not designated publisher (set FRESHNESS_PUBLISHER=1 to enable)".to_string());
         }
@@ -254,13 +254,16 @@ async fn run_post_cascade_refresh(
                             .as_ref()
                             .and_then(|d| d.as_array())
                             .map_or(0u32, |arr| {
-                                arr.iter()
-                                    .filter(|e| {
-                                        e.get("status")
-                                            .and_then(|s| s.as_str())
-                                            .is_some_and(|s| s == "Pushed")
-                                    })
-                                    .count() as u32
+                                u32::try_from(
+                                    arr.iter()
+                                        .filter(|e| {
+                                            e.get("status")
+                                                .and_then(|s| s.as_str())
+                                                .is_some_and(|s| s == "Pushed")
+                                        })
+                                        .count(),
+                                )
+                                .unwrap_or(u32::MAX)
                             });
                     total_pushed += pushed;
                 }
@@ -279,13 +282,16 @@ async fn run_post_cascade_refresh(
             .as_ref()
             .and_then(|d| d.as_array())
             .map_or(0u32, |arr| {
-                arr.iter()
-                    .filter(|e| {
-                        e.get("status")
-                            .and_then(|s| s.as_str())
-                            .is_some_and(|s| s == "Pushed")
-                    })
-                    .count() as u32
+                u32::try_from(
+                    arr.iter()
+                        .filter(|e| {
+                            e.get("status")
+                                .and_then(|s| s.as_str())
+                                .is_some_and(|s| s == "Pushed")
+                        })
+                        .count(),
+                )
+                .unwrap_or(u32::MAX)
             });
     }
 
@@ -450,7 +456,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             .await;
         }
 
-        if std::fs::copy(&depot_bin, &installed_bin).is_err() {
+        if tokio::fs::copy(&depot_bin, &installed_bin).await.is_err() {
             failed += 1;
             continue;
         }
@@ -584,6 +590,5 @@ pub(super) fn summarize_depot_freshness() -> String {
 /// Any gate with build authority can be the publisher — the identity is
 /// infrastructure configuration, not code knowledge.
 fn is_freshness_publisher() -> bool {
-    std::env::var("FRESHNESS_PUBLISHER")
-        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+    std::env::var("FRESHNESS_PUBLISHER").is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"))
 }

@@ -605,12 +605,15 @@ pub(super) async fn dispatch_content(
             .await?;
             let content_files: u32 = content_count_out.trim().parse().unwrap_or(0);
 
+            let content_svc = cellmembrane_types::MembraneService::with_capability(
+                cellmembrane_types::ServiceCapability::ContentServing,
+            );
             let nestgate_port = std::env::var(cellmembrane_types::service::ENV_NESTGATE_PORT)
                 .ok()
                 .and_then(|v| v.parse::<u16>().ok())
-                .unwrap_or(9500);
+                .unwrap_or_else(|| content_svc.and_then(|s| s.port).unwrap_or(9500));
             let bind = std::env::var(cellmembrane_types::service::ENV_NUCLEUS_BIND)
-                .unwrap_or_else(|_| "127.0.0.1".into());
+                .unwrap_or_else(|_| cellmembrane_types::service::BIND_LOOPBACK.into());
             let (curl_out, curl_code) = crate::ssh::exec_raw(
                 config,
                 &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{nestgate_port}/health 2>/dev/null"),

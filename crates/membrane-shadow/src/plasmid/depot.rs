@@ -115,10 +115,11 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
         rustc_version().await,
     );
 
-    let mut existing_prov: BTreeMap<String, ProvenanceEntry> = std::fs::read_to_string(&provenance_path)
-        .ok()
-        .and_then(|content| toml::from_str::<ProvenanceFile>(&content).ok())
-        .map_or_else(BTreeMap::new, |parsed| parsed.entries);
+    let mut existing_prov: BTreeMap<String, ProvenanceEntry> =
+        std::fs::read_to_string(&provenance_path)
+            .ok()
+            .and_then(|content| toml::from_str::<ProvenanceFile>(&content).ok())
+            .map_or_else(BTreeMap::new, |parsed| parsed.entries);
 
     for result in built {
         if let Some(commit) = result.detail.split("commit=").nth(1) {

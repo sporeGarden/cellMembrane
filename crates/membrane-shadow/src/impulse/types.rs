@@ -270,7 +270,7 @@ pub fn current_wave(workspace_root: &Path) -> u32 {
         if let Ok(val) = contents.parse::<toml::Table>() {
             if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {
                 if let Some(id) = wave.get("id").and_then(toml::Value::as_integer) {
-                    return id as u32;
+                    return u32::try_from(id).unwrap_or(0);
                 }
             }
         }

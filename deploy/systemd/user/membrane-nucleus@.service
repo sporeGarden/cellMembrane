@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # membrane-nucleus@.service (user) — NUCLEUS primal for desktop gates
 # Instance name (%i) is the primal binary name.
 # Runs under the user session, sockets in $XDG_RUNTIME_DIR/biomeos/.

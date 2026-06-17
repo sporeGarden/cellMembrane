@@ -24,6 +24,7 @@ use crate::impulse;
 use serde::Serialize;
 use std::path::PathBuf;
 use tokio::process::Command;
+use tracing::{debug, error, info, warn};
 
 /// Result of a full relay run.
 #[derive(Debug, Serialize)]
@@ -56,7 +57,7 @@ pub struct RelayConfig {
 impl RelayConfig {
     /// Resolve configuration from membrane.toml, environment variables, then defaults.
     ///
-    /// Priority: membrane.toml [relay] > environment > built-in defaults.
+    /// Priority: membrane.toml `[relay]` > environment > built-in defaults.
     #[must_use]
     pub fn from_env() -> Self {
         let membrane_config = load_relay_from_membrane_toml();
@@ -144,10 +145,7 @@ pub async fn run(config: &RelayConfig, repo_paths: &[&str]) -> Result<RelayResul
         repo_paths.to_vec()
     };
 
-    eprintln!(
-        "[relay] K-Derm relay chain triggered for {} repo(s)",
-        paths.len()
-    );
+    info!(count = paths.len(), "K-Derm relay chain triggered");
 
     let (pulled, pull_failures) = mediate(config, &paths).await;
     let impulses_sensed = sense_impulses(config);
@@ -162,12 +160,12 @@ pub async fn run(config: &RelayConfig, repo_paths: &[&str]) -> Result<RelayResul
         push_failures,
     };
 
-    eprintln!(
-        "[relay] chain complete: pulled={} pushed={} impulses={} failures={}",
-        result.pulled.len(),
-        result.pushed.len(),
-        result.impulses_sensed,
-        result.pull_failures.len() + result.push_failures.len(),
+    info!(
+        pulled = result.pulled.len(),
+        pushed = result.pushed.len(),
+        impulses = result.impulses_sensed,
+        failures = result.pull_failures.len() + result.push_failures.len(),
+        "chain complete"
     );
 
     Ok(result)
@@ -185,7 +183,7 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
         let local_path = config.ecoprimals_root.join(repo_path);
 
         if !local_path.join(".git").exists() {
-            eprintln!("[relay] SKIP {repo_path} (not cloned on peptidoglycan)");
+            debug!(repo = repo_path, "not cloned on peptidoglycan — skipping");
             continue;
         }
 
@@ -203,11 +201,11 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
 
         match status {
             Ok(s) if s.success() => {
-                eprintln!("[relay] pulled {repo_path} (metallic bond)");
+                info!(repo = repo_path, "pulled (metallic bond)");
                 pulled.push(repo_path.to_string());
             }
             _ => {
-                eprintln!("[relay] WARN: {repo_path} pull failed — may be up to date");
+                warn!(repo = repo_path, "pull failed — may be up to date");
                 failures.push(repo_path.to_string());
             }
         }
@@ -225,14 +223,14 @@ fn sense_impulses(config: &RelayConfig) -> usize {
     match impulse::sense(&config.ecoprimals_root, true, true) {
         Ok((_, count)) => {
             if count > 0 {
-                eprintln!("[relay] detected {count} pending impulse(s)");
+                info!(count, "detected pending impulse(s)");
             } else {
-                eprintln!("[relay] resting potential (no pending impulses)");
+                debug!("resting potential (no pending impulses)");
             }
             count
         }
         Err(e) => {
-            eprintln!("[relay] WARN: impulse sense failed ({e}) — continuing");
+            warn!(error = %e, "impulse sense failed — continuing");
             0
         }
     }
@@ -310,21 +308,21 @@ echo "+$ahead"
         Ok(o) => match o.status.code() {
             Some(0) => {
                 let commits = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                eprintln!("[relay] PUSHED {repo_path} ({commits} commits → GitHub)");
+                info!(repo = repo_path, commits, "pushed to GitHub");
                 ShipResult::Pushed
             }
             Some(2) => {
-                eprintln!("[relay] SKIP {repo_path} (not cloned on outer membrane)");
+                debug!(repo = repo_path, "not cloned on outer membrane — skipping");
                 ShipResult::Skipped
             }
             Some(4) => ShipResult::Skipped,
             _ => {
-                eprintln!("[relay] FAIL {repo_path} (push to GitHub failed)");
+                error!(repo = repo_path, "push to GitHub failed");
                 ShipResult::Failed
             }
         },
         Err(e) => {
-            eprintln!("[relay] FAIL SSH to golgiBody-ext ({e})");
+            error!(error = %e, "SSH to golgiBody-ext failed");
             ShipResult::Failed
         }
     }

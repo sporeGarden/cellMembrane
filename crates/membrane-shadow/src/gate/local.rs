@@ -71,7 +71,9 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
         }
     }
 
-    crate::resolve_xdg_data_home().join("ecoPrimals").join("plasmidBin")
+    crate::resolve_xdg_data_home()
+        .join("ecoPrimals")
+        .join("plasmidBin")
 }
 
 /// Resolve the membrane install base directory.

@@ -70,8 +70,7 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
         failed: Vec::new(),
     };
     for remote in &remotes {
-        let ok = try_push(repo_dir, remote).await
-            || reconcile_and_push(repo_dir, remote).await;
+        let ok = try_push(repo_dir, remote).await || reconcile_and_push(repo_dir, remote).await;
         if ok {
             result.succeeded += 1;
         } else {

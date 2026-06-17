@@ -113,6 +113,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     let bin_dir = dest_root.join("primals").join(&arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
+    #[allow(clippy::option_if_let_else)] // lifetimes differ: &'a str vs &'static str
     let primals: Vec<&str> = match args.primal.as_deref() {
         Some(p) => vec![p],
         None => nucleus_primals(),
@@ -148,7 +149,9 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 
 fn resolve_dest(override_dest: Option<&str>) -> PathBuf {
     super::resolve_path(override_dest, "ECOPRIMALS_PLASMID_BIN", || {
-        crate::resolve_xdg_data_home().join("ecoPrimals").join("plasmidBin")
+        crate::resolve_xdg_data_home()
+            .join("ecoPrimals")
+            .join("plasmidBin")
     })
 }
 
@@ -578,13 +581,18 @@ fn format_fetch_outcome(
     bin_dir: &Path,
     results: &[FetchResult],
 ) -> ShadowOutcome {
-    let downloaded = results.iter().filter(|r| r.status == "ok").count() as u32;
-    let verified = results.iter().filter(|r| r.verified).count() as u32;
-    let skipped = results.iter().filter(|r| r.status == "exists").count() as u32;
-    let failed = results
-        .iter()
-        .filter(|r| r.status == "download_failed")
-        .count() as u32;
+    let downloaded =
+        u32::try_from(results.iter().filter(|r| r.status == "ok").count()).unwrap_or(u32::MAX);
+    let verified = u32::try_from(results.iter().filter(|r| r.verified).count()).unwrap_or(u32::MAX);
+    let skipped =
+        u32::try_from(results.iter().filter(|r| r.status == "exists").count()).unwrap_or(u32::MAX);
+    let failed = u32::try_from(
+        results
+            .iter()
+            .filter(|r| r.status == "download_failed")
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
 
     let summary = FetchSummary {
         source: source.to_string(),

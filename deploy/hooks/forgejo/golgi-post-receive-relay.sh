@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # golgi-post-receive-relay.sh — Rust-native K-Derm relay hook
 # Installed in each repo's hooks/post-receive.d/ on golgiBody-inner.
 # Triggers membrane relay.run (Rust binary) instead of bash SSH chain.

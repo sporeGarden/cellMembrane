@@ -6,6 +6,7 @@ use crate::ShadowOutcome;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use tracing::warn;
 
 use super::{detect_target_triple, nucleus_primals};
 
@@ -180,9 +181,11 @@ async fn refresh_one(
             }
             Err(e) => {
                 last_err = format!("{e}");
-                eprintln!(
-                    "refresh: scp {primal} attempt {} failed: {last_err}",
-                    attempt + 1
+                warn!(
+                    primal,
+                    attempt = attempt + 1,
+                    error = %last_err,
+                    "scp failed"
                 );
             }
         }
@@ -218,10 +221,10 @@ async fn refresh_one(
 
     let divergence_note = check_checksum_coherence(primal, &actual_hash);
 
-    let detail = match divergence_note {
-        Some(note) => format!("→ {remote_final} ({size_kb}KB blake3={hash_short}) ⚠ {note}"),
-        None => format!("→ {remote_final} ({size_kb}KB blake3={hash_short})"),
-    };
+    let detail = divergence_note.map_or_else(
+        || format!("→ {remote_final} ({size_kb}KB blake3={hash_short})"),
+        |note| format!("→ {remote_final} ({size_kb}KB blake3={hash_short}) ⚠ {note}"),
+    );
 
     RefreshResult {
         binary: primal.into(),

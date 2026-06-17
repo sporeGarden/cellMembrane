@@ -7,6 +7,7 @@
 
 use crate::cli;
 use crate::{ShadowConfig, ShadowOutcome, gate, service};
+use tracing::info;
 
 #[allow(
     clippy::too_many_lines,
@@ -58,8 +59,7 @@ pub(super) async fn dispatch(
             } else {
                 cellmembrane_types::GateMobility::Fixed
             };
-            let positional: Vec<&&str> =
-                args.iter().filter(|a| !a.starts_with("--")).collect();
+            let positional: Vec<&&str> = args.iter().filter(|a| !a.starts_with("--")).collect();
             let gate_name = positional
                 .first()
                 .copied()
@@ -375,7 +375,7 @@ async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOutcome> {
         )));
     }
 
-    eprintln!("provision: resolving SSH keys...");
+    info!("resolving SSH keys");
     let keys = digitalocean::list_ssh_keys().await?;
     let ssh_key_ids: Vec<String> = keys.iter().map(|k| k.id.to_string()).collect();
 
@@ -385,9 +385,12 @@ async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOutcome> {
         ));
     }
 
-    eprintln!(
-        "provision: creating droplet {name} ({size}, {region}) with {} SSH key(s)...",
-        ssh_key_ids.len()
+    info!(
+        name = %name,
+        size = %size,
+        region = %region,
+        ssh_keys = ssh_key_ids.len(),
+        "creating droplet"
     );
 
     let req = ProvisionRequest {
@@ -401,16 +404,17 @@ async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOutcome> {
     };
 
     let droplet = digitalocean::create_droplet(&req).await?;
-    eprintln!(
-        "provision: droplet {} created (id={}), waiting for active...",
-        droplet.name, droplet.id
+    info!(
+        name = %droplet.name,
+        id = droplet.id,
+        "droplet created, waiting for active"
     );
 
     let active = digitalocean::wait_until_active(droplet.id, &profile).await?;
     let ip = active.ip.clone().unwrap_or_default();
-    eprintln!("provision: droplet active at {ip}");
+    info!(ip = %ip, "droplet active");
 
-    eprintln!("provision: bootstrapping...");
+    info!("bootstrapping");
     let outcome = provision::bootstrap::bootstrap_droplet(&active, &name).await;
 
     let msg = format!(
@@ -429,9 +433,9 @@ async fn dispatch_provision_status(args: &[&str]) -> crate::Result<ShadowOutcome
     use crate::provision::digitalocean;
 
     if let Some(id_str) = cli::extract_flag_value(args, "--id") {
-        let id: u64 = id_str
-            .parse()
-            .map_err(|e| crate::ShadowError::Parse(format!("invalid droplet id '{id_str}': {e}")))?;
+        let id: u64 = id_str.parse().map_err(|e| {
+            crate::ShadowError::Parse(format!("invalid droplet id '{id_str}': {e}"))
+        })?;
         let state = digitalocean::get_droplet(id).await?;
         let msg = format!(
             "{} (id={}) — {} @ {}",
@@ -565,9 +569,7 @@ async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<ShadowOutcome
         .join("\n");
 
     let status = if outcome.success { "PASS" } else { "FAIL" };
-    let msg = format!(
-        "gate.provision.verify [{status}] {gate_name}@{target_ip}\n{summary}"
-    );
+    let msg = format!("gate.provision.verify [{status}] {gate_name}@{target_ip}\n{summary}");
 
     if outcome.success {
         Ok(ShadowOutcome::ok(msg))

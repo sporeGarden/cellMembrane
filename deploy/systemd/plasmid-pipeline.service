@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # plasmid-pipeline.service — Zero-touch binary refresh from depot
 # Triggered by plasmid-pipeline.timer or manually via systemctl start
 #

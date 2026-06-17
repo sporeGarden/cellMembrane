@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+
 # Relay Trust Boundary — Cross-Gate Security Audit
 
 **Version**: 1.0.0

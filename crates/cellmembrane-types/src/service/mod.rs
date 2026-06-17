@@ -112,12 +112,10 @@ impl ServerContract {
             Self::SocketAuditDir => format!(
                 "{install_base}/{binary} server --socket {socket_path} --audit-dir /var/lib/membrane/{binary}"
             ),
-            Self::SocketOnly | Self::Tarpc => format!(
-                "{install_base}/{binary} server --socket {socket_path}"
-            ),
-            Self::BiomeosApi => format!(
-                "{install_base}/{binary} api --socket {socket_path}"
-            ),
+            Self::SocketOnly | Self::Tarpc => {
+                format!("{install_base}/{binary} server --socket {socket_path}")
+            }
+            Self::BiomeosApi => format!("{install_base}/{binary} api --socket {socket_path}"),
             Self::External => format!("{install_base}/{binary}"),
         }
     }
@@ -290,9 +288,9 @@ pub const DEFAULT_FEDERATION_PORT: u16 = 7700;
 /// Default TURN relay port.
 pub const DEFAULT_TURN_PORT: u16 = 3478;
 
-/// RustDesk hbbs (ID/rendezvous server) port.
+/// `RustDesk` hbbs (ID/rendezvous server) port.
 pub const RUSTDESK_HBBS_PORT: u16 = 21115;
-/// RustDesk hbbr (relay server) port.
+/// `RustDesk` hbbr (relay server) port.
 pub const RUSTDESK_HBBR_PORT: u16 = 21117;
 
 /// Default VPS mesh peer address (hub songbird federation endpoint).
@@ -595,15 +593,15 @@ impl MembraneService {
     /// constants and hardcoded primal names at call sites.
     #[must_use]
     pub fn binary_for(cap: ServiceCapability) -> &'static str {
-        match Self::with_capability(cap) {
-            Some(svc) => svc.binary,
-            None => match cap {
+        Self::with_capability(cap).map_or_else(
+            || match cap {
                 ServiceCapability::CryptoSigner => "beardog",
                 ServiceCapability::MeshRelay => "songbird",
                 ServiceCapability::ContentServing => "nestgate",
                 _ => "unknown",
             },
-        }
+            |svc| svc.binary,
+        )
     }
 
     /// All services declaring a given capability (for multi-provider scenarios).

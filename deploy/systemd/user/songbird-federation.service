@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # songbird-federation.service (user) — Mesh federation for desktop gates
 # Runs under the user session, no root required.
 #

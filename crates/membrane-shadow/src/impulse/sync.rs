@@ -14,6 +14,7 @@ use super::types::{
 };
 use crate::error::{Result, ShadowError};
 use crate::identity;
+use tracing::warn;
 
 /// Fire a SYNC divergence impulse — auto-called by `temporal.cascade`.
 pub async fn post_sync_diverge(
@@ -111,7 +112,7 @@ pub async fn post_sync_diverge(
     )
     .await?;
     if !push.failed.is_empty() {
-        eprintln!("⚠ sync impulse push partial failure: {:?}", push.failed);
+        warn!(failed = ?push.failed, "sync impulse push partial failure");
     }
 
     Ok(impulse)
@@ -119,7 +120,10 @@ pub async fn post_sync_diverge(
 
 async fn resolve_remote_head(workspace_root: &Path, repo_path: &str, remote: &str) -> String {
     let local_path = workspace_root.join(repo_path);
-    crate::git_ops::git_output(&local_path, &["rev-parse", "--short", &format!("{remote}/main")])
-        .await
-        .unwrap_or_default()
+    crate::git_ops::git_output(
+        &local_path,
+        &["rev-parse", "--short", &format!("{remote}/main")],
+    )
+    .await
+    .unwrap_or_default()
 }

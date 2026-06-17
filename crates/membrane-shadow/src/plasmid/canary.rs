@@ -10,6 +10,7 @@
 //! - Pool size defaults to 1 per primal (configurable via `membrane.toml`)
 
 use std::path::{Path, PathBuf};
+use tracing::{debug, warn};
 
 /// Base directory for canary sockets.
 const CANARY_SOCKET_DIR: &str = "/run/membrane/canary";
@@ -76,8 +77,12 @@ pub async fn retire_to_canary(
     let socket_dir = resolve_canary_socket_dir();
     let bin_dir = resolve_canary_bin_dir();
 
-    std::fs::create_dir_all(&socket_dir).map_err(|e| format!("create canary socket dir: {e}"))?;
-    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("create canary bin dir: {e}"))?;
+    tokio::fs::create_dir_all(&socket_dir)
+        .await
+        .map_err(|e| format!("create canary socket dir: {e}"))?;
+    tokio::fs::create_dir_all(&bin_dir)
+        .await
+        .map_err(|e| format!("create canary bin dir: {e}"))?;
 
     // Kill any existing canary for this primal
     let mut pool = load_pool();
@@ -91,16 +96,19 @@ pub async fn retire_to_canary(
 
     // Remove stale socket
     if socket_path.exists() {
-        std::fs::remove_file(&socket_path).ok();
+        tokio::fs::remove_file(&socket_path).await.ok();
     }
 
     // Stage binary to canary directory
-    std::fs::copy(old_binary, &canary_binary).map_err(|e| format!("stage canary binary: {e}"))?;
+    tokio::fs::copy(old_binary, &canary_binary)
+        .await
+        .map_err(|e| format!("stage canary binary: {e}"))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&canary_binary, std::fs::Permissions::from_mode(0o755))
+        tokio::fs::set_permissions(&canary_binary, std::fs::Permissions::from_mode(0o755))
+            .await
             .map_err(|e| format!("chmod canary binary: {e}"))?;
     }
 
@@ -239,9 +247,11 @@ pub async fn failover_targets() -> Vec<FailoverTarget> {
     let pool = load_pool();
     for slot in &pool.slots {
         if is_stale(slot) {
-            eprintln!(
-                "canary: refusing stale failover target {}/{} (promoted {})",
-                slot.primal, slot.commit, slot.promoted_at
+            debug!(
+                primal = %slot.primal,
+                commit = %slot.commit,
+                promoted_at = %slot.promoted_at,
+                "refusing stale failover target"
             );
             continue;
         }
@@ -268,9 +278,10 @@ pub async fn failover_targets() -> Vec<FailoverTarget> {
                 });
             }
         } else {
-            eprintln!(
-                "canary: remote {} ({}) unreachable — skipping",
-                remote.gate_name, remote.ip
+            warn!(
+                gate = %remote.gate_name,
+                ip = %remote.ip,
+                "remote canary unreachable — skipping"
             );
         }
     }
@@ -300,9 +311,11 @@ pub async fn promote_canary(primal: &str, production_path: &Path) -> Result<Cana
 
     // Atomic promotion: .new + rename
     let staging = production_path.with_extension("new");
-    std::fs::copy(&slot.binary_path, &staging)
+    tokio::fs::copy(&slot.binary_path, &staging)
+        .await
         .map_err(|e| format!("copy canary to production staging: {e}"))?;
-    std::fs::rename(&staging, production_path)
+    tokio::fs::rename(&staging, production_path)
+        .await
         .map_err(|e| format!("atomic canary promote: {e}"))?;
 
     // Kill the canary instance (it's now production)
@@ -411,8 +424,9 @@ pub fn deregister_remote_canary(gate_name: &str) {
 /// SSH-based health check for a remote canary droplet.
 /// Discovers the crypto spine binary via capability registry for the probe socket.
 async fn remote_health_check(ip: &str) -> bool {
-    let spine_binary =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let spine_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
 
     let probe_cmd = format!(
         "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:/run/membrane/{spine_binary}.sock 2>/dev/null"

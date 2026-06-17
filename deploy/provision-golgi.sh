@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # provision-golgi.sh — One-shot provisioning for mobile golgi NUCs
 #
 # Usage: sudo ./provision-golgi.sh <gate-name>

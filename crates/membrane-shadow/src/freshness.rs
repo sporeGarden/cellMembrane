@@ -9,6 +9,7 @@ use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use tracing::warn;
 
 const FRESHNESS_HEADER: &str = "\
 # SPDX-License-Identifier: CC-BY-SA-4.0
@@ -156,9 +157,9 @@ pub async fn auto_commit_freshness(
 
     let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
     if !push_result.failed.is_empty() {
-        eprintln!(
-            "freshness: push failed to {} (reconciliation attempted)",
-            push_result.failed.join(", ")
+        warn!(
+            failed_remotes = %push_result.failed.join(", "),
+            "freshness push failed (reconciliation attempted)"
         );
     }
 
@@ -212,8 +213,7 @@ fn read_freshness_wave_id(path: &Path) -> u32 {
     let Ok(content) = std::fs::read_to_string(path) else {
         return 0;
     };
-    toml::from_str::<FreshnessFile>(&content)
-        .map_or(0, |f| f.wave.id)
+    toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
 }
 
 /// Check installed binary freshness against source HEAD SHAs.
@@ -303,7 +303,11 @@ pub fn check_installed_freshness() -> Result<String> {
 /// `rhizoCrypt` (dehydrate) → `BearDog` (sign) → `NestGate` (store) → `LoamSpine` (commit) → `sweetGrass` (attribute)
 ///
 /// Returns `Ok(session_id)` on success or an error if NUCLEUS is unreachable.
-pub async fn rootpulse_commit(wave_id: u32, gate: &str, heads: &BTreeMap<String, String>) -> Result<String> {
+pub async fn rootpulse_commit(
+    wave_id: u32,
+    gate: &str,
+    heads: &BTreeMap<String, String>,
+) -> Result<String> {
     let socket_path = resolve_neural_api_socket();
     if !socket_path.exists() {
         return Err(ShadowError::Config(
@@ -413,32 +417,37 @@ pub async fn sovereignty_verify(
         .and_then(|r| r.get("ledger_heads"))
         .and_then(|h| h.as_object());
 
-    match ledger_heads {
-        Some(ledger) => heads
-            .iter()
-            .map(|(repo, head)| {
-                let verified = ledger
-                    .get(repo)
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|ledger_head| ledger_head == head);
-                let detail = if verified {
-                    "sovereign match".into()
-                } else {
-                    let ledger_val = ledger
+    ledger_heads.map_or_else(
+        || mark_all_unverified(heads, "no ledger state returned"),
+        |ledger| {
+            heads
+                .iter()
+                .map(|(repo, head)| {
+                    let verified = ledger
                         .get(repo)
                         .and_then(|v| v.as_str())
-                        .unwrap_or("(not in ledger)");
-                    format!("MISMATCH: VCS={} ledger={ledger_val}", &head[..8.min(head.len())])
-                };
-                SovereigntyCheck {
-                    repo: repo.clone(),
-                    verified,
-                    detail,
-                }
-            })
-            .collect(),
-        None => mark_all_unverified(heads, "no ledger state returned"),
-    }
+                        .is_some_and(|ledger_head| ledger_head == head);
+                    let detail = if verified {
+                        "sovereign match".into()
+                    } else {
+                        let ledger_val = ledger
+                            .get(repo)
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("(not in ledger)");
+                        format!(
+                            "MISMATCH: VCS={} ledger={ledger_val}",
+                            &head[..8.min(head.len())]
+                        )
+                    };
+                    SovereigntyCheck {
+                        repo: repo.clone(),
+                        verified,
+                        detail,
+                    }
+                })
+                .collect()
+        },
+    )
 }
 
 fn mark_all_unverified(heads: &BTreeMap<String, String>, reason: &str) -> Vec<SovereigntyCheck> {
@@ -482,7 +491,9 @@ struct ProvenanceSidecar {
 
 /// Standard provenance directory (XDG data dir).
 fn dirs_provenance() -> PathBuf {
-    crate::resolve_xdg_data_home().join("ecoPrimals").join("provenance")
+    crate::resolve_xdg_data_home()
+        .join("ecoPrimals")
+        .join("provenance")
 }
 
 /// Get full HEAD SHA of a source repo given its path (sync).

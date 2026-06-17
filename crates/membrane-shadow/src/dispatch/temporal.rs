@@ -4,6 +4,7 @@
 
 use crate::cli::{self, TapMessage};
 use crate::{ShadowConfig, ShadowOutcome, identity, manifest, temporal};
+use tracing::info;
 
 pub(super) async fn dispatch_temporal(
     config: &ShadowConfig,
@@ -165,7 +166,7 @@ async fn dispatch_cascade_stress(
     let mut all_green = true;
 
     for cycle in 1..=cycles {
-        eprintln!("=== Cascade Stress: cycle {cycle}/{cycles} ===");
+        info!(cycle, cycles, "cascade stress cycle");
 
         let result = dispatch_cascade(config, args).await?;
         let skew = result

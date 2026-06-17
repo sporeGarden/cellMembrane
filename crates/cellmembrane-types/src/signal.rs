@@ -234,7 +234,13 @@ mod tests {
     #[test]
     fn accept_decision_clear() {
         let d = accept_decision(&CLEAR_JSONRPC, UnsignalledPolicy::Reject);
-        assert_eq!(d, AcceptDecision::Accept { skip_bytes: 2, protocol: 0x01 });
+        assert_eq!(
+            d,
+            AcceptDecision::Accept {
+                skip_bytes: 2,
+                protocol: 0x01
+            }
+        );
     }
 
     #[test]

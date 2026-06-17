@@ -21,6 +21,7 @@
 use crate::ShadowOutcome;
 use crate::error::{Result, ShadowError};
 use std::path::Path;
+use tracing::warn;
 
 use super::depot::{compute_blake3_file, load_sources, resolve_depot, update_depot_metadata};
 use super::detect_target_triple;
@@ -63,7 +64,7 @@ pub async fn build(args: &BuildArgs) -> Result<ShadowOutcome> {
     match &result.status {
         HarvestStatus::Built => {
             if let Err(e) = update_depot_metadata(&depot_dir, &target, &[&result]).await {
-                eprintln!("warn: metadata update failed: {e}");
+                warn!(error = %e, "metadata update failed");
             }
             Ok(ShadowOutcome {
                 ok: true,

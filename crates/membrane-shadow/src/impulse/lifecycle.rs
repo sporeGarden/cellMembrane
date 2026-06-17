@@ -15,6 +15,7 @@ use super::types::{
 };
 use crate::error::{Result, ShadowError};
 use crate::identity;
+use tracing::warn;
 
 /// Fire a new impulse — rootPulse ACTION.
 pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseFile> {
@@ -102,7 +103,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     )
     .await?;
     if !push.failed.is_empty() {
-        eprintln!("⚠ impulse push partial failure: {:?}", push.failed);
+        warn!(failed = ?push.failed, "impulse push partial failure");
     }
 
     try_relay_impulse(&impulse);
@@ -253,7 +254,7 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
     )
     .await?;
     if !push.failed.is_empty() {
-        eprintln!("⚠ ack push partial failure: {:?}", push.failed);
+        warn!(failed = ?push.failed, "ack push partial failure");
     }
 
     Ok(impulse)
@@ -313,7 +314,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
         );
         let push = crate::git_ops::add_all_commit_push(&wh_dir, "impulses/", &msg).await?;
         if !push.failed.is_empty() {
-            eprintln!("⚠ archive push partial failure: {:?}", push.failed);
+            warn!(failed = ?push.failed, "archive push partial failure");
         }
     }
 

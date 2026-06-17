@@ -117,7 +117,9 @@ fn permissions_phase(dry_run: bool) -> BootstrapPhase {
         return BootstrapPhase {
             name: "permissions.set".into(),
             ok: true,
-            detail: format!("dry-run: would ensure {membrane_dir} + {depot_str} exist with correct perms"),
+            detail: format!(
+                "dry-run: would ensure {membrane_dir} + {depot_str} exist with correct perms"
+            ),
         };
     }
 
@@ -428,11 +430,10 @@ fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
          [ \"$2\" = \"up\" ] && membrane gate.status --quiet 2>/dev/null &\n"
     );
 
-    let ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok()
-        && {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).is_ok()
-        };
+    let ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok() && {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).is_ok()
+    };
 
     BootstrapPhase {
         name: "mobility.hook".into(),
@@ -501,8 +502,9 @@ fn emit_deployment_toml(
 // ── Mesh configuration (native UDS) ───────────────────────────────────
 
 async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
-    let relay_binary =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::MeshRelay);
+    let relay_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
 
     let dest_root = super::resolve_plasmidbin_dir();
     let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);
@@ -557,11 +559,17 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
         Ok(response) => {
             let peer_count = peers.len();
             if response.contains("\"result\"") || response.contains("\"ok\"") {
-                (true, format!("mesh.init sent ({peer_count} peers) as {gate_name}"))
+                (
+                    true,
+                    format!("mesh.init sent ({peer_count} peers) as {gate_name}"),
+                )
             } else {
                 (
                     true,
-                    format!("mesh.init sent ({peer_count} peers, response: {})", response.trim()),
+                    format!(
+                        "mesh.init sent ({peer_count} peers, response: {})",
+                        response.trim()
+                    ),
                 )
             }
         }
@@ -602,8 +610,80 @@ fn rand_byte() -> u8 {
         .unwrap_or_default()
         .subsec_nanos();
     #[allow(clippy::cast_possible_truncation)]
-    let byte = u64::from(now).wrapping_mul(6_364_136_223_846_793_005).wrapping_add(tick) as u8;
+    let byte = u64::from(now)
+        .wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(tick) as u8;
     byte
+}
+
+/// Resolve extra CLI args for a primal's systemd `ExecStart`, based on capability.
+fn extra_exec_args(svc: &cellmembrane_types::MembraneService) -> String {
+    let relay_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
+    let content_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::ContentServing,
+    );
+    let identity_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::Identity,
+    );
+
+    if svc.binary == relay_binary {
+        format!(
+            " --federation-port {} --bind {}",
+            cellmembrane_types::service::DEFAULT_FEDERATION_PORT,
+            cellmembrane_types::service::BIND_ALL,
+        )
+    } else if svc.binary == content_binary {
+        let port = cellmembrane_types::MembraneService::for_binary(content_binary)
+            .and_then(|s| s.port)
+            .unwrap_or(cellmembrane_types::service::DEFAULT_FEDERATION_PORT);
+        format!(
+            " --port {} --bind {}",
+            port,
+            cellmembrane_types::service::BIND_LOOPBACK,
+        )
+    } else if svc.binary == identity_binary {
+        format!(
+            " --http-address {}:0",
+            cellmembrane_types::service::BIND_LOOPBACK,
+        )
+    } else {
+        String::new()
+    }
+}
+
+/// Generate the systemd unit file content for a NUCLEUS primal.
+fn generate_unit_content(
+    svc: &cellmembrane_types::MembraneService,
+    exec_start: &str,
+    extra_args: &str,
+) -> String {
+    let content_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::ContentServing,
+    );
+    let env_file_line = if svc.binary == content_binary {
+        "EnvironmentFile=-/etc/membrane/secrets.env\n"
+    } else {
+        ""
+    };
+
+    format!(
+        "[Unit]\n\
+         Description={binary} primal (membrane NUCLEUS)\n\
+         After=network.target\n\n\
+         [Service]\n\
+         Type=simple\n\
+         {env_file_line}\
+         ExecStart={exec_start}{extra_args}\n\
+         Restart=on-failure\n\
+         RestartSec=3\n\
+         RuntimeDirectory=membrane\n\
+         RuntimeDirectoryPreserve=yes\n\n\
+         [Install]\n\
+         WantedBy=multi-user.target\n",
+        binary = svc.binary,
+    )
 }
 
 fn start_nucleus_primals(arch: &str) -> (bool, String) {
@@ -612,65 +692,57 @@ fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let install_base = super::resolve_install_base();
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
-    let run_dir = std::path::Path::new("/run/membrane");
+    let paths = cellmembrane_types::service::ServicePaths::from_env();
     let systemd_dir = std::path::Path::new("/etc/systemd/system");
 
-    std::fs::create_dir_all(run_dir).ok();
+    std::fs::create_dir_all(std::path::Path::new(
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    ))
+    .ok();
+
+    let security_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let security_socket = paths
+        .socket_path(
+            cellmembrane_types::MembraneService::with_capability(
+                cellmembrane_types::ServiceCapability::CryptoSigner,
+            )
+            .expect("registry must have CryptoSigner"),
+        )
+        .unwrap_or_else(|| {
+            format!(
+                "{}/{security_binary}.sock",
+                cellmembrane_types::service::DEFAULT_SOCKET_BASE
+            )
+        });
 
     let services = cellmembrane_types::MembraneService::all();
     let mut installed = 0u32;
     let mut failed = 0u32;
 
     for svc in services {
-        if !svc.is_primal {
-            continue;
-        }
-        let bin_path = bin_dir.join(svc.binary);
-        if !bin_path.exists() {
+        if !svc.is_primal || !bin_dir.join(svc.binary).exists() {
             continue;
         }
 
-        let socket_path = format!("/run/membrane/{}.sock", svc.binary);
-        let security_socket = "/run/membrane/beardog.sock".to_string();
+        let socket_path = paths.socket_path(svc).unwrap_or_else(|| {
+            format!(
+                "{}/{}.sock",
+                cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+                svc.binary
+            )
+        });
         let exec_start = svc.server_contract.exec_args_with_base(
             &install_base,
             svc.binary,
             &socket_path,
             &security_socket,
         );
+        let extra_args = extra_exec_args(svc);
+        let unit_content = generate_unit_content(svc, &exec_start, &extra_args);
+        let unit_path = systemd_dir.join(format!("{}-membrane.service", svc.binary));
 
-        let extra_args = match svc.binary {
-            "songbird" => " --federation-port 7700 --bind 0.0.0.0",
-            "nestgate" => " --port 9500 --bind 127.0.0.1",
-            "sweetgrass" => " --http-address 127.0.0.1:0",
-            _ => "",
-        };
-
-        let unit_name = format!("{}-membrane.service", svc.binary);
-        let env_file_line = if svc.binary == "nestgate" {
-            "EnvironmentFile=-/etc/membrane/secrets.env\n"
-        } else {
-            ""
-        };
-
-        let unit_content = format!(
-            "[Unit]\n\
-             Description={binary} primal (membrane NUCLEUS)\n\
-             After=network.target\n\n\
-             [Service]\n\
-             Type=simple\n\
-             {env_file_line}\
-             ExecStart={exec_start}{extra_args}\n\
-             Restart=on-failure\n\
-             RestartSec=3\n\
-             RuntimeDirectory=membrane\n\
-             RuntimeDirectoryPreserve=yes\n\n\
-             [Install]\n\
-             WantedBy=multi-user.target\n",
-            binary = svc.binary,
-        );
-
-        let unit_path = systemd_dir.join(&unit_name);
         if std::fs::write(&unit_path, &unit_content).is_ok() {
             installed += 1;
         } else {

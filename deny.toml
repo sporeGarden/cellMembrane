@@ -33,6 +33,12 @@ deny = [
     { crate = "openssl-sys", use-instead = "rustls" },
     { crate = "openssl", use-instead = "rustls" },
     { crate = "native-tls", use-instead = "rustls" },
+    # ring: ecosystem ecoBin standard — pure Rust crypto only (RustCrypto)
+    # Known violation: reqwest → rustls → ring (ring v0.17).
+    # Remediation: switch reqwest to rustls with aws-lc-rs backend or pure
+    # RustCrypto provider once rustls fully supports it. Until then, rustls
+    # is listed as an allowed wrapper so CI passes but the ban is tracked.
+    { crate = "ring", wrappers = ["rustls", "rustls-webpki"], use-instead = "RustCrypto crates" },
     # No vendor SDKs
     { crate = "aws-sdk-core" },
     { crate = "azure_core" },

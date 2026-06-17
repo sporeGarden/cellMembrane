@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # songbird-federation.service — Mesh federation with auto-reconnect
 # For mobile golgi NUCs and fixed gates alike.
 # Songbird starts with federation port, loads persisted peers, auto-meshes.

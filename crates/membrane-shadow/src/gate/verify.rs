@@ -5,6 +5,7 @@
 //! guideStone P3 (Self-Verifying): dual independent verification of binary integrity.
 
 use super::resolve_plasmidbin_dir;
+use tracing::warn;
 
 /// Verify local depot binaries against the git-tracked `checksums.toml`.
 #[must_use]
@@ -124,9 +125,11 @@ pub async fn verify_wan_checksums(arch: &str, dry_run: bool) -> super::bootstrap
             verified += 1;
         } else {
             mismatch += 1;
-            eprintln!(
-                "warn: WAN checksum mismatch for {name}: local={} wan={expected_hash}",
-                &actual[..12]
+            warn!(
+                name,
+                local = &actual[..12],
+                wan = expected_hash,
+                "WAN checksum mismatch"
             );
         }
     }
