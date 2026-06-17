@@ -160,6 +160,22 @@ impl MembraneComposition {
     }
 }
 
+impl MembraneComposition {
+    /// Parse a composition name (case-insensitive). Returns `None` for unknown names.
+    #[must_use]
+    pub fn parse_name(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "relay" => Some(Self::Relay),
+            "rustdesk" | "rust_desk" => Some(Self::RustDesk),
+            "tower" => Some(Self::Tower),
+            "nest" => Some(Self::Nest),
+            "nucleus" => Some(Self::Nucleus),
+            "peptidoglycan" | "pepti" => Some(Self::Peptidoglycan),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for MembraneComposition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -307,9 +307,19 @@ async fn harvest_one(
 
     toolchain::strip_binary(&bin_path, primal, target).await;
 
-    match stage_to_depot(primal, &bin_path, depot_dir, target) {
+    let primal_owned = primal.to_string();
+    let bin_path_owned = bin_path.clone();
+    let depot_owned = depot_dir.to_path_buf();
+    let target_owned = target.to_string();
+    let stage_result = tokio::task::spawn_blocking(move || {
+        stage_to_depot(&primal_owned, &bin_path_owned, &depot_owned, &target_owned)
+    })
+    .await
+    .unwrap_or_else(|_| Err("stage task panicked".into()));
+
+    match stage_result {
         Ok((size, blake3)) => {
-            let _ = std::fs::remove_dir_all(&clone_dir);
+            let _ = tokio::fs::remove_dir_all(&clone_dir).await;
             HarvestResult {
                 binary: primal.into(),
                 status: HarvestStatus::Built,
@@ -335,10 +345,8 @@ async fn clone_source(
     build_root: &Path,
     clone_dir: &Path,
 ) -> std::result::Result<(), String> {
-    if clone_dir.exists() {
-        let _ = std::fs::remove_dir_all(clone_dir);
-    }
-    std::fs::create_dir_all(build_root).ok();
+    let _ = tokio::fs::remove_dir_all(clone_dir).await;
+    tokio::fs::create_dir_all(build_root).await.ok();
 
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());

@@ -90,7 +90,7 @@ impl RelayConfig {
                         .as_ref()
                         .and_then(|c| c.golgi_ext_host.clone())
                 })
-                .map_or(Cow::Borrowed("golgi-ext"), Cow::Owned);
+                .map_or(Cow::Borrowed(cellmembrane_types::service::DEFAULT_SSH_ALIAS_EXT), Cow::Owned);
 
         Self {
             ecoprimals_root: PathBuf::from(ecoprimals_root),

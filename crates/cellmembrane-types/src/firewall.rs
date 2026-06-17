@@ -166,6 +166,7 @@ impl FirewallRuleset {
 /// DHCP serving, and packet forwarding for interior gates. This config
 /// parameterizes the nftables ruleset for that role.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools, reason = "each flag is an independent firewall toggle")]
 pub struct NftablesConfig {
     /// WAN-facing interface name (e.g., `"enp1s0"`, `"eth0"`).
     pub wan_interface: String,
@@ -182,11 +183,11 @@ pub struct NftablesConfig {
     /// Accept all input from LAN interface (gate is trusted by interior).
     #[serde(default)]
     pub trust_lan_input: bool,
-    /// WireGuard overlay interface name (e.g., `"wg0"`). Enables overlay
-    /// forwarding rules and accepts WireGuard UDP port in input chain.
+    /// `WireGuard` overlay interface name (e.g., `"wg0"`). Enables overlay
+    /// forwarding rules and accepts `WireGuard` UDP port in input chain.
     #[serde(default)]
     pub wireguard_interface: Option<String>,
-    /// WireGuard listen port (default 51820).
+    /// `WireGuard` listen port (default 51820).
     #[serde(default = "default_wg_port")]
     pub wireguard_port: u16,
     /// Drop all IPv6 forwarding (hardening for dual-stack LANs).
@@ -194,10 +195,10 @@ pub struct NftablesConfig {
     pub drop_ipv6_forward: bool,
 }
 
-fn default_wg_port() -> u16 {
+const fn default_wg_port() -> u16 {
     51820
 }
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 

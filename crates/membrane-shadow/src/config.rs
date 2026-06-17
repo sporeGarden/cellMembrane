@@ -49,10 +49,10 @@ impl Default for ShadowConfig {
     fn default() -> Self {
         Self {
             ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST)
-                .unwrap_or_else(|_| "golgi".into()),
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SSH_ALIAS.into()),
             ssh_host_ext: std::env::var(cellmembrane_types::service::ENV_SSH_HOST_EXT)
                 .or_else(|_| std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST))
-                .unwrap_or_else(|_| "golgi-ext".into()),
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SSH_ALIAS_EXT.into()),
             forgejo_api: String::new(),
             forgejo_token: None,
             vps_root: cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
@@ -78,9 +78,9 @@ impl ShadowConfig {
             ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST)
                 .ok()
                 .or(toml_overrides.ssh_host)
-                .unwrap_or_else(|| "golgi".into()),
+                .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_SSH_ALIAS.into()),
             ssh_host_ext: std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST)
-                .unwrap_or_else(|_| "golgi-ext".into()),
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SSH_ALIAS_EXT.into()),
             forgejo_api: std::env::var(cellmembrane_types::service::ENV_FORGEJO_API)
                 .ok()
                 .or(toml_overrides.forgejo_api)

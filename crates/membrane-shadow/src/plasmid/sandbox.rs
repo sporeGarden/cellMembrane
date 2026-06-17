@@ -208,15 +208,8 @@ pub async fn teardown(instance: &SandboxInstance) {
             .await;
     }
 
-    // Clean up socket
-    if instance.socket_path.exists() {
-        std::fs::remove_file(&instance.socket_path).ok();
-    }
-
-    // Clean up staged binary
-    if instance.binary_path.exists() {
-        std::fs::remove_file(&instance.binary_path).ok();
-    }
+    let _ = tokio::fs::remove_file(&instance.socket_path).await;
+    let _ = tokio::fs::remove_file(&instance.binary_path).await;
 }
 
 /// Full validation cycle: spin up → probe → teardown → return result.

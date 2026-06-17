@@ -307,6 +307,16 @@ pub const DEFAULT_CANARY_BIN_DIR: &str = "/opt/membrane/canary";
 /// Default VPS host (golgiBody sovereign surface).
 pub const DEFAULT_VPS_HOST: &str = "157.230.3.183";
 
+/// Default SSH alias for golgiBody (internal name used in ~/.ssh/config).
+pub const DEFAULT_SSH_ALIAS: &str = "golgi";
+/// Default SSH alias for golgiBody external relay endpoint.
+pub const DEFAULT_SSH_ALIAS_EXT: &str = "golgi-ext";
+/// Default SSH alias for peptidoglycan trust barrier.
+pub const DEFAULT_PEPTI_SSH_ALIAS: &str = "pepti";
+
+/// Default `NestGate` service port.
+pub const DEFAULT_NESTGATE_PORT: u16 = 9500;
+
 /// Default songbird federation port.
 pub const DEFAULT_FEDERATION_PORT: u16 = 7700;
 

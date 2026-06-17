@@ -154,7 +154,8 @@ async fn refresh_one(
     };
 
     if dry_run {
-        let size = std::fs::metadata(&local_path)
+        let size = tokio::fs::metadata(&local_path)
+            .await
             .map_or_else(|_| "?".into(), |m| format!("{}KB", m.len() / 1024));
         return RefreshResult {
             binary: primal.into(),

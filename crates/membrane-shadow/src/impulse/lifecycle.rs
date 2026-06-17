@@ -268,21 +268,15 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
 }
 
 /// Archive discharged impulses — waterFall SYNC.
-pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
-    let active = active_dir(workspace_root);
-    if !active.exists() {
-        return Ok(vec![]);
-    }
-
-    let now = Utc::now();
-    let wave = current_wave(workspace_root);
-    let archive_dir = impulses_dir(workspace_root)
-        .join("archive")
-        .join(format!("wave{wave}"));
-    std::fs::create_dir_all(&archive_dir).map_err(ShadowError::Io)?;
-
+fn archive_expired_impulses(
+    active: &Path,
+    archive_dir: &Path,
+    workspace_root: &Path,
+    now: &chrono::DateTime<Utc>,
+) -> Result<Vec<String>> {
+    std::fs::create_dir_all(archive_dir).map_err(ShadowError::Io)?;
     let mut archived = Vec::new();
-    let entries = std::fs::read_dir(&active).map_err(ShadowError::Io)?;
+    let entries = std::fs::read_dir(active).map_err(ShadowError::Io)?;
 
     for entry in entries {
         let entry = entry.map_err(ShadowError::Io)?;
@@ -298,7 +292,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
         };
 
         let ext_acks = load_external_acks(workspace_root, &impulse.impulse.id);
-        let should_archive = is_expired(&impulse.meta.expires, &now)
+        let should_archive = is_expired(&impulse.meta.expires, now)
             || is_fully_acked_with_externals(&impulse, &ext_acks);
 
         if should_archive {
@@ -312,6 +306,28 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
             archived.push(fname);
         }
     }
+    Ok(archived)
+}
+
+/// Archive discharged impulses — moves expired or fully-acked impulses to `archive/waveN/`.
+pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
+    let active = active_dir(workspace_root);
+    if !active.exists() {
+        return Ok(vec![]);
+    }
+
+    let now = Utc::now();
+    let wave = current_wave(workspace_root);
+    let archive_dir = impulses_dir(workspace_root)
+        .join("archive")
+        .join(format!("wave{wave}"));
+
+    let ws_root = workspace_root.to_path_buf();
+    let archived = tokio::task::spawn_blocking(move || {
+        archive_expired_impulses(&active, &archive_dir, &ws_root, &now)
+    })
+    .await
+    .map_err(|_| ShadowError::Parse("archive task panicked".into()))??;
 
     if !archived.is_empty() {
         let wh_dir = workspace_root.join("infra/wateringHole");

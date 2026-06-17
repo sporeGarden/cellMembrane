@@ -66,7 +66,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("repo.") => infra::dispatch_repo(config, cmd, args).await,
         c if c.starts_with("mirror.") => infra::dispatch_mirror(config, cmd, args).await,
         c if c.starts_with("service.") => infra::dispatch_service(config, cmd, args).await,
-        c if c.starts_with("gate.") || c == "health.audit" => {
+        c if c.starts_with("gate.") || c == "health.audit" || c.starts_with("firewall.") => {
             gate::dispatch(config, cmd, args).await
         }
         c if c.starts_with("token.") => infra::dispatch_token(config, cmd, args).await,
@@ -140,7 +140,7 @@ async fn pepti_validate(config: &ShadowConfig, args: &[&str]) -> crate::Result<S
     let pepti_host = args.first().map_or_else(
         || {
             std::env::var(cellmembrane_types::service::ENV_PEPTI_SSH_HOST)
-                .unwrap_or_else(|_| "pepti".into())
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_PEPTI_SSH_ALIAS.into())
         },
         |&h| h.to_string(),
     );

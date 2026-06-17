@@ -499,9 +499,7 @@ async fn kill_canary(slot: &CanarySlot) {
             .await;
     }
 
-    if slot.socket_path.exists() {
-        std::fs::remove_file(&slot.socket_path).ok();
-    }
+    let _ = tokio::fs::remove_file(&slot.socket_path).await;
 }
 
 async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {

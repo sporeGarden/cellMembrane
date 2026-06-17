@@ -90,6 +90,7 @@ pub(super) async fn dispatch(
             })?;
             dispatch_profile(gate_name)
         }
+        "firewall.generate" => dispatch_firewall_generate(args),
         #[cfg(feature = "http")]
         "gate.provision" => dispatch_provision(args).await,
         #[cfg(feature = "http")]
@@ -98,7 +99,7 @@ pub(super) async fn dispatch(
         "gate.provision.destroy" => dispatch_provision_destroy(args).await,
         #[cfg(feature = "http")]
         "gate.provision.verify" => dispatch_provision_verify(args).await,
-        _ => Ok(ShadowOutcome::fail(format!("unknown gate command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
     }
 }
 
@@ -576,4 +577,64 @@ async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<ShadowOutcome
     } else {
         Ok(ShadowOutcome::fail(msg))
     }
+}
+
+// ── Firewall generation ─────────────────────────────────────────────
+
+fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use cellmembrane_types::composition::MembraneComposition;
+    use cellmembrane_types::firewall::{FirewallRuleset, NftablesConfig};
+
+    let comp_str = cli::extract_flag_value(args, "--composition")
+        .or_else(|| args.first().filter(|a| !a.starts_with("--")).copied())
+        .unwrap_or("relay");
+    let composition = MembraneComposition::parse_name(comp_str)
+        .ok_or_else(|| crate::error::ShadowError::Parse(format!(
+            "unknown composition: {comp_str} (expected: {})",
+            MembraneComposition::all()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )))?;
+
+    let fw = FirewallRuleset::for_composition(composition);
+
+    let format = cli::extract_flag_value(args, "--format").unwrap_or("nftables");
+
+    let nft_config = if args.contains(&"--plasma-membrane") {
+        let wan = cli::extract_flag_value(args, "--wan").unwrap_or("enp1s0");
+        let lan = cli::extract_flag_value(args, "--lan").unwrap_or("eno1");
+        let subnet = cli::extract_flag_value(args, "--subnet").unwrap_or("192.168.4.0/22");
+        let gate_name = cli::extract_flag_value(args, "--gate-name")
+            .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
+        Some(NftablesConfig {
+            wan_interface: wan.into(),
+            lan_interface: lan.into(),
+            lan_subnet: subnet.into(),
+            gate_name: gate_name.into(),
+            enable_nat: !args.contains(&"--no-nat"),
+            enable_dhcp: !args.contains(&"--no-dhcp"),
+            trust_lan_input: args.contains(&"--trust-lan"),
+            wireguard_interface: cli::extract_flag_value(args, "--wg-iface").map(Into::into),
+            wireguard_port: cli::extract_flag_value(args, "--wg-port")
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(51820),
+            drop_ipv6_forward: !args.contains(&"--allow-ipv6-forward"),
+        })
+    } else {
+        None
+    };
+
+    let script = match format {
+        "ufw" => fw.to_ufw_script(),
+        "nftables" | "nft" => fw.to_nftables_script(nft_config.as_ref()),
+        other => {
+            return Err(crate::error::ShadowError::Parse(format!(
+                "unknown format: {other} (expected: nftables, ufw)"
+            )));
+        }
+    };
+
+    Ok(ShadowOutcome::ok(script))
 }

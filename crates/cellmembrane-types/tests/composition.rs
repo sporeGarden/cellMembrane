@@ -209,6 +209,27 @@ fn nucleus_uds_socket_paths() {
 }
 
 #[test]
+fn parse_name_resolves_all_variants() {
+    assert_eq!(
+        MembraneComposition::parse_name("relay"),
+        Some(MembraneComposition::Relay)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("NUCLEUS"),
+        Some(MembraneComposition::Nucleus)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("pepti"),
+        Some(MembraneComposition::Peptidoglycan)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("rust_desk"),
+        Some(MembraneComposition::RustDesk)
+    );
+    assert!(MembraneComposition::parse_name("unknown").is_none());
+}
+
+#[test]
 fn config_nucleus_composition_parses() {
     let toml = r#"
         [membrane]
