@@ -148,7 +148,9 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
         prov_out.push('\n');
     }
 
-    crate::atomic_write(&provenance_path, prov_out.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&provenance_path, prov_out.as_bytes())
+        .await
+        .map_err(ShadowError::Io)?;
     Ok(())
 }
 

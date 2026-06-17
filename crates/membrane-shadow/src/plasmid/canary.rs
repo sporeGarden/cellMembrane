@@ -12,18 +12,9 @@
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
-/// Base directory for canary sockets.
-const CANARY_SOCKET_DIR: &str = "/run/membrane/canary";
-
-/// Default base directory for canary binaries.
-/// Override via `MEMBRANE_CANARY_BIN_DIR` env var for non-standard installs.
-const CANARY_BIN_DIR_DEFAULT: &str = "/opt/membrane/canary";
-
-/// Environment variable to override canary socket directory.
-const ENV_CANARY_SOCKET_DIR: &str = "MEMBRANE_CANARY_SOCKET_DIR";
-
-/// Environment variable to override canary binary directory.
-const ENV_CANARY_BIN_DIR: &str = "MEMBRANE_CANARY_BIN_DIR";
+use cellmembrane_types::service::{
+    DEFAULT_CANARY_BIN_DIR, DEFAULT_CANARY_SOCKET_DIR, ENV_CANARY_BIN_DIR, ENV_CANARY_SOCKET_DIR,
+};
 
 /// A canary primal instance — the previous known-good binary kept alive as fallback.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -52,12 +43,14 @@ pub struct CanaryPool {
 }
 
 fn resolve_canary_socket_dir() -> PathBuf {
-    PathBuf::from(std::env::var(ENV_CANARY_SOCKET_DIR).unwrap_or_else(|_| CANARY_SOCKET_DIR.into()))
+    PathBuf::from(
+        std::env::var(ENV_CANARY_SOCKET_DIR).unwrap_or_else(|_| DEFAULT_CANARY_SOCKET_DIR.into()),
+    )
 }
 
 fn resolve_canary_bin_dir() -> PathBuf {
     PathBuf::from(
-        std::env::var(ENV_CANARY_BIN_DIR).unwrap_or_else(|_| CANARY_BIN_DIR_DEFAULT.into()),
+        std::env::var(ENV_CANARY_BIN_DIR).unwrap_or_else(|_| DEFAULT_CANARY_BIN_DIR.into()),
     )
 }
 

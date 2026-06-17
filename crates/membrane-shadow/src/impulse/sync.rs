@@ -98,11 +98,15 @@ pub async fn post_sync_diverge(
     };
 
     let active = active_dir(workspace_root);
-    std::fs::create_dir_all(&active).map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&active)
+        .await
+        .map_err(ShadowError::Io)?;
 
     let filepath = active.join(&filename);
     let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
-    crate::atomic_write(&filepath, toml_str.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&filepath, toml_str.as_bytes())
+        .await
+        .map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");
     let push = crate::git_ops::add_commit_push(

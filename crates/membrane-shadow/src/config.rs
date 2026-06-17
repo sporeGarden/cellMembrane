@@ -9,8 +9,7 @@
 
 use crate::error::{Result, ShadowError};
 
-/// Default `systemctl` service filter regex — matches nucleus services on the VPS.
-const DEFAULT_SERVICE_FILTER: &str = "membrane|forgejo|caddy|knot|hbb|fail2ban";
+use cellmembrane_types::service::DEFAULT_SERVICE_FILTER;
 
 /// Shadow function configuration — all the context needed to reach the VPS.
 #[derive(Debug, Clone)]

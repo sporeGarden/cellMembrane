@@ -8,8 +8,7 @@
 use crate::error::{Result, ShadowError};
 use std::path::Path;
 
-/// Fallback remote push order when manifest is unavailable.
-const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
+use cellmembrane_types::service::DEFAULT_PUSH_REMOTES;
 
 /// Resolve push remotes from manifest `[sync]` config, falling back to defaults.
 fn resolve_push_remotes() -> Vec<String> {

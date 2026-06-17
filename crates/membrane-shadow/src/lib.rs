@@ -160,3 +160,14 @@ pub fn atomic_write(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
         let _ = std::fs::remove_file(&tmp);
     })
 }
+
+/// Async variant of [`atomic_write`] using `tokio::fs` for non-blocking I/O.
+///
+/// Preferred in all `async fn` contexts to avoid stalling the executor.
+pub async fn atomic_write_async(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    tokio::fs::write(&tmp, contents).await?;
+    tokio::fs::rename(&tmp, path).await.inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}

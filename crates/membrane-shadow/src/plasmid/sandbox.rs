@@ -23,18 +23,10 @@ const SANDBOX_PROBE_RETRIES: u32 = 5;
 /// Delay between probe attempts (milliseconds).
 const SANDBOX_PROBE_INTERVAL_MS: u64 = 2000;
 
-/// Base directory for sandbox sockets.
-const SANDBOX_SOCKET_DIR: &str = "/run/membrane/sandbox";
-
-/// Default base directory for sandbox binaries (VPS-side staging).
-/// Override via `MEMBRANE_SANDBOX_BIN_DIR` env var for non-standard installs.
-const SANDBOX_BIN_DIR_DEFAULT: &str = "/opt/membrane/sandbox";
-
-/// Environment variable to override the sandbox socket directory.
-const ENV_SANDBOX_SOCKET_DIR: &str = "MEMBRANE_SANDBOX_SOCKET_DIR";
-
-/// Environment variable to override the sandbox binary directory.
-const ENV_SANDBOX_BIN_DIR: &str = "MEMBRANE_SANDBOX_BIN_DIR";
+use cellmembrane_types::service::{
+    DEFAULT_SANDBOX_BIN_DIR, DEFAULT_SANDBOX_SOCKET_DIR, ENV_SANDBOX_BIN_DIR,
+    ENV_SANDBOX_SOCKET_DIR,
+};
 
 /// A sandboxed primal instance under validation.
 #[derive(Debug, Clone)]
@@ -68,13 +60,13 @@ pub struct SandboxArgs {
 
 fn resolve_sandbox_socket_dir() -> PathBuf {
     PathBuf::from(
-        std::env::var(ENV_SANDBOX_SOCKET_DIR).unwrap_or_else(|_| SANDBOX_SOCKET_DIR.into()),
+        std::env::var(ENV_SANDBOX_SOCKET_DIR).unwrap_or_else(|_| DEFAULT_SANDBOX_SOCKET_DIR.into()),
     )
 }
 
 fn resolve_sandbox_bin_dir() -> PathBuf {
     PathBuf::from(
-        std::env::var(ENV_SANDBOX_BIN_DIR).unwrap_or_else(|_| SANDBOX_BIN_DIR_DEFAULT.into()),
+        std::env::var(ENV_SANDBOX_BIN_DIR).unwrap_or_else(|_| DEFAULT_SANDBOX_BIN_DIR.into()),
     )
 }
 

@@ -39,7 +39,11 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let gate_name = super::resolve_local_gate_identity();
     let mut probes: Vec<StatusProbe> = Vec::new();
 
-    let (depot_ok, depot_detail) = super::verify::verify_local_depot(&arch);
+    let arch_clone = arch.clone();
+    let (depot_ok, depot_detail) =
+        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(&arch_clone))
+            .await
+            .unwrap_or_else(|_| (false, "depot verify task panicked".into()));
     probes.push(StatusProbe {
         name: "depot.integrity".into(),
         ok: depot_ok,
@@ -198,7 +202,11 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
             continue;
         }
 
-        if probe_primal_jsonrpc(primal).await || probe_primal_pgrep(primal) {
+        let primal_name = (*primal).to_string();
+        let pgrep_found = tokio::task::spawn_blocking(move || probe_primal_pgrep(&primal_name))
+            .await
+            .unwrap_or(false);
+        if probe_primal_jsonrpc(primal).await || pgrep_found {
             alive += 1;
         } else {
             dead += 1;

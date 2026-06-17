@@ -32,6 +32,13 @@ pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
     depot::compute_blake3_file(path)
 }
 
+/// Async variant — runs the full-file BLAKE3 read on a blocking thread.
+pub(crate) async fn compute_blake3_file_async(path: std::path::PathBuf) -> String {
+    tokio::task::spawn_blocking(move || depot::compute_blake3_file(&path))
+        .await
+        .unwrap_or_default()
+}
+
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.
 pub fn detect_depot_staleness() -> crate::error::Result<StalenessReport> {
     let depot_dir = depot::resolve_depot(None)?;

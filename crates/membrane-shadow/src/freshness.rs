@@ -55,7 +55,8 @@ pub async fn publish_freshness_toml(
     let freshness_path = root.join("infra/wateringHole/freshness.toml");
 
     // Preserve existing heads from repos this gate doesn't track (merge, not overwrite).
-    let mut heads = std::fs::read_to_string(&freshness_path)
+    let mut heads = tokio::fs::read_to_string(&freshness_path)
+        .await
         .ok()
         .and_then(|c| toml::from_str::<FreshnessFile>(&c).ok())
         .map_or_else(BTreeMap::new, |f| f.heads);
@@ -82,7 +83,9 @@ pub async fn publish_freshness_toml(
 
     let body = toml::to_string_pretty(&file).map_err(ShadowError::Serialize)?;
     let content = format!("{FRESHNESS_HEADER}\n{body}");
-    crate::atomic_write(&freshness_path, content.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&freshness_path, content.as_bytes())
+        .await
+        .map_err(ShadowError::Io)?;
 
     Ok(())
 }
@@ -104,9 +107,15 @@ pub async fn auto_commit_freshness(
         ));
     }
 
-    let gate = std::env::var(cellmembrane_types::service::ENV_GATE_NAME)
-        .or_else(|_| std::fs::read_to_string(root.join(".gate")).map(|s| s.trim().to_string()))
-        .unwrap_or_else(|_| crate::gate::resolve_local_gate_identity());
+    let gate = match std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
+        Ok(g) => g,
+        Err(_) => tokio::fs::read_to_string(root.join(".gate"))
+            .await
+            .map_or_else(
+                |_| crate::gate::resolve_local_gate_identity(),
+                |s| s.trim().to_string(),
+            ),
+    };
 
     let local_wave = read_freshness_wave_id(&wh_dir.join("freshness.toml"));
 
@@ -168,7 +177,7 @@ pub async fn auto_commit_freshness(
 
 /// Pull-rebase from both forgejo and origin to sync before publishing.
 async fn pull_rebase_both_remotes(wh_dir: &Path) {
-    for remote in &["forgejo", "origin"] {
+    for remote in cellmembrane_types::service::DEFAULT_PUSH_REMOTES {
         let Ok(pull) = tokio::process::Command::new("git")
             .args(["pull", "--rebase", remote, "main"])
             .current_dir(wh_dir)

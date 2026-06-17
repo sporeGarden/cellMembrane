@@ -84,11 +84,15 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     };
 
     let active = active_dir(workspace_root);
-    std::fs::create_dir_all(&active).map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&active)
+        .await
+        .map_err(ShadowError::Io)?;
 
     let filepath = active.join(&filename);
     let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
-    crate::atomic_write(&filepath, toml_str.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&filepath, toml_str.as_bytes())
+        .await
+        .map_err(ShadowError::Io)?;
 
     let wh_dir = workspace_root.join("infra/wateringHole");
     let push = crate::git_ops::add_commit_push(
@@ -233,15 +237,18 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
         note: note.to_string(),
     };
 
-    // Write separate ack file — safe under rebase
     let acks_dir = impulses_dir(workspace_root).join("acks");
-    std::fs::create_dir_all(&acks_dir).map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&acks_dir)
+        .await
+        .map_err(ShadowError::Io)?;
 
     let ack_filename = format!("{}_{}.toml", impulse_id, gate_id.name);
     let ack_path = acks_dir.join(&ack_filename);
 
     let ack_toml = toml::to_string_pretty(&ack_entry).map_err(ShadowError::Serialize)?;
-    crate::atomic_write(&ack_path, ack_toml.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&ack_path, ack_toml.as_bytes())
+        .await
+        .map_err(ShadowError::Io)?;
 
     // Also append to in-memory representation for return value
     impulse.acks.push(ack_entry);

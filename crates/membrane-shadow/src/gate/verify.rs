@@ -120,7 +120,7 @@ pub async fn verify_wan_checksums(arch: &str, dry_run: bool) -> super::bootstrap
             missing += 1;
             continue;
         }
-        let actual = crate::plasmid::compute_blake3_file(&bin_path);
+        let actual = crate::plasmid::compute_blake3_file_async(bin_path.clone()).await;
         if actual == *expected_hash {
             verified += 1;
         } else {

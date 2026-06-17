@@ -393,7 +393,7 @@ pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<
 
 fn default_forgejo_data_dir() -> String {
     std::env::var(cellmembrane_types::service::ENV_FORGEJO_DATA_DIR)
-        .unwrap_or_else(|_| "/opt/forgejo/data".into())
+        .unwrap_or_else(|_| "/opt/forgejo/data".into()) // Forgejo convention
 }
 
 fn default_forgejo_work_dir() -> String {
@@ -471,7 +471,10 @@ pub async fn token_create(config: &ShadowConfig, name: &str, scopes: &str) -> Re
     validate_shell_safe(scopes, "token scopes")?;
 
     let forgejo_dir = forgejo_work_path(config);
-    let admin_user = config.forgejo_admin_user.as_deref().unwrap_or("admin");
+    let admin_user = config
+        .forgejo_admin_user
+        .as_deref()
+        .unwrap_or(cellmembrane_types::service::DEFAULT_FORGEJO_ADMIN_USER);
 
     let cmd = format!(
         "sudo -u git FORGEJO_WORK_DIR='{forgejo_dir}' HOME='{forgejo_dir}' \

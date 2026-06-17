@@ -267,11 +267,15 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
     };
 
     let gate_dir = gate_context_dir(workspace_root, &gate_id.name);
-    std::fs::create_dir_all(&gate_dir).map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&gate_dir)
+        .await
+        .map_err(ShadowError::Io)?;
 
     let filepath = braid_filepath(workspace_root, &gate_id.name, args.project);
     let toml_str = toml::to_string_pretty(&braid).map_err(ShadowError::Serialize)?;
-    crate::atomic_write(&filepath, toml_str.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&filepath, toml_str.as_bytes())
+        .await
+        .map_err(ShadowError::Io)?;
 
     let slug = project_slug(args.project);
     let rel_path = format!("context/{}/{slug}.toml", gate_id.name);
@@ -381,54 +385,17 @@ pub async fn clear(
         let gate_id = identity::resolve(workspace_root)?;
         let filepath = braid_filepath(workspace_root, &gate_id.name, proj);
         if filepath.exists() {
-            std::fs::remove_file(&filepath).map_err(ShadowError::Io)?;
+            tokio::fs::remove_file(&filepath)
+                .await
+                .map_err(ShadowError::Io)?;
             let slug = project_slug(proj);
             cleared.push(format!("{}/{slug}", gate_id.name));
         }
     } else if expired_only {
-        let now = Utc::now();
-        let gate_dirs: Vec<PathBuf> = std::fs::read_dir(&ctx_dir)
-            .map_err(ShadowError::Io)?
-            .filter_map(std::result::Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect();
-
-        for gate_dir in gate_dirs {
-            let gate_name = gate_dir
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-
-            let Ok(entries) = std::fs::read_dir(&gate_dir) else {
-                continue;
-            };
-
-            for entry in entries {
-                let Ok(entry) = entry else { continue };
-                let path = entry.path();
-                if path.extension().is_none_or(|e| e != "toml") {
-                    continue;
-                }
-
-                let Ok(contents) = std::fs::read_to_string(&path) else {
-                    continue;
-                };
-
-                if let Ok(braid) = toml::from_str::<ContextBraid>(&contents) {
-                    if is_expired(&braid.braid.updated, braid.braid.ttl_hours, &now) {
-                        let slug = path
-                            .file_stem()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
-                        std::fs::remove_file(&path).map_err(ShadowError::Io)?;
-                        cleared.push(format!("{gate_name}/{slug}"));
-                    }
-                }
-            }
-        }
+        let ctx_owned = ctx_dir.clone();
+        cleared = tokio::task::spawn_blocking(move || clear_expired_braids(&ctx_owned))
+            .await
+            .map_err(|_| ShadowError::Parse("clear task panicked".into()))??;
     }
 
     if !cleared.is_empty() {
@@ -441,6 +408,55 @@ pub async fn clear(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+fn clear_expired_braids(ctx_dir: &Path) -> Result<Vec<String>> {
+    let now = Utc::now();
+    let mut cleared = Vec::new();
+
+    let gate_dirs: Vec<PathBuf> = std::fs::read_dir(ctx_dir)
+        .map_err(ShadowError::Io)?
+        .filter_map(std::result::Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+
+    for gate_dir in gate_dirs {
+        let gate_name = gate_dir
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let Ok(entries) = std::fs::read_dir(&gate_dir) else {
+            continue;
+        };
+
+        for entry in entries {
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "toml") {
+                continue;
+            }
+
+            let Ok(contents) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+
+            if let Ok(braid) = toml::from_str::<ContextBraid>(&contents) {
+                if is_expired(&braid.braid.updated, braid.braid.ttl_hours, &now) {
+                    let slug = path
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    std::fs::remove_file(&path).map_err(ShadowError::Io)?;
+                    cleared.push(format!("{gate_name}/{slug}"));
+                }
+            }
+        }
+    }
+    Ok(cleared)
+}
 
 fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> bool {
     chrono::DateTime::parse_from_str(updated, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|updated_dt| {

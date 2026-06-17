@@ -142,7 +142,7 @@ pub(super) async fn dispatch_mirror(
 
 async fn mirror_sync_all(config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let orgs: Vec<&str> = if args.is_empty() {
-        vec!["ecoPrimals"]
+        vec![cellmembrane_types::service::DEFAULT_GITHUB_ORG]
     } else {
         args.to_vec()
     };

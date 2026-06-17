@@ -8,7 +8,7 @@ use super::{DropletState, ProvisionRequest};
 use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 
-const API_BASE: &str = "https://api.digitalocean.com/v2";
+const API_BASE: &str = cellmembrane_types::service::DEFAULT_DIGITALOCEAN_API;
 const POLL_INTERVAL_SECS: u64 = 5;
 const POLL_TIMEOUT_SECS: u64 = 300;
 

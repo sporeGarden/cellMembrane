@@ -287,6 +287,23 @@ pub const DEFAULT_CADDY_ADMIN_ENDPOINT: &str = "localhost:2019";
 /// Default WAN depot base URL served by Caddy on the sovereign membrane surface.
 pub const DEFAULT_WAN_DEPOT_URL: &str = "https://membrane.primals.eco/depot";
 
+/// Environment variable to override the sandbox socket directory.
+pub const ENV_SANDBOX_SOCKET_DIR: &str = "MEMBRANE_SANDBOX_SOCKET_DIR";
+/// Default sandbox socket directory (ephemeral UDS probes during validation).
+pub const DEFAULT_SANDBOX_SOCKET_DIR: &str = "/run/membrane/sandbox";
+/// Environment variable to override the sandbox binary directory.
+pub const ENV_SANDBOX_BIN_DIR: &str = "MEMBRANE_SANDBOX_BIN_DIR";
+/// Default sandbox binary directory (isolated copies for validation).
+pub const DEFAULT_SANDBOX_BIN_DIR: &str = "/opt/membrane/sandbox";
+/// Environment variable to override the canary socket directory.
+pub const ENV_CANARY_SOCKET_DIR: &str = "MEMBRANE_CANARY_SOCKET_DIR";
+/// Default canary socket directory (previous-good fallback instances).
+pub const DEFAULT_CANARY_SOCKET_DIR: &str = "/run/membrane/canary";
+/// Environment variable to override the canary binary directory.
+pub const ENV_CANARY_BIN_DIR: &str = "MEMBRANE_CANARY_BIN_DIR";
+/// Default canary binary directory (previous-good binaries retained for rollback).
+pub const DEFAULT_CANARY_BIN_DIR: &str = "/opt/membrane/canary";
+
 /// Default VPS host (golgiBody sovereign surface).
 pub const DEFAULT_VPS_HOST: &str = "157.230.3.183";
 
@@ -373,6 +390,19 @@ pub const ENV_AUTO_REBUILD: &str = "MEMBRANE_AUTO_REBUILD";
 /// `DigitalOcean` API token for cloud provisioning (fieldMouse droplets).
 /// Fallback: `DO_TOKEN` (doctl-compatible).
 pub const ENV_DIGITALOCEAN_TOKEN: &str = "DIGITALOCEAN_TOKEN";
+
+/// `DigitalOcean` REST API base URL.
+pub const DEFAULT_DIGITALOCEAN_API: &str = "https://api.digitalocean.com/v2";
+/// Cloudflare REST API (v4) base URL.
+pub const DEFAULT_CLOUDFLARE_API: &str = "https://api.cloudflare.com/client/v4";
+/// GitHub REST API base URL.
+pub const DEFAULT_GITHUB_API: &str = "https://api.github.com";
+/// Default Forgejo admin username (for initial provisioning).
+pub const DEFAULT_FORGEJO_ADMIN_USER: &str = "admin";
+/// Default push remotes for K-Derm relay chain operations.
+pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
+/// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
+pub const DEFAULT_SERVICE_FILTER: &str = "membrane|forgejo|caddy|knot|hbb|fail2ban";
 
 /// Runtime path resolver for membrane services.
 ///

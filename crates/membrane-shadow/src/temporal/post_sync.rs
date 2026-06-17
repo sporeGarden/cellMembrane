@@ -413,8 +413,8 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             continue;
         }
 
-        let depot_hash = crate::plasmid::compute_blake3_file(&depot_bin);
-        let installed_hash = crate::plasmid::compute_blake3_file(&installed_bin);
+        let depot_hash = crate::plasmid::compute_blake3_file_async(depot_bin.clone()).await;
+        let installed_hash = crate::plasmid::compute_blake3_file_async(installed_bin.clone()).await;
 
         if depot_hash == installed_hash {
             skipped += 1;

@@ -215,8 +215,10 @@ async fn refresh_one(
         let _ = crate::ssh::exec_raw(config, &restart_cmd).await;
     }
 
-    let size_kb = std::fs::metadata(&local_path).map_or(0, |m| m.len() / 1024);
-    let actual_hash = super::compute_blake3_file(Path::new(&local_path));
+    let size_kb = tokio::fs::metadata(&local_path)
+        .await
+        .map_or(0, |m| m.len() / 1024);
+    let actual_hash = super::compute_blake3_file_async(PathBuf::from(&local_path)).await;
     let hash_short = &actual_hash[..16.min(actual_hash.len())];
 
     let divergence_note = check_checksum_coherence(primal, &actual_hash);
