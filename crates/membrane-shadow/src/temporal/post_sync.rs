@@ -85,28 +85,32 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.mode == CascadeMode::Sync {
-        let depot_summary = summarize_depot_freshness();
+        let depot_summary = tokio::task::spawn_blocking(summarize_depot_freshness)
+            .await
+            .unwrap_or_default();
         if !depot_summary.is_empty() {
             lines.push(depot_summary);
         }
         if !do_harvest {
-            if let Ok(report) = crate::plasmid::detect_depot_staleness() {
-                if report.stale_count > 0 {
-                    let auto_rebuild = std::env::var(cellmembrane_types::service::ENV_AUTO_REBUILD)
-                        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+            let staleness = tokio::task::spawn_blocking(crate::plasmid::detect_depot_staleness)
+                .await
+                .ok()
+                .and_then(std::result::Result::ok);
+            if let Some(report) = staleness.filter(|r| r.stale_count > 0) {
+                let auto_rebuild = std::env::var(cellmembrane_types::service::ENV_AUTO_REBUILD)
+                    .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
 
-                    if auto_rebuild {
-                        lines.push(format!(
-                            "  [depot] {}/{} stale — MEMBRANE_AUTO_REBUILD: triggering rebuild",
-                            report.stale_count, report.total
-                        ));
-                        run_auto_rebuild(lines).await;
-                    } else {
-                        lines.push(format!(
-                            "  [depot] {}/{} stale — run with --with-rebuild to auto-fix",
-                            report.stale_count, report.total
-                        ));
-                    }
+                if auto_rebuild {
+                    lines.push(format!(
+                        "  [depot] {}/{} stale — MEMBRANE_AUTO_REBUILD: triggering rebuild",
+                        report.stale_count, report.total
+                    ));
+                    run_auto_rebuild(lines).await;
+                } else {
+                    lines.push(format!(
+                        "  [depot] {}/{} stale — run with --with-rebuild to auto-fix",
+                        report.stale_count, report.total
+                    ));
                 }
             }
         }

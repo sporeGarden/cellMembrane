@@ -338,13 +338,17 @@ async fn probe_vcs_parity() -> StatusProbe {
         };
     };
 
-    let local_paths: Vec<String> =
-        crate::manifest::EcosystemManifest::find_in_workspace(&workspace)
+    let ws = workspace.clone();
+    let local_paths: Vec<String> = tokio::task::spawn_blocking(move || {
+        crate::manifest::EcosystemManifest::find_in_workspace(&ws)
             .and_then(|p| crate::manifest::EcosystemManifest::load(&p).ok())
             .map_or_else(
                 || vec!["infra/plasmidBin".into(), "infra/wateringHole".into()],
                 |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
-            );
+            )
+    })
+    .await
+    .unwrap_or_else(|_| vec!["infra/plasmidBin".into(), "infra/wateringHole".into()]);
 
     let mut drift_count = 0u32;
     let mut checked = 0u32;

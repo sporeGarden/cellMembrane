@@ -230,7 +230,13 @@ async fn refresh_one(
     let actual_hash = super::compute_blake3_file_async(PathBuf::from(&local_path)).await;
     let hash_short = &actual_hash[..16.min(actual_hash.len())];
 
-    let divergence_note = check_checksum_coherence(primal, &actual_hash);
+    let primal_owned = primal.to_string();
+    let hash_owned = actual_hash.clone();
+    let divergence_note =
+        tokio::task::spawn_blocking(move || check_checksum_coherence(&primal_owned, &hash_owned))
+            .await
+            .ok()
+            .flatten();
 
     let detail = divergence_note.map_or_else(
         || format!("→ {remote_final} ({size_kb}KB blake3={hash_short})"),

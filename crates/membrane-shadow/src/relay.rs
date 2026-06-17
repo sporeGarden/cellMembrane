@@ -23,7 +23,7 @@ use crate::error::Result;
 use crate::impulse;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
 
@@ -154,7 +154,10 @@ pub async fn run(config: &RelayConfig, repo_paths: &[&str]) -> Result<RelayResul
     info!(count = paths.len(), "K-Derm relay chain triggered");
 
     let (pulled, pull_failures) = mediate(config, &paths).await;
-    let impulses_sensed = sense_impulses(config);
+    let sense_root = config.ecoprimals_root.clone();
+    let impulses_sensed = tokio::task::spawn_blocking(move || sense_impulses_blocking(&sense_root))
+        .await
+        .unwrap_or(0);
     let (pushed, push_skipped, push_failures) = ship_extracellular(config, &paths).await;
 
     let result = RelayResult {
@@ -225,8 +228,8 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
 /// Replaces the impulse detection in `pepti-sync-relay.sh` and
 /// `impulse-relay-hook.sh`. Uses the `impulse` module directly
 /// instead of shelling out to a membrane binary.
-fn sense_impulses(config: &RelayConfig) -> usize {
-    match impulse::sense(&config.ecoprimals_root, true, true) {
+fn sense_impulses_blocking(ecoprimals_root: &Path) -> usize {
+    match impulse::sense(ecoprimals_root, true, true) {
         Ok((_, count)) => {
             if count > 0 {
                 info!(count, "detected pending impulse(s)");

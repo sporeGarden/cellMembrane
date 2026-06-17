@@ -536,7 +536,10 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
 async fn relay_status() -> crate::Result<ShadowOutcome> {
     let relay_cfg = relay::RelayConfig::from_env();
     let root = temporal::resolve_workspace_root()?;
-    let m = manifest::load_from_workspace(&root)?;
+    let root_owned = root.clone();
+    let m = tokio::task::spawn_blocking(move || manifest::load_from_workspace(&root_owned))
+        .await
+        .map_err(|e| crate::error::ShadowError::Parse(format!("spawn failed: {e}")))??;
 
     let ext_host = &relay_cfg.golgi_ext_host;
     let ssh_ok_ext = crate::ssh::check_connectivity(ext_host).await;

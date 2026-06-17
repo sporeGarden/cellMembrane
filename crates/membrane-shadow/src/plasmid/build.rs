@@ -23,7 +23,7 @@ use crate::error::{Result, ShadowError};
 use std::path::Path;
 use tracing::warn;
 
-use super::depot::{compute_blake3_file, load_sources, resolve_depot, update_depot_metadata};
+use super::depot::{load_sources, resolve_depot, update_depot_metadata};
 use super::detect_target_triple;
 use super::harvest::{self, HarvestResult, HarvestStatus, validate_elf_arch};
 
@@ -95,9 +95,9 @@ async fn build_one(
 
     // Phase 1: Clone (ephemeral — always fresh)
     if clone_dir.exists() {
-        let _ = std::fs::remove_dir_all(&clone_dir);
+        let _ = tokio::fs::remove_dir_all(&clone_dir).await;
     }
-    std::fs::create_dir_all(&build_root).ok();
+    tokio::fs::create_dir_all(&build_root).await.ok();
 
     if let Err(detail) = clone_source(primal, source, &clone_dir).await {
         let status = if source.private {
@@ -156,9 +156,9 @@ async fn build_one(
     strip_binary(&bin_path, primal, target).await;
 
     // Phase 6: Stage to depot (atomic)
-    match stage_to_depot(primal, &bin_path, depot_dir, target) {
+    match stage_to_depot(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
-            let _ = std::fs::remove_dir_all(&clone_dir);
+            let _ = tokio::fs::remove_dir_all(&clone_dir).await;
             HarvestResult {
                 binary: primal.into(),
                 status: HarvestStatus::Built,
@@ -218,22 +218,28 @@ async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
     super::toolchain::strip_binary(bin_path, primal, target).await;
 }
 
-fn stage_to_depot(
+async fn stage_to_depot(
     primal: &str,
     bin_path: &Path,
     depot_dir: &Path,
     target: &str,
 ) -> std::result::Result<(u64, String), String> {
     let staging_dir = depot_dir.join("primals").join(target);
-    std::fs::create_dir_all(&staging_dir).ok();
+    tokio::fs::create_dir_all(&staging_dir)
+        .await
+        .map_err(|e| format!("depot staging dir create failed: {e}"))?;
     let dest = staging_dir.join(primal);
     let tmp = staging_dir.join(format!(".{primal}.new"));
 
-    std::fs::copy(bin_path, &tmp).map_err(|e| format!("depot stage failed: {e}"))?;
-    std::fs::rename(&tmp, &dest).map_err(|e| format!("atomic rename failed: {e}"))?;
+    tokio::fs::copy(bin_path, &tmp)
+        .await
+        .map_err(|e| format!("depot stage failed: {e}"))?;
+    tokio::fs::rename(&tmp, &dest)
+        .await
+        .map_err(|e| format!("atomic rename failed: {e}"))?;
 
-    let size = std::fs::metadata(&dest).map_or(0, |m| m.len());
-    let blake3 = compute_blake3_file(&dest);
+    let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
+    let blake3 = super::compute_blake3_file_async(dest).await;
     Ok((size, blake3))
 }
 

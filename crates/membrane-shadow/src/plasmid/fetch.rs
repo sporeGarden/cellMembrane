@@ -357,11 +357,23 @@ fn compute_blake3(path: &Path) -> std::io::Result<String> {
     Ok(blake3::hash(&data).to_hex().to_string())
 }
 
+#[cfg(test)]
 fn verify_blake3(path: &Path, expected: &str) -> bool {
     if expected.is_empty() {
         return false;
     }
     compute_blake3(path).is_ok_and(|actual| actual == expected)
+}
+
+async fn verify_blake3_async(path: PathBuf, expected: String) -> bool {
+    if expected.is_empty() {
+        return false;
+    }
+    tokio::task::spawn_blocking(move || {
+        compute_blake3(&path).is_ok_and(|actual| actual == expected)
+    })
+    .await
+    .unwrap_or(false)
 }
 
 /// Fetch `checksums.toml` from the WAN depot and parse it into per-primal BLAKE3 hashes.
@@ -550,9 +562,11 @@ async fn fetch_primals(
                 .await;
         }
 
-        let is_verified = checksums
-            .get(*primal)
-            .is_some_and(|expected| verify_blake3(&local_path, expected));
+        let is_verified = if let Some(expected) = checksums.get(*primal) {
+            verify_blake3_async(local_path.clone(), expected.clone()).await
+        } else {
+            false
+        };
 
         results.push(FetchResult {
             primal: (*primal).to_string(),

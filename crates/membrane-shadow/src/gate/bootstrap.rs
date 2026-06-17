@@ -93,7 +93,11 @@ pub async fn bootstrap(
 
     phases.push(timed_phase("depot.fetch", fetch_phase(config, &transport, dry_run)).await);
 
-    let verify_result = super::verify::verify_local_depot(&arch);
+    let verify_arch = arch.clone();
+    let verify_result =
+        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(&verify_arch))
+            .await
+            .unwrap_or_else(|_| (false, "spawn_blocking failed".into()));
     phases.push(BootstrapPhase {
         name: "checksum.git".into(),
         ok: verify_result.0,

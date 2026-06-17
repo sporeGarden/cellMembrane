@@ -143,12 +143,12 @@ fn toml_search_paths() -> Vec<String> {
     let mut paths = Vec::with_capacity(4);
 
     if let Ok(root) = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT) {
-        paths.push(format!("{root}/gardens/cellMembrane/membrane.toml"));
+        paths.push(format!("{root}/membrane.toml"));
     }
 
     if let Ok(root) = crate::temporal::resolve_workspace_root() {
         let root_str = root.to_string_lossy();
-        let p = format!("{root_str}/gardens/cellMembrane/membrane.toml");
+        let p = format!("{root_str}/membrane.toml");
         if !paths.contains(&p) {
             paths.push(p);
         }

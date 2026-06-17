@@ -267,11 +267,12 @@ async fn dispatch_health_audit(
 
     let include_mesh = args.contains(&"--mesh");
 
-    let Ok(depot_dir) = plasmid::depot::resolve_depot(None) else {
-        return Ok(ShadowOutcome::fail("depot not resolved — cannot audit"));
-    };
-
-    let local_report = plasmid::depot::detect_stale_primals(&depot_dir)?;
+    let local_report = tokio::task::spawn_blocking(|| {
+        let depot_dir = plasmid::depot::resolve_depot(None)?;
+        plasmid::depot::detect_stale_primals(&depot_dir)
+    })
+    .await
+    .map_err(|e| crate::error::ShadowError::Parse(format!("spawn failed: {e}")))??;
 
     let mut entries: Vec<serde_json::Value> = Vec::new();
     for entry in &local_report.entries {
