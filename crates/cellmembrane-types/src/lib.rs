@@ -54,7 +54,7 @@ pub use envelope::{
     BondType, BoundaryPolicy, BraidPolicy, ChannelProtein, EnvelopeLayer, EnvelopeTopology,
 };
 pub use error::ConfigError;
-pub use firewall::{FirewallRule, FirewallRuleset};
+pub use firewall::{FirewallRule, FirewallRuleset, NftablesConfig};
 pub use identity::{GateMobility, MembraneIdentity};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
