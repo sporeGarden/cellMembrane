@@ -445,6 +445,26 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
     }
 }
 
+// ── Depot domain (integrity verification) ────────────────────────────
+
+pub(super) fn dispatch_depot_integrity(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let verify_only = args.contains(&"--verify");
+    let depot_dir = crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
+    let report = if verify_only {
+        crate::plasmid::depot::verify_checksums(&depot_dir)?
+    } else {
+        crate::plasmid::depot::generate_checksums(&depot_dir)?
+    };
+    Ok(ShadowOutcome::ok_with(
+        format!(
+            "{} binaries across {} arch(es)",
+            report.total_binaries,
+            report.architectures.len()
+        ),
+        serde_json::to_value(&report)?,
+    ))
+}
+
 // ── Relay domain (K-Derm relay chain) ────────────────────────────────
 
 pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {

@@ -10,6 +10,9 @@ use crate::config::ShadowConfig;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
+/// Maximum time for any single bootstrap phase before it's marked failed.
+const PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// Result of a single bootstrap phase.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootstrapPhase {
@@ -32,6 +35,19 @@ pub struct BootstrapResult {
     pub phases: Vec<BootstrapPhase>,
     /// Whether all phases passed (gate is enrolled).
     pub all_pass: bool,
+}
+
+async fn timed_phase<F>(name: &str, fut: F) -> BootstrapPhase
+where
+    F: std::future::Future<Output = BootstrapPhase>,
+{
+    tokio::time::timeout(PHASE_TIMEOUT, fut)
+        .await
+        .unwrap_or_else(|_| BootstrapPhase {
+            name: name.into(),
+            ok: false,
+            detail: format!("timeout after {}s", PHASE_TIMEOUT.as_secs()),
+        })
 }
 
 /// Orchestrate full gate enrollment in one command.
@@ -60,7 +76,9 @@ pub async fn bootstrap(
 
     phases.push(permissions_phase(dry_run));
 
-    phases.push(fetch_phase(config, &transport, dry_run).await);
+    phases.push(identity_phase());
+
+    phases.push(timed_phase("depot.fetch", fetch_phase(config, &transport, dry_run)).await);
 
     let verify_result = super::verify::verify_local_depot(&arch);
     phases.push(BootstrapPhase {
@@ -73,9 +91,15 @@ pub async fn bootstrap(
         },
     });
 
-    phases.push(super::verify::verify_wan_checksums(&arch, dry_run).await);
+    phases.push(
+        timed_phase(
+            "checksum.wan",
+            super::verify::verify_wan_checksums(&arch, dry_run),
+        )
+        .await,
+    );
 
-    phases.push(sandbox_phase(&arch, dry_run).await);
+    phases.push(timed_phase("sandbox.validate", sandbox_phase(&arch, dry_run)).await);
 
     phases.push(install_phase(&arch, dry_run));
 
@@ -85,8 +109,8 @@ pub async fn bootstrap(
     if !dry_run {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
-    phases.push(mesh_phase(gate_name, &arch, dry_run).await);
-    phases.push(health_phase(&arch, dry_run).await);
+    phases.push(timed_phase("mesh.configure", mesh_phase(gate_name, &arch, dry_run)).await);
+    phases.push(timed_phase("health.sweep", health_phase(&arch, dry_run)).await);
 
     if mobility.needs_reconnect_hook() {
         phases.push(mobility_phase(gate_name, dry_run));
@@ -107,6 +131,66 @@ pub async fn bootstrap(
 }
 
 // ── Phase implementations ──────────────────────────────────────────────
+
+fn identity_phase() -> BootstrapPhase {
+    let name_set = std::process::Command::new("git")
+        .args(["config", "--global", "user.name"])
+        .output()
+        .ok()
+        .is_some_and(|o| o.status.success() && !o.stdout.is_empty());
+
+    let email_set = std::process::Command::new("git")
+        .args(["config", "--global", "user.email"])
+        .output()
+        .ok()
+        .is_some_and(|o| o.status.success() && !o.stdout.is_empty());
+
+    let ssh_ok = ssh_identity_ok();
+
+    if name_set && email_set && ssh_ok {
+        return BootstrapPhase {
+            name: "identity.git".into(),
+            ok: true,
+            detail: "git user.name, user.email, and SSH key configured".into(),
+        };
+    }
+
+    let mut missing = Vec::new();
+    if !name_set {
+        missing.push("user.name");
+    }
+    if !email_set {
+        missing.push("user.email");
+    }
+
+    let mut detail = if missing.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "git {} not set — run: git config --global user.name \"ecoPrimal\" \
+             && git config --global user.email \"ecoPrimal@pm.me\"",
+            missing.join(" and ")
+        )
+    };
+
+    if !ssh_ok {
+        if !detail.is_empty() {
+            detail.push_str("; ");
+        }
+        detail.push_str("SSH key (~/.ssh/id_ed25519) not found");
+    }
+
+    BootstrapPhase {
+        name: "identity.git".into(),
+        ok: false,
+        detail,
+    }
+}
+
+fn ssh_identity_ok() -> bool {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
+    std::path::Path::new(&home).join(".ssh/id_ed25519").exists()
+}
 
 fn permissions_phase(dry_run: bool) -> BootstrapPhase {
     let membrane_dir = super::resolve_install_base();
@@ -766,6 +850,10 @@ fn start_nucleus_primals(arch: &str) -> (bool, String) {
                 .output()
                 .ok();
         }
+    }
+
+    if installed == 0 && failed == 0 {
+        return (true, "no primal binaries found in depot — skipped".into());
     }
 
     let ok = failed == 0 && installed > 0;

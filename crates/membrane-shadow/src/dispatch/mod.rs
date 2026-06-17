@@ -76,6 +76,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("impulse.") => impulse::dispatch_impulse(cmd, args).await,
         c if c.starts_with("potential.") => impulse::dispatch_potential(cmd, args),
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,
+        "depot.integrity" => data::dispatch_depot_integrity(args),
         c if c.starts_with("plasmid.") => data::dispatch_plasmid(config, cmd, args).await,
         c if c.starts_with("relay.") => data::dispatch_relay(cmd, args).await,
         c if c.starts_with("content.") => data::dispatch_content(config, cmd, args).await,

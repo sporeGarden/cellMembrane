@@ -25,7 +25,7 @@ pub use fetch::*;
 pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
 pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
-pub use depot::{StalenessEntry, StalenessReport};
+pub use depot::{IntegrityMismatch, IntegrityReport, StalenessEntry, StalenessReport};
 
 /// Compute BLAKE3 hash of a file, returning hex string.
 pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
