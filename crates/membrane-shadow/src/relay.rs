@@ -22,6 +22,7 @@
 use crate::error::Result;
 use crate::impulse;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::path::PathBuf;
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
@@ -49,9 +50,9 @@ pub struct RelayConfig {
     /// Root of the ecoPrimals workspace on this node.
     pub ecoprimals_root: PathBuf,
     /// Forgejo remote name for pull operations.
-    pub forgejo_remote: String,
+    pub forgejo_remote: Cow<'static, str>,
     /// SSH host alias for golgiBody-ext (outer membrane).
-    pub golgi_ext_host: String,
+    pub golgi_ext_host: Cow<'static, str>,
 }
 
 impl RelayConfig {
@@ -71,23 +72,25 @@ impl RelayConfig {
             })
             .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.to_string());
 
-        let forgejo_remote = std::env::var(cellmembrane_types::service::ENV_RELAY_FORGEJO_REMOTE)
-            .ok()
-            .or_else(|| {
-                membrane_config
-                    .as_ref()
-                    .and_then(|c| c.forgejo_remote.clone())
-            })
-            .unwrap_or_else(|| "forgejo".to_string());
+        let forgejo_remote: Cow<'static, str> =
+            std::env::var(cellmembrane_types::service::ENV_RELAY_FORGEJO_REMOTE)
+                .ok()
+                .or_else(|| {
+                    membrane_config
+                        .as_ref()
+                        .and_then(|c| c.forgejo_remote.clone())
+                })
+                .map_or(Cow::Borrowed("forgejo"), Cow::Owned);
 
-        let golgi_ext_host = std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST)
-            .ok()
-            .or_else(|| {
-                membrane_config
-                    .as_ref()
-                    .and_then(|c| c.golgi_ext_host.clone())
-            })
-            .unwrap_or_else(|| "golgi-ext".to_string());
+        let golgi_ext_host: Cow<'static, str> =
+            std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST)
+                .ok()
+                .or_else(|| {
+                    membrane_config
+                        .as_ref()
+                        .and_then(|c| c.golgi_ext_host.clone())
+                })
+                .map_or(Cow::Borrowed("golgi-ext"), Cow::Owned);
 
         Self {
             ecoprimals_root: PathBuf::from(ecoprimals_root),
@@ -336,35 +339,35 @@ mod tests {
     fn relay_config_respects_defaults() {
         let config = RelayConfig {
             ecoprimals_root: PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT),
-            forgejo_remote: "forgejo".to_string(),
-            golgi_ext_host: "golgi-ext".to_string(),
+            forgejo_remote: Cow::Borrowed("forgejo"),
+            golgi_ext_host: Cow::Borrowed("golgi-ext"),
         };
         assert_eq!(
             config.ecoprimals_root,
             PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
         );
-        assert_eq!(config.forgejo_remote, "forgejo");
-        assert_eq!(config.golgi_ext_host, "golgi-ext");
+        assert_eq!(&*config.forgejo_remote, "forgejo");
+        assert_eq!(&*config.golgi_ext_host, "golgi-ext");
     }
 
     #[test]
     fn relay_config_custom_values() {
         let config = RelayConfig {
             ecoprimals_root: PathBuf::from("/tmp/test-eco"),
-            forgejo_remote: "forgejo".to_string(),
-            golgi_ext_host: "custom-ext".to_string(),
+            forgejo_remote: Cow::Borrowed("forgejo"),
+            golgi_ext_host: Cow::Owned("custom-ext".to_string()),
         };
         assert_eq!(config.ecoprimals_root, PathBuf::from("/tmp/test-eco"));
-        assert_eq!(config.forgejo_remote, "forgejo");
-        assert_eq!(config.golgi_ext_host, "custom-ext");
+        assert_eq!(&*config.forgejo_remote, "forgejo");
+        assert_eq!(&*config.golgi_ext_host, "custom-ext");
     }
 
     #[tokio::test]
     async fn mediate_skips_nonexistent_repos() {
         let config = RelayConfig {
             ecoprimals_root: PathBuf::from("/tmp/nonexistent-relay-test"),
-            forgejo_remote: "forgejo".to_string(),
-            golgi_ext_host: "test".to_string(),
+            forgejo_remote: Cow::Borrowed("forgejo"),
+            golgi_ext_host: Cow::Borrowed("test"),
         };
         let (pulled, failures) = mediate(&config, &["no/such/repo"]).await;
         assert!(pulled.is_empty());

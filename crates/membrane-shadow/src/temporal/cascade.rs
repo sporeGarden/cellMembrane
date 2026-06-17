@@ -3,6 +3,7 @@
 
 use crate::error::Result;
 use std::path::Path;
+use std::sync::Arc;
 
 use super::types::SyncClassification;
 use super::{check, resolve_workspace_root, sync_with_policy};
@@ -77,13 +78,14 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
         .collect();
 
     let push_target = m.sync.push_target.clone();
+    let shared_manifest = Arc::new(m.clone());
 
     let mut join_set = tokio::task::JoinSet::new();
 
     for (name, entry) in owned_repos {
         let root = root.clone();
         let push_target = push_target.clone();
-        let manifest = m.clone();
+        let manifest = Arc::clone(&shared_manifest);
         let mode = opts.mode;
         let clone_missing = opts.clone_missing;
 
