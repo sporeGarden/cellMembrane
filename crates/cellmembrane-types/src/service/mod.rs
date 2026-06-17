@@ -269,10 +269,29 @@ pub const ENV_NESTGATE_PORT: &str = "NESTGATE_PORT";
 pub const ENV_VPS_BIN_DIR: &str = "VPS_MEMBRANE_BIN_DIR";
 /// Environment variable for the songbird configuration path.
 pub const ENV_SONGBIRD_CONFIG: &str = "SONGBIRD_CONFIG_PATH";
+/// Default relay config directory (e.g. `/etc/songbird`).
+/// Override with `SONGBIRD_CONFIG_PATH`.
+pub const DEFAULT_RELAY_CONFIG_DIR: &str = "/etc/songbird";
 /// Environment variable for SSH connection timeout (seconds).
 pub const ENV_SSH_TIMEOUT: &str = "SSH_TIMEOUT";
 /// Environment variable for the Forgejo data directory path.
 pub const ENV_FORGEJO_DATA_DIR: &str = "FORGEJO_DATA_DIR";
+/// Default Forgejo data directory.
+pub const DEFAULT_FORGEJO_DATA_DIR: &str = "/opt/forgejo/data";
+/// Default Forgejo install base.
+pub const DEFAULT_FORGEJO_INSTALL_BASE: &str = "/opt/forgejo";
+/// Default Caddy systemd service unit name.
+pub const CADDY_SERVICE_UNIT: &str = "caddy-tls";
+/// Default WAN interface name hint.
+pub const DEFAULT_WAN_IFACE: &str = "enp1s0";
+/// Default LAN interface name hint.
+pub const DEFAULT_LAN_IFACE: &str = "eno1";
+/// Default LAN subnet CIDR.
+pub const DEFAULT_LAN_SUBNET: &str = "192.168.4.0/22";
+/// Default systemd unit directory.
+pub const SYSTEMD_UNIT_DIR: &str = "/etc/systemd/system";
+/// Default secrets environment file path.
+pub const DEFAULT_SECRETS_ENV: &str = "/etc/membrane/secrets.env";
 /// Environment variable for the Forgejo work directory path.
 pub const ENV_FORGEJO_WORK_DIR: &str = "FORGEJO_WORK_DIR";
 /// Environment variable for the Forgejo admin username.

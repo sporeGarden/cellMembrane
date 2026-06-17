@@ -96,7 +96,10 @@ pub struct CaddyHealth {
 pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     let (active_out, active_code) = caddy_exec(
         config,
-        "systemctl is-active caddy-tls 2>/dev/null || echo inactive",
+        &format!(
+            "systemctl is-active {} 2>/dev/null || echo inactive",
+            cellmembrane_types::service::CADDY_SERVICE_UNIT
+        ),
     )
     .await?;
     let service_active = active_out.trim() == "active" && active_code == 0;
@@ -216,7 +219,8 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
     let caddyfile = caddyfile_path();
     let cmd = format!(
         "{caddy_bin} reload --config {caddyfile} --force 2>&1 || \
-         systemctl reload caddy-tls 2>&1"
+         systemctl reload {} 2>&1",
+        cellmembrane_types::service::CADDY_SERVICE_UNIT
     );
     let (out, code) = caddy_exec(config, &cmd).await?;
 
@@ -494,9 +498,10 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
 
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
+    let unit = cellmembrane_types::service::CADDY_SERVICE_UNIT;
     let cmd = format!(
-        "journalctl -u caddy-tls --no-pager -n {lines} --grep='acme\\|tls\\|certificate' 2>/dev/null || \
-         journalctl -u caddy-tls --no-pager -n {lines} 2>/dev/null"
+        "journalctl -u {unit} --no-pager -n {lines} --grep='acme\\|tls\\|certificate' 2>/dev/null || \
+         journalctl -u {unit} --no-pager -n {lines} 2>/dev/null"
     );
     let (out, _) = caddy_exec(config, &cmd).await?;
     Ok(out)

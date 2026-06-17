@@ -98,7 +98,7 @@ impl CredentialPaths {
             membrane_base: std::env::var(crate::service::ENV_INSTALL_BASE)
                 .unwrap_or_else(|_| crate::service::DEFAULT_INSTALL_BASE.to_string()),
             songbird_config: std::env::var(crate::service::ENV_SONGBIRD_CONFIG)
-                .unwrap_or_else(|_| "/etc/songbird".to_string()),
+                .unwrap_or_else(|_| crate::service::DEFAULT_RELAY_CONFIG_DIR.to_string()),
         }
     }
 }
@@ -129,17 +129,19 @@ pub fn credential_files_for_paths(
 
     let mut files = vec![];
 
+    let relay_binary =
+        crate::service::MembraneService::binary_for(crate::service::ServiceCapability::TurnServer);
     files.push(CredentialFile {
         path: format!("{}/relay-credentials", paths.songbird_config),
         expected_mode: "600",
         expected_owner: "root",
-        description: "Songbird TURN shared secret",
+        description: "TURN relay shared secret",
     });
     files.push(CredentialFile {
-        path: format!("{}/songbird/turn-credentials", paths.membrane_base),
+        path: format!("{}/{relay_binary}/turn-credentials", paths.membrane_base),
         expected_mode: "600",
         expected_owner: "root",
-        description: "Songbird TURN credentials (legacy path)",
+        description: "TURN relay credentials (legacy path)",
     });
 
     if composition >= MembraneComposition::RustDesk {

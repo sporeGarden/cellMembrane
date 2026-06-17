@@ -109,3 +109,29 @@ pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) 
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn check_connectivity_unreachable_returns_false() {
+        let ok = check_connectivity("nonexistent.invalid.host.test").await;
+        assert!(!ok, "unreachable host should return false");
+    }
+
+    #[tokio::test]
+    async fn exec_raw_on_invalid_host_returns_error_or_failure() {
+        let result = exec_raw_on("nonexistent.invalid.host.test", 1, "true").await;
+        match result {
+            Ok((_out, code)) => assert_ne!(code, 0, "invalid host should fail"),
+            Err(_) => {} // IO error spawning ssh is also acceptable
+        }
+    }
+
+    #[test]
+    fn shadow_config_default_timeout() {
+        let config = ShadowConfig::default();
+        assert!(config.ssh_timeout > 0, "timeout should be positive");
+    }
+}

@@ -16,7 +16,7 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
     let paths = cellmembrane_types::service::ServicePaths::from_env();
-    let systemd_dir = std::path::Path::new("/etc/systemd/system");
+    let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
 
     std::fs::create_dir_all(std::path::Path::new(
         cellmembrane_types::service::DEFAULT_SOCKET_BASE,

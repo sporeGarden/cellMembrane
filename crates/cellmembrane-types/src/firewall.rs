@@ -198,7 +198,9 @@ pub struct NftablesConfig {
     pub drop_ipv6_forward: bool,
 }
 
-const fn default_wg_port() -> u16 {
+/// Default `WireGuard` listen port (standard: 51820).
+#[must_use]
+pub const fn default_wg_port() -> u16 {
     51820
 }
 const fn default_true() -> bool {

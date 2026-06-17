@@ -85,12 +85,16 @@ async fn harden(ip: &str) -> Result<String> {
 async fn setup_directories(ip: &str) -> Result<String> {
     let base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let relay_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::TurnServer,
+    );
+    let config_dir = cellmembrane_types::service::DEFAULT_CONFIG_DIR;
     let script = format!(
         r#"
         mkdir -p {base} /run/membrane /opt/ecoPrimals \
                  {base}/sandbox /run/membrane/sandbox \
                  {base}/canary /run/membrane/canary \
-                 /var/lib/membrane/songbird /etc/membrane
+                 /var/lib/membrane/{relay_binary} {config_dir}
         echo "directories created"
     "#
     );
@@ -206,7 +210,7 @@ WantedBy=multi-user.target
     );
 
     let bind_all = cellmembrane_types::service::BIND_ALL;
-    let songbird_unit = format!(
+    let relay_unit = format!(
         r"[Unit]
 Description={relay} Discovery + Federation (Membrane Tower)
 After=network-online.target {spine}-membrane.service
@@ -260,7 +264,7 @@ WantedBy=multi-user.target
 "
     );
 
-    (bearer_unit, songbird_unit, nucleus_template)
+    (bearer_unit, relay_unit, nucleus_template)
 }
 
 /// Phase 4: Install systemd service units for Tower atomic.
@@ -275,7 +279,7 @@ async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
     let relay = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    let (bearer_unit, songbird_unit, _nucleus_template) = generate_systemd_units(gate_name);
+    let (bearer_unit, relay_unit, _nucleus_template) = generate_systemd_units(gate_name);
 
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
     let spine_socket = format!("{socket_base}/{spine}.sock");
@@ -320,7 +324,7 @@ cat > /etc/systemd/system/{spine}-membrane.service << 'UNIT'
 UNIT
 
 cat > /etc/systemd/system/{relay}-membrane.service << 'UNIT'
-{songbird_unit}
+{relay_unit}
 UNIT
 
 {primal_units}

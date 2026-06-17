@@ -171,3 +171,57 @@ pub async fn atomic_write_async(path: &std::path::Path, contents: &[u8]) -> std:
         let _ = std::fs::remove_file(&tmp);
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn resolve_xdg_data_home_returns_non_empty() {
+        let path = resolve_xdg_data_home();
+        assert!(!path.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn atomic_write_creates_file() {
+        let dir = std::env::temp_dir().join("membrane-lib-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test_atomic.bin");
+        atomic_write(&path, b"hello membrane").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"hello membrane");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn atomic_write_no_partial_on_rename() {
+        let dir = std::env::temp_dir().join("membrane-lib-test-atomic");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("atomic_test.txt");
+        atomic_write(&path, b"first").unwrap();
+        atomic_write(&path, b"second").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+        let tmp = path.with_extension("tmp");
+        assert!(!tmp.exists(), ".tmp should be cleaned up");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn atomic_write_async_creates_file() {
+        let dir = std::env::temp_dir().join("membrane-lib-test-async");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("async_atomic.bin");
+        atomic_write_async(&path, b"async hello").await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"async hello");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn resolve_workspace_succeeds_in_workspace() {
+        let result = resolve_workspace_root();
+        assert!(
+            result.is_ok(),
+            "should find workspace from CWD within ecoPrimals"
+        );
+    }
+}

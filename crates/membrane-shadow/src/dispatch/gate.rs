@@ -288,7 +288,11 @@ async fn dispatch_health_audit(
     if include_mesh {
         let vps_provenance = crate::ssh::exec(
             config,
-            "cat /opt/ecoPrimals/plasmidBin/provenance.toml 2>/dev/null || echo ''",
+            &format!(
+                "cat {}/{}/provenance.toml 2>/dev/null || echo ''",
+                cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+                cellmembrane_types::service::INFRA_PLASMID_BIN,
+            ),
         )
         .await
         .unwrap_or_default();
@@ -606,9 +610,12 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let format = cli::extract_flag_value(args, "--format").unwrap_or("nftables");
 
     let nft_config = if args.contains(&"--plasma-membrane") {
-        let wan = cli::extract_flag_value(args, "--wan").unwrap_or("enp1s0");
-        let lan = cli::extract_flag_value(args, "--lan").unwrap_or("eno1");
-        let subnet = cli::extract_flag_value(args, "--subnet").unwrap_or("192.168.4.0/22");
+        let wan = cli::extract_flag_value(args, "--wan")
+            .unwrap_or(cellmembrane_types::service::DEFAULT_WAN_IFACE);
+        let lan = cli::extract_flag_value(args, "--lan")
+            .unwrap_or(cellmembrane_types::service::DEFAULT_LAN_IFACE);
+        let subnet = cli::extract_flag_value(args, "--subnet")
+            .unwrap_or(cellmembrane_types::service::DEFAULT_LAN_SUBNET);
         let gate_name = cli::extract_flag_value(args, "--gate-name")
             .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
         Some(NftablesConfig {
@@ -622,7 +629,7 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
             wireguard_interface: cli::extract_flag_value(args, "--wg-iface").map(Into::into),
             wireguard_port: cli::extract_flag_value(args, "--wg-port")
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(51820),
+                .unwrap_or(cellmembrane_types::firewall::default_wg_port()),
             drop_ipv6_forward: !args.contains(&"--allow-ipv6-forward"),
         })
     } else {

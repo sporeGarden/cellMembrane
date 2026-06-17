@@ -83,3 +83,32 @@ pub(super) fn resolve_install_base() -> String {
     std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_identity_returns_non_empty() {
+        let id = resolve_local_gate_identity();
+        assert!(!id.is_empty(), "identity should never be empty");
+    }
+
+    #[test]
+    fn dirs_home_returns_path() {
+        let home = dirs_home();
+        assert!(!home.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn resolve_install_base_returns_non_empty() {
+        let base = resolve_install_base();
+        assert!(!base.is_empty());
+    }
+
+    #[test]
+    fn resolve_plasmidbin_dir_returns_path() {
+        let dir = resolve_plasmidbin_dir();
+        assert!(!dir.as_os_str().is_empty(), "depot dir should not be empty");
+    }
+}

@@ -393,12 +393,12 @@ pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<
 
 fn default_forgejo_data_dir() -> String {
     std::env::var(cellmembrane_types::service::ENV_FORGEJO_DATA_DIR)
-        .unwrap_or_else(|_| "/opt/forgejo/data".into()) // Forgejo convention
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_DATA_DIR.into())
 }
 
 fn default_forgejo_work_dir() -> String {
     std::env::var(cellmembrane_types::service::ENV_FORGEJO_WORK_DIR)
-        .unwrap_or_else(|_| "/opt/forgejo".into())
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_INSTALL_BASE.into())
 }
 
 /// Forgejo data directory on the VPS. Resolution chain:

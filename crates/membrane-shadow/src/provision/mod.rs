@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 pub enum Provider {
     /// `DigitalOcean` VPS (DO API v2).
     DigitalOcean,
-    /// Hetzner Cloud (hcloud API).
+    /// Hetzner Cloud (hcloud API) — reserved, not yet implemented.
     Hetzner,
 }
 
