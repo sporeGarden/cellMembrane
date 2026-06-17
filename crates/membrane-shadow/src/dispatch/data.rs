@@ -288,7 +288,7 @@ async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<S
             Ok(ShadowOutcome::ok_with(msg, serde_json::json!(data)))
         }
         "plasmid.canary.list" => {
-            let slots = plasmid::canary::list();
+            let slots = plasmid::canary::list().await;
             let msg = if slots.is_empty() {
                 "canary pool empty".to_string()
             } else {
@@ -605,18 +605,15 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
         cellmembrane_types::ServiceCapability::ContentServing,
     );
     let content_unit = format!("{content_binary}-membrane");
-    let (nestgate_out, nestgate_code) =
+    let (svc_out, svc_code) =
         crate::ssh::exec_raw(config, &format!("systemctl is-active {content_unit}")).await?;
-    let nestgate_active = nestgate_code == 0;
+    let svc_active = svc_code == 0;
 
     let content_path = std::env::var(cellmembrane_types::service::ENV_NESTGATE_CONTENT_PATH)
         .unwrap_or_else(|_| {
-            format!(
-                "{}/nestgate/content",
-                std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE).unwrap_or_else(|_| {
-                    cellmembrane_types::service::DEFAULT_INSTALL_BASE.into()
-                })
-            )
+            let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+            format!("{install_base}/{content_binary}/content")
         });
     let (content_count_out, _) = crate::ssh::exec_raw(
         config,
@@ -628,7 +625,7 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
     let content_svc = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::ContentServing,
     );
-    let nestgate_port = std::env::var(cellmembrane_types::service::ENV_NESTGATE_PORT)
+    let content_port = std::env::var(cellmembrane_types::service::ENV_NESTGATE_PORT)
         .ok()
         .and_then(|v| v.parse::<u16>().ok())
         .unwrap_or_else(|| {
@@ -640,13 +637,13 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
         .unwrap_or_else(|_| cellmembrane_types::service::BIND_LOOPBACK.into());
     let (curl_out, curl_code) = crate::ssh::exec_raw(
         config,
-        &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{nestgate_port}/health 2>/dev/null"),
+        &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{content_port}/health 2>/dev/null"),
     )
     .await?;
-    let nestgate_http = curl_out.trim().to_string();
-    let nestgate_responding = curl_code == 0 && nestgate_http == "200";
+    let http_status = curl_out.trim().to_string();
+    let http_ok = curl_code == 0 && http_status == "200";
 
-    let status = if caddy_active && nestgate_active && nestgate_responding {
+    let status = if caddy_active && svc_active && http_ok {
         "READY"
     } else {
         "NOT READY"
@@ -656,33 +653,26 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
         "=== S3 Content Verification ===\n\
          Status:         {status}\n\
          Caddy TLS:      {} ({})\n\
-         NestGate:       {} ({})\n\
-         NestGate HTTP:  {} ({bind}:{nestgate_port}/health)\n\
+         {content_binary}:       {} ({})\n\
+         {content_binary} HTTP:  {} ({bind}:{content_port}/health)\n\
          Content files:  {content_files}",
         if caddy_active { "active" } else { "inactive" },
         caddy_out.trim(),
-        if nestgate_active {
-            "active"
-        } else {
-            "inactive"
-        },
-        nestgate_out.trim(),
-        if nestgate_responding {
-            "200 OK"
-        } else {
-            &nestgate_http
-        },
+        if svc_active { "active" } else { "inactive" },
+        svc_out.trim(),
+        if http_ok { "200 OK" } else { &http_status },
     );
 
-    let ok = caddy_active && nestgate_active && nestgate_responding;
+    let ok = caddy_active && svc_active && http_ok;
     Ok(if ok {
         ShadowOutcome::ok_with(
             msg,
             serde_json::json!({
                 "status": status,
                 "caddy": caddy_active,
-                "nestgate": nestgate_active,
-                "nestgate_http": nestgate_http,
+                "content_service": content_binary,
+                "content_active": svc_active,
+                "content_http": http_status,
                 "content_files": content_files,
             }),
         )
@@ -693,8 +683,9 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
             data: Some(serde_json::json!({
                 "status": status,
                 "caddy": caddy_active,
-                "nestgate": nestgate_active,
-                "nestgate_http": nestgate_http,
+                "content_service": content_binary,
+                "content_active": svc_active,
+                "content_http": http_status,
                 "content_files": content_files,
             })),
         }

@@ -115,3 +115,43 @@ pub fn request(method: &str, id: u32) -> String {
 pub fn request_with_params(method: &str, params: &serde_json::Value, id: u32) -> String {
     format!(r#"{{"jsonrpc":"2.0","method":"{method}","params":{params},"id":{id}}}"#)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_formats_valid_jsonrpc() {
+        let req = request("health", 1);
+        let parsed: serde_json::Value = serde_json::from_str(&req).expect("valid JSON");
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["method"], "health");
+        assert_eq!(parsed["id"], 1);
+        assert!(parsed["params"].is_object());
+    }
+
+    #[test]
+    fn request_with_params_embeds_params() {
+        let params = serde_json::json!({"key": "value", "n": 42});
+        let req = request_with_params("test.method", &params, 7);
+        let parsed: serde_json::Value = serde_json::from_str(&req).expect("valid JSON");
+        assert_eq!(parsed["method"], "test.method");
+        assert_eq!(parsed["id"], 7);
+        assert_eq!(parsed["params"]["key"], "value");
+        assert_eq!(parsed["params"]["n"], 42);
+    }
+
+    #[test]
+    fn request_escapes_method_name() {
+        let req = request("gate.bootstrap", 99);
+        assert!(req.contains("gate.bootstrap"));
+        let parsed: serde_json::Value = serde_json::from_str(&req).expect("valid JSON");
+        assert_eq!(parsed["method"], "gate.bootstrap");
+    }
+
+    #[test]
+    fn default_timeout_is_reasonable() {
+        assert!(DEFAULT_TIMEOUT.as_secs() >= 1);
+        assert!(DEFAULT_TIMEOUT.as_secs() <= 30);
+    }
+}

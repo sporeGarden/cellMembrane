@@ -200,6 +200,16 @@ pub struct GateProfile {
     /// Gate-specific notes for operators.
     #[serde(default)]
     pub notes: Option<String>,
+    /// Cytoplasm zone this gate is in (e.g., `"backbone"`, `"house2"`).
+    /// Defined in `TOPOLOGY_MAP.toml [cytoplasm.zones.*]`.
+    #[serde(default)]
+    pub zone: Option<String>,
+    /// Physical port on the zone's hub switch (e.g., `"sfp+2"`, `"ether8"`).
+    #[serde(default)]
+    pub hub_port: Option<String>,
+    /// Link speed to the hub switch in Mbps (e.g., `10000`, `2500`).
+    #[serde(default)]
+    pub link_speed_mbps: Option<u32>,
 }
 
 impl EcosystemManifest {
@@ -463,6 +473,45 @@ repos = ["bearDog", "cellMembrane"]
         assert!(manifest.gates.contains_key("eastGate"));
         let gate = &manifest.gates["eastGate"];
         assert_eq!(gate.repos, vec!["bearDog", "cellMembrane"]);
+    }
+
+    #[test]
+    fn gate_profile_zone_fields_parsed() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.sporeGate]
+repos = ["cellMembrane"]
+zone = "backbone"
+hub_port = "ether8"
+link_speed_mbps = 2500
+
+[gates.fieldGate]
+repos = ["cellMembrane"]
+zone = "house2"
+hub_port = "2.5g"
+link_speed_mbps = 2500
+
+[gates.flockGate]
+repos = ["cellMembrane"]
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+
+        let sg = &manifest.gates["sporeGate"];
+        assert_eq!(sg.zone.as_deref(), Some("backbone"));
+        assert_eq!(sg.hub_port.as_deref(), Some("ether8"));
+        assert_eq!(sg.link_speed_mbps, Some(2500));
+
+        let fg = &manifest.gates["fieldGate"];
+        assert_eq!(fg.zone.as_deref(), Some("house2"));
+        assert_eq!(fg.link_speed_mbps, Some(2500));
+
+        let flock = &manifest.gates["flockGate"];
+        assert_eq!(flock.zone, None);
+        assert_eq!(flock.hub_port, None);
+        assert_eq!(flock.link_speed_mbps, None);
     }
 
     #[test]

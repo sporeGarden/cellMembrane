@@ -108,7 +108,7 @@ pub async fn post_sync_diverge(
         .await
         .map_err(ShadowError::Io)?;
 
-    let wh_dir = workspace_root.join("infra/wateringHole");
+    let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     let push = crate::git_ops::add_commit_push(
         &wh_dir,
         &format!("impulses/active/{filename}"),

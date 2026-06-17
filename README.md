@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 495 tests — pedantic clippy clean
+cargo test                  # 515 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -68,7 +68,7 @@ unit management) + `gate/mesh.rs` (mesh peer configuration). All sync phases evo
 to `spawn_blocking` (prevents executor stalls on binary copy). Zero `as` casts in
 production, zero `.expect()` in production. `option_if_let_else` promoted from allow
 to warn. SSH user `root@` evolved to `MEMBRANE_PROVISION_SSH_USER` env var. Caddy
-admin endpoint evolved to `CADDY_ADMIN_ENDPOINT` env var. 495 tests, zero clippy.
+admin endpoint evolved to `CADDY_ADMIN_ENDPOINT` env var. 515 tests, zero clippy.
 
 **Wave 107–109 (Deterministic Deployment + guideStone):**
 `gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),
@@ -190,7 +190,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Sandbox NUCLEUS + canary pool (Wave 110+): sandbox.rs ephemeral validation, canary.rs fallback pool, atomic blue/green promotion, cascade-restart with canary retirement, service/registry.rs extracted | DONE |
 | riboCipher + dispatch SRP (Wave 111): mito-tier HKDF+HMAC complete, dispatch gate.rs extracted (762L→264+518L), error propagation modernized, Neural API constants shared, 391 tests | DONE |
 | Deep debt evolution (Wave 113): zero-copy temporal (Arc manifest, Cow defaults), idiomatic Rust (safe casts, structured logging), ecosystem compliance (SPDX headers, cargo-deny CI) | DONE |
-| Bootstrap robustness + depot integrity (Wave 115): per-phase timeouts, identity detection, depot.integrity command, bootstrap 861→555L smart refactor, spawn_blocking for fs ops, 495 tests | DONE |
+| Bootstrap robustness + depot integrity (Wave 115): per-phase timeouts, identity detection, depot.integrity command, bootstrap 861→555L smart refactor, spawn_blocking for fs ops, 514 tests | DONE |
 
 ---
 

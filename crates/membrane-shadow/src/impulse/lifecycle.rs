@@ -94,7 +94,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
         .await
         .map_err(ShadowError::Io)?;
 
-    let wh_dir = workspace_root.join("infra/wateringHole");
+    let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     let push = crate::git_ops::add_commit_push(
         &wh_dir,
         &format!("impulses/active/{filename}"),
@@ -253,7 +253,7 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
     // Also append to in-memory representation for return value
     impulse.acks.push(ack_entry);
 
-    let wh_dir = workspace_root.join("infra/wateringHole");
+    let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     let push = crate::git_ops::add_commit_push(
         &wh_dir,
         &format!("impulses/acks/{ack_filename}"),
@@ -330,7 +330,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
     .map_err(|_| ShadowError::Parse("archive task panicked".into()))??;
 
     if !archived.is_empty() {
-        let wh_dir = workspace_root.join("infra/wateringHole");
+        let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
         let msg = format!(
             "impulse archive: {} discharged → wave{wave}",
             archived.len()

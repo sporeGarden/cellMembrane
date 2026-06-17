@@ -103,7 +103,9 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
         let local = local_depot.join(filename);
         if local.is_file() {
             let remote = format!("{remote_depot}/{filename}");
-            let _ = crate::ssh::scp_to(config, &local.to_string_lossy(), &remote).await;
+            if let Err(e) = crate::ssh::scp_to(config, &local.to_string_lossy(), &remote).await {
+                tracing::warn!(file = filename, error = %e, "depot metadata sync failed");
+            }
         }
     }
 }
@@ -135,7 +137,9 @@ async fn sync_depot_binaries(config: &crate::ShadowConfig) {
          done"
     );
 
-    let _ = crate::ssh::exec_raw(config, &cmd).await;
+    if let Err(e) = crate::ssh::exec_raw(config, &cmd).await {
+        tracing::warn!(error = %e, "WAN depot binary sync failed");
+    }
 }
 
 async fn refresh_one(
@@ -181,7 +185,7 @@ async fn refresh_one(
                 break;
             }
             Err(e) => {
-                last_err = format!("{e}");
+                last_err = e.to_string();
                 warn!(
                     primal,
                     attempt = attempt + 1,
@@ -194,7 +198,9 @@ async fn refresh_one(
     if !scp_ok {
         // Rollback: clean up partial .new file on remote
         let cleanup = format!("rm -f {remote_new}");
-        let _ = crate::ssh::exec_raw(config, &cleanup).await;
+        if let Err(e) = crate::ssh::exec_raw(config, &cleanup).await {
+            tracing::warn!(primal, error = %e, "rollback cleanup failed");
+        }
         return RefreshResult {
             binary: primal.into(),
             status: RefreshStatus::Failed,
@@ -213,7 +219,9 @@ async fn refresh_one(
 
     if let Some(svc) = cellmembrane_types::MembraneService::for_binary(primal) {
         let restart_cmd = format!("systemctl restart {}", svc.systemd_unit);
-        let _ = crate::ssh::exec_raw(config, &restart_cmd).await;
+        if let Err(e) = crate::ssh::exec_raw(config, &restart_cmd).await {
+            tracing::warn!(primal, unit = %svc.systemd_unit, error = %e, "service restart failed");
+        }
     }
 
     let size_kb = tokio::fs::metadata(&local_path)

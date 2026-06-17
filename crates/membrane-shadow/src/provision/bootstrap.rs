@@ -533,7 +533,7 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
         .into_iter()
         .map(Into::into)
         .collect();
-    crate::plasmid::canary::register_remote_canary(gate_name, &ip, Some(droplet.id), primals);
+    crate::plasmid::canary::register_remote_canary(gate_name, &ip, Some(droplet.id), primals).await;
     phases.push("registry: remote canary registered".into());
 
     // Write gate identity file for remote verification

@@ -99,7 +99,9 @@ pub async fn check(workspace_root: &Path, repo_path: &str) -> Result<TemporalMat
         .await
         .unwrap_or_else(|_| "main".to_string());
 
-    let _ = git_ok(&local_path, &["fetch", "--all", "--quiet"]).await;
+    if !git_ok(&local_path, &["fetch", "--all", "--quiet"]).await {
+        tracing::warn!(repo = %local_path.display(), "git fetch --all failed");
+    }
 
     let remotes_str = git(&local_path, &["remote"]).await?;
     let remotes: Vec<&str> = remotes_str.lines().filter(|l| !l.is_empty()).collect();
@@ -460,12 +462,16 @@ async fn try_pull_converge(
         )
         .await
             || git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await;
-        let _ = git_ok(local_path, &["stash", "pop", "--quiet"]).await;
+        if !git_ok(local_path, &["stash", "pop", "--quiet"]).await {
+            tracing::debug!(repo = repo_path, "stash pop failed (may be empty)");
+        }
         if pull_ok {
             info!(repo = repo_path, "stash-recovery succeeded");
             return PullOutcome::Ok(leader.to_string());
         }
-        let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+        if !git_ok(local_path, &["rebase", "--abort"]).await {
+            tracing::debug!(repo = repo_path, "rebase abort failed (no active rebase)");
+        }
         return PullOutcome::Err(format!("pull {leader} failed after stash (diverged)"));
     }
 
@@ -474,7 +480,9 @@ async fn try_pull_converge(
         info!(repo = repo_path, "diderm rebase reconciled");
         return PullOutcome::Ok(leader.to_string());
     }
-    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+    if !git_ok(local_path, &["rebase", "--abort"]).await {
+        tracing::debug!(repo = repo_path, "rebase abort cleanup failed");
+    }
     PullOutcome::Err(format!(
         "pull {leader} failed (ff-only — diverged, rebase conflicted)"
     ))
@@ -518,7 +526,9 @@ async fn sync_diverge(
             repo_policy: policy.to_string(),
         };
 
-        let _ = crate::impulse::post_sync_diverge(workspace_root, &args).await;
+        if let Err(e) = crate::impulse::post_sync_diverge(workspace_root, &args).await {
+            tracing::warn!(repo = %repo_path_owned, error = %e, "sync diverge impulse failed");
+        }
 
         let resolved =
             resolve::apply_divergence_policy(local_path, matrix, policy, push_target).await;

@@ -75,20 +75,24 @@ fn resolve_sandbox_bin_dir() -> PathBuf {
 /// The binary is copied to the sandbox staging area and started with
 /// `--socket` pointing to an isolated namespace. If `security_socket` is
 /// provided (from a dependency chain), the process also gets `--security-socket`.
-pub fn spin_up(args: &SandboxArgs) -> Result<SandboxInstance, String> {
-    spin_up_with_deps(args, None)
+pub async fn spin_up(args: &SandboxArgs) -> Result<SandboxInstance, String> {
+    spin_up_with_deps(args, None).await
 }
 
 /// Spin up with an optional security socket path for Tower dependency injection.
-pub fn spin_up_with_deps(
+pub async fn spin_up_with_deps(
     args: &SandboxArgs,
     security_socket: Option<&Path>,
 ) -> Result<SandboxInstance, String> {
     let socket_dir = resolve_sandbox_socket_dir();
     let bin_dir = resolve_sandbox_bin_dir();
 
-    std::fs::create_dir_all(&socket_dir).map_err(|e| format!("create sandbox socket dir: {e}"))?;
-    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("create sandbox bin dir: {e}"))?;
+    tokio::fs::create_dir_all(&socket_dir)
+        .await
+        .map_err(|e| format!("create sandbox socket dir: {e}"))?;
+    tokio::fs::create_dir_all(&bin_dir)
+        .await
+        .map_err(|e| format!("create sandbox bin dir: {e}"))?;
 
     let commit_short = if args.commit.len() >= 8 {
         &args.commit[..8]
@@ -99,19 +103,17 @@ pub fn spin_up_with_deps(
     let sandbox_binary = bin_dir.join(format!("{}-{commit_short}", args.primal));
     let socket_path = socket_dir.join(format!("{}-{commit_short}.sock", args.primal));
 
-    // Remove stale socket if present
-    if socket_path.exists() {
-        std::fs::remove_file(&socket_path).ok();
-    }
+    let _ = tokio::fs::remove_file(&socket_path).await;
 
-    // Stage binary to sandbox directory
-    std::fs::copy(&args.binary_path, &sandbox_binary)
+    tokio::fs::copy(&args.binary_path, &sandbox_binary)
+        .await
         .map_err(|e| format!("stage sandbox binary: {e}"))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&sandbox_binary, std::fs::Permissions::from_mode(0o755))
+        tokio::fs::set_permissions(&sandbox_binary, std::fs::Permissions::from_mode(0o755))
+            .await
             .map_err(|e| format!("chmod sandbox binary: {e}"))?;
     }
 
@@ -221,7 +223,7 @@ pub async fn validate(args: &SandboxArgs) -> Result<SandboxResult, String> {
     let timeout =
         std::time::Duration::from_secs(args.timeout_secs.unwrap_or(SANDBOX_HEALTH_TIMEOUT_SECS));
 
-    let instance = spin_up(args)?;
+    let instance = spin_up(args).await?;
 
     let result = tokio::time::timeout(timeout, probe_health(&instance))
         .await
@@ -287,7 +289,7 @@ pub async fn validate_with_deps(args: &SandboxArgs) -> Result<SandboxResult, Str
                 binary_path: dep_path,
                 timeout_secs: Some(10),
             };
-            let instance = spin_up(&dep_args)?;
+            let instance = spin_up(&dep_args).await?;
             // Wait for dependency to become ready before starting the target
             let dep_ready = tokio::time::timeout(
                 std::time::Duration::from_secs(8),
@@ -310,7 +312,7 @@ pub async fn validate_with_deps(args: &SandboxArgs) -> Result<SandboxResult, Str
     };
 
     let security_socket = dep_instance.as_ref().map(|d| d.socket_path.as_path());
-    let instance = spin_up_with_deps(args, security_socket)?;
+    let instance = spin_up_with_deps(args, security_socket).await?;
 
     let result = tokio::time::timeout(timeout, probe_health(&instance))
         .await

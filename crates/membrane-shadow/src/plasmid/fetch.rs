@@ -127,13 +127,22 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         .await
         .map_err(ShadowError::Io)?;
 
-    cleanup_partial_downloads(&bin_dir);
+    cleanup_partial_downloads(&bin_dir).await;
 
-    let mut checksums = load_checksums(&bin_dir, &tag);
+    let bd = bin_dir.clone();
+    let t = tag.clone();
+    let mut checksums = tokio::task::spawn_blocking(move || load_checksums(&bd, &t))
+        .await
+        .unwrap_or_default();
     if checksums.is_empty() && args.source == FetchSource::Wan {
         checksums = fetch_wan_checksums(&arch).await;
         if !checksums.is_empty() {
-            persist_checksums(&dest_root, &arch, &checksums);
+            let dr = dest_root.clone();
+            let a = arch.clone();
+            let cs = checksums.clone();
+            tokio::task::spawn_blocking(move || persist_checksums(&dr, &a, &cs))
+                .await
+                .ok();
         }
     }
     let results = fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
@@ -313,14 +322,14 @@ async fn download_via_http(_url: &str, _dest: &Path) -> bool {
 }
 
 /// Remove leftover `.tmp` files from interrupted downloads.
-fn cleanup_partial_downloads(bin_dir: &Path) {
-    let Ok(entries) = std::fs::read_dir(bin_dir) else {
+async fn cleanup_partial_downloads(bin_dir: &Path) {
+    let Ok(mut entries) = tokio::fs::read_dir(bin_dir).await else {
         return;
     };
-    for entry in entries.flatten() {
+    while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("tmp") {
-            let _ = std::fs::remove_file(&path);
+            let _ = tokio::fs::remove_file(&path).await;
         }
     }
 }

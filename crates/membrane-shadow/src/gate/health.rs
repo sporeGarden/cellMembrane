@@ -64,7 +64,11 @@ pub async fn status() -> crate::error::Result<GateStatus> {
         detail: procs_detail,
     });
 
-    let (fresh_ok, fresh_detail) = probe_depot_freshness(&arch);
+    let arch_for_freshness = arch.clone();
+    let (fresh_ok, fresh_detail) =
+        tokio::task::spawn_blocking(move || probe_depot_freshness(&arch_for_freshness))
+            .await
+            .unwrap_or_else(|_| (false, "freshness probe panicked".into()));
     probes.push(StatusProbe {
         name: "depot.freshness".into(),
         ok: fresh_ok,
@@ -563,7 +567,7 @@ async fn probe_s3_content() -> StatusProbe {
     }
 }
 
-/// S4: Sovereign Auth — probe `BearDog` BTSP enforcement via local UDS health.
+/// S4: Sovereign Auth — probe crypto-signer BTSP enforcement via local UDS health.
 ///
 /// Tries neuralAPI capability routing first, then direct UDS. Any JSON-RPC
 /// response (including `-32601 method_not_found` or BTSP errors) proves
@@ -586,7 +590,7 @@ async fn probe_s4_auth() -> StatusProbe {
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let detail = if btsp == "btsp" {
-            "ENFORCED — BearDog BTSP active (via neuralAPI)".to_string()
+            format!("ENFORCED — {binary_name} BTSP active (via neuralAPI)")
         } else {
             format!("RESPONDING — {binary_name} {status} (via neuralAPI)")
         };
@@ -614,7 +618,7 @@ async fn probe_s4_auth() -> StatusProbe {
                 let enforced = response.contains("BTSP handshake required")
                     || response.contains("\"auth_mode\":\"btsp\"");
                 let detail = if enforced {
-                    "ENFORCED — BearDog BTSP active (direct UDS)".to_string()
+                    format!("ENFORCED — {binary_name} BTSP active (direct UDS)")
                 } else {
                     format!(
                         "RESPONDING — {binary_name} alive ({})",
@@ -633,7 +637,7 @@ async fn probe_s4_auth() -> StatusProbe {
     StatusProbe {
         name: "sovereignty.s4_auth".into(),
         ok: false,
-        detail: "UNREACHABLE — BearDog not responding on UDS".into(),
+        detail: format!("UNREACHABLE — {binary_name} not responding on UDS"),
     }
 }
 
@@ -672,7 +676,8 @@ fn resolve_mesh_relay_socket() -> String {
 pub(super) fn resolve_biomeos_socket_dir() -> String {
     std::env::var("BIOMEOS_SOCKET_DIR").unwrap_or_else(|_| {
         let uid = resolve_uid();
-        format!("/run/user/{uid}/biomeos")
+        let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
+        format!("/run/user/{uid}/{ns}")
     })
 }
 
@@ -694,7 +699,10 @@ fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
     let mut paths = vec![
         format!("{socket_base}/{primal}.sock"),
-        format!("{xdg_runtime}/biomeos/{primal}.sock"),
+        format!(
+            "{xdg_runtime}/{}/{primal}.sock",
+            cellmembrane_types::service::NEURAL_API_NAMESPACE
+        ),
     ];
     // Check registry for alternative API socket (capability-driven, not hardcoded)
     if let Some(svc) = cellmembrane_types::MembraneService::all()

@@ -303,7 +303,9 @@ sed -i '/^{escaped_hostname} {{/r /tmp/depot-snippet.caddy' {caddyfile} && rm -f
              {caddy_bin} reload --config {caddyfile} --force 2>/dev/null",
             cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
         );
-        let _ = caddy_exec(config, &rollback_cmd).await;
+        if let Err(e) = caddy_exec(config, &rollback_cmd).await {
+            tracing::warn!(error = %e, "Caddyfile rollback also failed");
+        }
         return Err(ShadowError::Ssh(format!(
             "Caddyfile validation/reload failed (rolled back): {}",
             reload_out.trim()
@@ -435,7 +437,9 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
             "sed -i '/^{domain}/,/^}}/ {{ /tls \\//d; }}' {caddyfile}; \
              {caddy_bin} reload --config {caddyfile} --force 2>/dev/null"
         );
-        let _ = caddy_exec(config, &rollback).await;
+        if let Err(e) = caddy_exec(config, &rollback).await {
+            tracing::warn!(error = %e, "TLS cutover rollback also failed");
+        }
         return Err(ShadowError::Ssh(format!(
             "Caddyfile invalid after TLS cutover (rolled back): {}",
             reload_out.trim()

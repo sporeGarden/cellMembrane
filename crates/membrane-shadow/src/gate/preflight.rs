@@ -181,17 +181,17 @@ async fn detect_interfaces() -> Vec<DetectedInterface> {
 fn build_addr_map(addrs: &[serde_json::Value]) -> BTreeMap<String, Vec<String>> {
     let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for entry in addrs {
-        let ifname = entry["ifname"].as_str().unwrap_or("").to_string();
-        if let Some(addr_info) = entry["addr_info"].as_array() {
-            for ai in addr_info {
-                if ai["family"].as_str() == Some("inet") {
-                    if let Some(local) = ai["local"].as_str() {
-                        map.entry(ifname.clone())
-                            .or_default()
-                            .push(local.to_string());
-                    }
-                }
-            }
+        let ifname = entry["ifname"].as_str().unwrap_or("");
+        let Some(addr_info) = entry["addr_info"].as_array() else {
+            continue;
+        };
+        let ips: Vec<String> = addr_info
+            .iter()
+            .filter(|ai| ai["family"].as_str() == Some("inet"))
+            .filter_map(|ai| ai["local"].as_str().map(String::from))
+            .collect();
+        if !ips.is_empty() {
+            map.entry(ifname.to_string()).or_default().extend(ips);
         }
     }
     map

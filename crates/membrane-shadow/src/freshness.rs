@@ -100,7 +100,7 @@ pub async fn auto_commit_freshness(
     manifest: &crate::manifest::EcosystemManifest,
     repos: &[(&str, &crate::manifest::RepoEntry)],
 ) -> Result<()> {
-    let wh_dir = root.join("infra/wateringHole");
+    let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     if !wh_dir.join(".git").exists() {
         return Err(ShadowError::Config(
             "wateringHole not a git repo — cannot auto-commit freshness".into(),

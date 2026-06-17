@@ -112,3 +112,88 @@ impl ShadowOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn outcome_ok_sets_fields() {
+        let o = ShadowOutcome::ok("success");
+        assert!(o.ok);
+        assert_eq!(o.message, "success");
+        assert!(o.data.is_none());
+    }
+
+    #[test]
+    fn outcome_ok_with_carries_data() {
+        let data = serde_json::json!({"count": 3});
+        let o = ShadowOutcome::ok_with("done", data.clone());
+        assert!(o.ok);
+        assert_eq!(o.data.unwrap()["count"], 3);
+    }
+
+    #[test]
+    fn outcome_fail_sets_not_ok() {
+        let o = ShadowOutcome::fail("broken");
+        assert!(!o.ok);
+        assert_eq!(o.message, "broken");
+        assert!(o.data.is_none());
+    }
+
+    #[test]
+    fn outcome_serializes_to_json() {
+        let o = ShadowOutcome::ok_with("test", serde_json::json!({"x": 1}));
+        let json = serde_json::to_string(&o).unwrap();
+        assert!(json.contains(r#""ok":true"#));
+        assert!(json.contains(r#""message":"test""#));
+    }
+
+    #[test]
+    fn outcome_deserializes_from_json() {
+        let json = r#"{"ok":false,"message":"err"}"#;
+        let o: ShadowOutcome = serde_json::from_str(json).unwrap();
+        assert!(!o.ok);
+        assert_eq!(o.message, "err");
+        assert!(o.data.is_none());
+    }
+
+    #[test]
+    fn outcome_skip_serializing_none_data() {
+        let o = ShadowOutcome::ok("test message");
+        let json = serde_json::to_string(&o).unwrap();
+        assert!(!json.contains(r#""data""#));
+    }
+
+    #[test]
+    fn shadow_error_display() {
+        let e = ShadowError::Ssh("timeout".into());
+        assert_eq!(e.to_string(), "ssh: timeout");
+
+        let e = ShadowError::Parse("bad input".into());
+        assert_eq!(e.to_string(), "parse: bad input");
+
+        let e = ShadowError::Config("missing key".into());
+        assert_eq!(e.to_string(), "config: missing key");
+
+        let e = ShadowError::ForgejoApi {
+            status: 404,
+            message: "not found".into(),
+        };
+        assert_eq!(e.to_string(), "forgejo api 404: not found");
+    }
+
+    #[test]
+    fn shadow_error_from_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
+        let e: ShadowError = io_err.into();
+        assert!(e.to_string().contains("gone"));
+    }
+
+    #[test]
+    fn shadow_error_from_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("not json").unwrap_err();
+        let e: ShadowError = json_err.into();
+        assert!(e.to_string().starts_with("json:"));
+    }
+}

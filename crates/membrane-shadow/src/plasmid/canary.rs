@@ -78,7 +78,7 @@ pub async fn retire_to_canary(
         .map_err(|e| format!("create canary bin dir: {e}"))?;
 
     // Kill any existing canary for this primal
-    let mut pool = load_pool();
+    let mut pool = load_pool().await;
     if let Some(existing) = pool.slots.iter().find(|s| s.primal == primal) {
         kill_canary(existing).await;
     }
@@ -126,14 +126,14 @@ pub async fn retire_to_canary(
     };
 
     pool.slots.push(slot.clone());
-    save_pool(&pool);
+    save_pool(&pool).await;
 
     Ok(slot)
 }
 
 /// Health-check all canary instances in the pool.
 pub async fn canary_health_watch() -> Vec<CanaryHealth> {
-    let pool = load_pool();
+    let pool = load_pool().await;
     let mut results = Vec::with_capacity(pool.slots.len());
 
     for slot in &pool.slots {
@@ -168,7 +168,7 @@ fn is_stale(slot: &CanarySlot) -> bool {
 /// Returns a report of each canary's age and staleness status.
 /// If `auto_refresh` is true, stale canaries are killed and removed from the pool.
 pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
-    let pool = load_pool();
+    let pool = load_pool().await;
     let mut reports = Vec::with_capacity(pool.slots.len());
     let mut stale_primals = Vec::new();
 
@@ -192,14 +192,14 @@ pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
     }
 
     if auto_refresh && !stale_primals.is_empty() {
-        let mut pool = load_pool();
+        let mut pool = load_pool().await;
         for primal in &stale_primals {
             if let Some(slot) = pool.slots.iter().find(|s| &s.primal == primal) {
                 kill_canary(slot).await;
             }
         }
         pool.slots.retain(|s| !stale_primals.contains(&s.primal));
-        save_pool(&pool);
+        save_pool(&pool).await;
     }
 
     reports
@@ -237,7 +237,7 @@ pub async fn failover_targets() -> Vec<FailoverTarget> {
     let mut targets = Vec::new();
 
     // Local canary pool
-    let pool = load_pool();
+    let pool = load_pool().await;
     for slot in &pool.slots {
         if is_stale(slot) {
             debug!(
@@ -260,7 +260,7 @@ pub async fn failover_targets() -> Vec<FailoverTarget> {
     }
 
     // Remote canary droplets (SSH health probe)
-    let remote_canaries = load_remote_canaries();
+    let remote_canaries = load_remote_canaries().await;
     for remote in &remote_canaries.entries {
         if remote_health_check(&remote.ip).await {
             for primal in &remote.primals {
@@ -286,7 +286,7 @@ pub async fn failover_targets() -> Vec<FailoverTarget> {
 ///
 /// Copies the canary binary to the production path and returns the slot.
 pub async fn promote_canary(primal: &str, production_path: &Path) -> Result<CanarySlot, String> {
-    let pool = load_pool();
+    let pool = load_pool().await;
 
     let slot = pool
         .slots
@@ -315,26 +315,26 @@ pub async fn promote_canary(primal: &str, production_path: &Path) -> Result<Cana
     kill_canary(&slot).await;
 
     // Remove from pool
-    let mut pool = load_pool();
+    let mut pool = load_pool().await;
     pool.slots.retain(|s| s.primal != primal);
-    save_pool(&pool);
+    save_pool(&pool).await;
 
     Ok(slot)
 }
 
 /// List current canary pool state.
-pub fn list() -> Vec<CanarySlot> {
-    load_pool().slots
+pub async fn list() -> Vec<CanarySlot> {
+    load_pool().await.slots
 }
 
 /// Kill all canary instances (shutdown).
 pub async fn teardown_all() {
-    let pool = load_pool();
+    let pool = load_pool().await;
     for slot in &pool.slots {
         kill_canary(slot).await;
     }
     let empty = CanaryPool::default();
-    save_pool(&empty);
+    save_pool(&empty).await;
 }
 
 // ── Remote canary registry ───────────────────────────────────────────────
@@ -366,36 +366,33 @@ fn remote_canaries_path() -> PathBuf {
 }
 
 /// Load the remote canary registry from disk.
-pub fn load_remote_canaries() -> RemoteCanaryRegistry {
+pub async fn load_remote_canaries() -> RemoteCanaryRegistry {
     let path = remote_canaries_path();
-    if !path.exists() {
-        return RemoteCanaryRegistry::default();
-    }
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| toml::from_str(&s).ok())
-        .unwrap_or_default()
+    tokio::fs::read_to_string(&path).await.map_or_else(
+        |_| RemoteCanaryRegistry::default(),
+        |s| toml::from_str(&s).unwrap_or_default(),
+    )
 }
 
 /// Save the remote canary registry to disk.
-pub fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
+pub async fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
     let path = remote_canaries_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).ok();
+        let _ = tokio::fs::create_dir_all(parent).await;
     }
     if let Ok(content) = toml::to_string_pretty(registry) {
-        std::fs::write(&path, content).ok();
+        let _ = tokio::fs::write(&path, content).await;
     }
 }
 
 /// Register a newly provisioned remote canary droplet.
-pub fn register_remote_canary(
+pub async fn register_remote_canary(
     gate_name: &str,
     ip: &str,
     droplet_id: Option<u64>,
     primals: Vec<String>,
 ) {
-    let mut registry = load_remote_canaries();
+    let mut registry = load_remote_canaries().await;
     registry.entries.retain(|e| e.gate_name != gate_name);
     registry.entries.push(RemoteCanary {
         gate_name: gate_name.to_string(),
@@ -404,14 +401,14 @@ pub fn register_remote_canary(
         primals,
         registered_at: chrono::Utc::now().to_rfc3339(),
     });
-    save_remote_canaries(&registry);
+    save_remote_canaries(&registry).await;
 }
 
 /// Remove a remote canary from the registry.
-pub fn deregister_remote_canary(gate_name: &str) {
-    let mut registry = load_remote_canaries();
+pub async fn deregister_remote_canary(gate_name: &str) {
+    let mut registry = load_remote_canaries().await;
     registry.entries.retain(|e| e.gate_name != gate_name);
-    save_remote_canaries(&registry);
+    save_remote_canaries(&registry).await;
 }
 
 /// SSH-based health check for a remote canary droplet.
@@ -459,30 +456,27 @@ async fn remote_health_check(ip: &str) -> bool {
 }
 
 /// List all remote canary entries.
-pub fn list_remote_canaries() -> Vec<RemoteCanary> {
-    load_remote_canaries().entries
+pub async fn list_remote_canaries() -> Vec<RemoteCanary> {
+    load_remote_canaries().await.entries
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
-fn load_pool() -> CanaryPool {
+async fn load_pool() -> CanaryPool {
     let path = pool_state_path();
-    if !path.exists() {
-        return CanaryPool::default();
-    }
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| toml::from_str(&s).ok())
-        .unwrap_or_default()
+    tokio::fs::read_to_string(&path).await.map_or_else(
+        |_| CanaryPool::default(),
+        |s| toml::from_str(&s).unwrap_or_default(),
+    )
 }
 
-fn save_pool(pool: &CanaryPool) {
+async fn save_pool(pool: &CanaryPool) {
     let path = pool_state_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).ok();
+        let _ = tokio::fs::create_dir_all(parent).await;
     }
     if let Ok(content) = toml::to_string_pretty(pool) {
-        std::fs::write(&path, content).ok();
+        let _ = tokio::fs::write(&path, content).await;
     }
 }
 

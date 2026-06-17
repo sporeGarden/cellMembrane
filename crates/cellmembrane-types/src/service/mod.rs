@@ -201,6 +201,12 @@ pub const DEFAULT_CONFIG_DIR: &str = "/etc/membrane";
 /// Override with `ECOPRIMALS_ROOT` env var.
 pub const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";
 
+/// Infra path fragment for the shared coordination layer (`wateringHole`).
+pub const INFRA_WATERING_HOLE: &str = "infra/wateringHole";
+
+/// Infra path fragment for the binary depot (`plasmidBin`).
+pub const INFRA_PLASMID_BIN: &str = "infra/plasmidBin";
+
 // ── Standard deployment environment variables ────────────────────────
 
 /// Environment variable for the plasmidBin depot directory.
@@ -625,15 +631,7 @@ impl MembraneService {
     /// constants and hardcoded primal names at call sites.
     #[must_use]
     pub fn binary_for(cap: ServiceCapability) -> &'static str {
-        Self::with_capability(cap).map_or_else(
-            || match cap {
-                ServiceCapability::CryptoSigner => "beardog",
-                ServiceCapability::MeshRelay => "songbird",
-                ServiceCapability::ContentServing => "nestgate",
-                _ => "unknown",
-            },
-            |svc| svc.binary,
-        )
+        Self::with_capability(cap).map_or("unknown", |svc| svc.binary)
     }
 
     /// All services declaring a given capability (for multi-provider scenarios).

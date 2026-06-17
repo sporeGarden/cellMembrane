@@ -279,7 +279,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
 
     let slug = project_slug(args.project);
     let rel_path = format!("context/{}/{slug}.toml", gate_id.name);
-    let wh_dir = workspace_root.join("infra/wateringHole");
+    let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     git_add_commit_push(
         &wh_dir,
         &rel_path,
@@ -399,7 +399,7 @@ pub async fn clear(
     }
 
     if !cleared.is_empty() {
-        let wh_dir = workspace_root.join("infra/wateringHole");
+        let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
         let msg = format!("[context] clear {} expired braid(s)", cleared.len());
         git_add_all_commit_push(&wh_dir, &msg).await?;
     }

@@ -413,7 +413,7 @@ async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOutcome> {
     );
 
     let active = digitalocean::wait_until_active(droplet.id, &profile).await?;
-    let ip = active.ip.clone().unwrap_or_default();
+    let ip = active.ip.as_deref().unwrap_or("").to_string();
     info!(ip = %ip, "droplet active");
 
     info!("bootstrapping");
@@ -449,7 +449,7 @@ async fn dispatch_provision_status(args: &[&str]) -> crate::Result<ShadowOutcome
         Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&state)?))
     } else {
         let droplets = digitalocean::list_membrane_droplets().await?;
-        let remote_canaries = canary::list_remote_canaries();
+        let remote_canaries = canary::list_remote_canaries().await;
 
         if droplets.is_empty() && remote_canaries.is_empty() {
             return Ok(ShadowOutcome::ok("no membrane droplets found"));
@@ -520,11 +520,11 @@ async fn dispatch_provision_destroy(args: &[&str]) -> crate::Result<ShadowOutcom
     digitalocean::destroy_droplet(id).await?;
 
     if let Some(name) = gate_name {
-        canary::deregister_remote_canary(name);
+        canary::deregister_remote_canary(name).await;
     } else {
-        let registry = canary::load_remote_canaries();
+        let registry = canary::load_remote_canaries().await;
         if let Some(entry) = registry.entries.iter().find(|e| e.droplet_id == Some(id)) {
-            canary::deregister_remote_canary(&entry.gate_name);
+            canary::deregister_remote_canary(&entry.gate_name).await;
         }
     }
 
@@ -542,7 +542,7 @@ async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<ShadowOutcome
     let (target_ip, gate_name) = match (ip, gate) {
         (Some(ip), name) => (ip.to_string(), name.unwrap_or("unknown").to_string()),
         (None, Some(name)) => {
-            let registry = canary::load_remote_canaries();
+            let registry = canary::load_remote_canaries().await;
             let entry = registry
                 .entries
                 .iter()

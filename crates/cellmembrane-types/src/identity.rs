@@ -76,7 +76,7 @@ impl MembraneIdentity {
     #[must_use]
     pub fn gate_id_or_default(&self) -> String {
         self.gate_id
-            .clone()
-            .unwrap_or_else(|| format!("{}-membrane", self.family_id))
+            .as_ref()
+            .map_or_else(|| format!("{}-membrane", self.family_id), Clone::clone)
     }
 }
