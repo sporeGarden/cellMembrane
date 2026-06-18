@@ -7,6 +7,7 @@
 //! for repo metadata, gate profiles, and sync configuration.
 
 use crate::error::{Result, ShadowError};
+use cellmembrane_types::{CytoplasmZone, DivergencePolicy, GateTransport, PushTarget};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -99,16 +100,16 @@ pub struct SyncConfig {
     pub default_branch: String,
     /// Global divergence policy: `flag`, `merge-ff`, `merge-rebase`,
     /// `impulse-only`, `agentic`. Per-repo overrides in `RepoEntry`.
-    #[serde(default = "default_divergence_policy")]
-    pub divergence_policy: String,
+    #[serde(default)]
+    pub divergence_policy: DivergencePolicy,
     /// Whether temporal sync should push to follower remotes.
     #[serde(default)]
     pub push_to_followers: bool,
     /// Push target: "forgejo" (sovereign mediator) or "all" (legacy dual-push).
     /// When "forgejo", temporal.sync pushes only to the forgejo remote;
     /// the VPS push mirror handles GitHub propagation.
-    #[serde(default = "default_push_target")]
-    pub push_target: String,
+    #[serde(default)]
+    pub push_target: PushTarget,
     /// Auto-fire a SYNC impulse when divergence is detected.
     #[serde(default)]
     pub diverge_impulse: bool,
@@ -118,20 +119,12 @@ pub struct SyncConfig {
     pub push_remotes: Vec<String>,
 }
 
-fn default_push_target() -> String {
-    "all".into()
-}
-
 fn default_source() -> String {
     "temporal".into()
 }
 fn default_branch() -> String {
     "main".into()
 }
-fn default_divergence_policy() -> String {
-    "flag".into()
-}
-
 /// A single repository entry from `[repos.*]`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoEntry {
@@ -163,7 +156,7 @@ pub struct RepoEntry {
     /// Per-repo divergence policy override (falls back to `sync.divergence_policy`).
     /// Values: `flag`, `merge-ff`, `merge-rebase`, `impulse-only`, `agentic`.
     #[serde(default)]
-    pub divergence_policy: Option<String>,
+    pub divergence_policy: Option<DivergencePolicy>,
     /// Remotes to exclude from temporal matrix (e.g. `["upstream"]` for vendor forks).
     #[serde(default)]
     pub exclude_remotes: Vec<String>,
@@ -196,14 +189,14 @@ pub struct GateProfile {
     pub composition: Option<String>,
     /// Transport: how binaries reach this gate (`wan`, `lan`, `adb`, `local`).
     #[serde(default)]
-    pub transport: Option<String>,
+    pub transport: Option<GateTransport>,
     /// Gate-specific notes for operators.
     #[serde(default)]
     pub notes: Option<String>,
     /// Cytoplasm zone this gate is in (e.g., `"backbone"`, `"house2"`).
     /// Defined in `TOPOLOGY_MAP.toml [cytoplasm.zones.*]`.
     #[serde(default)]
-    pub zone: Option<String>,
+    pub zone: Option<CytoplasmZone>,
     /// Physical port on the zone's hub switch (e.g., `"sfp+2"`, `"ether8"`).
     #[serde(default)]
     pub hub_port: Option<String>,
@@ -292,11 +285,10 @@ impl EcosystemManifest {
 
     /// Resolve divergence policy for a repo — per-repo override or global default.
     #[must_use]
-    pub fn divergence_policy_for<'a>(&'a self, entry: &'a RepoEntry) -> &'a str {
+    pub fn divergence_policy_for(&self, entry: &RepoEntry) -> DivergencePolicy {
         entry
             .divergence_policy
-            .as_deref()
-            .unwrap_or(&self.sync.divergence_policy)
+            .unwrap_or(self.sync.divergence_policy)
     }
 
     /// Build a GitHub clone URL for a repo.
@@ -465,8 +457,8 @@ repos = ["bearDog", "cellMembrane"]
     fn parse_manifest_sync_config() {
         let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
         assert_eq!(manifest.sync.default_source, "temporal");
-        assert_eq!(manifest.sync.push_target, "forgejo");
-        assert_eq!(manifest.sync.divergence_policy, "merge-ff");
+        assert_eq!(manifest.sync.push_target, PushTarget::Forgejo);
+        assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::MergeFf);
     }
 
     #[test]
@@ -527,12 +519,12 @@ repos = ["cellMembrane"]
         let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
 
         let sg = &manifest.gates["sporeGate"];
-        assert_eq!(sg.zone.as_deref(), Some("backbone"));
+        assert_eq!(sg.zone, Some(CytoplasmZone::Backbone));
         assert_eq!(sg.hub_port.as_deref(), Some("ether8"));
         assert_eq!(sg.link_speed_mbps, Some(2500));
 
         let fg = &manifest.gates["fieldGate"];
-        assert_eq!(fg.zone.as_deref(), Some("house2"));
+        assert_eq!(fg.zone, Some(CytoplasmZone::House2));
         assert_eq!(fg.link_speed_mbps, Some(2500));
 
         let flock = &manifest.gates["flockGate"];
@@ -552,7 +544,7 @@ version = "1.0.0"
         let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
         assert_eq!(manifest.sync.default_source, "temporal");
         assert_eq!(manifest.sync.default_branch, "main");
-        assert_eq!(manifest.sync.divergence_policy, "flag");
-        assert_eq!(manifest.sync.push_target, "all");
+        assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::Flag);
+        assert_eq!(manifest.sync.push_target, PushTarget::All);
     }
 }

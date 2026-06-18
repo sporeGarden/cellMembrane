@@ -21,6 +21,7 @@ pub use cascade::{CascadeMode, CascadeOpts, PostSyncPhase, cascade_with_opts};
 pub use types::*;
 
 use crate::error::Result;
+use cellmembrane_types::PushTarget;
 use std::path::{Path, PathBuf};
 // ── Git helpers (delegated to git_ops) ───────────────────────────────
 
@@ -237,14 +238,14 @@ async fn count_divergent_remotes(
 /// Returns `Err` only on infrastructure failures. Divergence is reported
 /// as an `Ok` result with `ok: false` — the DAG is never force-mutated.
 pub async fn sync(workspace_root: &Path, repo_path: &str) -> Result<TemporalSyncResult> {
-    sync_with_target(workspace_root, repo_path, "all").await
+    sync_with_target(workspace_root, repo_path, PushTarget::All).await
 }
 
 /// Temporal sync respecting the manifest's `push_target` setting.
 pub async fn sync_with_target(
     workspace_root: &Path,
     repo_path: &str,
-    push_target: &str,
+    push_target: PushTarget,
 ) -> Result<TemporalSyncResult> {
     sync_with_policy(workspace_root, repo_path, push_target, None).await
 }
@@ -253,7 +254,7 @@ pub async fn sync_with_target(
 pub async fn sync_with_policy(
     workspace_root: &Path,
     repo_path: &str,
-    push_target: &str,
+    push_target: PushTarget,
     manifest: Option<&crate::manifest::EcosystemManifest>,
 ) -> Result<TemporalSyncResult> {
     let local_path = workspace_root.join(repo_path);

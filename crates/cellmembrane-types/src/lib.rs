@@ -43,6 +43,7 @@ pub mod identity;
 pub mod provider;
 pub mod service;
 pub mod signal;
+pub mod sync;
 pub mod transport;
 pub mod validation;
 
@@ -62,6 +63,7 @@ pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
     binary_integrity_for,
 };
+pub use sync::{DivergencePolicy, GateTransport, PushTarget};
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 

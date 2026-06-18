@@ -119,16 +119,14 @@ pub const fn envelope_len(prefix_byte: u8) -> Option<usize> {
 
 /// Policy for handling connections that arrive WITHOUT a signal prefix.
 ///
-/// As of Wave 114, the default is `Reject`. Primals should adopt this
-/// via the centralized accept pattern.
+/// As of Wave 116, the `Warn` variant has been removed (2 waves past its
+/// Wave 114 deadline). Legacy configs with `"warn"` deserialize to `Reject`.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UnsignalledPolicy {
-    /// Accept with warning log (deprecated — migration only).
-    Warn,
-    /// Accept with error log (transitional).
+    /// Accept with error log (probe/transition only).
     Error,
-    /// Reject immediately (Wave 114+ default).
+    /// Reject immediately (default since Wave 114).
     #[default]
     Reject,
 }
@@ -137,7 +135,7 @@ impl UnsignalledPolicy {
     /// Whether this policy allows the connection to proceed.
     #[must_use]
     pub const fn allows_connection(self) -> bool {
-        matches!(self, Self::Warn | Self::Error)
+        matches!(self, Self::Error)
     }
 }
 
@@ -250,8 +248,8 @@ mod tests {
     }
 
     #[test]
-    fn accept_decision_unsignalled_warn() {
-        let d = accept_decision(&[0x7B, 0x22], UnsignalledPolicy::Warn);
+    fn accept_decision_unsignalled_error() {
+        let d = accept_decision(&[0x7B, 0x22], UnsignalledPolicy::Error);
         assert_eq!(d, AcceptDecision::Unsignalled);
     }
 

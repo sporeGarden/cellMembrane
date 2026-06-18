@@ -109,13 +109,25 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
 /// Convenience: build a JSON-RPC request object for a method with no params.
 #[must_use]
 pub fn request(method: &str, id: u32) -> String {
-    format!(r#"{{"jsonrpc":"2.0","method":"{method}","params":{{}},"id":{id}}}"#)
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": {},
+        "id": id,
+    })
+    .to_string()
 }
 
 /// Convenience: build a JSON-RPC request with params.
 #[must_use]
 pub fn request_with_params(method: &str, params: &serde_json::Value, id: u32) -> String {
-    format!(r#"{{"jsonrpc":"2.0","method":"{method}","params":{params},"id":{id}}}"#)
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": id,
+    })
+    .to_string()
 }
 
 #[cfg(test)]

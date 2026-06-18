@@ -11,6 +11,7 @@ use tracing::info;
 
 use super::resolve;
 use super::types::{SyncAction, TemporalMatrix, TemporalSyncResult};
+use cellmembrane_types::PushTarget;
 use crate::error::Result;
 use crate::git_ops::{git_output as git, git_success as git_ok};
 
@@ -67,7 +68,7 @@ pub(super) async fn sync_converge(
     local_path: &Path,
     repo_path: &str,
     matrix: &TemporalMatrix,
-    push_target: &str,
+    push_target: PushTarget,
 ) -> Result<TemporalSyncResult> {
     let branch = &matrix.branch;
     let mut pulled_from = None;
@@ -201,7 +202,7 @@ pub(super) async fn sync_diverge(
     local_path: &Path,
     repo_path: &str,
     matrix: &TemporalMatrix,
-    push_target: &str,
+    push_target: PushTarget,
     manifest: Option<&crate::manifest::EcosystemManifest>,
 ) -> Result<TemporalSyncResult> {
     if let SyncAction::TreeParity { leader, followers } = &matrix.action {
@@ -220,7 +221,7 @@ pub(super) async fn sync_diverge(
     if let Some(m) = manifest {
         let entry = m.repos.values().find(|e| e.local_path == repo_path);
         let policy = entry.map_or_else(
-            || m.sync.divergence_policy.as_str(),
+            || m.sync.divergence_policy,
             |e| m.divergence_policy_for(e),
         );
         let positions: Vec<(String, u32, u32)> = matrix
@@ -231,7 +232,7 @@ pub(super) async fn sync_diverge(
         let args = crate::impulse::SyncDivergeArgs {
             repo_path: repo_path_owned.clone(),
             positions,
-            repo_policy: policy.to_string(),
+            repo_policy: policy,
         };
 
         if let Err(e) = crate::impulse::post_sync_diverge(workspace_root, &args).await {

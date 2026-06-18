@@ -66,13 +66,35 @@ pub struct FetchArgs {
     pub dest: Option<String>,
 }
 
+/// Outcome of fetching a single primal binary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FetchStatus {
+    /// Downloaded successfully.
+    Ok,
+    /// Already present — skipped.
+    Exists,
+    /// Download failed (network, checksum, or filesystem error).
+    DownloadFailed,
+}
+
+impl std::fmt::Display for FetchStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ok => write!(f, "ok"),
+            Self::Exists => write!(f, "exists"),
+            Self::DownloadFailed => write!(f, "download_failed"),
+        }
+    }
+}
+
 /// Result of fetching a single primal binary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FetchResult {
     /// Primal name.
     pub primal: String,
-    /// Outcome: `ok`, `exists`, or `download_failed`.
-    pub status: String,
+    /// Outcome of the fetch.
+    pub status: FetchStatus,
     /// Release tag the binary was fetched from.
     pub tag: Option<String>,
     /// Whether BLAKE3 checksum was verified.
@@ -252,7 +274,7 @@ async fn fetch_primals(
         if local_path.exists() && !args.force {
             results.push(FetchResult {
                 primal: (*primal).to_string(),
-                status: "exists".into(),
+                status: FetchStatus::Exists,
                 tag: None,
                 verified: false,
             });
@@ -309,7 +331,7 @@ async fn fetch_primals(
             if !retry_got {
                 results.push(FetchResult {
                     primal: (*primal).to_string(),
-                    status: "download_failed".into(),
+                    status: FetchStatus::DownloadFailed,
                     tag: Some(tag.to_string()),
                     verified: false,
                 });
@@ -336,7 +358,7 @@ async fn fetch_primals(
 
         results.push(FetchResult {
             primal: (*primal).to_string(),
-            status: "ok".into(),
+            status: FetchStatus::Ok,
             tag: Some(tag.to_string()),
             verified: is_verified,
         });
@@ -374,14 +396,14 @@ fn format_fetch_outcome(
     results: &[FetchResult],
 ) -> ShadowOutcome {
     let downloaded =
-        u32::try_from(results.iter().filter(|r| r.status == "ok").count()).unwrap_or(u32::MAX);
+        u32::try_from(results.iter().filter(|r| r.status == FetchStatus::Ok).count()).unwrap_or(u32::MAX);
     let verified = u32::try_from(results.iter().filter(|r| r.verified).count()).unwrap_or(u32::MAX);
     let skipped =
-        u32::try_from(results.iter().filter(|r| r.status == "exists").count()).unwrap_or(u32::MAX);
+        u32::try_from(results.iter().filter(|r| r.status == FetchStatus::Exists).count()).unwrap_or(u32::MAX);
     let failed = u32::try_from(
         results
             .iter()
-            .filter(|r| r.status == "download_failed")
+            .filter(|r| r.status == FetchStatus::DownloadFailed)
             .count(),
     )
     .unwrap_or(u32::MAX);
@@ -401,11 +423,11 @@ fn format_fetch_outcome(
     let status_lines: Vec<String> = results
         .iter()
         .map(|r| {
-            let mark = match r.status.as_str() {
-                "ok" if r.verified => "OK verified",
-                "ok" => "OK",
-                "exists" => "EXISTS",
-                _ => "FAIL",
+            let mark = match r.status {
+                FetchStatus::Ok if r.verified => "OK verified",
+                FetchStatus::Ok => "OK",
+                FetchStatus::Exists => "EXISTS",
+                FetchStatus::DownloadFailed => "FAIL",
             };
             format!("  [{:<12}] {mark}", r.primal)
         })

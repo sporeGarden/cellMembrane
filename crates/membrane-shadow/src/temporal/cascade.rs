@@ -2,6 +2,7 @@
 //! Full cascade sync — reads manifest, syncs all gate repos, reports parity.
 
 use crate::error::Result;
+use cellmembrane_types::PushTarget;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -56,7 +57,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
     let root = resolve_workspace_root()?;
     let m = crate::manifest::load_from_workspace_async(&root).await?;
 
-    let push_target: Arc<str> = Arc::from(m.sync.push_target.as_str());
+    let push_target = m.sync.push_target;
     let shared_manifest = Arc::new(m);
 
     let repos: Vec<(&str, &crate::manifest::RepoEntry)> = shared_manifest.gate_repos(opts.gate);
@@ -83,7 +84,6 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
 
     for name in repo_names {
         let root = Arc::clone(&root);
-        let push_target = Arc::clone(&push_target);
         let manifest = Arc::clone(&shared_manifest);
         let mode = opts.mode;
         let clone_missing = opts.clone_missing;
@@ -96,7 +96,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
                     entry,
                     mode,
                     clone_missing,
-                    &push_target,
+                    push_target,
                     &manifest,
                 )
                 .await
@@ -202,7 +202,7 @@ async fn process_repo(
     entry: &crate::manifest::RepoEntry,
     mode: CascadeMode,
     clone_missing: bool,
-    push_target: &str,
+    push_target: PushTarget,
     manifest: &crate::manifest::EcosystemManifest,
 ) -> RepoResult {
     let repo_path = &entry.local_path;
@@ -257,7 +257,7 @@ async fn sync_repo(
     root: &Path,
     name: &str,
     repo_path: &str,
-    push_target: &str,
+    push_target: PushTarget,
     manifest: &crate::manifest::EcosystemManifest,
 ) -> RepoResult {
     match sync_with_policy(root, repo_path, push_target, Some(manifest)).await {

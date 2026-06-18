@@ -10,6 +10,8 @@ use tracing::warn;
 
 use super::{detect_target_triple, nucleus_primals};
 
+const INTER_PRIMAL_DELAY_MS: u64 = 500;
+
 /// Parsed CLI arguments for `plasmid.refresh`.
 pub struct RefreshArgs {
     /// Single primal to refresh (None = all registry primals).
@@ -71,7 +73,7 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
 
     for (i, &primal) in primals_to_refresh.iter().enumerate() {
         if i > 0 && !args.dry_run {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(INTER_PRIMAL_DELAY_MS)).await;
         }
         results.push(refresh_one(config, primal, &source_dir, &install_dir, args.dry_run).await);
     }

@@ -183,7 +183,7 @@ fn dispatch_profile(gate_name: &str) -> crate::Result<ShadowOutcome> {
         profile.mobility.as_deref().unwrap_or("fixed"),
         profile.bind_mode.as_deref().unwrap_or("(auto)"),
         profile.composition.as_deref().unwrap_or("full"),
-        profile.transport.as_deref().unwrap_or("(auto)"),
+        profile.transport.map_or_else(|| "(auto)".to_string(), |t| t.to_string()),
         profile.mesh_peer.as_deref().unwrap_or("(default relay)"),
         profile.repos.len(),
     );

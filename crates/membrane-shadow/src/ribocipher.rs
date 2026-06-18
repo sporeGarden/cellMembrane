@@ -100,14 +100,15 @@ pub enum SignalTier {
 }
 
 /// Policy for unsignalled (legacy) inbound connections.
-/// Deprecation schedule: WARN (111) → ERROR (112) → REJECT (113) → REMOVE (114).
+///
+/// `Warn` was removed in Wave 116 (2 waves past its Wave 114 deadline).
+/// Legacy TOML configs with `unsignalled_policy = "warn"` are silently
+/// promoted to `Reject`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnsignalledPolicy {
-    /// Log warning, fall through to legacy peek logic (deprecated — Wave 111 only).
-    Warn,
-    /// Log error, fall through to legacy peek logic (Wave 112 default).
+    /// Log error, fall through to legacy peek logic (probe/transition only).
     Error,
-    /// Reject with JSON-RPC error -32002 (Wave 113+).
+    /// Reject with JSON-RPC error -32002 (default since Wave 113).
     Reject,
 }
 
@@ -148,7 +149,10 @@ impl RiboCipherConfig {
             .get("unsignalled_policy")
             .and_then(|v| v.as_str())
             .map_or(UnsignalledPolicy::Reject, |s| match s {
-                "warn" => UnsignalledPolicy::Warn,
+                "warn" => {
+                    tracing::warn!("unsignalled_policy = \"warn\" removed in Wave 116 — promoted to reject");
+                    UnsignalledPolicy::Reject
+                }
                 "error" => UnsignalledPolicy::Error,
                 _ => UnsignalledPolicy::Reject,
             });
@@ -175,10 +179,7 @@ impl RiboCipherConfig {
     /// to the riboCipher signal, the connection fails immediately.
     #[must_use]
     pub const fn allows_fallback(&self) -> bool {
-        matches!(
-            self.unsignalled_policy,
-            UnsignalledPolicy::Warn | UnsignalledPolicy::Error
-        )
+        matches!(self.unsignalled_policy, UnsignalledPolicy::Error)
     }
 
     /// JSON-RPC error code for rejected unsignalled connections.
@@ -355,7 +356,7 @@ unsignalled_policy = "warn"
 "#;
         let parsed: toml::Table = toml_str.parse().unwrap();
         let cfg = RiboCipherConfig::from_toml(&parsed);
-        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Warn);
+        assert_eq!(cfg.unsignalled_policy, UnsignalledPolicy::Reject);
     }
 
     #[test]
@@ -388,7 +389,7 @@ unsignalled_policy = "error"
         let key = hkdf_sha256(b"test-family-seed", HKDF_SALT, HKDF_INFO_MITO);
         let cfg = RiboCipherConfig {
             signal_tier: SignalTier::Mito,
-            unsignalled_policy: UnsignalledPolicy::Warn,
+            unsignalled_policy: UnsignalledPolicy::Error,
             mito_key: Some(key),
         };
         let prefix = cfg.outbound_prefix(protocol::NDJSON_JSONRPC);
@@ -400,7 +401,7 @@ unsignalled_policy = "error"
     fn outbound_prefix_mito_without_key_falls_back() {
         let cfg = RiboCipherConfig {
             signal_tier: SignalTier::Mito,
-            unsignalled_policy: UnsignalledPolicy::Warn,
+            unsignalled_policy: UnsignalledPolicy::Error,
             mito_key: None,
         };
         let prefix = cfg.outbound_prefix(protocol::NDJSON_JSONRPC);
@@ -428,7 +429,7 @@ unsignalled_policy = "error"
         let key = hkdf_sha256(b"verify-roundtrip", HKDF_SALT, HKDF_INFO_MITO);
         let cfg = RiboCipherConfig {
             signal_tier: SignalTier::Mito,
-            unsignalled_policy: UnsignalledPolicy::Warn,
+            unsignalled_policy: UnsignalledPolicy::Error,
             mito_key: Some(key),
         };
         let tag = mito_hmac_tag(&key, protocol::BTSP_BINARY);
@@ -441,7 +442,7 @@ unsignalled_policy = "error"
         let key = hkdf_sha256(b"reject-test", HKDF_SALT, HKDF_INFO_MITO);
         let cfg = RiboCipherConfig {
             signal_tier: SignalTier::Mito,
-            unsignalled_policy: UnsignalledPolicy::Warn,
+            unsignalled_policy: UnsignalledPolicy::Error,
             mito_key: Some(key),
         };
         let bad_tag = [0xFF, 0xFF, 0xFF, 0xFF];

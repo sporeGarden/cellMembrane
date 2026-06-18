@@ -42,7 +42,7 @@ pub async fn post_sync_diverge(
     }
 
     let diverge_type = classify_diverge_type(&args.positions);
-    let suggested = suggest_action(&diverge_type, &args.repo_policy);
+    let suggested = suggest_action(&diverge_type, args.repo_policy);
     let subject = format!(
         "DIVERGE: {repo_name} - {}",
         diverge_summary_parts.join(" vs ")
@@ -85,7 +85,7 @@ pub async fn post_sync_diverge(
             merge_base: String::new(),
             remotes: remotes_map,
             ahead: ahead_map,
-            repo_policy: args.repo_policy.clone(),
+            repo_policy: args.repo_policy.to_string(),
             suggested_action: suggested,
         },
         meta: ImpulseOpMeta {
@@ -153,16 +153,20 @@ mod tests {
     #[test]
     fn suggest_action_merge_ff() {
         use super::super::policy::suggest_action;
+        use cellmembrane_types::DivergencePolicy;
 
         assert_eq!(
-            suggest_action("origin_ahead", "merge-ff"),
+            suggest_action("origin_ahead", DivergencePolicy::MergeFf),
             "pull_leader_push_followers"
         );
         assert_eq!(
-            suggest_action("local_ahead", "impulse-only"),
+            suggest_action("local_ahead", DivergencePolicy::ImpulseOnly),
             "human_review"
         );
-        assert_eq!(suggest_action("local_ahead", "agentic"), "agentic_resolve");
+        assert_eq!(
+            suggest_action("local_ahead", DivergencePolicy::Agentic),
+            "agentic_resolve"
+        );
     }
 
     #[tokio::test]
@@ -175,7 +179,7 @@ mod tests {
         let args = SyncDivergeArgs {
             repo_path: "gardens/cellMembrane".into(),
             positions: vec![("origin".into(), 2, 0)],
-            repo_policy: "merge-ff".into(),
+            repo_policy: cellmembrane_types::DivergencePolicy::MergeFf,
         };
 
         let result = post_sync_diverge(&tmp, &args).await;

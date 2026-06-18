@@ -93,7 +93,7 @@ pub async fn bootstrap(
     phases.push(blocking_phase("permissions.set", move || permissions_phase(dry_run)).await);
     phases.push(blocking_phase("identity.git", identity_phase).await);
 
-    phases.push(timed_phase("depot.fetch", fetch_phase(config, &transport, dry_run)).await);
+    phases.push(timed_phase("depot.fetch", fetch_phase(config, transport, dry_run)).await);
 
     let verify_arch = arch.clone();
     let verify_result =
@@ -351,7 +351,7 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
-async fn fetch_phase(config: &ShadowConfig, transport: &str, dry_run: bool) -> BootstrapPhase {
+async fn fetch_phase(config: &ShadowConfig, transport: cellmembrane_types::GateTransport, dry_run: bool) -> BootstrapPhase {
     let source = super::mesh::transport_to_fetch_source(transport);
     if dry_run {
         return BootstrapPhase {

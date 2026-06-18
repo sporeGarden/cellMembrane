@@ -2,6 +2,7 @@
 
 //! Core types for the impulsePotential system.
 
+use cellmembrane_types::DivergencePolicy;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -235,7 +236,7 @@ pub struct SyncDivergeArgs {
     /// Per-remote position data `(remote, ahead, behind)`.
     pub positions: Vec<(String, u32, u32)>,
     /// Per-repo divergence policy from manifest.
-    pub repo_policy: String,
+    pub repo_policy: DivergencePolicy,
 }
 
 /// Result of `potential.check` — membrane gradient health.

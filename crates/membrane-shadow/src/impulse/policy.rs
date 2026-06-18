@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use super::types::{ImpulseAck, ImpulseFile};
+use cellmembrane_types::DivergencePolicy;
 use std::path::Path;
 
 #[must_use]
@@ -19,13 +20,13 @@ pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
 }
 
 #[must_use]
-pub fn suggest_action(diverge_type: &str, repo_policy: &str) -> String {
+pub fn suggest_action(diverge_type: &str, repo_policy: DivergencePolicy) -> String {
     match repo_policy {
-        "merge-ff" => "pull_leader_push_followers".to_string(),
-        "merge-rebase" => "rebase_and_push".to_string(),
-        "impulse-only" => "human_review".to_string(),
-        "agentic" => "agentic_resolve".to_string(),
-        _ => match diverge_type {
+        DivergencePolicy::MergeFf => "pull_leader_push_followers".to_string(),
+        DivergencePolicy::MergeRebase => "rebase_and_push".to_string(),
+        DivergencePolicy::ImpulseOnly => "human_review".to_string(),
+        DivergencePolicy::Agentic => "agentic_resolve".to_string(),
+        DivergencePolicy::Flag => match diverge_type {
             t if t.ends_with("_ahead") => format!("pull_{t}_push_others"),
             "local_ahead" => "push_all".to_string(),
             _ => "human_review".to_string(),
@@ -116,14 +117,17 @@ mod tests {
     #[test]
     fn suggest_merge_ff() {
         assert_eq!(
-            suggest_action("any", "merge-ff"),
+            suggest_action("any", DivergencePolicy::MergeFf),
             "pull_leader_push_followers"
         );
     }
 
     #[test]
     fn suggest_impulse_only() {
-        assert_eq!(suggest_action("any", "impulse-only"), "human_review");
+        assert_eq!(
+            suggest_action("any", DivergencePolicy::ImpulseOnly),
+            "human_review"
+        );
     }
 
     #[test]

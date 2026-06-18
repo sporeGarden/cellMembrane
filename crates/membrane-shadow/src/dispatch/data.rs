@@ -110,14 +110,12 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
     let zone = m
         .gates
         .get(gate_name)
-        .and_then(|p| p.zone.as_deref())
-        .map_or_else(|| CytoplasmZone::for_gate(gate_name), CytoplasmZone::from_manifest);
+        .and_then(|p| p.zone)
+        .unwrap_or_else(|| CytoplasmZone::for_gate(gate_name));
 
     let profile = m.gates.get(gate_name);
 
-    let transport = profile
-        .and_then(|p| p.transport.as_deref())
-        .unwrap_or("unknown");
+    let transport = profile.and_then(|p| p.transport).unwrap_or_default();
     let composition = profile
         .and_then(|p| p.composition.as_deref())
         .unwrap_or("unknown");
@@ -197,8 +195,7 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
     for (name, profile) in &m.gates {
         let zone = profile
             .zone
-            .as_deref()
-            .map_or_else(|| CytoplasmZone::for_gate(name), CytoplasmZone::from_manifest);
+            .unwrap_or_else(|| CytoplasmZone::for_gate(name));
         zone_gates
             .entry(zone.label().to_owned())
             .or_default()

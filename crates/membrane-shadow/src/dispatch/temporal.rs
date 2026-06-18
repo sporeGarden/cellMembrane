@@ -3,6 +3,7 @@
 //! Temporal domain dispatch — temporal.check, temporal.sync, temporal.cascade.
 
 use crate::cli::{self, TapMessage};
+use cellmembrane_types::PushTarget;
 use crate::{ShadowConfig, ShadowOutcome, identity, manifest, temporal};
 use tracing::info;
 
@@ -42,12 +43,12 @@ pub(super) async fn dispatch_temporal(
             }
             let push_target = manifest::load_from_workspace_async(&root)
                 .await
-                .map_or_else(|_| "all".into(), |m| m.sync.push_target);
+                .map_or(PushTarget::All, |m| m.sync.push_target);
             let mut results = Vec::with_capacity(args.len());
             let mut synced = 0u32;
             let mut failed = 0u32;
             for path in args {
-                let r = temporal::sync_with_target(&root, path, &push_target).await?;
+                let r = temporal::sync_with_target(&root, path, push_target).await?;
                 if r.ok {
                     synced += 1;
                 } else {

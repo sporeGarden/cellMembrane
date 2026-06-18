@@ -9,9 +9,10 @@
 use std::path::Path;
 
 use super::types::{RemotePosition, TemporalMatrix, TemporalSyncResult};
+use cellmembrane_types::{DivergencePolicy, PushTarget};
 use crate::error::Result;
 use crate::git_ops::{git_success as git_ok, rev_list_count};
-use tracing::{error, warn};
+use tracing::error;
 
 /// The sovereign remote name, resolved from `MEMBRANE_SOVEREIGN_REMOTE` env var
 /// or defaulting to "forgejo". Authority-first push always converges to this
@@ -31,8 +32,8 @@ pub(super) fn sovereign_remote() -> &'static str {
 pub(super) async fn apply_divergence_policy(
     local_path: &Path,
     matrix: &TemporalMatrix,
-    policy: &str,
-    push_target: &str,
+    policy: DivergencePolicy,
+    push_target: PushTarget,
 ) -> Option<String> {
     let branch = &matrix.branch;
 
@@ -43,7 +44,7 @@ pub(super) async fn apply_divergence_policy(
         .map(|p| &p.remote)?;
 
     match policy {
-        "merge-ff" => {
+        DivergencePolicy::MergeFf => {
             if !git_ok(
                 local_path,
                 &["pull", leader, branch, "--ff-only", "--quiet"],
@@ -59,7 +60,7 @@ pub(super) async fn apply_divergence_policy(
                 pushed.join(" ")
             ))
         }
-        "merge-rebase" => {
+        DivergencePolicy::MergeRebase => {
             if !git_ok(local_path, &["pull", "--rebase", leader, branch, "--quiet"]).await {
                 return None;
             }
@@ -70,14 +71,9 @@ pub(super) async fn apply_divergence_policy(
                 pushed.join(" ")
             ))
         }
-        "impulse-only" | "flag" => None,
-        "agentic" => resolve_agentic(local_path, matrix, leader, push_target, branch).await,
-        unknown => {
-            warn!(
-                policy = unknown,
-                "unknown divergence policy — treating as flag"
-            );
-            None
+        DivergencePolicy::ImpulseOnly | DivergencePolicy::Flag => None,
+        DivergencePolicy::Agentic => {
+            resolve_agentic(local_path, matrix, leader, push_target, branch).await
         }
     }
 }
@@ -97,7 +93,7 @@ async fn resolve_agentic(
     local_path: &Path,
     matrix: &TemporalMatrix,
     leader: &str,
-    push_target: &str,
+    push_target: PushTarget,
     branch: &str,
 ) -> Option<String> {
     let sov = sovereign_remote();
@@ -166,7 +162,7 @@ pub(super) async fn push_to_followers(
     local_path: &Path,
     matrix: &TemporalMatrix,
     leader: &str,
-    push_target: &str,
+    push_target: PushTarget,
     branch: &str,
     force_lease: bool,
 ) -> Vec<String> {
@@ -184,7 +180,7 @@ pub(super) async fn push_to_followers(
     };
 
     for pos in sovereign_first {
-        if push_target == "forgejo" && pos.remote != "forgejo" {
+        if push_target == PushTarget::Forgejo && pos.remote != "forgejo" {
             continue;
         }
         // Sovereign remote gets a normal push (or force-with-lease if we rebased).
@@ -261,7 +257,7 @@ pub(super) async fn push_converge_followers(
     local_path: &Path,
     positions: &[RemotePosition],
     pulled_from: Option<&str>,
-    push_target: &str,
+    push_target: PushTarget,
     branch: &str,
 ) -> Vec<String> {
     let sov = sovereign_remote();
@@ -274,7 +270,7 @@ pub(super) async fn push_converge_followers(
     push_targets.sort_by_key(|p| i32::from(p.remote != sov));
 
     for pos in push_targets {
-        if push_target == "forgejo" && pos.remote != "forgejo" {
+        if push_target == PushTarget::Forgejo && pos.remote != "forgejo" {
             continue;
         }
         let remote_ref = format!("{}/{branch}", pos.remote);

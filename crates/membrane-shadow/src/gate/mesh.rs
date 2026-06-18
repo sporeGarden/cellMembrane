@@ -7,15 +7,16 @@
 //! JSON-RPC calls, and multi-peer negotiation.
 
 use super::BootstrapPhase;
+use cellmembrane_types::GateTransport;
 
-/// Map a gate profile transport string to `FetchSource`.
+/// Map a gate profile transport to `FetchSource`.
 ///
 /// `local` uses SSH/rsync (VPS layer). All remote transports currently
 /// resolve to WAN HTTPS. As LAN rsync and ADB push mature, they will
 /// diverge from the WAN fallback.
-pub(super) fn transport_to_fetch_source(transport: &str) -> crate::plasmid::FetchSource {
+pub(super) const fn transport_to_fetch_source(transport: GateTransport) -> crate::plasmid::FetchSource {
     match transport {
-        "local" => crate::plasmid::FetchSource::Vps,
+        GateTransport::Local => crate::plasmid::FetchSource::Vps,
         _ => crate::plasmid::FetchSource::Wan,
     }
 }
@@ -25,7 +26,7 @@ pub(super) fn transport_to_fetch_source(transport: &str) -> crate::plasmid::Fetc
 /// Fields beyond `transport` and `mesh_peer` are staged for profile-driven
 /// bootstrap evolution (Wave 117+: composition-aware NUCLEUS, manifest mobility).
 pub(super) struct GateManifestProfile {
-    pub transport: String,
+    pub transport: GateTransport,
     pub mesh_peer: Option<String>,
     #[allow(dead_code, reason = "staged for composition-aware NUCLEUS (Wave 117+)")]
     pub mobility: Option<String>,
@@ -34,9 +35,10 @@ pub(super) struct GateManifestProfile {
 }
 
 impl Default for GateManifestProfile {
+    #[allow(clippy::derivable_impls)]
     fn default() -> Self {
         Self {
-            transport: "wan".into(),
+            transport: GateTransport::default(),
             mesh_peer: None,
             mobility: None,
             composition: None,
@@ -55,7 +57,7 @@ pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
     manifest.gates.get(gate_name).map_or_else(
         GateManifestProfile::default,
         |p| GateManifestProfile {
-            transport: p.transport.clone().unwrap_or_else(|| "wan".into()),
+            transport: p.transport.unwrap_or_default(),
             mesh_peer: p.mesh_peer.clone(),
             mobility: p.mobility.clone(),
             composition: p.composition.clone(),
@@ -64,7 +66,7 @@ pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
 }
 
 /// Resolve just the transport mode (backwards compat helper).
-pub(super) fn resolve_gate_transport(gate_name: &str) -> String {
+pub(super) fn resolve_gate_transport(gate_name: &str) -> GateTransport {
     resolve_gate_profile(gate_name).transport
 }
 
@@ -193,24 +195,24 @@ mod tests {
 
     #[test]
     fn transport_local_maps_to_vps() {
-        let source = transport_to_fetch_source("local");
+        let source = transport_to_fetch_source(GateTransport::Local);
         assert_eq!(source, crate::plasmid::FetchSource::Vps);
     }
 
     #[test]
     fn transport_wan_maps_to_wan() {
-        let source = transport_to_fetch_source("wan");
+        let source = transport_to_fetch_source(GateTransport::Wan);
         assert_eq!(source, crate::plasmid::FetchSource::Wan);
     }
 
     #[test]
-    fn transport_unknown_maps_to_wan() {
-        for input in ["https", "github", "rsync", "", "LAN", "adb"] {
-            let source = transport_to_fetch_source(input);
+    fn transport_non_local_maps_to_wan() {
+        for transport in [GateTransport::Lan, GateTransport::Adb] {
+            let source = transport_to_fetch_source(transport);
             assert_eq!(
                 source,
                 crate::plasmid::FetchSource::Wan,
-                "unknown transport '{input}' should map to Wan"
+                "transport '{transport}' should map to Wan"
             );
         }
     }
@@ -252,7 +254,7 @@ mod tests {
     #[test]
     fn gate_manifest_profile_defaults() {
         let p = GateManifestProfile::default();
-        assert_eq!(p.transport, "wan");
+        assert_eq!(p.transport, GateTransport::Wan);
         assert!(p.mesh_peer.is_none());
         assert!(p.mobility.is_none());
         assert!(p.composition.is_none());

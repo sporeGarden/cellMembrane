@@ -7,6 +7,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+const STALE_THRESHOLD_DAYS: u64 = 7;
+const SECS_PER_DAY: u64 = 86_400;
+const SECS_PER_HOUR: u64 = 3_600;
+
 /// A single status probe (e.g. depot integrity, mesh connectivity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusProbe {
@@ -308,15 +312,14 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
     }
 
     let total = present + missing;
-    let age_days = oldest_age_secs / 86400;
-    let stale_threshold_days = 7;
-    let ok = missing == 0 && age_days < stale_threshold_days;
+    let age_days = oldest_age_secs / SECS_PER_DAY;
+    let ok = missing == 0 && age_days < STALE_THRESHOLD_DAYS;
 
     let age_str = if oldest_age_secs > 0 {
         if age_days > 0 {
             format!(", oldest {age_days}d")
         } else {
-            let hours = oldest_age_secs / 3600;
+            let hours = oldest_age_secs / SECS_PER_HOUR;
             format!(", oldest {hours}h")
         }
     } else {

@@ -11,9 +11,15 @@ pub(super) async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOut
     use crate::provision::{self, ProvisionRequest, digitalocean};
 
     let provider_str = cli::extract_flag_value(args, "--provider").unwrap_or("digitalocean");
-    let _provider: provision::Provider = provider_str
+    let provider: provision::Provider = provider_str
         .parse()
         .map_err(|e: String| crate::ShadowError::Parse(e))?;
+
+    if matches!(provider, provision::Provider::Hetzner) {
+        return Ok(ShadowOutcome::fail(
+            "Hetzner provider not yet implemented — use --provider digitalocean",
+        ));
+    }
 
     let name = cli::extract_flag_value(args, "--name")
         .unwrap_or("membrane-canary")
