@@ -19,12 +19,11 @@ pub async fn verify_remote_gate(
 ) -> ProvisionOutcome {
     let mut phases: Vec<String> = Vec::new();
 
-    let expected_healthy = match profile {
-        Some("canary-fieldmouse" | "tower" | "relay") => 2,
-        Some("nest") => 7,
-        Some("full" | "nucleus") => 13,
-        _ => 0,
-    };
+    let expected_healthy: u32 = profile
+        .and_then(cellmembrane_types::MembraneComposition::parse_name)
+        .map_or(0, |comp| {
+            u32::try_from(comp.spec().primals.len()).unwrap_or(u32::MAX)
+        });
     if expected_healthy > 0 {
         phases.push(format!(
             "profile: expects {expected_healthy} healthy ({})",

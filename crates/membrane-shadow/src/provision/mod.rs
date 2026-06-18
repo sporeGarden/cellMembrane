@@ -65,14 +65,21 @@ pub struct ProvisionRequest {
     pub tags: Vec<String>,
 }
 
+/// Environment variables for provision defaults.
+const ENV_PROVISION_NAME: &str = "MEMBRANE_PROVISION_NAME";
+const ENV_PROVISION_PROFILE: &str = "MEMBRANE_PROVISION_PROFILE";
+const ENV_PROVISION_REGION: &str = "MEMBRANE_PROVISION_REGION";
+const ENV_PROVISION_SIZE: &str = "MEMBRANE_PROVISION_SIZE";
+
 impl Default for ProvisionRequest {
     fn default() -> Self {
         Self {
-            name: "membrane-canary".into(),
-            region: "nyc1".into(),
-            size: "s-1vcpu-2gb".into(),
+            name: std::env::var(ENV_PROVISION_NAME).unwrap_or_else(|_| "membrane-canary".into()),
+            region: std::env::var(ENV_PROVISION_REGION).unwrap_or_else(|_| "nyc1".into()),
+            size: std::env::var(ENV_PROVISION_SIZE).unwrap_or_else(|_| "s-1vcpu-2gb".into()),
             image: "debian-12-x64".into(),
-            profile: "canary-fieldmouse".into(),
+            profile: std::env::var(ENV_PROVISION_PROFILE)
+                .unwrap_or_else(|_| "canary-fieldmouse".into()),
             ssh_keys: Vec::new(),
             tags: vec!["membrane".into(), "canary".into(), "ecoprimals".into()],
         }
