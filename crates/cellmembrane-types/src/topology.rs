@@ -6,9 +6,9 @@
 //! the physical L2/L3 switching domains parsed from `TOPOLOGY_MAP.toml`.
 //!
 //! ```
-//! use cellmembrane_types::topology::{CytoplasmZone, ZoneStatus};
+//! use cellmembrane_types::topology::{PhysicalZone, ZoneStatus};
 //!
-//! let zone = CytoplasmZone {
+//! let zone = PhysicalZone {
 //!     hub_device: "MikroTik CRS310-1G-5S-4S+IN".into(),
 //!     hub_role: "backbone".into(),
 //!     max_speed_mbps: 10_000,
@@ -59,7 +59,7 @@ impl fmt::Display for ZoneStatus {
 /// and bandwidth/uplink characteristics. Maps to `[cytoplasm.zones.*]`
 /// in `TOPOLOGY_MAP.toml`.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct CytoplasmZone {
+pub struct PhysicalZone {
     /// Hub switch or AP (e.g., "`MikroTik` CRS310-1G-5S-4S+IN").
     #[serde(default)]
     pub hub_device: String,
@@ -183,7 +183,7 @@ pub struct TopologyMap {
     pub meta: TopologyMeta,
     /// Cytoplasm zones keyed by zone ID.
     #[serde(default)]
-    pub zones: BTreeMap<String, CytoplasmZone>,
+    pub zones: BTreeMap<String, PhysicalZone>,
     /// Backbone links.
     #[serde(default)]
     pub backbone: Vec<BackboneLink>,
@@ -224,7 +224,7 @@ pub struct ResolvedTopology {
     /// Zone ID this gate belongs to (from manifest or zone.gates).
     pub zone_id: Option<String>,
     /// Zone definition (if resolved).
-    pub zone: Option<CytoplasmZone>,
+    pub zone: Option<PhysicalZone>,
     /// Segment ID this gate belongs to.
     pub segment_id: Option<String>,
     /// Segment definition (if resolved).
@@ -242,7 +242,7 @@ pub struct ResolvedTopology {
 impl TopologyMap {
     /// Find which zone a gate belongs to by searching zone gate lists.
     #[must_use]
-    pub fn zone_for_gate(&self, gate_name: &str) -> Option<(&str, &CytoplasmZone)> {
+    pub fn zone_for_gate(&self, gate_name: &str) -> Option<(&str, &PhysicalZone)> {
         self.zones.iter().find_map(|(id, zone)| {
             if zone.gates.iter().any(|g| g == gate_name) {
                 Some((id.as_str(), zone))
@@ -300,7 +300,7 @@ mod tests {
         let mut zones = BTreeMap::new();
         zones.insert(
             "backbone".to_string(),
-            CytoplasmZone {
+            PhysicalZone {
                 hub_device: "CRS310".into(),
                 hub_role: "backbone".into(),
                 max_speed_mbps: 10_000,
@@ -312,7 +312,7 @@ mod tests {
         );
         zones.insert(
             "house2".to_string(),
-            CytoplasmZone {
+            PhysicalZone {
                 hub_device: "Omada SX3008F".into(),
                 hub_role: "extension".into(),
                 max_speed_mbps: 10_000,

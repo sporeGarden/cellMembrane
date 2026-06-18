@@ -27,6 +27,9 @@ pub const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";
 /// Infra path fragment for the shared coordination layer (`wateringHole`).
 pub const INFRA_WATERING_HOLE: &str = "infra/wateringHole";
 
+/// Filename for the physical network topology map in the wateringHole.
+pub const TOPOLOGY_MAP_FILENAME: &str = "TOPOLOGY_MAP.toml";
+
 /// Infra path fragment for the binary depot (`plasmidBin`).
 pub const INFRA_PLASMID_BIN: &str = "infra/plasmidBin";
 

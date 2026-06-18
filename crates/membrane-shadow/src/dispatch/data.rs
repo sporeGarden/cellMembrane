@@ -7,7 +7,7 @@
 
 use crate::cli;
 use crate::error::ShadowError;
-use crate::{ShadowOutcome, context, identity, manifest, temporal};
+use crate::{ShadowOutcome, context, identity, manifest, temporal, topology};
 use cellmembrane_types::envelope::{CytoplasmZone, mesh_address};
 
 // ── Manifest domain ──────────────────────────────────────────────────
@@ -97,6 +97,13 @@ pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result
         }
         "topology.zones" => topology_zones().await,
         "topology.mesh" => Ok(topology_mesh()),
+        "topology.summary" => {
+            let root = temporal::resolve_workspace_root()?;
+            let map = topology::load_topology_map(&root)?;
+            let summary = topology::format_topology_summary(&map);
+            let data = serde_json::to_value(&map)?;
+            Ok(ShadowOutcome::ok_with(summary, data))
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown topology command: {cmd}"
         ))),
@@ -166,7 +173,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         lines.push(format!("  ⚠ {gate_name} not in ecosystem manifest — zone derived from name"));
     }
 
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "gate": gate_name,
         "zone": zone.label(),
         "transport": transport,
@@ -182,12 +189,53 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         "requires_overlay": zone.requires_overlay(),
     });
 
+    enrich_with_physical_topology(&root, gate_name, &mut lines, &mut data);
+
     Ok(ShadowOutcome::ok_with(lines.join("\n"), data))
+}
+
+fn enrich_with_physical_topology(
+    root: &std::path::Path,
+    gate_name: &str,
+    lines: &mut Vec<String>,
+    data: &mut serde_json::Value,
+) {
+    let Ok(map) = topology::load_topology_map(root) else {
+        return;
+    };
+    let physical = map.resolve_gate(gate_name);
+    if let Some(ref pzone) = physical.zone {
+        lines.push(format!("  hub_device:  {}", pzone.hub_device));
+        lines.push(format!("  site:        {}", pzone.site));
+        if !pzone.hub_role.is_empty() {
+            lines.push(format!("  hub_role:    {}", pzone.hub_role));
+        }
+        if let Some(speed) = physical.expected_speed_mbps {
+            lines.push(format!("  max_speed:   {} Mbps ({}G)", speed, speed / 1000));
+        }
+    }
+    if let Some(ref seg_id) = physical.segment_id {
+        lines.push(format!("  segment:     {seg_id}"));
+        if let Some(ref seg) = physical.segment {
+            if let Some(subnet) = &seg.subnet {
+                lines.push(format!("  subnet:      {subnet}"));
+            }
+        }
+    }
+    for issue in &physical.issues {
+        lines.push(format!("  ⚠ {issue}"));
+    }
+    if let Ok(val) = serde_json::to_value(&physical) {
+        if let Some(obj) = data.as_object_mut() {
+            obj.insert("physical".into(), val);
+        }
+    }
 }
 
 async fn topology_zones() -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
     let m = manifest::load_from_workspace_async(&root).await?;
+    let physical_map = topology::load_topology_map(&root).ok();
 
     let mut zone_gates: std::collections::BTreeMap<String, Vec<String>> =
         std::collections::BTreeMap::new();
@@ -203,13 +251,51 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
     }
 
     let mut lines = vec!["=== Cytoplasm Zone Map ===".to_owned()];
-    for (zone, gates) in &zone_gates {
-        lines.push(format!("  {zone:<12} {} gate(s): {}", gates.len(), gates.join(", ")));
+    let mut data = serde_json::Map::new();
+
+    for (zone_label, gates) in &zone_gates {
+        let mut line = format!(
+            "  {zone_label:<12} {} gate(s): {}",
+            gates.len(),
+            gates.join(", ")
+        );
+
+        let mut entry = serde_json::json!({ "gates": gates });
+
+        if let Some(ref map) = physical_map {
+            let physical = map.zones.iter().find(|(id, pzone)| {
+                *id == zone_label || pzone.gates.iter().any(|g| gates.contains(g))
+            });
+            if let Some((id, pzone)) = physical {
+                use std::fmt::Write;
+                let _ = write!(
+                    line,
+                    "\n    hub: {} @ {} ({}G max, {} physical gates)",
+                    pzone.hub_device,
+                    pzone.site,
+                    pzone.max_speed_mbps / 1000,
+                    pzone.gates.len()
+                );
+                if let Some(obj) = entry.as_object_mut() {
+                    obj.insert("physical_zone_id".into(), serde_json::json!(id));
+                    obj.insert("hub_device".into(), serde_json::json!(&pzone.hub_device));
+                    obj.insert("site".into(), serde_json::json!(&pzone.site));
+                    obj.insert(
+                        "max_speed_mbps".into(),
+                        serde_json::json!(pzone.max_speed_mbps),
+                    );
+                    obj.insert("physical_gates".into(), serde_json::json!(&pzone.gates));
+                }
+            }
+        }
+
+        lines.push(line);
+        data.insert(zone_label.clone(), entry);
     }
 
     Ok(ShadowOutcome::ok_with(
         lines.join("\n"),
-        serde_json::to_value(&zone_gates)?,
+        serde_json::Value::Object(data),
     ))
 }
 

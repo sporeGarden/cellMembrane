@@ -7,7 +7,7 @@
 //! for repo metadata, gate profiles, and sync configuration.
 
 use crate::error::{Result, ShadowError};
-use cellmembrane_types::{CytoplasmZone, DivergencePolicy, GateTransport, PushTarget};
+use cellmembrane_types::{CytoplasmZone, DivergencePolicy, EnvelopeLayer, GateTransport, PushTarget};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -206,7 +206,7 @@ pub struct GateProfile {
     /// K-Derm role: which envelope layer this gate operates at.
     /// E.g., `"plasma_membrane"`, `"periplasm"`, `"outer_membrane"`.
     #[serde(default)]
-    pub kderm_role: Option<String>,
+    pub kderm_role: Option<EnvelopeLayer>,
     /// Site topology annotation (e.g., `"triangle_3hub_backbone"`).
     #[serde(default)]
     pub site_topology: Option<String>,
@@ -240,7 +240,9 @@ impl EcosystemManifest {
     /// Looks at `infra/wateringHole/ecosystem_manifest.toml`.
     #[must_use]
     pub fn find_in_workspace(workspace_root: &Path) -> Option<PathBuf> {
-        let path = workspace_root.join("infra/wateringHole/ecosystem_manifest.toml");
+        let path = workspace_root
+            .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+            .join("ecosystem_manifest.toml");
         path.exists().then_some(path)
     }
 

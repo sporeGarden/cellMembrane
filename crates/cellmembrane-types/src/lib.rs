@@ -66,7 +66,7 @@ pub use service::{
 };
 pub use sync::{DivergencePolicy, GateTransport, PushTarget};
 pub use topology::{
-    AffinityTable, BackboneLink, NetworkSegment, ResolvedTopology, TopologyMap,
+    AffinityTable, BackboneLink, NetworkSegment, PhysicalZone, ResolvedTopology, TopologyMap,
     TopologyMeta, ZoneStatus,
 };
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};

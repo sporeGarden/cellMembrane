@@ -179,7 +179,7 @@ fn resolve_neural_api_socket() -> PathBuf {
     let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
 
-    PathBuf::from(&socket_base).join("neural-api.sock")
+    PathBuf::from(&socket_base).join(cellmembrane_types::service::NEURAL_API_SOCKET_NAME)
 }
 
 #[cfg(test)]

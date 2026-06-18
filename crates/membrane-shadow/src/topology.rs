@@ -7,7 +7,7 @@
 //! produce a `ResolvedTopology` for any named gate.
 
 use cellmembrane_types::topology::{
-    BackboneLink, CytoplasmZone, LatencyEstimate, NetworkSegment, TopologyMap, TopologyMeta,
+    BackboneLink, LatencyEstimate, NetworkSegment, PhysicalZone, TopologyMap, TopologyMeta,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -22,9 +22,8 @@ use crate::error::{Result, ShadowError};
 /// if parsing fails.
 pub fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
     let path = workspace_root
-        .join("infra")
-        .join("wateringHole")
-        .join("TOPOLOGY_MAP.toml");
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join(cellmembrane_types::service::TOPOLOGY_MAP_FILENAME);
     let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
     parse_topology_map(&contents)
 }
@@ -65,7 +64,7 @@ fn try_deserialize<T: serde::de::DeserializeOwned>(value: &toml::Value) -> Optio
     value.clone().try_into().ok()
 }
 
-fn extract_zones(table: &toml::Table) -> BTreeMap<String, CytoplasmZone> {
+fn extract_zones(table: &toml::Table) -> BTreeMap<String, PhysicalZone> {
     let mut zones = BTreeMap::new();
     let Some(cytoplasm) = table.get("cytoplasm").and_then(|v| v.as_table()) else {
         return zones;
@@ -74,7 +73,7 @@ fn extract_zones(table: &toml::Table) -> BTreeMap<String, CytoplasmZone> {
         return zones;
     };
     for (id, value) in zone_table {
-        if let Some(zone) = try_deserialize::<CytoplasmZone>(value) {
+        if let Some(zone) = try_deserialize::<PhysicalZone>(value) {
             zones.insert(id.clone(), zone);
         }
     }
