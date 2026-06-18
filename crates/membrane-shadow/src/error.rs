@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn outcome_ok_with_carries_data() {
         let data = serde_json::json!({"count": 3});
-        let o = ShadowOutcome::ok_with("done", data.clone());
+        let o = ShadowOutcome::ok_with("done", data);
         assert!(o.ok);
         assert_eq!(o.data.unwrap()["count"], 3);
     }

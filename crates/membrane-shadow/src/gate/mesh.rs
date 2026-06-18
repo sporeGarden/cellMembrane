@@ -52,15 +52,15 @@ pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
     let Ok(manifest) = crate::manifest::load_from_workspace(&workspace_root) else {
         return GateManifestProfile::default();
     };
-    manifest
-        .gates
-        .get(gate_name)
-        .map_or_else(GateManifestProfile::default, |p| GateManifestProfile {
+    manifest.gates.get(gate_name).map_or_else(
+        GateManifestProfile::default,
+        |p| GateManifestProfile {
             transport: p.transport.clone().unwrap_or_else(|| "wan".into()),
             mesh_peer: p.mesh_peer.clone(),
             mobility: p.mobility.clone(),
             composition: p.composition.clone(),
-        })
+        },
+    )
 }
 
 /// Resolve just the transport mode (backwards compat helper).

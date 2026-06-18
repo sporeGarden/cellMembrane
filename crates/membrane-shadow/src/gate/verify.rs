@@ -191,7 +191,7 @@ beardog = { blake3 = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987
 beardog = { blake3 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", size = 4096 }
 "#;
         let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
-        assert!(parsed.targets.get("riscv64").is_none());
+        assert!(!parsed.targets.contains_key("riscv64"));
     }
 
     #[test]

@@ -307,9 +307,9 @@ mod tests {
 
     #[test]
     fn signal_bytes_avoid_json_and_http() {
-        assert!(signal::CLEAR > 0x7F, "must not be ASCII printable");
-        assert!(signal::MITO > 0x7F);
-        assert!(signal::NUCLEAR > 0x7F);
+        const _: () = assert!(signal::CLEAR > 0x7F, "must not be ASCII printable");
+        const _: () = assert!(signal::MITO > 0x7F);
+        const _: () = assert!(signal::NUCLEAR > 0x7F);
         assert_ne!(signal::CLEAR, b'{');
         assert_ne!(signal::CLEAR, b'[');
     }

@@ -76,6 +76,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("token.") => infra::dispatch_token(config, cmd, args).await,
         c if c.starts_with("temporal.") => temporal::dispatch_temporal(config, cmd, args).await,
         c if c.starts_with("manifest.") => data::dispatch_manifest(cmd, args).await,
+        c if c.starts_with("topology.") => data::dispatch_topology(cmd, args).await,
         "identity.resolve" => data::dispatch_identity().await,
         c if c.starts_with("impulse.") => impulse::dispatch_impulse(cmd, args).await,
         c if c.starts_with("potential.") => {

@@ -8,6 +8,7 @@
 use crate::cli;
 use crate::error::ShadowError;
 use crate::{ShadowOutcome, context, identity, manifest, temporal};
+use cellmembrane_types::envelope::{CytoplasmZone, mesh_address};
 
 // ── Manifest domain ──────────────────────────────────────────────────
 
@@ -84,6 +85,162 @@ pub(super) async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result
             "unknown manifest command: {cmd}"
         ))),
     }
+}
+
+// ── Topology domain ─────────────────────────────────────────────────
+
+pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+    match cmd {
+        "topology.resolve" => {
+            let gate_name = cli::require_arg(args, 0, "gate_name")?;
+            topology_resolve(gate_name).await
+        }
+        "topology.zones" => topology_zones().await,
+        "topology.mesh" => Ok(topology_mesh()),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown topology command: {cmd}"
+        ))),
+    }
+}
+
+async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
+    let root = temporal::resolve_workspace_root()?;
+    let m = manifest::load_from_workspace_async(&root).await?;
+
+    let zone = m
+        .gates
+        .get(gate_name)
+        .and_then(|p| p.zone.as_deref())
+        .map_or_else(|| CytoplasmZone::for_gate(gate_name), CytoplasmZone::from_manifest);
+
+    let profile = m.gates.get(gate_name);
+
+    let transport = profile
+        .and_then(|p| p.transport.as_deref())
+        .unwrap_or("unknown");
+    let composition = profile
+        .and_then(|p| p.composition.as_deref())
+        .unwrap_or("unknown");
+    let target = profile
+        .and_then(|p| p.target.as_deref())
+        .unwrap_or("unknown");
+    let mobility = profile
+        .and_then(|p| p.mobility.as_deref())
+        .unwrap_or("unknown");
+    let mesh_ip = mesh_address(gate_name).unwrap_or("unpeered");
+    let mesh_peer = profile.and_then(|p| p.mesh_peer.as_deref());
+    let hub_port = profile.and_then(|p| p.hub_port.as_deref());
+    let link_speed = profile.and_then(|p| p.link_speed_mbps);
+
+    let envelope = if zone.requires_overlay() {
+        cellmembrane_types::EnvelopeTopology::Diderm
+    } else {
+        cellmembrane_types::EnvelopeTopology::Monoderm
+    };
+
+    let mut lines = vec![
+        format!("=== Topology: {gate_name} ==="),
+        format!("  zone:        {zone}"),
+        format!("  transport:   {transport}"),
+        format!("  composition: {composition}"),
+        format!("  target:      {target}"),
+        format!("  mobility:    {mobility}"),
+        format!("  envelope:    {envelope} ({} boundaries)", envelope.boundary_count()),
+        format!("  mesh_ip:     {mesh_ip}"),
+    ];
+
+    if let Some(peer) = mesh_peer {
+        lines.push(format!("  mesh_peer:   {peer}"));
+    }
+    if let Some(port) = hub_port {
+        lines.push(format!("  hub_port:    {port}"));
+    }
+    if let Some(speed) = link_speed {
+        lines.push(format!("  link_speed:  {speed} Mbps"));
+    }
+    if zone.has_l2_backbone() {
+        lines.push("  l2_backbone: yes (direct switched)".into());
+    }
+    if zone.requires_overlay() {
+        lines.push("  overlay:     required (WireGuard)".into());
+    }
+    if profile.is_none() {
+        lines.push(format!("  ⚠ {gate_name} not in ecosystem manifest — zone derived from name"));
+    }
+
+    let data = serde_json::json!({
+        "gate": gate_name,
+        "zone": zone.label(),
+        "transport": transport,
+        "composition": composition,
+        "target": target,
+        "mobility": mobility,
+        "envelope": envelope.to_string(),
+        "mesh_ip": mesh_ip,
+        "mesh_peer": mesh_peer,
+        "hub_port": hub_port,
+        "link_speed_mbps": link_speed,
+        "l2_backbone": zone.has_l2_backbone(),
+        "requires_overlay": zone.requires_overlay(),
+    });
+
+    Ok(ShadowOutcome::ok_with(lines.join("\n"), data))
+}
+
+async fn topology_zones() -> crate::Result<ShadowOutcome> {
+    let root = temporal::resolve_workspace_root()?;
+    let m = manifest::load_from_workspace_async(&root).await?;
+
+    let mut zone_gates: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+
+    for (name, profile) in &m.gates {
+        let zone = profile
+            .zone
+            .as_deref()
+            .map_or_else(|| CytoplasmZone::for_gate(name), CytoplasmZone::from_manifest);
+        zone_gates
+            .entry(zone.label().to_owned())
+            .or_default()
+            .push(name.clone());
+    }
+
+    let mut lines = vec!["=== Cytoplasm Zone Map ===".to_owned()];
+    for (zone, gates) in &zone_gates {
+        lines.push(format!("  {zone:<12} {} gate(s): {}", gates.len(), gates.join(", ")));
+    }
+
+    Ok(ShadowOutcome::ok_with(
+        lines.join("\n"),
+        serde_json::to_value(&zone_gates)?,
+    ))
+}
+
+fn topology_mesh() -> ShadowOutcome {
+    let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
+    let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
+
+    for gate in &known {
+        if let Some(ip) = mesh_address(gate) {
+            let zone = CytoplasmZone::for_gate(gate);
+            lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
+        }
+    }
+
+    let data: Vec<serde_json::Value> = known
+        .iter()
+        .filter_map(|g| {
+            mesh_address(g).map(|ip| {
+                serde_json::json!({
+                    "gate": g,
+                    "ip": ip,
+                    "zone": CytoplasmZone::for_gate(g).label(),
+                })
+            })
+        })
+        .collect();
+
+    ShadowOutcome::ok_with(lines.join("\n"), serde_json::json!(data))
 }
 
 // ── Identity domain ──────────────────────────────────────────────────

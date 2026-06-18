@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn ip_conflict_prefers_lan_interface() {
-        let ifaces = vec![
+        let ifaces = [
             DetectedInterface {
                 name: "enp1s0".into(),
                 driver: "r8169".into(),
@@ -470,7 +470,7 @@ mod tests {
 
     #[test]
     fn ip_conflict_falls_back_to_any_ethernet() {
-        let ifaces = vec![DetectedInterface {
+        let ifaces = [DetectedInterface {
             name: "enp5s0".into(),
             driver: "ixgbe".into(),
             speed_mbps: Some(10000),

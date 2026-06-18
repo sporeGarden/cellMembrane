@@ -264,7 +264,7 @@ mod tests {
     #[tokio::test]
     async fn validate_elf_rejects_short_file() {
         let tmp = std::env::temp_dir().join("membrane-toolchain-test-short");
-        std::fs::write(&tmp, &[0x7f, b'E', b'L']).unwrap();
+        std::fs::write(&tmp, [0x7f, b'E', b'L']).unwrap();
         let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
         assert!(result.is_err());
         let _ = std::fs::remove_file(&tmp);

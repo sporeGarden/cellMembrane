@@ -123,9 +123,8 @@ mod tests {
     #[tokio::test]
     async fn exec_raw_on_invalid_host_returns_error_or_failure() {
         let result = exec_raw_on("nonexistent.invalid.host.test", 1, "true").await;
-        match result {
-            Ok((_out, code)) => assert_ne!(code, 0, "invalid host should fail"),
-            Err(_) => {} // IO error spawning ssh is also acceptable
+        if let Ok((_out, code)) = result {
+            assert_ne!(code, 0, "invalid host should fail");
         }
     }
 
