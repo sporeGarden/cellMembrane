@@ -167,9 +167,15 @@ pub fn atomic_write(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
 pub async fn atomic_write_async(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");
     tokio::fs::write(&tmp, contents).await?;
-    tokio::fs::rename(&tmp, path).await.inspect_err(|_| {
-        let _ = std::fs::remove_file(&tmp);
-    })
+    match tokio::fs::rename(&tmp, path).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            if let Err(cleanup_err) = tokio::fs::remove_file(&tmp).await {
+                tracing::debug!(error = %cleanup_err, "tmp cleanup after rename failure");
+            }
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]

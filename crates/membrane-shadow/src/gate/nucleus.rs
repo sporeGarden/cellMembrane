@@ -18,10 +18,11 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let paths = cellmembrane_types::service::ServicePaths::from_env();
     let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
 
-    std::fs::create_dir_all(std::path::Path::new(
+    if let Err(e) = std::fs::create_dir_all(std::path::Path::new(
         cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    ))
-    .ok();
+    )) {
+        tracing::warn!(error = %e, "failed to create socket base directory");
+    }
 
     let security_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
@@ -75,20 +76,24 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     }
 
     if installed > 0 {
-        std::process::Command::new("systemctl")
+        if let Err(e) = std::process::Command::new("systemctl")
             .args(["daemon-reload"])
             .output()
-            .ok();
+        {
+            tracing::warn!(error = %e, "systemctl daemon-reload failed");
+        }
 
         for svc in services {
             if !svc.is_primal || !bin_dir.join(svc.binary).exists() {
                 continue;
             }
             let unit = format!("{}-membrane.service", svc.binary);
-            std::process::Command::new("systemctl")
+            if let Err(e) = std::process::Command::new("systemctl")
                 .args(["enable", "--now", &unit])
                 .output()
-                .ok();
+            {
+                tracing::warn!(error = %e, unit = %unit, "systemctl enable failed");
+            }
         }
     }
 
@@ -126,7 +131,9 @@ fn generate_secrets_env() {
     let config_dir = std::env::var(cellmembrane_types::service::ENV_CONFIG_DIR)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CONFIG_DIR.into());
     let env_dir = std::path::Path::new(&config_dir);
-    std::fs::create_dir_all(env_dir).ok();
+    if let Err(e) = std::fs::create_dir_all(env_dir) {
+        tracing::warn!(error = %e, "failed to create config directory for secrets");
+    }
     let env_file = env_dir.join("secrets.env");
     if env_file.exists() {
         return;
@@ -139,9 +146,13 @@ fn generate_secrets_env() {
     }
     let content = format!("NESTGATE_JWT_SECRET={secret}\n");
     if let Ok(mut f) = std::fs::File::create(&env_file) {
-        f.write_all(content.as_bytes()).ok();
+        if let Err(e) = f.write_all(content.as_bytes()) {
+            tracing::warn!(error = %e, "failed to write secrets.env");
+        }
     }
-    std::fs::set_permissions(&env_file, std::fs::Permissions::from_mode(0o600)).ok();
+    if let Err(e) = std::fs::set_permissions(&env_file, std::fs::Permissions::from_mode(0o600)) {
+        tracing::warn!(error = %e, "failed to set secrets.env permissions");
+    }
 }
 
 fn rand_byte() -> u8 {

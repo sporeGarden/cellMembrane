@@ -345,8 +345,12 @@ async fn clone_source(
     build_root: &Path,
     clone_dir: &Path,
 ) -> std::result::Result<(), String> {
-    let _ = tokio::fs::remove_dir_all(clone_dir).await;
-    tokio::fs::create_dir_all(build_root).await.ok();
+    if let Err(e) = tokio::fs::remove_dir_all(clone_dir).await {
+        tracing::debug!(error = %e, "clone_dir cleanup (may not exist yet)");
+    }
+    if let Err(e) = tokio::fs::create_dir_all(build_root).await {
+        tracing::warn!(error = %e, dir = %build_root.display(), "failed to create build root");
+    }
 
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
@@ -430,7 +434,9 @@ fn stage_to_depot(
     target: &str,
 ) -> std::result::Result<(u64, String), String> {
     let staging_dir = depot_dir.join("primals").join(target);
-    std::fs::create_dir_all(&staging_dir).ok();
+    if let Err(e) = std::fs::create_dir_all(&staging_dir) {
+        tracing::warn!(error = %e, dir = %staging_dir.display(), "failed to create staging directory");
+    }
     let dest = staging_dir.join(primal);
     let tmp = staging_dir.join(format!(".{primal}.new"));
 
@@ -475,8 +481,17 @@ async fn publish_depot_checksums(depot_dir: &std::path::Path) {
         chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
     );
 
-    let _ = crate::git_ops::git_output(depot_dir, &["commit", "-m", &commit_msg]).await;
-    let _ = crate::git_ops::push_all_remotes(depot_dir).await;
+    if let Err(e) = crate::git_ops::git_output(depot_dir, &["commit", "-m", &commit_msg]).await {
+        tracing::warn!(error = %e, "depot checksum commit failed");
+    }
+    let push = crate::git_ops::push_all_remotes(depot_dir).await;
+    if !push.failed.is_empty() {
+        tracing::warn!(
+            failed = ?push.failed,
+            succeeded = push.succeeded,
+            "depot checksum push had failures"
+        );
+    }
 }
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {

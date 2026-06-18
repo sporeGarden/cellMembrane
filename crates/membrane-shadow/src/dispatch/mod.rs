@@ -74,9 +74,26 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("manifest.") => data::dispatch_manifest(cmd, args).await,
         "identity.resolve" => data::dispatch_identity().await,
         c if c.starts_with("impulse.") => impulse::dispatch_impulse(cmd, args).await,
-        c if c.starts_with("potential.") => impulse::dispatch_potential(cmd, args),
+        c if c.starts_with("potential.") => {
+            let cmd = cmd.to_owned();
+            let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+            tokio::task::spawn_blocking(move || {
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                impulse::dispatch_potential(&cmd, &refs)
+            })
+            .await
+            .unwrap_or_else(|e| Err(ShadowError::Config(format!("spawn_blocking: {e}"))))
+        }
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,
-        "depot.integrity" => data::dispatch_depot_integrity(args),
+        "depot.integrity" => {
+            let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+            tokio::task::spawn_blocking(move || {
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                data::dispatch_depot_integrity(&refs)
+            })
+            .await
+            .unwrap_or_else(|e| Err(ShadowError::Config(format!("spawn_blocking: {e}"))))
+        }
         c if c.starts_with("plasmid.") => data::dispatch_plasmid(config, cmd, args).await,
         c if c.starts_with("relay.") => data::dispatch_relay(cmd, args).await,
         c if c.starts_with("content.") => data::dispatch_content(config, cmd, args).await,

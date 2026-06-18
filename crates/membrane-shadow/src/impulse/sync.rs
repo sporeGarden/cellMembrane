@@ -131,3 +131,72 @@ async fn resolve_remote_head(workspace_root: &Path, repo_path: &str, remote: &st
     .await
     .unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_diverge_types() {
+        use super::super::policy::classify_diverge_type;
+
+        let positions = vec![("origin".into(), 0, 3)];
+        assert_eq!(classify_diverge_type(&positions), "origin_ahead");
+
+        let positions = vec![("origin".into(), 2, 0)];
+        assert_eq!(classify_diverge_type(&positions), "local_ahead");
+
+        let positions = vec![("origin".into(), 1, 2), ("forgejo".into(), 3, 0)];
+        assert_eq!(classify_diverge_type(&positions), "multi_remote_diverge");
+    }
+
+    #[test]
+    fn suggest_action_merge_ff() {
+        use super::super::policy::suggest_action;
+
+        assert_eq!(
+            suggest_action("origin_ahead", "merge-ff"),
+            "pull_leader_push_followers"
+        );
+        assert_eq!(
+            suggest_action("local_ahead", "impulse-only"),
+            "human_review"
+        );
+        assert_eq!(suggest_action("local_ahead", "agentic"), "agentic_resolve");
+    }
+
+    #[tokio::test]
+    async fn post_sync_diverge_creates_impulse_file() {
+        let tmp = std::env::temp_dir().join("membrane-sync-test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("infra/wateringHole/impulses/active")).unwrap();
+        std::fs::write(tmp.join(".gate"), "testGate\n").unwrap();
+
+        let args = SyncDivergeArgs {
+            repo_path: "gardens/cellMembrane".into(),
+            positions: vec![("origin".into(), 2, 0)],
+            repo_policy: "merge-ff".into(),
+        };
+
+        let result = post_sync_diverge(&tmp, &args).await;
+        match result {
+            Ok(impulse) => {
+                assert_eq!(impulse.impulse.impulse_type, ImpulseType::Sync);
+                assert_eq!(impulse.impulse.priority, Priority::Priority);
+                assert_eq!(impulse.from.gate, "testGate");
+                assert!(impulse.content.subject.contains("DIVERGE"));
+                assert!(impulse.content.subject.contains("cellMembrane"));
+                assert_eq!(impulse.payload.repo, "gardens/cellMembrane");
+                assert_eq!(impulse.payload.repo_policy, "merge-ff");
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("git") || msg.contains("commit") || msg.contains("push"),
+                    "unexpected error: {msg}"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+}

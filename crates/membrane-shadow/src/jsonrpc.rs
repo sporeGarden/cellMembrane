@@ -95,7 +95,9 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
         .map_err(|e| format!("read: {e}"))?;
 
     // Shutdown write side after read (cleanup)
-    let _ = writer.shutdown().await;
+    if let Err(e) = writer.shutdown().await {
+        tracing::debug!(error = %e, "writer shutdown (non-fatal)");
+    }
 
     if read_result == 0 && line.is_empty() {
         return Err(format!("empty response: {}", socket_path.display()));

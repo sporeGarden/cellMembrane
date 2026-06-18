@@ -452,12 +452,15 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
 
         // Retire current production binary to canary pool before overwriting
         if installed_bin.exists() {
-            let _ = crate::plasmid::canary::retire_to_canary(
+            if let Err(e) = crate::plasmid::canary::retire_to_canary(
                 primal,
                 &installed_bin,
                 &installed_hash[..8],
             )
-            .await;
+            .await
+            {
+                tracing::warn!(error = %e, primal, "canary retirement failed");
+            }
         }
 
         if tokio::fs::copy(&depot_bin, &installed_bin).await.is_err() {

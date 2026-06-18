@@ -505,7 +505,7 @@ mod tests {
                 assert!(data.get("drifted").is_some());
             }
             Err(e) => {
-                let msg = format!("{e}");
+                let msg = e.to_string();
                 assert!(
                     msg.contains("depot not found") || msg.contains("cannot read"),
                     "unexpected error: {msg}"

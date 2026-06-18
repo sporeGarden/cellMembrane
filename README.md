@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 527 tests — pedantic clippy clean
+cargo test                  # 539 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -68,7 +68,7 @@ unit management) + `gate/mesh.rs` (mesh peer configuration). All sync phases evo
 to `spawn_blocking` (prevents executor stalls on binary copy). Zero `as` casts in
 production, zero `.expect()` in production. `option_if_let_else` promoted from allow
 to warn. SSH user `root@` evolved to `MEMBRANE_PROVISION_SSH_USER` env var. Caddy
-admin endpoint evolved to `CADDY_ADMIN_ENDPOINT` env var. 527 tests, zero clippy.
+admin endpoint evolved to `CADDY_ADMIN_ENDPOINT` env var. 539 tests, zero clippy.
 
 **Wave 107–109 (Deterministic Deployment + guideStone):**
 `gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),

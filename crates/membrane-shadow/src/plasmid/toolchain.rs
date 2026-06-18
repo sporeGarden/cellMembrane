@@ -212,11 +212,97 @@ pub async fn build_binary(
 /// Shallow-clone a git repository. Returns true on success.
 pub async fn try_clone(url: &str, clone_dir: &Path) -> bool {
     if clone_dir.exists() {
-        let _ = tokio::fs::remove_dir_all(clone_dir).await;
+        if let Err(e) = tokio::fs::remove_dir_all(clone_dir).await {
+            tracing::debug!(error = %e, "clone_dir cleanup (may not exist)");
+        }
     }
     let result = tokio::process::Command::new("git")
         .args(["clone", "--depth", "1", url, &clone_dir.to_string_lossy()])
         .output()
         .await;
     result.is_ok_and(|o| o.status.success())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn android_target_constant() {
+        assert_eq!(ANDROID_TARGET, "aarch64-linux-android");
+    }
+
+    #[test]
+    fn elf_magic_bytes() {
+        assert_eq!(ELF_MAGIC, [0x7f, b'E', b'L', b'F']);
+    }
+
+    #[test]
+    fn ndk_linker_returns_none_without_env() {
+        if std::env::var(ENV_ANDROID_NDK_HOME).is_err() {
+            assert!(resolve_ndk_linker().is_none());
+        }
+    }
+
+    #[test]
+    fn ndk_strip_returns_none_without_env() {
+        if std::env::var(ENV_ANDROID_NDK_HOME).is_err() {
+            assert!(resolve_ndk_strip().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn validate_elf_rejects_non_elf() {
+        let tmp = std::env::temp_dir().join("membrane-toolchain-test-notelf");
+        std::fs::write(&tmp, b"not an ELF binary").unwrap();
+        let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("BUILD-ELF-01"));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn validate_elf_rejects_short_file() {
+        let tmp = std::env::temp_dir().join("membrane-toolchain-test-short");
+        std::fs::write(&tmp, &[0x7f, b'E', b'L']).unwrap();
+        let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
+        assert!(result.is_err());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn validate_elf_accepts_correct_arch() {
+        let tmp = std::env::temp_dir().join("membrane-toolchain-test-elf64");
+        let mut elf = vec![0u8; 64];
+        elf[..4].copy_from_slice(&ELF_MAGIC);
+        elf[18] = 0x3E; // x86-64
+        elf[19] = 0x00;
+        std::fs::write(&tmp, &elf).unwrap();
+        let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
+        assert!(result.is_ok());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn validate_elf_rejects_wrong_arch() {
+        let tmp = std::env::temp_dir().join("membrane-toolchain-test-wrongarch");
+        let mut elf = vec![0u8; 64];
+        elf[..4].copy_from_slice(&ELF_MAGIC);
+        elf[18] = 0xB7; // aarch64
+        elf[19] = 0x00;
+        std::fs::write(&tmp, &elf).unwrap();
+        let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("arch mismatch"));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[tokio::test]
+    async fn try_clone_fails_on_invalid_url() {
+        let tmp = std::env::temp_dir().join("membrane-toolchain-test-clone");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let ok = try_clone("https://invalid.example.com/nonexistent.git", &tmp).await;
+        assert!(!ok);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }

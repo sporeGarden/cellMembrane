@@ -399,7 +399,9 @@ pub async fn validate_and_promote(
     // Preserve the old binary path for canary retirement
     let old_binary = if production_path.exists() {
         let canary_dir = resolve_sandbox_bin_dir().join("retired");
-        tokio::fs::create_dir_all(&canary_dir).await.ok();
+        if let Err(e) = tokio::fs::create_dir_all(&canary_dir).await {
+            tracing::warn!(error = %e, "failed to create canary retire directory");
+        }
         let retired_path = canary_dir.join(format!(
             "{}-prev",
             production_path
@@ -407,7 +409,9 @@ pub async fn validate_and_promote(
                 .unwrap_or_default()
                 .to_string_lossy()
         ));
-        tokio::fs::copy(production_path, &retired_path).await.ok();
+        if let Err(e) = tokio::fs::copy(production_path, &retired_path).await {
+            tracing::warn!(error = %e, "failed to retire production binary to canary");
+        }
         Some(retired_path)
     } else {
         None

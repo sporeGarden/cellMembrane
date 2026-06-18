@@ -95,9 +95,13 @@ async fn build_one(
 
     // Phase 1: Clone (ephemeral — always fresh)
     if clone_dir.exists() {
-        let _ = tokio::fs::remove_dir_all(&clone_dir).await;
+        if let Err(e) = tokio::fs::remove_dir_all(&clone_dir).await {
+            tracing::debug!(error = %e, "stale clone_dir cleanup");
+        }
     }
-    tokio::fs::create_dir_all(&build_root).await.ok();
+    if let Err(e) = tokio::fs::create_dir_all(&build_root).await {
+        tracing::warn!(error = %e, dir = %build_root.display(), "failed to create build root");
+    }
 
     if let Err(detail) = clone_source(primal, source, &clone_dir).await {
         let status = if source.private {

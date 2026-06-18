@@ -140,9 +140,11 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
             let dr = dest_root.clone();
             let a = arch.clone();
             let cs = checksums.clone();
-            tokio::task::spawn_blocking(move || persist_checksums(&dr, &a, &cs))
-                .await
-                .ok();
+            if let Err(e) =
+                tokio::task::spawn_blocking(move || persist_checksums(&dr, &a, &cs)).await
+            {
+                tracing::warn!(error = %e, "persist_checksums task failed");
+            }
         }
     }
     let results = fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
@@ -485,7 +487,9 @@ fn persist_checksums(
         let _ = writeln!(content, "{name} = \"{hash}\"");
     }
     let path = depot_root.join("checksums.toml");
-    std::fs::write(&path, content.as_bytes()).ok();
+    if let Err(e) = std::fs::write(&path, content.as_bytes()) {
+        tracing::warn!(error = %e, path = %path.display(), "failed to persist checksums.toml");
+    }
 }
 
 // ── Fetch orchestration ──────────────────────────────────────────────────────
@@ -558,8 +562,12 @@ async fn fetch_primals(
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = tokio::fs::set_permissions(&local_path, std::fs::Permissions::from_mode(0o755))
-                .await;
+            if let Err(e) =
+                tokio::fs::set_permissions(&local_path, std::fs::Permissions::from_mode(0o755))
+                    .await
+            {
+                tracing::warn!(error = %e, path = %local_path.display(), "failed to set executable permissions");
+            }
         }
 
         let is_verified = if let Some(expected) = checksums.get(*primal) {

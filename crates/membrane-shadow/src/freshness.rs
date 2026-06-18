@@ -189,28 +189,42 @@ async fn pull_rebase_both_remotes(wh_dir: &Path) {
         if !pull.status.success() {
             let stderr = String::from_utf8_lossy(&pull.stderr);
             if stderr.contains("CONFLICT") {
-                let _ = tokio::process::Command::new("git")
+                tracing::info!("freshness.toml conflict detected, resolving with --ours");
+                if let Err(e) = tokio::process::Command::new("git")
                     .args(["checkout", "--ours", "freshness.toml"])
                     .current_dir(wh_dir)
                     .output()
-                    .await;
-                let _ = tokio::process::Command::new("git")
+                    .await
+                {
+                    tracing::warn!(error = %e, "git checkout --ours failed");
+                }
+                if let Err(e) = tokio::process::Command::new("git")
                     .args(["add", "freshness.toml"])
                     .current_dir(wh_dir)
                     .output()
-                    .await;
-                let _ = tokio::process::Command::new("git")
+                    .await
+                {
+                    tracing::warn!(error = %e, "git add freshness.toml failed");
+                }
+                if let Err(e) = tokio::process::Command::new("git")
                     .args(["rebase", "--continue"])
                     .env("GIT_EDITOR", "true")
                     .current_dir(wh_dir)
                     .output()
-                    .await;
+                    .await
+                {
+                    tracing::warn!(error = %e, "git rebase --continue failed");
+                }
             } else if !stderr.contains("Already up to date") {
-                let _ = tokio::process::Command::new("git")
+                tracing::warn!(%stderr, "freshness pull failed, aborting rebase");
+                if let Err(e) = tokio::process::Command::new("git")
                     .args(["rebase", "--abort"])
                     .current_dir(wh_dir)
                     .output()
-                    .await;
+                    .await
+                {
+                    tracing::warn!(error = %e, "git rebase --abort failed");
+                }
             }
         }
     }

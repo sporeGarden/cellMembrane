@@ -120,9 +120,18 @@ pub(super) async fn dispatch_context(cmd: &str, args: &[&str]) -> crate::Result<
         }
         "context.sense" => {
             let all = args.contains(&"--all");
-            let filter_gate = cli::extract_flag_value(args, "--gate");
-            let filter_project = cli::extract_flag_value(args, "--project");
-            let braids = context::sense(&root, filter_gate, filter_project, all)?;
+            let filter_gate = cli::extract_flag_value(args, "--gate").map(str::to_owned);
+            let filter_project = cli::extract_flag_value(args, "--project").map(str::to_owned);
+            let braids = {
+                let root = root.clone();
+                let fg = filter_gate.clone();
+                let fp = filter_project.clone();
+                tokio::task::spawn_blocking(move || {
+                    context::sense(&root, fg.as_deref(), fp.as_deref(), all)
+                })
+                .await
+                .map_err(|e| ShadowError::Config(format!("spawn_blocking: {e}")))?
+            }?;
             if braids.is_empty() {
                 Ok(ShadowOutcome::ok(
                     "No context braids woven (resting state).".to_string(),
