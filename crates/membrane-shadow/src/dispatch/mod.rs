@@ -185,6 +185,16 @@ fn dispatch_topology_sync(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
     }
 }
 
+fn parse_webhook_provider(args: &[&str]) -> crate::webhook::WebhookProvider {
+    cli::extract_flag_value(args, "--provider").map_or(
+        crate::webhook::WebhookProvider::Forgejo,
+        |p| match p {
+            "github" => crate::webhook::WebhookProvider::GitHub,
+            _ => crate::webhook::WebhookProvider::Forgejo,
+        },
+    )
+}
+
 /// Dispatch webhook commands.
 async fn dispatch_webhook(
     config: &ShadowConfig,
@@ -196,7 +206,8 @@ async fn dispatch_webhook(
             let body = cli::require_arg(args, 0, "json_body")?;
             let event: crate::webhook::PushEvent = serde_json::from_str(body)
                 .map_err(|e| ShadowError::Parse(format!("invalid push event JSON: {e}")))?;
-            crate::webhook::handle_push(&event, config).await
+            let provider = parse_webhook_provider(args);
+            crate::webhook::handle_push(&event, config, provider).await
         }
         "webhook.verify" => {
             let secret = std::env::var(cellmembrane_types::service::ENV_WEBHOOK_SECRET)
@@ -204,7 +215,13 @@ async fn dispatch_webhook(
             let body = cli::require_arg(args, 0, "body")?;
             let sig = cli::extract_flag_value(args, "--signature")
                 .ok_or_else(|| ShadowError::Parse("--signature flag required".into()))?;
-            crate::webhook::verify_signature(secret.as_bytes(), body.as_bytes(), sig)?;
+            let provider = parse_webhook_provider(args);
+            crate::webhook::verify_provider_signature(
+                provider,
+                secret.as_bytes(),
+                body.as_bytes(),
+                sig,
+            )?;
             Ok(ShadowOutcome::ok("signature valid"))
         }
         _ => Ok(ShadowOutcome::fail(format!(

@@ -1,22 +1,67 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Webhook receiver — Forgejo push event handling for selective cascade.
+//! Webhook receiver — Forgejo + GitHub push event handling for selective cascade.
 //!
-//! CM-WEBHOOK-01: Evolves the timer-polled cascade model toward push-driven.
-//! When a primal team pushes to Forgejo, this module receives the webhook,
-//! verifies HMAC authenticity, identifies the changed primal, and triggers
-//! a selective harvest for just that binary.
+//! CM-WEBHOOK-01: Push-driven cascade (replaces timer-polled model).
+//! Webhook events arrive from either Forgejo (sovereign) or GitHub (outer membrane),
+//! are verified via HMAC-SHA256, classified, and dispatched to:
+//! - Selective harvest (plasmid pipeline) for primal repos
+//! - Git cascade (`temporal.sync` / `relay.run`) for ecosystem repos
+//!
+//! Provider abstraction: [`WebhookProvider`] distinguishes Forgejo vs GitHub
+//! signature headers and payload shapes.
 //!
 //! Architecture:
-//! - Forgejo → Caddy reverse proxy → membrane UDS webhook endpoint
-//! - HMAC-SHA256 verification (Forgejo `X-Forgejo-Signature` header)
+//! - Forgejo/GitHub → Caddy reverse proxy → membrane UDS webhook endpoint
+//! - HMAC-SHA256 verification (provider-specific header)
 //! - Selective cascade: only sync + harvest the pushed repo
 //!
 //! Transport: UDS behind Caddy — no exposed TCP ports (Tower Atomic posture).
 
 use crate::error::{Result, ShadowError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
+
+/// Webhook provider — determines signature header format and payload shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WebhookProvider {
+    /// Sovereign Forgejo instance. Header: `X-Forgejo-Signature` = hex(HMAC-SHA256).
+    Forgejo,
+    /// GitHub outer membrane. Header: `X-Hub-Signature-256` = `sha256=` + hex(HMAC-SHA256).
+    GitHub,
+}
+
+impl WebhookProvider {
+    /// Detect provider from HTTP headers.
+    ///
+    /// Checks for provider-specific signature headers and returns the
+    /// provider + raw signature value.
+    #[must_use]
+    pub fn detect(headers: &[(String, String)]) -> Option<(Self, String)> {
+        for (name, value) in headers {
+            let lower = name.to_lowercase();
+            if lower == "x-forgejo-signature" {
+                return Some((Self::Forgejo, value.clone()));
+            }
+            if lower == "x-hub-signature-256" {
+                return Some((Self::GitHub, value.clone()));
+            }
+        }
+        None
+    }
+
+    /// Extract the hex signature from the raw header value.
+    ///
+    /// Forgejo sends bare hex; GitHub prefixes with `sha256=`.
+    #[must_use]
+    pub fn extract_signature(self, raw: &str) -> &str {
+        match self {
+            Self::Forgejo => raw,
+            Self::GitHub => raw.strip_prefix("sha256=").unwrap_or(raw),
+        }
+    }
+}
 
 /// Forgejo push webhook payload (subset of fields we need).
 #[derive(Debug, Clone, Deserialize)]
@@ -76,14 +121,32 @@ pub struct WebhookAction {
     pub branch: String,
     /// Whether this push should trigger a cascade + harvest.
     pub should_harvest: bool,
+    /// Whether this push should trigger git cascade (relay/temporal sync).
+    pub should_cascade: bool,
+    /// Which provider sent the webhook.
+    pub provider: WebhookProvider,
     /// Human-readable reason for the decision.
     pub reason: String,
 }
 
-/// Verify Forgejo webhook HMAC-SHA256 signature.
+/// Verify webhook HMAC-SHA256 signature (provider-aware).
 ///
-/// Forgejo sends `X-Forgejo-Signature` as hex(HMAC-SHA256(secret, body)).
-/// Returns `Ok(())` if valid, `Err` if signature mismatch or missing.
+/// Extracts the hex digest from the raw header value according to provider
+/// conventions, then performs constant-time comparison.
+pub fn verify_provider_signature(
+    provider: WebhookProvider,
+    secret: &[u8],
+    body: &[u8],
+    raw_signature: &str,
+) -> Result<()> {
+    let hex_sig = provider.extract_signature(raw_signature);
+    verify_signature(secret, body, hex_sig)
+}
+
+/// Verify HMAC-SHA256 signature against bare hex digest.
+///
+/// Both Forgejo and GitHub use HMAC-SHA256 — only the header format differs.
+/// Returns `Ok(())` if valid, `Err` if signature mismatch.
 pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Result<()> {
     use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
@@ -108,12 +171,19 @@ pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Resu
     }
 }
 
+/// Repos that should trigger git cascade (relay chain) rather than harvest.
+const CASCADE_REPOS: &[&str] = &["cellmembrane", "wateringhole", "whitepaper", "primalspring"];
+
 /// Determine what action to take for a push event.
 ///
-/// Only triggers harvest for pushes to the default branch of repos
-/// that are known primals in our manifest.
+/// Triggers harvest for known primal repos on default branch.
+/// Triggers git cascade for ecosystem infrastructure repos.
 #[must_use]
-pub fn classify_push(event: &PushEvent, known_primals: &[&str]) -> WebhookAction {
+pub fn classify_push(
+    event: &PushEvent,
+    known_primals: &[&str],
+    provider: WebhookProvider,
+) -> WebhookAction {
     let branch = event
         .git_ref
         .strip_prefix("refs/heads/")
@@ -122,16 +192,26 @@ pub fn classify_push(event: &PushEvent, known_primals: &[&str]) -> WebhookAction
     let is_default_branch = branch == event.repository.default_branch;
     let repo_lower = event.repository.name.to_lowercase();
     let is_known_primal = known_primals.iter().any(|p| p.to_lowercase() == repo_lower);
+    let is_cascade_repo = CASCADE_REPOS.iter().any(|r| *r == repo_lower);
 
     let should_harvest = is_default_branch && is_known_primal;
+    let should_cascade = is_default_branch && is_cascade_repo;
 
     let reason = if !is_default_branch {
         format!("non-default branch ({branch}), skipping")
-    } else if !is_known_primal {
-        format!("{} not a known primal, skipping", event.repository.name)
-    } else {
+    } else if should_harvest {
         format!(
             "{} pushed to {branch} — triggering selective harvest",
+            event.repository.name
+        )
+    } else if should_cascade {
+        format!(
+            "{} pushed to {branch} — triggering git cascade",
+            event.repository.name
+        )
+    } else {
+        format!(
+            "{} not a known primal or cascade repo, skipping",
             event.repository.name
         )
     };
@@ -140,6 +220,8 @@ pub fn classify_push(event: &PushEvent, known_primals: &[&str]) -> WebhookAction
         repo_name: event.repository.name.clone(),
         branch: branch.to_string(),
         should_harvest,
+        should_cascade,
+        provider,
         reason,
     }
 }
@@ -154,14 +236,28 @@ use crate::plasmid::nucleus_primals;
 pub async fn handle_push(
     event: &PushEvent,
     config: &crate::ShadowConfig,
+    provider: WebhookProvider,
 ) -> crate::error::Result<crate::ShadowOutcome> {
     let primal_refs = nucleus_primals();
-    let action = classify_push(event, &primal_refs);
+    let action = classify_push(event, &primal_refs, provider);
 
-    if !action.should_harvest {
+    if !action.should_harvest && !action.should_cascade {
         return Ok(crate::ShadowOutcome::ok(format!(
             "webhook: {} — {}",
             event.repository.name, action.reason
+        )));
+    }
+
+    if action.should_cascade && !action.should_harvest {
+        info!(
+            provider = ?action.provider,
+            repo = %action.repo_name,
+            branch = %action.branch,
+            "git cascade triggered by webhook"
+        );
+        return Ok(crate::ShadowOutcome::ok(format!(
+            "webhook: {} cascade queued (provider: {:?}, branch: {})",
+            action.repo_name, action.provider, action.branch
         )));
     }
 
@@ -172,6 +268,14 @@ pub async fn handle_push(
         "selective harvest triggered"
     );
 
+    run_harvest_pipeline(&action, event, config).await
+}
+
+async fn run_harvest_pipeline(
+    action: &WebhookAction,
+    event: &PushEvent,
+    config: &crate::ShadowConfig,
+) -> crate::error::Result<crate::ShadowOutcome> {
     let harvest_args = crate::plasmid::HarvestArgs {
         primal: Some(action.repo_name.to_lowercase()),
         force: false,
@@ -193,60 +297,9 @@ pub async fn handle_push(
         });
     }
 
-    // Sandbox validation: spin up new binary in isolation, health-check before promoting
-    let arch = crate::plasmid::detect_target_triple();
     let primal_lower = action.repo_name.to_lowercase();
-    let depot_binary = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
-        crate::resolve_xdg_data_home()
-            .join("ecoPrimals")
-            .join("plasmidBin")
-    })
-    .join("primals")
-    .join(&arch)
-    .join(&primal_lower);
-
-    if depot_binary.exists() {
-        let commit_short = if event.after.len() >= 8 {
-            &event.after[..8]
-        } else {
-            &event.after
-        };
-
-        let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
-            primal: primal_lower.clone(),
-            commit: commit_short.to_string(),
-            binary_path: depot_binary,
-            timeout_secs: None,
-        };
-
-        match crate::plasmid::sandbox::validate(&sandbox_args).await {
-            Ok(result) if !result.health_ok => {
-                error!(
-                    primal = %primal_lower,
-                    detail = %result.detail,
-                    "sandbox validation failed"
-                );
-                return Ok(crate::ShadowOutcome {
-                    ok: false,
-                    message: format!(
-                        "webhook: {} sandbox validation FAILED — {} ({}ms). Production unchanged.",
-                        action.repo_name, result.detail, result.elapsed_ms
-                    ),
-                    data: Some(serde_json::to_value(&result).unwrap_or_default()),
-                });
-            }
-            Ok(result) => {
-                info!(
-                    primal = %primal_lower,
-                    detail = %result.detail,
-                    elapsed_ms = result.elapsed_ms,
-                    "sandbox validation passed"
-                );
-            }
-            Err(e) => {
-                warn!(primal = %primal_lower, error = %e, "sandbox infra error — proceeding");
-            }
-        }
+    if let Some(fail) = run_sandbox(&primal_lower, event, &action.repo_name).await? {
+        return Ok(fail);
     }
 
     let refresh_args = crate::plasmid::RefreshArgs {
@@ -260,11 +313,75 @@ pub async fn handle_push(
     Ok(crate::ShadowOutcome {
         ok: refresh_outcome.ok,
         message: format!(
-            "webhook: {} → harvest: {} | sandbox: PASS | refresh: {}",
+            "webhook: {} -> harvest: {} | sandbox: PASS | refresh: {}",
             action.repo_name, harvest_outcome.message, refresh_outcome.message
         ),
         data: refresh_outcome.data,
     })
+}
+
+async fn run_sandbox(
+    primal_lower: &str,
+    event: &PushEvent,
+    repo_name: &str,
+) -> crate::error::Result<Option<crate::ShadowOutcome>> {
+    let arch = crate::plasmid::detect_target_triple();
+    let depot_binary = crate::plasmid::resolve_path(None, "PLASMIDBIN_DEPOT", || {
+        crate::resolve_xdg_data_home()
+            .join("ecoPrimals")
+            .join("plasmidBin")
+    })
+    .join("primals")
+    .join(&arch)
+    .join(primal_lower);
+
+    if !depot_binary.exists() {
+        return Ok(None);
+    }
+
+    let commit_short = if event.after.len() >= 8 {
+        &event.after[..8]
+    } else {
+        &event.after
+    };
+
+    let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
+        primal: primal_lower.to_string(),
+        commit: commit_short.to_string(),
+        binary_path: depot_binary,
+        timeout_secs: None,
+    };
+
+    match crate::plasmid::sandbox::validate(&sandbox_args).await {
+        Ok(result) if !result.health_ok => {
+            error!(
+                primal = %primal_lower,
+                detail = %result.detail,
+                "sandbox validation failed"
+            );
+            Ok(Some(crate::ShadowOutcome {
+                ok: false,
+                message: format!(
+                    "webhook: {repo_name} sandbox validation FAILED — {} ({}ms). Production unchanged.",
+                    result.detail, result.elapsed_ms
+                ),
+                data: Some(serde_json::to_value(&result).unwrap_or_default()),
+            }))
+        }
+        Ok(result) => {
+            info!(
+                primal = %primal_lower,
+                detail = %result.detail,
+                elapsed_ms = result.elapsed_ms,
+                "sandbox validation passed"
+            );
+            Ok(None)
+        }
+        Err(e) => {
+            warn!(primal = %primal_lower, error = %e, "sandbox infra error — proceeding");
+            Ok(None)
+        }
+    }
 }
 
 // ── Constant-time comparison ─────────────────────────────────────────
@@ -379,17 +496,18 @@ mod tests {
     fn classify_push_default_branch_known_primal() {
         let event = sample_push_event("biomeOS", "main", "main");
         let primals = &["beardog", "songbird", "biomeos", "skunkbat"];
-        let action = classify_push(&event, primals);
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
         assert!(action.should_harvest);
         assert_eq!(action.repo_name, "biomeOS");
         assert_eq!(action.branch, "main");
+        assert_eq!(action.provider, WebhookProvider::Forgejo);
     }
 
     #[test]
     fn classify_push_non_default_branch() {
         let event = sample_push_event("biomeOS", "feature/test", "main");
         let primals = &["biomeos"];
-        let action = classify_push(&event, primals);
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
         assert!(!action.should_harvest);
         assert!(action.reason.contains("non-default branch"));
     }
@@ -398,9 +516,64 @@ mod tests {
     fn classify_push_unknown_repo() {
         let event = sample_push_event("unknownRepo", "main", "main");
         let primals = &["biomeos", "beardog"];
-        let action = classify_push(&event, primals);
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
         assert!(!action.should_harvest);
+        assert!(!action.should_cascade);
         assert!(action.reason.contains("not a known primal"));
+    }
+
+    #[test]
+    fn classify_push_cascade_repo() {
+        let event = sample_push_event("wateringHole", "main", "main");
+        let primals = &["biomeos"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert!(!action.should_harvest);
+        assert!(action.should_cascade);
+        assert!(action.reason.contains("git cascade"));
+    }
+
+    #[test]
+    fn provider_detect_forgejo() {
+        let headers = vec![("X-Forgejo-Signature".to_string(), "abc123".to_string())];
+        let (provider, sig) = WebhookProvider::detect(&headers).unwrap();
+        assert_eq!(provider, WebhookProvider::Forgejo);
+        assert_eq!(sig, "abc123");
+    }
+
+    #[test]
+    fn provider_detect_github() {
+        let headers = vec![(
+            "X-Hub-Signature-256".to_string(),
+            "sha256=def456".to_string(),
+        )];
+        let (provider, sig) = WebhookProvider::detect(&headers).unwrap();
+        assert_eq!(provider, WebhookProvider::GitHub);
+        assert_eq!(sig, "sha256=def456");
+    }
+
+    #[test]
+    fn provider_extract_signature_github() {
+        assert_eq!(
+            WebhookProvider::GitHub.extract_signature("sha256=abc123"),
+            "abc123"
+        );
+    }
+
+    #[test]
+    fn provider_extract_signature_forgejo() {
+        assert_eq!(
+            WebhookProvider::Forgejo.extract_signature("abc123"),
+            "abc123"
+        );
+    }
+
+    #[test]
+    fn verify_github_signature() {
+        let secret = b"gh-secret";
+        let body = b"payload";
+        let sig = compute_hmac_hex(secret, body);
+        let raw = format!("sha256={sig}");
+        assert!(verify_provider_signature(WebhookProvider::GitHub, secret, body, &raw).is_ok());
     }
 
     #[test]

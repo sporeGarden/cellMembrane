@@ -210,6 +210,13 @@ pub struct GateProfile {
     /// Link speed to the hub switch in Mbps (e.g., `10000`, `2500`).
     #[serde(default)]
     pub link_speed_mbps: Option<u32>,
+    /// K-Derm role: which envelope layer this gate operates at.
+    /// E.g., `"plasma_membrane"`, `"periplasm"`, `"outer_membrane"`.
+    #[serde(default)]
+    pub kderm_role: Option<String>,
+    /// Site topology annotation (e.g., `"triangle_3hub_backbone"`).
+    #[serde(default)]
+    pub site_topology: Option<String>,
 }
 
 impl EcosystemManifest {
