@@ -439,6 +439,33 @@ pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
 /// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
 pub const DEFAULT_SERVICE_FILTER: &str = "membrane|forgejo|caddy|knot|hbb|fail2ban";
 
+// ── Timeout constants ────────────────────────────────────────────────
+
+/// Default SSH connection timeout (seconds).
+pub const DEFAULT_SSH_TIMEOUT_SECS: u64 = 10;
+/// HTTP download timeout for binary fetch operations (seconds).
+pub const DEFAULT_FETCH_TIMEOUT_SECS: u64 = 300;
+/// Bootstrap phase timeout (seconds).
+pub const DEFAULT_BOOTSTRAP_PHASE_TIMEOUT_SECS: u64 = 120;
+/// Git operation timeout (seconds).
+pub const DEFAULT_GIT_OP_TIMEOUT_SECS: u64 = 60;
+/// Forgejo API write timeout (seconds).
+pub const DEFAULT_API_WRITE_TIMEOUT_SECS: u64 = 30;
+/// Forgejo API read timeout (seconds).
+pub const DEFAULT_API_READ_TIMEOUT_SECS: u64 = 15;
+/// Cloudflare API timeout (seconds).
+pub const DEFAULT_CLOUDFLARE_TIMEOUT_SECS: u64 = 15;
+/// Cloud provision polling timeout (seconds).
+pub const DEFAULT_PROVISION_POLL_TIMEOUT_SECS: u64 = 300;
+/// Binary staleness threshold (seconds) — 7 days.
+pub const DEFAULT_STALENESS_THRESHOLD_SECS: u64 = 7 * 86_400;
+/// Canary maximum age (hours).
+pub const DEFAULT_CANARY_MAX_AGE_HOURS: i64 = 168;
+/// Sandbox health check timeout (seconds).
+pub const DEFAULT_SANDBOX_HEALTH_TIMEOUT_SECS: u64 = 15;
+/// Forgejo API pagination page size.
+pub const DEFAULT_API_PAGE_SIZE: u32 = 50;
+
 /// Runtime path resolver for membrane services.
 ///
 /// Resolves install paths and socket paths from a configurable base,

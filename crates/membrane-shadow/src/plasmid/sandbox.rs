@@ -15,7 +15,8 @@ fn millis_u64(d: Duration) -> u64 {
 }
 
 /// Default time (seconds) to wait for sandbox instance to become healthy.
-const SANDBOX_HEALTH_TIMEOUT_SECS: u64 = 15;
+const SANDBOX_HEALTH_TIMEOUT_SECS: u64 =
+    cellmembrane_types::service::DEFAULT_SANDBOX_HEALTH_TIMEOUT_SECS;
 
 /// How many probe attempts before declaring failure.
 const SANDBOX_PROBE_RETRIES: u32 = 5;

@@ -15,7 +15,8 @@ use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 
 const CF_API_BASE: &str = cellmembrane_types::service::DEFAULT_CLOUDFLARE_API;
-const API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+const API_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_CLOUDFLARE_TIMEOUT_SECS);
 
 // ── Configuration ───────────────────────────────────────────────────
 

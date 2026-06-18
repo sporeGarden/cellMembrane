@@ -561,7 +561,9 @@ pub(super) fn summarize_depot_freshness() -> String {
     let mut total = 0u32;
     let mut stale = 0u32;
     let now = std::time::SystemTime::now();
-    let stale_threshold = std::time::Duration::from_secs(7 * 86400);
+    let stale_threshold = std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_STALENESS_THRESHOLD_SECS,
+    );
 
     for name in crate::plasmid::nucleus_primals() {
         total += 1;

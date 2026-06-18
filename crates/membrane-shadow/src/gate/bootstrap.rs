@@ -11,7 +11,9 @@ use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 /// Maximum time for any single bootstrap phase before it's marked failed.
-const PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+const PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
+    cellmembrane_types::service::DEFAULT_BOOTSTRAP_PHASE_TIMEOUT_SECS,
+);
 
 /// Result of a single bootstrap phase.
 #[derive(Debug, Clone, Serialize, Deserialize)]

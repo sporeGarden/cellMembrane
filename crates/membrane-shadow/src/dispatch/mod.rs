@@ -14,10 +14,14 @@
 //! handles the request. This enables smooth graduation: as primals come
 //! online, membrane-shadow automatically delegates without code changes.
 
+mod content_dispatch;
 mod data;
 mod gate;
 mod impulse;
 mod infra;
+mod plasmid_dispatch;
+mod provision_dispatch;
+mod relay_dispatch;
 mod temporal;
 
 use crate::cli;
@@ -89,14 +93,18 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
             tokio::task::spawn_blocking(move || {
                 let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-                data::dispatch_depot_integrity(&refs)
+                plasmid_dispatch::dispatch_depot_integrity(&refs)
             })
             .await
             .unwrap_or_else(|e| Err(ShadowError::Config(format!("spawn_blocking: {e}"))))
         }
-        c if c.starts_with("plasmid.") => data::dispatch_plasmid(config, cmd, args).await,
-        c if c.starts_with("relay.") => data::dispatch_relay(cmd, args).await,
-        c if c.starts_with("content.") => data::dispatch_content(config, cmd, args).await,
+        c if c.starts_with("plasmid.") => {
+            plasmid_dispatch::dispatch_plasmid(config, cmd, args).await
+        }
+        c if c.starts_with("relay.") => relay_dispatch::dispatch_relay(cmd, args).await,
+        c if c.starts_with("content.") => {
+            content_dispatch::dispatch_content(config, cmd, args).await
+        }
         "forgejo.version" => {
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))

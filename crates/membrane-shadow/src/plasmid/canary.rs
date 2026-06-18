@@ -146,7 +146,7 @@ pub async fn canary_health_watch() -> Vec<CanaryHealth> {
 
 /// Maximum age (in hours) before a canary is considered stale and refused for failover.
 /// Configurable via `MEMBRANE_CANARY_MAX_AGE_HOURS` (default: 168 = 7 days / ~2 waves).
-const DEFAULT_MAX_AGE_HOURS: i64 = 168;
+const DEFAULT_MAX_AGE_HOURS: i64 = cellmembrane_types::service::DEFAULT_CANARY_MAX_AGE_HOURS;
 
 /// Check if a canary slot is stale (`promoted_at` older than max age).
 fn is_stale(slot: &CanarySlot) -> bool {

@@ -196,7 +196,8 @@ pub fn resolve_head_ref(project_path: &Path) -> String {
 
 // ── Async git utilities (used by temporal, dispatch, etc.) ───────────
 
-const GIT_OP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+const GIT_OP_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_GIT_OP_TIMEOUT_SECS);
 
 const SSH_CMD_WITH_TIMEOUT: &str =
     "ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o BatchMode=yes";
