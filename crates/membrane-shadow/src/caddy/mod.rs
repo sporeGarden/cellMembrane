@@ -98,7 +98,10 @@ pub struct CaddyHealth {
 pub async fn status(config: &ShadowConfig) -> Result<CaddyHealth> {
     let (active_out, active_code) = caddy_exec(
         config,
-        "systemctl is-active caddy 2>/dev/null || echo inactive",
+        &format!(
+            "systemctl is-active {} 2>/dev/null || echo inactive",
+            cellmembrane_types::service::CADDY_SERVICE_UNIT
+        ),
     )
     .await?;
     let service_active = active_out.trim() == "active" && active_code == 0;

@@ -13,7 +13,9 @@
 
 pub mod build;
 pub(crate) mod canary;
+mod checksum;
 pub(crate) mod depot;
+mod download;
 mod drift;
 mod fetch;
 mod harvest;
@@ -23,6 +25,7 @@ pub(crate) mod sandbox;
 pub(crate) mod toolchain;
 
 pub use build::BuildArgs;
+pub use checksum::fetch_wan_checksums;
 pub use fetch::*;
 pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
 pub use integrity::{IntegrityMismatch, IntegrityReport};

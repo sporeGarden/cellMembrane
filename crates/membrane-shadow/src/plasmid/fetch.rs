@@ -127,21 +127,21 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         .await
         .map_err(ShadowError::Io)?;
 
-    cleanup_partial_downloads(&bin_dir).await;
+    download::cleanup_partial_downloads(&bin_dir).await;
 
     let bd = bin_dir.clone();
     let t = tag.clone();
-    let mut checksums = tokio::task::spawn_blocking(move || load_checksums(&bd, &t))
+    let mut checksums = tokio::task::spawn_blocking(move || checksum::load_checksums(&bd, &t))
         .await
         .unwrap_or_default();
     if checksums.is_empty() && args.source == FetchSource::Wan {
-        checksums = fetch_wan_checksums(&arch).await;
+        checksums = checksum::fetch_wan_checksums(&arch).await;
         if !checksums.is_empty() {
             let dr = dest_root.clone();
             let a = arch.clone();
             let cs = checksums.clone();
             if let Err(e) =
-                tokio::task::spawn_blocking(move || persist_checksums(&dr, &a, &cs)).await
+                tokio::task::spawn_blocking(move || checksum::persist_checksums(&dr, &a, &cs)).await
             {
                 tracing::warn!(error = %e, "persist_checksums task failed");
             }
@@ -230,269 +230,8 @@ async fn resolve_tag(
         .ok_or_else(|| ShadowError::Parse("cannot resolve latest tag without http feature".into()))
 }
 
-// ── Download transport ───────────────────────────────────────────────────────
-
-async fn download_asset(
-    source: FetchSource,
-    config: &crate::ShadowConfig,
-    tag: &str,
-    asset: &str,
-    arch: &str,
-    primal: &str,
-    dest: &Path,
-) -> bool {
-    match source {
-        FetchSource::GitHub => {
-            let org = std::env::var(cellmembrane_types::service::ENV_GITHUB_ORG)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_GITHUB_ORG.into());
-            let url =
-                format!("https://github.com/{org}/plasmidBin/releases/download/{tag}/{asset}");
-            download_via_http(&url, dest).await
-        }
-        FetchSource::Forgejo => {
-            let api = &config.forgejo_api;
-            let base = api.trim_end_matches("/api/v1");
-            let org = std::env::var(cellmembrane_types::service::ENV_FORGEJO_ORG)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_ORG.into());
-            let url = format!("{base}/{org}/plasmidBin/releases/download/{tag}/{asset}");
-            download_via_http(&url, dest).await
-        }
-        FetchSource::Vps => {
-            let vps_bin_dir = std::env::var(cellmembrane_types::service::ENV_VPS_BIN_DIR)
-                .unwrap_or_else(|_| {
-                    format!(
-                        "{}/plasmidBin/primals",
-                        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
-                    )
-                });
-            let remote_path = format!("{vps_bin_dir}/{arch}/{primal}");
-            download_via_ssh(&config.ssh_host, &remote_path, dest).await
-        }
-        FetchSource::Wan => {
-            let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
-            let url = format!("{base_url}/{arch}/{primal}");
-            download_via_http(&url, dest).await
-        }
-    }
-}
-
-async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
-    let output = tokio::process::Command::new("ssh")
-        .args([
-            "-o",
-            "ConnectTimeout=30",
-            "-o",
-            "BatchMode=yes",
-            host,
-            "cat",
-            remote_path,
-        ])
-        .output()
-        .await;
-
-    match output {
-        Ok(o) if o.status.success() && !o.stdout.is_empty() => atomic_write(dest, &o.stdout).await,
-        _ => false,
-    }
-}
-
-#[cfg(feature = "http")]
-async fn download_via_http(url: &str, dest: &Path) -> bool {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_FETCH_TIMEOUT_SECS,
-        ))
-        .build()
-    else {
-        return false;
-    };
-
-    let response = match client.get(url).send().await {
-        Ok(r) if r.status().is_success() => r,
-        _ => return false,
-    };
-
-    let Ok(bytes) = response.bytes().await else {
-        return false;
-    };
-
-    atomic_write(dest, &bytes).await
-}
-
-#[cfg(not(feature = "http"))]
-async fn download_via_http(_url: &str, _dest: &Path) -> bool {
-    false
-}
-
-/// Remove leftover `.tmp` files from interrupted downloads.
-async fn cleanup_partial_downloads(bin_dir: &Path) {
-    let Ok(mut entries) = tokio::fs::read_dir(bin_dir).await else {
-        return;
-    };
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("tmp") {
-            let _ = tokio::fs::remove_file(&path).await;
-        }
-    }
-}
-
-/// Atomic write: data → temp file → rename to final path.
-/// Prevents partial/corrupt binaries from appearing at `dest` if the process
-/// is interrupted mid-write. Cleans up the temp file on failure.
-async fn atomic_write(dest: &Path, data: &[u8]) -> bool {
-    let tmp = dest.with_extension("tmp");
-    if tokio::fs::write(&tmp, data).await.is_err() {
-        let _ = tokio::fs::remove_file(&tmp).await;
-        return false;
-    }
-    if tokio::fs::rename(&tmp, dest).await.is_err() {
-        let _ = tokio::fs::remove_file(&tmp).await;
-        return false;
-    }
-    true
-}
-
-// ── Checksum verification ────────────────────────────────────────────────────
-
-fn compute_blake3(path: &Path) -> std::io::Result<String> {
-    let data = std::fs::read(path)?;
-    Ok(blake3::hash(&data).to_hex().to_string())
-}
-
-#[cfg(test)]
-fn verify_blake3(path: &Path, expected: &str) -> bool {
-    if expected.is_empty() {
-        return false;
-    }
-    compute_blake3(path).is_ok_and(|actual| actual == expected)
-}
-
-async fn verify_blake3_async(path: PathBuf, expected: String) -> bool {
-    if expected.is_empty() {
-        return false;
-    }
-    tokio::task::spawn_blocking(move || {
-        compute_blake3(&path).is_ok_and(|actual| actual == expected)
-    })
-    .await
-    .unwrap_or(false)
-}
-
-/// Fetch `checksums.toml` from the WAN depot and parse it into per-primal BLAKE3 hashes.
-/// Enables zero-git verification for WAN-fetched binaries.
-#[cfg(feature = "http")]
-pub async fn fetch_wan_checksums(arch: &str) -> std::collections::HashMap<String, String> {
-    let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
-    let url = format!("{base_url}/checksums.toml");
-
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-    else {
-        return std::collections::HashMap::new();
-    };
-
-    let Ok(resp) = client.get(&url).send().await else {
-        return std::collections::HashMap::new();
-    };
-
-    if !resp.status().is_success() {
-        return std::collections::HashMap::new();
-    }
-
-    let Ok(body) = resp.text().await else {
-        return std::collections::HashMap::new();
-    };
-
-    parse_checksums_toml(&body, arch)
-}
-
-#[cfg(not(feature = "http"))]
-pub async fn fetch_wan_checksums(_arch: &str) -> std::collections::HashMap<String, String> {
-    std::collections::HashMap::new()
-}
-
-/// Parse the arch-keyed `checksums.toml` format into a flat primal→blake3 map.
-fn parse_checksums_toml(content: &str, arch: &str) -> std::collections::HashMap<String, String> {
-    let Ok(table) = content.parse::<toml::Table>() else {
-        return std::collections::HashMap::new();
-    };
-    let Some(arch_table) = table.get(arch).and_then(toml::Value::as_table) else {
-        return std::collections::HashMap::new();
-    };
-    let mut result = std::collections::HashMap::new();
-    for (name, entry) in arch_table {
-        if let Some(blake3) = entry.get("blake3").and_then(toml::Value::as_str) {
-            result.insert(name.clone(), blake3.to_string());
-        }
-    }
-    result
-}
-
-fn load_checksums(bin_dir: &Path, tag: &str) -> std::collections::HashMap<String, String> {
-    #[derive(Deserialize)]
-    struct FlatChecksumFile {
-        #[serde(default)]
-        checksums: std::collections::HashMap<String, String>,
-    }
-
-    let checksums_path = bin_dir
-        .parent()
-        .unwrap_or(bin_dir)
-        .join(format!("checksums-{tag}.toml"));
-
-    let alt_path = bin_dir.join("checksums.toml");
-
-    let depot_root_path = bin_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|d| d.join("checksums.toml"));
-
-    let path = if checksums_path.exists() {
-        checksums_path
-    } else if alt_path.exists() {
-        alt_path
-    } else if depot_root_path.as_ref().is_some_and(|p| p.exists()) {
-        depot_root_path.unwrap_or_default()
-    } else {
-        return std::collections::HashMap::new();
-    };
-
-    let Ok(contents) = std::fs::read_to_string(&path) else {
-        return std::collections::HashMap::new();
-    };
-
-    let arch = detect_target_triple();
-    let arch_result = parse_checksums_toml(&contents, &arch);
-    if !arch_result.is_empty() {
-        return arch_result;
-    }
-
-    toml::from_str::<FlatChecksumFile>(&contents)
-        .map(|f| f.checksums)
-        .unwrap_or_default()
-}
-
-fn persist_checksums(
-    depot_root: &Path,
-    arch: &str,
-    checksums: &std::collections::HashMap<String, String>,
-) {
-    use std::fmt::Write;
-    let mut content = format!("[{arch}]\n");
-    let mut sorted: Vec<_> = checksums.iter().collect();
-    sorted.sort_by_key(|(k, _)| k.as_str());
-    for (name, hash) in sorted {
-        let _ = writeln!(content, "{name} = \"{hash}\"");
-    }
-    let path = depot_root.join("checksums.toml");
-    if let Err(e) = std::fs::write(&path, content.as_bytes()) {
-        tracing::warn!(error = %e, path = %path.display(), "failed to persist checksums.toml");
-    }
-}
+use super::checksum;
+use super::download;
 
 // ── Fetch orchestration ──────────────────────────────────────────────────────
 
@@ -523,7 +262,7 @@ async fn fetch_primals(
         let _ = tokio::fs::remove_file(&local_path).await;
 
         let arch_asset = format!("{primal}-{arch}");
-        let got = download_asset(
+        let got = download::download_asset(
             args.source,
             config,
             tag,
@@ -533,12 +272,21 @@ async fn fetch_primals(
             &local_path,
         )
         .await
-            || download_asset(args.source, config, tag, primal, arch, primal, &local_path).await;
+            || download::download_asset(
+                args.source,
+                config,
+                tag,
+                primal,
+                arch,
+                primal,
+                &local_path,
+            )
+            .await;
 
         if !got {
             // PARTIAL-FETCH-RESUME: one retry after short backoff
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            let retry_got = download_asset(
+            let retry_got = download::download_asset(
                 args.source,
                 config,
                 tag,
@@ -548,8 +296,16 @@ async fn fetch_primals(
                 &local_path,
             )
             .await
-                || download_asset(args.source, config, tag, primal, arch, primal, &local_path)
-                    .await;
+                || download::download_asset(
+                    args.source,
+                    config,
+                    tag,
+                    primal,
+                    arch,
+                    primal,
+                    &local_path,
+                )
+                .await;
             if !retry_got {
                 results.push(FetchResult {
                     primal: (*primal).to_string(),
@@ -573,7 +329,7 @@ async fn fetch_primals(
         }
 
         let is_verified = if let Some(expected) = checksums.get(*primal) {
-            verify_blake3_async(local_path.clone(), expected.clone()).await
+            checksum::verify_blake3_async(local_path.clone(), expected.clone()).await
         } else {
             false
         };
@@ -681,6 +437,7 @@ fn format_fetch_outcome(
 
 #[cfg(test)]
 mod tests {
+    use super::checksum::compute_blake3;
     use super::*;
 
     #[test]
@@ -733,7 +490,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("b3-test-known");
         std::fs::write(&tmp, b"test data").unwrap();
         let hash = compute_blake3(&tmp).unwrap();
-        assert!(verify_blake3(&tmp, &hash));
+        assert!(checksum::verify_blake3(&tmp, &hash));
         let _ = std::fs::remove_file(&tmp);
     }
 
@@ -741,7 +498,7 @@ mod tests {
     fn blake3_verify_wrong_hash() {
         let tmp = std::env::temp_dir().join("b3-test-wrong");
         std::fs::write(&tmp, b"actual content").unwrap();
-        assert!(!verify_blake3(
+        assert!(!checksum::verify_blake3(
             &tmp,
             "0000000000000000000000000000000000000000000000000000000000000000"
         ));
@@ -750,7 +507,7 @@ mod tests {
 
     #[test]
     fn load_checksums_returns_empty_for_missing() {
-        let checksums = load_checksums(Path::new("/tmp/nonexistent-dir"), "v0.1");
+        let checksums = checksum::load_checksums(Path::new("/tmp/nonexistent-dir"), "v0.1");
         assert!(checksums.is_empty());
     }
 }

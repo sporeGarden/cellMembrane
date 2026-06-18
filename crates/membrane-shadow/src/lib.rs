@@ -65,6 +65,7 @@ pub mod error;
 pub mod forgejo;
 pub mod freshness;
 pub mod gate;
+
 pub mod git_ops;
 pub mod identity;
 pub mod impulse;
@@ -181,7 +182,6 @@ pub async fn atomic_write_async(path: &std::path::Path, contents: &[u8]) -> std:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn resolve_xdg_data_home_returns_non_empty() {

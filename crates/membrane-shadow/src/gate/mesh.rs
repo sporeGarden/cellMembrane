@@ -52,15 +52,15 @@ pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
     let Ok(manifest) = crate::manifest::load_from_workspace(&workspace_root) else {
         return GateManifestProfile::default();
     };
-    match manifest.gates.get(gate_name) {
-        Some(p) => GateManifestProfile {
+    manifest
+        .gates
+        .get(gate_name)
+        .map_or_else(GateManifestProfile::default, |p| GateManifestProfile {
             transport: p.transport.clone().unwrap_or_else(|| "wan".into()),
             mesh_peer: p.mesh_peer.clone(),
             mobility: p.mobility.clone(),
             composition: p.composition.clone(),
-        },
-        None => GateManifestProfile::default(),
-    }
+        })
 }
 
 /// Resolve just the transport mode (backwards compat helper).
@@ -99,14 +99,21 @@ pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> Bo
 
 /// Resolve the primary mesh peer: manifest profile > env var > compiled default.
 fn resolve_primary_peer(manifest_peer: Option<&str>) -> String {
-    manifest_peer.map(String::from).unwrap_or_else(|| {
-        std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into())
-    })
+    manifest_peer.map_or_else(
+        || {
+            std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
+                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into())
+        },
+        String::from,
+    )
 }
 
 /// Configure mesh peering via songbird UDS JSON-RPC.
-async fn configure_mesh(gate_name: &str, arch: &str, manifest_peer: Option<&str>) -> (bool, String) {
+async fn configure_mesh(
+    gate_name: &str,
+    arch: &str,
+    manifest_peer: Option<&str>,
+) -> (bool, String) {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );

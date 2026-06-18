@@ -12,6 +12,7 @@
 
 pub mod bootstrap;
 pub mod health;
+mod interface;
 mod local;
 mod mesh;
 mod nucleus;
