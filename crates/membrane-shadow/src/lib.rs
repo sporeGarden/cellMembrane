@@ -77,6 +77,7 @@ pub mod provision;
 pub mod relay;
 pub mod ribocipher;
 pub mod service;
+pub mod sovereignty_ledger;
 pub mod ssh;
 pub mod temporal;
 pub mod webhook;
