@@ -667,7 +667,7 @@ async fn dispatch_preflight(args: &[&str]) -> crate::Result<ShadowOutcome> {
                 iface.ipv4.join(", ")
             };
             lines.push(format!(
-                "  {:<12} {:>8} {:>6}  {:<15}  {:?}  [{}]",
+                "  {:<12} {:>8} {:>6}  {:<15}  {}  [{}]",
                 iface.name, speed, carrier, ips, iface.role_hint, iface.driver
             ));
         }
