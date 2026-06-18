@@ -1,8 +1,14 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-18 (Wave 116)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
+**Last updated:** 2026-06-18 (Wave 116b)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 116b update (Topology Types + Agentic Enrollment):** `CytoplasmZone` typed enum
+added to `cellmembrane-types/envelope.rs` (Backbone, House2, Garage, Wan, Unassigned)
+with serde, manifest parsing, and topology predicates. `topology.resolve`,
+`topology.zones`, `topology.mesh` dispatch commands wired. WireGuard mesh address
+registry (5 live: golgi, sporeGate, pepti, eastGate, flockGate). Clippy swept 14→0.
+Per-gate agentic FRAGO pushed to wateringHole. 562 tests, zero warnings.
 **Wave 116 update (Gate Enrollment Pipeline):** Fresh binary rebuilt from `11a7c68` with
 ARP probe fix (uses detected LAN interface, not loopback). `InterfaceRole` Display impl
 for clean preflight output. Gate enrollment pipeline validated: `gate.preflight`,
