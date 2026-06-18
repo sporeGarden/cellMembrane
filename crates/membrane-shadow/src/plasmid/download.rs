@@ -127,3 +127,41 @@ pub(super) async fn atomic_write(dest: &Path, data: &[u8]) -> bool {
     }
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn atomic_write_creates_file() {
+        let dir = std::env::temp_dir().join("dl_atomic_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let dest = dir.join("binary");
+        assert!(atomic_write(&dest, b"hello").await);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn atomic_write_no_leftover_tmp() {
+        let dir = std::env::temp_dir().join("dl_atomic_tmp_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let dest = dir.join("binary");
+        atomic_write(&dest, b"data").await;
+        let tmp = dest.with_extension("tmp");
+        assert!(!tmp.exists(), ".tmp should be cleaned up");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn cleanup_partial_downloads_removes_tmp() {
+        let dir = std::env::temp_dir().join("dl_cleanup_test");
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(dir.join("good_binary"), b"ok").unwrap();
+        std::fs::write(dir.join("broken.tmp"), b"partial").unwrap();
+        cleanup_partial_downloads(&dir).await;
+        assert!(dir.join("good_binary").exists());
+        assert!(!dir.join("broken.tmp").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

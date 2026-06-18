@@ -148,3 +148,77 @@ pub(super) fn persist_checksums(
         tracing::warn!(error = %e, path = %path.display(), "failed to persist checksums.toml");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_checksums_toml_extracts_arch_section() {
+        let content = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "abc123" }
+songbird = { blake3 = "def456" }
+
+[aarch64-unknown-linux-musl]
+beardog = { blake3 = "zzz999" }
+"#;
+        let map = parse_checksums_toml(content, "x86_64-unknown-linux-musl");
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("beardog").unwrap(), "abc123");
+        assert_eq!(map.get("songbird").unwrap(), "def456");
+    }
+
+    #[test]
+    fn parse_checksums_toml_returns_empty_for_missing_arch() {
+        let content = "[aarch64-unknown-linux-musl]\nbeardog = { blake3 = \"abc\" }\n";
+        let map = parse_checksums_toml(content, "x86_64-unknown-linux-musl");
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn parse_checksums_toml_returns_empty_for_invalid_toml() {
+        let map = parse_checksums_toml("not [valid toml", "x86_64-unknown-linux-musl");
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn compute_blake3_matches_known_hash() {
+        let dir = std::env::temp_dir().join("cksum_blake3_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test_file");
+        std::fs::write(&path, b"hello world").unwrap();
+        let hash = compute_blake3(&path).unwrap();
+        assert!(!hash.is_empty());
+        let hash2 = compute_blake3(&path).unwrap();
+        assert_eq!(hash, hash2, "deterministic");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn persist_writes_sorted_toml() {
+        let dir = std::env::temp_dir().join("cksum_persist_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let arch = "x86_64-unknown-linux-musl";
+        let mut checksums = HashMap::new();
+        checksums.insert("beardog".to_string(), "abc123".to_string());
+        checksums.insert("songbird".to_string(), "def456".to_string());
+
+        persist_checksums(&dir, arch, &checksums);
+
+        let content = std::fs::read_to_string(dir.join("checksums.toml")).unwrap();
+        assert!(content.starts_with(&format!("[{arch}]")));
+        assert!(content.contains("beardog = \"abc123\""));
+        assert!(content.contains("songbird = \"def456\""));
+        let beardog_pos = content.find("beardog").unwrap();
+        let songbird_pos = content.find("songbird").unwrap();
+        assert!(beardog_pos < songbird_pos, "sorted alphabetically");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_checksums_returns_empty_for_missing_dir() {
+        let loaded = load_checksums(Path::new("/tmp/nonexistent-checksum-dir"), "v0.1");
+        assert!(loaded.is_empty());
+    }
+}

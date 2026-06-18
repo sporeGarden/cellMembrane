@@ -11,6 +11,10 @@
 //! - All mutations logged for audit trail
 //! - Inner membrane never contacts Cloudflare directly
 
+pub mod dns;
+
+pub use dns::{DnsRecord, DnsRecordParams, dns_create, dns_delete, dns_list, dns_update};
+
 use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 
@@ -114,24 +118,6 @@ struct CfError {
     message: String,
 }
 
-/// DNS record from the Cloudflare API.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DnsRecord {
-    /// Record ID (for update/delete).
-    pub id: String,
-    /// Record type (A, AAAA, CNAME, TXT, MX, etc.).
-    #[serde(rename = "type")]
-    pub record_type: String,
-    /// Hostname (e.g. `www.primals.eco`).
-    pub name: String,
-    /// Record content/value.
-    pub content: String,
-    /// TTL in seconds (1 = automatic).
-    pub ttl: u32,
-    /// Whether proxied through Cloudflare.
-    pub proxied: bool,
-}
-
 /// Zone info from the Cloudflare API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZoneInfo {
@@ -160,155 +146,6 @@ pub struct ZoneSetting {
     /// Whether modifiable.
     #[serde(default)]
     pub modified_on: Option<String>,
-}
-
-// ── DNS Operations ──────────────────────────────────────────────────
-
-/// List DNS records for a zone, optionally filtered by type or name.
-pub async fn dns_list(
-    cf: &CloudflareConfig,
-    zone: &str,
-    record_type: Option<&str>,
-    name_filter: Option<&str>,
-) -> Result<Vec<DnsRecord>> {
-    let zone_id = resolve_zone_id(cf, zone).await?;
-    let client = CloudflareConfig::client()?;
-    let (header_key, header_val) = cf.auth_header();
-
-    let mut url = format!("{CF_API_BASE}/zones/{zone_id}/dns_records?per_page=100");
-    if let Some(rt) = record_type {
-        url.push_str("&type=");
-        url.push_str(rt);
-    }
-    if let Some(name) = name_filter {
-        url.push_str("&name=");
-        url.push_str(name);
-    }
-
-    let body: CfResponse<Vec<DnsRecord>> = client
-        .get(&url)
-        .header(header_key, &header_val)
-        .send()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?
-        .json()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
-
-    body.into_result_or_default()
-}
-
-/// Create a DNS record.
-pub async fn dns_create(
-    cf: &CloudflareConfig,
-    zone: &str,
-    record_type: &str,
-    name: &str,
-    content: &str,
-    ttl: u32,
-    proxied: bool,
-) -> Result<DnsRecord> {
-    let zone_id = resolve_zone_id(cf, zone).await?;
-    let client = CloudflareConfig::client()?;
-    let (header_key, header_val) = cf.auth_header();
-
-    let payload = serde_json::json!({
-        "type": record_type,
-        "name": name,
-        "content": content,
-        "ttl": ttl,
-        "proxied": proxied,
-    });
-
-    let resp = client
-        .post(format!("{CF_API_BASE}/zones/{zone_id}/dns_records"))
-        .header(header_key, &header_val)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
-
-    let body: CfResponse<DnsRecord> = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
-
-    body.into_result()
-}
-
-/// Parameters for DNS record mutation (create or update).
-pub struct DnsRecordParams<'a> {
-    /// Zone name (e.g. `primals.eco`).
-    pub zone: &'a str,
-    /// Record type (A, AAAA, CNAME, TXT, etc.).
-    pub record_type: &'a str,
-    /// Hostname.
-    pub name: &'a str,
-    /// Record content/value.
-    pub content: &'a str,
-    /// TTL in seconds (1 = automatic).
-    pub ttl: u32,
-    /// Whether proxied through Cloudflare.
-    pub proxied: bool,
-}
-
-/// Update an existing DNS record by ID.
-pub async fn dns_update(
-    cf: &CloudflareConfig,
-    record_id: &str,
-    params: &DnsRecordParams<'_>,
-) -> Result<DnsRecord> {
-    let zone_id = resolve_zone_id(cf, params.zone).await?;
-    let client = CloudflareConfig::client()?;
-    let (header_key, header_val) = cf.auth_header();
-
-    let payload = serde_json::json!({
-        "type": params.record_type,
-        "name": params.name,
-        "content": params.content,
-        "ttl": params.ttl,
-        "proxied": params.proxied,
-    });
-
-    let resp = client
-        .put(format!(
-            "{CF_API_BASE}/zones/{zone_id}/dns_records/{record_id}"
-        ))
-        .header(header_key, &header_val)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
-
-    let body: CfResponse<DnsRecord> = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
-
-    body.into_result()
-}
-
-/// Delete a DNS record by ID.
-pub async fn dns_delete(cf: &CloudflareConfig, zone: &str, record_id: &str) -> Result<()> {
-    let zone_id = resolve_zone_id(cf, zone).await?;
-    let client = CloudflareConfig::client()?;
-    let (header_key, header_val) = cf.auth_header();
-
-    let resp = client
-        .delete(format!(
-            "{CF_API_BASE}/zones/{zone_id}/dns_records/{record_id}"
-        ))
-        .header(header_key, &header_val)
-        .send()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
-
-    let body: CfResponse<serde_json::Value> = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
-
-    body.into_result().map(|_: serde_json::Value| ())
 }
 
 // ── Cache Operations ────────────────────────────────────────────────

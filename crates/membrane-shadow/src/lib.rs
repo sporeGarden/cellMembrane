@@ -80,6 +80,7 @@ pub mod service;
 pub mod sovereignty_ledger;
 pub mod ssh;
 pub mod temporal;
+pub mod topology;
 pub mod webhook;
 
 pub use config::ShadowConfig;

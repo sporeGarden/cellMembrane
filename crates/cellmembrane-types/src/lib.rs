@@ -44,6 +44,7 @@ pub mod provider;
 pub mod service;
 pub mod signal;
 pub mod sync;
+pub mod topology;
 pub mod transport;
 pub mod validation;
 
@@ -64,6 +65,10 @@ pub use service::{
     binary_integrity_for,
 };
 pub use sync::{DivergencePolicy, GateTransport, PushTarget};
+pub use topology::{
+    AffinityTable, BackboneLink, NetworkSegment, ResolvedTopology, TopologyMap,
+    TopologyMeta, ZoneStatus,
+};
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 

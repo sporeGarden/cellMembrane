@@ -5,8 +5,8 @@
 //! - `publish_freshness_toml()` — writes `freshness.toml` with HEAD SHAs after cascade.
 //! - `check_installed_freshness()` — compares installed binary provenance against source.
 
-pub use crate::sovereignty_ledger::{SovereigntyCheck, rootpulse_commit, sovereignty_verify};
 use crate::error::{Result, ShadowError};
+pub use crate::sovereignty_ledger::{SovereigntyCheck, rootpulse_commit, sovereignty_verify};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
