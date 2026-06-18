@@ -286,9 +286,9 @@ pub(super) fn dispatch_depot_integrity(args: &[&str]) -> crate::Result<ShadowOut
     let verify_only = args.contains(&"--verify");
     let depot_dir = crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
     let report = if verify_only {
-        crate::plasmid::depot::verify_checksums(&depot_dir)?
+        crate::plasmid::integrity::verify_checksums(&depot_dir)?
     } else {
-        crate::plasmid::depot::generate_checksums(&depot_dir)?
+        crate::plasmid::integrity::generate_checksums(&depot_dir)?
     };
     Ok(ShadowOutcome::ok_with(
         format!(

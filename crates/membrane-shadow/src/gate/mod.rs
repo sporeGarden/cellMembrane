@@ -16,6 +16,7 @@ mod local;
 mod mesh;
 mod nucleus;
 pub mod preflight;
+pub(crate) mod sovereignty;
 pub mod verify;
 
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};

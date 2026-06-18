@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! Remote gate verification — health, federation, canary, and identity checks.
+//!
+//! Used by `gate.provision.verify` to validate a remote gate without needing
+//! physical access. Profile-based expectations determine pass/fail criteria.
+
+use super::{DropletState, ProvisionOutcome};
+
+use super::bootstrap::{health_sweep, ssh_exec, verify_federation, write_gate_identity};
+
+/// Remotely verify a provisioned gate — checks health, federation, and canary state.
+///
+/// When `profile` is provided, health expectations are derived from the composition tier.
+pub async fn verify_remote_gate(
+    ip: &str,
+    gate_name: &str,
+    profile: Option<&str>,
+) -> ProvisionOutcome {
+    let mut phases: Vec<String> = Vec::new();
+
+    let expected_healthy = match profile {
+        Some("canary-fieldmouse" | "tower" | "relay") => 2,
+        Some("nest") => 7,
+        Some("full" | "nucleus") => 13,
+        _ => 0,
+    };
+    if expected_healthy > 0 {
+        phases.push(format!(
+            "profile: expects {expected_healthy} healthy ({})",
+            profile.unwrap_or("unknown")
+        ));
+    }
+
+    if ssh_exec(ip, "echo ready").await.is_err() {
+        return ProvisionOutcome {
+            success: false,
+            droplet: None,
+            message: format!("SSH unreachable at {ip}"),
+            phases,
+        };
+    }
+    phases.push("ssh: reachable".into());
+
+    let health_count = match health_sweep(ip).await {
+        Ok(detail) => {
+            let count = detail
+                .split('/')
+                .next()
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .unwrap_or(0);
+            phases.push(format!("health: {detail}"));
+            count
+        }
+        Err(e) => {
+            phases.push(format!("health: FAIL — {e}"));
+            0
+        }
+    };
+
+    let has_federation = match verify_federation(ip).await {
+        Ok(detail) => {
+            let trimmed = detail.trim().to_string();
+            let has_peers = trimmed.contains("peers=1") || trimmed.contains("peers=2");
+            phases.push(trimmed);
+            has_peers
+        }
+        Err(e) => {
+            phases.push(format!("federation: {e}"));
+            false
+        }
+    };
+
+    let canary_result = ssh_exec(
+        ip,
+        &format!(
+            r#"
+STALE=0
+for bin in {install_base}/*; do
+    [ -x "$bin" ] || continue
+    NAME=$(basename "$bin")
+    SOCK="{socket_base}/${{NAME}}.sock"
+    [ -S "$SOCK" ] || {{ STALE=$((STALE + 1)); continue; }}
+    RESP=$(echo '{{"jsonrpc":"2.0","method":"health","id":1}}' | socat - UNIX-CONNECT:"$SOCK" 2>/dev/null)
+    echo "$RESP" | grep -q '"status":"healthy"' || STALE=$((STALE + 1))
+done
+echo "canary.audit: stale=$STALE"
+"#,
+            install_base = cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+            socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE
+        ),
+    )
+    .await;
+    match canary_result {
+        Ok(detail) => phases.push(detail.trim().to_string()),
+        Err(e) => phases.push(format!("canary.audit: FAIL — {e}")),
+    }
+
+    let identity_result = ssh_exec(
+        ip,
+        "cat /etc/membrane/gate_identity 2>/dev/null || echo 'no identity file'",
+    )
+    .await;
+    match identity_result {
+        Ok(detail) => phases.push(format!("identity: {}", detail.trim())),
+        Err(e) => phases.push(format!("identity: {e}")),
+    }
+
+    let health_ok = expected_healthy == 0 || health_count >= expected_healthy;
+    let success = has_federation && health_ok && !phases.iter().any(|p| p.contains("health: FAIL"));
+
+    if !health_ok {
+        phases.push(format!(
+            "EXPECTATION MISS: health {health_count}/{expected_healthy} (profile requires {expected_healthy})"
+        ));
+    }
+
+    ProvisionOutcome {
+        success,
+        droplet: None,
+        message: format!("verify complete for {gate_name} at {ip}"),
+        phases,
+    }
+}
+
+/// Register a remote canary and write gate identity during bootstrap.
+pub(super) async fn finalize_bootstrap(
+    droplet: &DropletState,
+    gate_name: &str,
+    ip: &str,
+    phases: &mut Vec<String>,
+) {
+    let primals: Vec<String> = crate::plasmid::nucleus_primals()
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    crate::plasmid::canary::register_remote_canary(gate_name, ip, Some(droplet.id), primals).await;
+    phases.push("registry: remote canary registered".into());
+
+    match write_gate_identity(ip, gate_name, &droplet.profile).await {
+        Ok(_) => phases.push("identity: written".into()),
+        Err(e) => phases.push(format!("identity: FAIL — {e}")),
+    }
+}

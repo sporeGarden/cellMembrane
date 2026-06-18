@@ -192,7 +192,7 @@ pub(super) async fn dispatch_provision_destroy(args: &[&str]) -> crate::Result<S
 #[cfg(feature = "http")]
 pub(super) async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<ShadowOutcome> {
     use crate::plasmid::canary;
-    use crate::provision::bootstrap;
+    use crate::provision::verify;
 
     let ip = cli::extract_flag_value(args, "--ip");
     let gate = cli::extract_flag_value(args, "--gate");
@@ -220,7 +220,7 @@ pub(super) async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<Sh
     };
 
     let profile = cli::extract_flag_value(args, "--profile");
-    let outcome = bootstrap::verify_remote_gate(&target_ip, &gate_name, profile).await;
+    let outcome = verify::verify_remote_gate(&target_ip, &gate_name, profile).await;
     let summary = outcome
         .phases
         .iter()

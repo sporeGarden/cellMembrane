@@ -17,7 +17,7 @@ fn provision_ssh_user() -> String {
 }
 
 /// Run a command on the remote host via SSH with retry logic for fresh droplets.
-async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
+pub(super) async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
     let user = provision_ssh_user();
     let output = tokio::process::Command::new("ssh")
         .args([
@@ -401,7 +401,7 @@ echo '{{"jsonrpc":"2.0","method":"mesh.init","params":{{"node_id":"{gate_name}",
 }
 
 /// Phase 6b: Verify federation mesh enrollment after join.
-async fn verify_federation(ip: &str) -> Result<String> {
+pub(super) async fn verify_federation(ip: &str) -> Result<String> {
     let relay = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
@@ -424,7 +424,7 @@ echo "federation: peers=${{PEERS:-0}} connections=${{CONNS:-0}}"
 }
 
 /// Phase 7: Health sweep — verify critical services are responding.
-async fn health_sweep(ip: &str) -> Result<String> {
+pub(super) async fn health_sweep(ip: &str) -> Result<String> {
     let script = r#"
         HEALTHY=0
         TOTAL=0
@@ -532,19 +532,7 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
         Err(e) => phases.push(format!("health: FAIL — {e}")),
     }
 
-    // Register as remote canary for failover discovery
-    let primals: Vec<String> = crate::plasmid::nucleus_primals()
-        .into_iter()
-        .map(Into::into)
-        .collect();
-    crate::plasmid::canary::register_remote_canary(gate_name, &ip, Some(droplet.id), primals).await;
-    phases.push("registry: remote canary registered".into());
-
-    // Write gate identity file for remote verification
-    match write_gate_identity(&ip, gate_name, &droplet.profile).await {
-        Ok(_) => phases.push("identity: written".into()),
-        Err(e) => phases.push(format!("identity: FAIL — {e}")),
-    }
+    super::verify::finalize_bootstrap(droplet, gate_name, &ip, &mut phases).await;
 
     ProvisionOutcome {
         success: true,
@@ -555,7 +543,11 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
 }
 
 /// Write a gate identity file at `/etc/membrane/gate_identity` for remote verification.
-async fn write_gate_identity(ip: &str, gate_name: &str, profile: &str) -> Result<String> {
+pub(super) async fn write_gate_identity(
+    ip: &str,
+    gate_name: &str,
+    profile: &str,
+) -> Result<String> {
     let now = chrono::Utc::now().to_rfc3339();
     let script = format!(
         r#"
@@ -571,129 +563,6 @@ echo "identity written"
 "#
     );
     ssh_exec(ip, &script).await
-}
-
-/// Remotely verify a provisioned gate — checks health, federation, and canary state.
-///
-/// Used by `gate.provision.verify` to validate a remote gate without needing
-/// physical access, replacing the "canary.audit on NUC" convergence criterion.
-/// When `profile` is provided, health expectations are derived from the composition tier.
-pub async fn verify_remote_gate(
-    ip: &str,
-    gate_name: &str,
-    profile: Option<&str>,
-) -> ProvisionOutcome {
-    let mut phases: Vec<String> = Vec::new();
-
-    // Derive expected healthy count from profile
-    let expected_healthy = match profile {
-        Some("canary-fieldmouse" | "tower" | "relay") => 2,
-        Some("nest") => 7,
-        Some("full" | "nucleus") => 13,
-        _ => 0, // unknown profile — don't enforce minimum
-    };
-    if expected_healthy > 0 {
-        phases.push(format!(
-            "profile: expects {expected_healthy} healthy ({})",
-            profile.unwrap_or("unknown")
-        ));
-    }
-
-    // SSH reachability
-    if ssh_exec(ip, "echo ready").await.is_err() {
-        return ProvisionOutcome {
-            success: false,
-            droplet: None,
-            message: format!("SSH unreachable at {ip}"),
-            phases,
-        };
-    }
-    phases.push("ssh: reachable".into());
-
-    // Health sweep
-    let health_count = match health_sweep(ip).await {
-        Ok(detail) => {
-            let count = detail
-                .split('/')
-                .next()
-                .and_then(|s| s.trim().parse::<u32>().ok())
-                .unwrap_or(0);
-            phases.push(format!("health: {detail}"));
-            count
-        }
-        Err(e) => {
-            phases.push(format!("health: FAIL — {e}"));
-            0
-        }
-    };
-
-    // Federation status
-    let has_federation = match verify_federation(ip).await {
-        Ok(detail) => {
-            let trimmed = detail.trim().to_string();
-            let has_peers = trimmed.contains("peers=1") || trimmed.contains("peers=2");
-            phases.push(trimmed);
-            has_peers
-        }
-        Err(e) => {
-            phases.push(format!("federation: {e}"));
-            false
-        }
-    };
-
-    // Canary freshness — check if any stale binaries exist
-    let canary_result = ssh_exec(
-        ip,
-        &format!(
-            r#"
-STALE=0
-for bin in {install_base}/*; do
-    [ -x "$bin" ] || continue
-    NAME=$(basename "$bin")
-    SOCK="{socket_base}/${{NAME}}.sock"
-    [ -S "$SOCK" ] || {{ STALE=$((STALE + 1)); continue; }}
-    RESP=$(echo '{{"jsonrpc":"2.0","method":"health","id":1}}' | socat - UNIX-CONNECT:"$SOCK" 2>/dev/null)
-    echo "$RESP" | grep -q '"status":"healthy"' || STALE=$((STALE + 1))
-done
-echo "canary.audit: stale=$STALE"
-"#,
-            install_base = cellmembrane_types::service::DEFAULT_INSTALL_BASE,
-            socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE
-        ),
-    )
-    .await;
-    match canary_result {
-        Ok(detail) => phases.push(detail.trim().to_string()),
-        Err(e) => phases.push(format!("canary.audit: FAIL — {e}")),
-    }
-
-    // Gate identity
-    let identity_result = ssh_exec(
-        ip,
-        "cat /etc/membrane/gate_identity 2>/dev/null || echo 'no identity file'",
-    )
-    .await;
-    match identity_result {
-        Ok(detail) => phases.push(format!("identity: {}", detail.trim())),
-        Err(e) => phases.push(format!("identity: {e}")),
-    }
-
-    // Determine success based on profile expectations
-    let health_ok = expected_healthy == 0 || health_count >= expected_healthy;
-    let success = has_federation && health_ok && !phases.iter().any(|p| p.contains("health: FAIL"));
-
-    if !health_ok {
-        phases.push(format!(
-            "EXPECTATION MISS: health {health_count}/{expected_healthy} (profile requires {expected_healthy})"
-        ));
-    }
-
-    ProvisionOutcome {
-        success,
-        droplet: None,
-        message: format!("verify complete for {gate_name} at {ip}"),
-        phases,
-    }
 }
 
 #[cfg(test)]

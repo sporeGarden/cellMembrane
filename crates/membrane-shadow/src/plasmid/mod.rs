@@ -14,8 +14,10 @@
 pub mod build;
 pub(crate) mod canary;
 pub(crate) mod depot;
+mod drift;
 mod fetch;
 mod harvest;
+pub(crate) mod integrity;
 mod refresh;
 pub(crate) mod sandbox;
 pub(crate) mod toolchain;
@@ -23,9 +25,10 @@ pub(crate) mod toolchain;
 pub use build::BuildArgs;
 pub use fetch::*;
 pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
+pub use integrity::{IntegrityMismatch, IntegrityReport};
 pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
-pub use depot::{IntegrityMismatch, IntegrityReport, StalenessEntry, StalenessReport};
+pub use depot::{StalenessEntry, StalenessReport};
 
 /// Compute BLAKE3 hash of a file, returning hex string.
 pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
@@ -425,7 +428,7 @@ pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
     for &primal in &registry_primals {
         if let Some(source) = sources.get(primal) {
             let changed =
-                harvest::has_upstream_changes_pub(primal, source, provenance.as_ref(), &depot_dir)
+                drift::has_upstream_changes_pub(primal, source, provenance.as_ref(), &depot_dir)
                     .await;
             if changed {
                 drifted.push(primal.to_string());

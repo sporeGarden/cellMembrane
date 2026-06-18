@@ -132,7 +132,7 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
         };
 
         let needs_rebuild = args.force
-            || has_upstream_changes(primal, source, provenance.as_ref(), &depot_dir).await;
+            || drift::has_upstream_changes(primal, source, provenance.as_ref(), &depot_dir).await;
 
         if !needs_rebuild {
             results.push(HarvestResult {
@@ -165,7 +165,7 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             if let Err(e) = update_depot_metadata(&depot_dir, &target, &built).await {
                 warn!(error = %e, "failed to update depot metadata");
             }
-            publish_depot_checksums(&depot_dir).await;
+            drift::publish_depot_checksums(&depot_dir).await;
         }
     }
 
@@ -193,57 +193,7 @@ fn determine_primals(
     }
 }
 
-async fn has_upstream_changes(
-    primal: &str,
-    source: &SourceEntry,
-    provenance: Option<&ProvenanceFile>,
-    depot_dir: &Path,
-) -> bool {
-    let Some(prov) = provenance else {
-        return true;
-    };
-    let Some(entry) = prov.entries.get(primal) else {
-        return true;
-    };
-    let Some(prev_commit) = entry.commit.as_deref() else {
-        return true;
-    };
-
-    fetch_head_commit(&source.repo, depot_dir)
-        .await
-        .is_none_or(|head| !head.starts_with(prev_commit) && !prev_commit.starts_with(&head))
-}
-
-/// Fetch HEAD from both outer (GitHub) and inner (Forgejo) membranes.
-///
-/// Returns the commit that is farthest ahead — if either remote has a newer
-/// commit than provenance, we should detect drift. This ensures golgiBody
-/// sees GitHub pushes and peptidoglycan sees both layers.
-async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
-    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
-
-    let forgejo = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await;
-    let github = try_ls_remote_head(&format!("https://github.com/{repo}.git")).await;
-
-    // Prefer GitHub (outer) if available — it's where pushes land first.
-    // Forgejo mirrors from GitHub so it can lag behind.
-    github.or(forgejo)
-}
-
-async fn try_ls_remote_head(url: &str) -> Option<String> {
-    let output = tokio::process::Command::new("git")
-        .args(["ls-remote", url, "HEAD"])
-        .output()
-        .await
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout.split_whitespace().next().map(|s| s[..8].to_string())
-}
+use super::drift;
 
 async fn harvest_one(
     primal: &str,
@@ -254,7 +204,7 @@ async fn harvest_one(
     let build_root = std::env::temp_dir().join("membrane-harvest");
     let clone_dir = build_root.join(primal);
 
-    if let Err(detail) = clone_source(primal, source, &build_root, &clone_dir).await {
+    if let Err(detail) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
         let status = if source.private {
             HarvestStatus::Skipped
         } else {
@@ -267,9 +217,11 @@ async fn harvest_one(
         };
     }
 
-    let head_commit = get_local_head(&clone_dir).await.unwrap_or_default();
+    let head_commit = drift::get_local_head(&clone_dir).await.unwrap_or_default();
 
-    if let Some(warning) = check_clone_freshness(primal, source, &clone_dir, &head_commit).await {
+    if let Some(warning) =
+        drift::check_clone_freshness(primal, source, &clone_dir, &head_commit).await
+    {
         warn!(primal, warning, "freshness warning");
     }
 
@@ -339,90 +291,6 @@ async fn harvest_one(
     }
 }
 
-async fn clone_source(
-    primal: &str,
-    source: &SourceEntry,
-    build_root: &Path,
-    clone_dir: &Path,
-) -> std::result::Result<(), String> {
-    if let Err(e) = tokio::fs::remove_dir_all(clone_dir).await {
-        tracing::debug!(error = %e, "clone_dir cleanup (may not exist yet)");
-    }
-    if let Err(e) = tokio::fs::create_dir_all(build_root).await {
-        tracing::warn!(error = %e, dir = %build_root.display(), "failed to create build root");
-    }
-
-    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
-    let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
-    let github_url = format!("https://github.com/{}.git", source.repo);
-
-    // Try Forgejo SSH first (works for private repos, inner membrane)
-    if toolchain::try_clone(&forgejo_url, clone_dir).await {
-        return Ok(());
-    }
-
-    // Fall back to GitHub HTTPS (outer membrane, public repos)
-    if toolchain::try_clone(&github_url, clone_dir).await {
-        return Ok(());
-    }
-
-    if source.private {
-        Err(format!(
-            "private repo — neither Forgejo SSH nor GitHub accessible ({primal})"
-        ))
-    } else {
-        Err("git clone failed on both Forgejo and GitHub".into())
-    }
-}
-
-/// Verify the clone is at the same HEAD as the upstream origin.
-/// Returns `Some(warning)` if the clone appears stale, `None` if fresh or unverifiable.
-async fn check_clone_freshness(
-    _primal: &str,
-    source: &SourceEntry,
-    clone_dir: &Path,
-    local_head: &str,
-) -> Option<String> {
-    if local_head.is_empty() {
-        return Some("could not determine local HEAD".into());
-    }
-
-    let github_url = format!("https://github.com/{}.git", source.repo);
-    let output = tokio::process::Command::new("git")
-        .args(["ls-remote", &github_url, "HEAD"])
-        .current_dir(clone_dir)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .await
-        .ok()?;
-
-    if !output.status.success() {
-        return None; // Can't verify — skip gracefully
-    }
-
-    let remote_head = String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_string();
-
-    if remote_head.is_empty() {
-        return None;
-    }
-
-    if !remote_head.starts_with(local_head) && !local_head.starts_with(&remote_head) {
-        Some(format!(
-            "clone at {short_local} but origin HEAD is {short_remote} — source may be stale",
-            short_local = &local_head[..8.min(local_head.len())],
-            short_remote = &remote_head[..8.min(remote_head.len())],
-        ))
-    } else {
-        None
-    }
-}
-
 pub(super) use toolchain::{
     ANDROID_TARGET, ENV_ANDROID_NDK_HOME, resolve_ndk_linker, validate_elf_arch,
 };
@@ -448,51 +316,9 @@ fn stage_to_depot(
     Ok((size, blake3))
 }
 
-async fn get_local_head(repo_dir: &Path) -> Option<String> {
-    crate::git_ops::git_output(repo_dir, &["rev-parse", "--short=8", "HEAD"])
-        .await
-        .ok()
-}
-
 pub(super) use super::depot::{
     compute_blake3_file, load_provenance, load_sources, resolve_depot, update_depot_metadata,
 };
-
-/// Commit and push updated checksums.toml + provenance.toml to git.
-/// Non-fatal — harvest succeeds even if git publish fails.
-async fn publish_depot_checksums(depot_dir: &std::path::Path) {
-    if !depot_dir.join(".git").is_dir() {
-        return;
-    }
-
-    if !crate::git_ops::git_success(depot_dir, &["add", "checksums.toml", "provenance.toml"]).await
-    {
-        return;
-    }
-
-    let has_staged =
-        !crate::git_ops::git_success(depot_dir, &["diff", "--cached", "--quiet"]).await;
-    if !has_staged {
-        return;
-    }
-
-    let commit_msg = format!(
-        "harvest: update checksums + provenance ({})",
-        chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
-    );
-
-    if let Err(e) = crate::git_ops::git_output(depot_dir, &["commit", "-m", &commit_msg]).await {
-        tracing::warn!(error = %e, "depot checksum commit failed");
-    }
-    let push = crate::git_ops::push_all_remotes(depot_dir).await;
-    if !push.failed.is_empty() {
-        tracing::warn!(
-            failed = ?push.failed,
-            succeeded = push.succeeded,
-            "depot checksum push had failures"
-        );
-    }
-}
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
     let built = results
@@ -520,31 +346,6 @@ fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
         message: msg,
         data: serde_json::to_value(results).ok(),
     }
-}
-
-/// Public wrapper to check upstream changes for a primal — used by `status`.
-///
-/// Uses lenient mode: if remote HEAD cannot be fetched (network failure),
-/// assume current rather than reporting false drift.
-pub(super) async fn has_upstream_changes_pub(
-    primal: &str,
-    source: &SourceEntry,
-    provenance: Option<&ProvenanceFile>,
-    depot_dir: &Path,
-) -> bool {
-    let Some(prov) = provenance else {
-        return true;
-    };
-    let Some(entry) = prov.entries.get(primal) else {
-        return true;
-    };
-    let Some(prev_commit) = entry.commit.as_deref() else {
-        return true;
-    };
-
-    fetch_head_commit(&source.repo, depot_dir)
-        .await
-        .is_some_and(|head| !head.starts_with(prev_commit) && !prev_commit.starts_with(&head))
 }
 
 #[cfg(test)]

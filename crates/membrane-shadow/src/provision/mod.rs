@@ -12,6 +12,7 @@
 pub mod digitalocean;
 
 pub mod bootstrap;
+pub mod verify;
 
 use serde::{Deserialize, Serialize};
 
