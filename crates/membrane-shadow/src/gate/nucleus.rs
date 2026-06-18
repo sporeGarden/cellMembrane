@@ -10,7 +10,7 @@ use super::BootstrapPhase;
 
 /// Start all NUCLEUS primals — generate secrets, write systemd units, enable+start.
 pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
-    generate_secrets_env();
+    let config_dir = generate_secrets_env();
 
     let install_base = super::resolve_install_base();
     let dest_root = super::resolve_plasmidbin_dir();
@@ -64,7 +64,7 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
             &security_socket,
         );
         let extra_args = extra_exec_args(svc);
-        let unit_content = generate_unit_content(svc, &exec_start, &extra_args);
+        let unit_content = generate_unit_content(svc, &exec_start, &extra_args, &config_dir);
         let unit_path = systemd_dir.join(format!("{}-membrane.service", svc.binary));
 
         if std::fs::write(&unit_path, &unit_content).is_ok() {
@@ -119,7 +119,7 @@ pub(super) fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
 
 // ── Secrets generation ──────────────────────────────────────────────
 
-fn generate_secrets_env() {
+fn generate_secrets_env() -> String {
     use std::io::Write as _;
     use std::os::unix::fs::PermissionsExt;
 
@@ -129,32 +129,38 @@ fn generate_secrets_env() {
     std::fs::create_dir_all(env_dir).ok();
     let env_file = env_dir.join("secrets.env");
     if env_file.exists() {
-        return;
+        return config_dir;
     }
 
-    let mut secret = String::with_capacity(128);
-    for _ in 0..64 {
-        use std::fmt::Write;
-        let _ = write!(secret, "{:02x}", rand_byte());
-    }
+    let secret = match csprng_hex(64) {
+        Some(s) => s,
+        None => {
+            tracing::warn!("failed to read /dev/urandom — secrets.env not generated");
+            return config_dir;
+        }
+    };
     let content = format!("NESTGATE_JWT_SECRET={secret}\n");
     if let Ok(mut f) = std::fs::File::create(&env_file) {
         f.write_all(content.as_bytes()).ok();
     }
     std::fs::set_permissions(&env_file, std::fs::Permissions::from_mode(0o600)).ok();
+    config_dir
 }
 
-fn rand_byte() -> u8 {
-    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let tick = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    u64::from(now)
-        .wrapping_mul(6_364_136_223_846_793_005)
-        .wrapping_add(tick)
-        .to_le_bytes()[0]
+/// Read `n` bytes from `/dev/urandom` and return as hex string.
+fn csprng_hex(n: usize) -> Option<String> {
+    use std::io::Read as _;
+    let mut buf = vec![0u8; n];
+    std::fs::File::open("/dev/urandom")
+        .ok()?
+        .read_exact(&mut buf)
+        .ok()?;
+    let mut hex = String::with_capacity(n * 2);
+    for b in &buf {
+        use std::fmt::Write;
+        let _ = write!(hex, "{b:02x}");
+    }
+    Some(hex)
 }
 
 // ── Systemd unit generation ─────────────────────────────────────────
@@ -201,14 +207,15 @@ fn generate_unit_content(
     svc: &cellmembrane_types::MembraneService,
     exec_start: &str,
     extra_args: &str,
+    config_dir: &str,
 ) -> String {
     let content_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::ContentServing,
     );
     let env_file_line = if svc.binary == content_binary {
-        "EnvironmentFile=-/etc/membrane/secrets.env\n"
+        format!("EnvironmentFile=-{config_dir}/secrets.env\n")
     } else {
-        ""
+        String::new()
     };
 
     format!(
@@ -296,7 +303,8 @@ mod tests {
     fn generate_unit_content_has_systemd_sections() {
         let svc = MembraneService::with_capability(ServiceCapability::CryptoSigner)
             .expect("CryptoSigner must exist");
-        let content = generate_unit_content(svc, "/usr/bin/beardog server --socket /run/x", "");
+        let content =
+            generate_unit_content(svc, "/usr/bin/beardog server --socket /run/x", "", "/etc/membrane");
         assert!(content.contains("[Unit]"), "missing [Unit]");
         assert!(content.contains("[Service]"), "missing [Service]");
         assert!(content.contains("[Install]"), "missing [Install]");
@@ -311,7 +319,7 @@ mod tests {
             .expect("MeshRelay must exist");
         let exec = "/opt/membrane/primals/x86_64/songbird server --socket /run/s.sock";
         let extra = " --federation-port 7700 --bind 0.0.0.0";
-        let content = generate_unit_content(svc, exec, extra);
+        let content = generate_unit_content(svc, exec, extra, "/etc/membrane");
         let exec_line = format!("ExecStart={exec}{extra}");
         assert!(
             content.contains(&exec_line),
@@ -323,7 +331,7 @@ mod tests {
     fn generate_unit_content_env_file_only_for_content_serving() {
         let content_svc = MembraneService::with_capability(ServiceCapability::ContentServing)
             .expect("ContentServing must exist");
-        let unit = generate_unit_content(content_svc, "/bin/x", "");
+        let unit = generate_unit_content(content_svc, "/bin/x", "", "/etc/membrane");
         assert!(
             unit.contains("EnvironmentFile"),
             "content serving primal should have EnvironmentFile"
@@ -331,7 +339,7 @@ mod tests {
 
         let crypto_svc = MembraneService::with_capability(ServiceCapability::CryptoSigner)
             .expect("CryptoSigner must exist");
-        let unit2 = generate_unit_content(crypto_svc, "/bin/x", "");
+        let unit2 = generate_unit_content(crypto_svc, "/bin/x", "", "/etc/membrane");
         assert!(
             !unit2.contains("EnvironmentFile"),
             "non-content primal should NOT have EnvironmentFile"
@@ -339,9 +347,20 @@ mod tests {
     }
 
     #[test]
+    fn generate_unit_content_env_file_uses_config_dir() {
+        let content_svc = MembraneService::with_capability(ServiceCapability::ContentServing)
+            .expect("ContentServing must exist");
+        let unit = generate_unit_content(content_svc, "/bin/x", "", "/custom/config");
+        assert!(
+            unit.contains("EnvironmentFile=-/custom/config/secrets.env"),
+            "env file path should use config_dir, got: {unit}"
+        );
+    }
+
+    #[test]
     fn generate_unit_content_description_includes_binary_name() {
         let svc = MembraneService::with_capability(ServiceCapability::MeshRelay).unwrap();
-        let content = generate_unit_content(svc, "/bin/x", "");
+        let content = generate_unit_content(svc, "/bin/x", "", "/etc/membrane");
         assert!(
             content.contains(&format!("Description={} primal", svc.binary)),
             "description should include binary name"
@@ -349,16 +368,20 @@ mod tests {
     }
 
     #[test]
-    fn rand_byte_produces_varied_output() {
-        let mut bytes = std::collections::HashSet::new();
-        for _ in 0..256 {
-            bytes.insert(rand_byte());
-        }
+    fn csprng_hex_produces_correct_length() {
+        let hex = csprng_hex(32).expect("/dev/urandom should be readable");
+        assert_eq!(hex.len(), 64, "32 bytes should produce 64 hex chars");
         assert!(
-            bytes.len() > 1,
-            "256 calls to rand_byte() should produce more than 1 distinct value, got {}",
-            bytes.len()
+            hex.chars().all(|c| c.is_ascii_hexdigit()),
+            "output should be hex only, got: {hex}"
         );
+    }
+
+    #[test]
+    fn csprng_hex_produces_varied_output() {
+        let a = csprng_hex(16).unwrap();
+        let b = csprng_hex(16).unwrap();
+        assert_ne!(a, b, "two CSPRNG reads should differ");
     }
 
     #[test]

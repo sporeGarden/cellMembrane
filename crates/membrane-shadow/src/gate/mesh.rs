@@ -20,26 +20,62 @@ pub(super) fn transport_to_fetch_source(transport: &str) -> crate::plasmid::Fetc
     }
 }
 
-/// Resolve the transport mode for a gate from the ecosystem manifest.
-pub(super) fn resolve_gate_transport(gate_name: &str) -> String {
+/// Resolved gate profile fields from the ecosystem manifest.
+///
+/// Fields beyond `transport` and `mesh_peer` are staged for profile-driven
+/// bootstrap evolution (Wave 117+: composition-aware NUCLEUS, manifest mobility).
+pub(super) struct GateManifestProfile {
+    pub transport: String,
+    pub mesh_peer: Option<String>,
+    #[allow(dead_code, reason = "staged for composition-aware NUCLEUS (Wave 117+)")]
+    pub mobility: Option<String>,
+    #[allow(dead_code, reason = "staged for composition-aware NUCLEUS (Wave 117+)")]
+    pub composition: Option<String>,
+}
+
+impl Default for GateManifestProfile {
+    fn default() -> Self {
+        Self {
+            transport: "wan".into(),
+            mesh_peer: None,
+            mobility: None,
+            composition: None,
+        }
+    }
+}
+
+/// Resolve gate profile fields from the ecosystem manifest.
+pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
     let Ok(workspace_root) = crate::temporal::resolve_workspace_root() else {
-        return "wan".into();
+        return GateManifestProfile::default();
     };
     let Ok(manifest) = crate::manifest::load_from_workspace(&workspace_root) else {
-        return "wan".into();
+        return GateManifestProfile::default();
     };
-    manifest
-        .gates
-        .get(gate_name)
-        .and_then(|p| p.transport.clone())
-        .unwrap_or_else(|| "wan".into())
+    match manifest.gates.get(gate_name) {
+        Some(p) => GateManifestProfile {
+            transport: p.transport.clone().unwrap_or_else(|| "wan".into()),
+            mesh_peer: p.mesh_peer.clone(),
+            mobility: p.mobility.clone(),
+            composition: p.composition.clone(),
+        },
+        None => GateManifestProfile::default(),
+    }
+}
+
+/// Resolve just the transport mode (backwards compat helper).
+pub(super) fn resolve_gate_transport(gate_name: &str) -> String {
+    resolve_gate_profile(gate_name).transport
 }
 
 /// Construct the mesh configuration phase.
+///
+/// If the gate's manifest profile specifies a `mesh_peer`, it takes priority over
+/// the `MEMBRANE_VPS_MESH_PEER` env var and the compiled-in default.
 pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> BootstrapPhase {
+    let profile = resolve_gate_profile(gate_name);
     if dry_run {
-        let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
+        let vps_peer = resolve_primary_peer(profile.mesh_peer.as_deref());
         let extra = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS).unwrap_or_default();
         let peer_info = if extra.is_empty() {
             format!("1 peer ({vps_peer})")
@@ -53,7 +89,7 @@ pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> Bo
             detail: format!("dry-run: would mesh.init {peer_info} as {gate_name}"),
         };
     }
-    let (ok, detail) = configure_mesh(gate_name, arch).await;
+    let (ok, detail) = configure_mesh(gate_name, arch, profile.mesh_peer.as_deref()).await;
     BootstrapPhase {
         name: "mesh.configure".into(),
         ok,
@@ -61,8 +97,16 @@ pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> Bo
     }
 }
 
+/// Resolve the primary mesh peer: manifest profile > env var > compiled default.
+fn resolve_primary_peer(manifest_peer: Option<&str>) -> String {
+    manifest_peer.map(String::from).unwrap_or_else(|| {
+        std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
+            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into())
+    })
+}
+
 /// Configure mesh peering via songbird UDS JSON-RPC.
-async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
+async fn configure_mesh(gate_name: &str, arch: &str, manifest_peer: Option<&str>) -> (bool, String) {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
@@ -96,8 +140,7 @@ async fn configure_mesh(gate_name: &str, arch: &str) -> (bool, String) {
         );
     }
 
-    let vps_peer = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into());
+    let vps_peer = resolve_primary_peer(manifest_peer);
 
     let mut peers: Vec<String> = vec![vps_peer.clone()];
     if let Ok(extra) = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS) {
@@ -182,5 +225,29 @@ mod tests {
             "dry-run detail should mention peers, got: {}",
             phase.detail
         );
+    }
+
+    #[test]
+    fn resolve_primary_peer_prefers_manifest() {
+        let peer = resolve_primary_peer(Some("10.13.37.1:7700"));
+        assert_eq!(peer, "10.13.37.1:7700");
+    }
+
+    #[test]
+    fn resolve_primary_peer_falls_back_to_default() {
+        let peer = resolve_primary_peer(None);
+        assert!(
+            !peer.is_empty(),
+            "should fall back to env or compiled default"
+        );
+    }
+
+    #[test]
+    fn gate_manifest_profile_defaults() {
+        let p = GateManifestProfile::default();
+        assert_eq!(p.transport, "wan");
+        assert!(p.mesh_peer.is_none());
+        assert!(p.mobility.is_none());
+        assert!(p.composition.is_none());
     }
 }
