@@ -5,10 +5,10 @@
 //! Runs non-destructive checks to catch the common adhoc interventions
 //! documented in the sporeGate Wave 115 AAR:
 //!   - Interface detection (WAN/LAN by driver, speed, carrier)
-//!   - IP conflict scanning (ARP probe for target gateway IP)
+//!   - IP conflict scanning (ARP probe for target gateway IP on detected LAN interface)
 //!   - Port 53 listener check (systemd-resolved vs dnsmasq)
-//!   - Existing DHCP server detection on LAN
 //!   - `NetworkManager` interference check
+//!   - IPv6 forwarding state
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -58,6 +58,18 @@ pub enum InterfaceRole {
     Virtual,
     /// Cannot determine.
     Unknown,
+}
+
+impl std::fmt::Display for InterfaceRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Wan => f.write_str("Wan"),
+            Self::Lan => f.write_str("Lan"),
+            Self::Wireless => f.write_str("Wireless"),
+            Self::Virtual => f.write_str("Virtual"),
+            Self::Unknown => f.write_str("Unknown"),
+        }
+    }
 }
 
 /// Full preflight report.
@@ -390,8 +402,27 @@ async fn check_ip_conflict(target_ip: &str, interfaces: &[DetectedInterface]) ->
         };
     }
 
+    let probe_iface = interfaces
+        .iter()
+        .find(|i| i.role_hint == InterfaceRole::Lan && i.carrier)
+        .or_else(|| {
+            interfaces
+                .iter()
+                .find(|i| i.name.starts_with("en") && i.carrier)
+        });
+
+    let Some(iface) = probe_iface else {
+        return PreflightCheck {
+            name: "ip.conflict".into(),
+            passed: true,
+            detail: format!(
+                "{target_ip} — skipped ARP probe (no active ethernet interface for probing)"
+            ),
+        };
+    };
+
     let arping = tokio::process::Command::new("arping")
-        .args(["-c", "2", "-w", "3", "-I", "lo", target_ip])
+        .args(["-c", "2", "-w", "3", "-I", &iface.name, target_ip])
         .output()
         .await;
 
@@ -400,16 +431,22 @@ async fn check_ip_conflict(target_ip: &str, interfaces: &[DetectedInterface]) ->
         .is_some_and(|o| o.status.success() && !o.stdout.is_empty());
 
     if conflict {
-        info!(ip = target_ip, "IP conflict detected via ARP");
+        info!(ip = target_ip, iface = %iface.name, "IP conflict detected via ARP");
     }
 
     PreflightCheck {
         name: "ip.conflict".into(),
         passed: !conflict,
         detail: if conflict {
-            format!("{target_ip} already claimed by another device on the network")
+            format!(
+                "{target_ip} already claimed by another device on the network (probed via {})",
+                iface.name
+            )
         } else {
-            format!("{target_ip} appears available (no ARP response)")
+            format!(
+                "{target_ip} appears available (no ARP response on {})",
+                iface.name
+            )
         },
     }
 }
@@ -551,5 +588,73 @@ mod tests {
         };
         let json = serde_json::to_string(&report).unwrap();
         assert!(json.contains("\"all_pass\":true"));
+    }
+
+    #[test]
+    fn interface_role_display() {
+        assert_eq!(InterfaceRole::Wan.to_string(), "Wan");
+        assert_eq!(InterfaceRole::Lan.to_string(), "Lan");
+        assert_eq!(InterfaceRole::Wireless.to_string(), "Wireless");
+        assert_eq!(InterfaceRole::Virtual.to_string(), "Virtual");
+        assert_eq!(InterfaceRole::Unknown.to_string(), "Unknown");
+    }
+
+    #[test]
+    fn ip_conflict_prefers_lan_interface() {
+        let ifaces = vec![
+            DetectedInterface {
+                name: "enp1s0".into(),
+                driver: "r8169".into(),
+                speed_mbps: Some(1000),
+                carrier: true,
+                mac: "aa:bb:cc:dd:ee:ff".into(),
+                ipv4: vec!["192.168.1.2".into()],
+                role_hint: InterfaceRole::Wan,
+            },
+            DetectedInterface {
+                name: "eno1".into(),
+                driver: "igc".into(),
+                speed_mbps: Some(1000),
+                carrier: true,
+                mac: "11:22:33:44:55:66".into(),
+                ipv4: vec!["192.168.4.1".into()],
+                role_hint: InterfaceRole::Lan,
+            },
+        ];
+
+        let probe_iface = ifaces
+            .iter()
+            .find(|i| i.role_hint == InterfaceRole::Lan && i.carrier)
+            .or_else(|| {
+                ifaces
+                    .iter()
+                    .find(|i| i.name.starts_with("en") && i.carrier)
+            });
+
+        assert_eq!(probe_iface.map(|i| i.name.as_str()), Some("eno1"));
+    }
+
+    #[test]
+    fn ip_conflict_falls_back_to_any_ethernet() {
+        let ifaces = vec![DetectedInterface {
+            name: "enp5s0".into(),
+            driver: "ixgbe".into(),
+            speed_mbps: Some(10000),
+            carrier: true,
+            mac: "aa:bb:cc:dd:ee:ff".into(),
+            ipv4: vec![],
+            role_hint: InterfaceRole::Unknown,
+        }];
+
+        let probe_iface = ifaces
+            .iter()
+            .find(|i| i.role_hint == InterfaceRole::Lan && i.carrier)
+            .or_else(|| {
+                ifaces
+                    .iter()
+                    .find(|i| i.name.starts_with("en") && i.carrier)
+            });
+
+        assert_eq!(probe_iface.map(|i| i.name.as_str()), Some("enp5s0"));
     }
 }

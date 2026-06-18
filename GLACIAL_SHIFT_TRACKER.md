@@ -1,8 +1,13 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-17 (Wave 115)
+**Last updated:** 2026-06-18 (Wave 116)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-gate mesh collective, deterministic deployment CODIFIED
+**Wave 116 update (Gate Enrollment Pipeline):** Fresh binary rebuilt from `11a7c68` with
+ARP probe fix (uses detected LAN interface, not loopback). `InterfaceRole` Display impl
+for clean preflight output. Gate enrollment pipeline validated: `gate.preflight`,
+`firewall.generate --plasma-membrane`, `gate.bootstrap --dry-run` all operational.
+eastGate enrollment BLOCKED on SSH key authorization (operator action). 498 tests.
 **Wave 115 update (Sovereign Mesh & Gate Hardening):** `gate.bootstrap` per-phase
 timeouts (120s) + `identity.git` phase (detects missing git config + SSH keys).
 `depot.integrity` command (generate/verify BLAKE3 checksums). Smart refactor:
