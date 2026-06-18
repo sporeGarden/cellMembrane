@@ -181,3 +181,31 @@ fn resolve_neural_api_socket() -> PathBuf {
 
     PathBuf::from(&socket_base).join("neural-api.sock")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mark_all_unverified_produces_correct_output() {
+        let mut heads = BTreeMap::new();
+        heads.insert("repo-a".to_string(), "abc123".to_string());
+        heads.insert("repo-b".to_string(), "def456".to_string());
+
+        let checks = mark_all_unverified(&heads, "test reason");
+        assert_eq!(checks.len(), 2);
+        assert!(!checks[0].verified);
+        assert!(checks[0].detail.contains("test reason"));
+    }
+
+    #[test]
+    fn sovereignty_check_fields() {
+        let check = SovereigntyCheck {
+            repo: "cellMembrane".to_string(),
+            verified: true,
+            detail: "sovereign match".into(),
+        };
+        assert!(check.verified);
+        assert_eq!(check.repo, "cellMembrane");
+    }
+}

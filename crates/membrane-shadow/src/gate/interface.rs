@@ -173,3 +173,79 @@ async fn read_sysfs_speed(iface: &str) -> Option<u32> {
         .and_then(|s| s.trim().parse().ok())
         .filter(|&s: &u32| s > 0 && s < 1_000_000)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::preflight::InterfaceRole;
+    use super::*;
+
+    #[test]
+    fn classify_wireless_by_prefix() {
+        assert_eq!(
+            classify_role("wlp3s0", "iwlwifi", true, &[], None),
+            InterfaceRole::Wireless
+        );
+    }
+
+    #[test]
+    fn classify_virtual_overlays() {
+        assert_eq!(
+            classify_role("wg0", "", false, &[], None),
+            InterfaceRole::Virtual
+        );
+        assert_eq!(
+            classify_role("docker0", "", false, &[], None),
+            InterfaceRole::Virtual
+        );
+        assert_eq!(
+            classify_role("veth123", "", false, &[], None),
+            InterfaceRole::Virtual
+        );
+    }
+
+    #[test]
+    fn classify_wan_by_default_route() {
+        assert_eq!(
+            classify_role(
+                "enp1s0",
+                "r8169",
+                true,
+                &["192.168.1.2".into()],
+                Some("enp1s0")
+            ),
+            InterfaceRole::Wan
+        );
+    }
+
+    #[test]
+    fn classify_lan_by_carrier() {
+        assert_eq!(
+            classify_role("eno1", "igb", true, &["10.0.0.1".into()], Some("enp1s0")),
+            InterfaceRole::Lan
+        );
+    }
+
+    #[test]
+    fn classify_unknown_when_no_match() {
+        assert_eq!(
+            classify_role("random0", "", false, &[], None),
+            InterfaceRole::Unknown
+        );
+    }
+
+    #[test]
+    fn build_addr_map_parses_json() {
+        let json: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[{
+                "ifname": "enp5s0",
+                "addr_info": [
+                    {"family": "inet", "local": "192.168.4.244"},
+                    {"family": "inet6", "local": "fe80::1"}
+                ]
+            }]"#,
+        )
+        .unwrap();
+        let map = build_addr_map(&json);
+        assert_eq!(map.get("enp5s0").unwrap(), &vec!["192.168.4.244"]);
+    }
+}
