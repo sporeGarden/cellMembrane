@@ -151,6 +151,22 @@ pub const DEFAULT_CANARY_SOCKET_DIR: &str = "/run/membrane/canary";
 pub const ENV_CANARY_BIN_DIR: &str = "MEMBRANE_CANARY_BIN_DIR";
 /// Default canary binary directory (previous-good binaries retained for rollback).
 pub const DEFAULT_CANARY_BIN_DIR: &str = "/opt/membrane/canary";
+/// Environment variable to override canary maximum age in hours before staleness.
+pub const ENV_CANARY_MAX_AGE_HOURS: &str = "MEMBRANE_CANARY_MAX_AGE_HOURS";
+
+/// Environment variable for the `plasmidBin` staging directory.
+pub const ENV_PLASMIDBIN_STAGING: &str = "PLASMIDBIN_STAGING";
+
+/// Environment variable for the `biomeOS` socket directory.
+pub const ENV_BIOMEOS_SOCKET_DIR: &str = "BIOMEOS_SOCKET_DIR";
+
+/// Environment variable for the `NetworkManager` dispatcher directory.
+pub const ENV_NM_DISPATCHER_DIR: &str = "NM_DISPATCHER_DIR";
+/// Default `NetworkManager` dispatcher directory.
+pub const DEFAULT_NM_DISPATCHER_DIR: &str = "/etc/NetworkManager/dispatcher.d";
+
+/// Environment variable for the family seed (ribocipher key derivation).
+pub const ENV_FAMILY_SEED: &str = "FAMILY_SEED";
 
 /// Default VPS host (golgiBody sovereign surface).
 pub const DEFAULT_VPS_HOST: &str = "157.230.3.183";
@@ -245,6 +261,10 @@ pub const DEFAULT_SOVEREIGN_REMOTE: &str = "forgejo";
 /// when depot staleness is detected (production gates only).
 pub const ENV_AUTO_REBUILD: &str = "MEMBRANE_AUTO_REBUILD";
 
+/// Single-writer freshness publisher designation. Set to `1`/`true`/`yes`
+/// on exactly one gate per mesh to avoid multi-writer race conditions.
+pub const ENV_FRESHNESS_PUBLISHER: &str = "FRESHNESS_PUBLISHER";
+
 /// `DigitalOcean` API token for cloud provisioning (fieldMouse droplets).
 /// Fallback: `DO_TOKEN` (doctl-compatible).
 pub const ENV_DIGITALOCEAN_TOKEN: &str = "DIGITALOCEAN_TOKEN";
@@ -288,3 +308,6 @@ pub const DEFAULT_CANARY_MAX_AGE_HOURS: i64 = 168;
 pub const DEFAULT_SANDBOX_HEALTH_TIMEOUT_SECS: u64 = 15;
 /// Forgejo API pagination page size.
 pub const DEFAULT_API_PAGE_SIZE: u32 = 50;
+
+/// Default push mirror sync interval (Forgejo -> GitHub).
+pub const DEFAULT_PUSH_MIRROR_INTERVAL: &str = "8h0m0s";

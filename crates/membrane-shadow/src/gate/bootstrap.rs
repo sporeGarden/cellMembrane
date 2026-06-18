@@ -492,8 +492,8 @@ fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let hook_dir_str = std::env::var("NM_DISPATCHER_DIR")
-        .unwrap_or_else(|_| "/etc/NetworkManager/dispatcher.d".into());
+    let hook_dir_str = std::env::var(cellmembrane_types::service::ENV_NM_DISPATCHER_DIR)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_NM_DISPATCHER_DIR.into());
     let hook_dir = std::path::Path::new(&hook_dir_str);
     let hook_path = hook_dir.join("99-membrane-reconnect");
     let hook_content = format!(

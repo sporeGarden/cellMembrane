@@ -242,7 +242,7 @@ const HKDF_INFO_MITO: &[u8] = b"mito-signal";
 /// 1. `FAMILY_SEED` env var (may be a path to a key file, or inline seed)
 /// 2. Falls back gracefully to `None` if unavailable.
 fn derive_mito_key_from_env() -> Option<[u8; 32]> {
-    let seed_source = std::env::var("FAMILY_SEED").ok()?;
+    let seed_source = std::env::var(cellmembrane_types::service::ENV_FAMILY_SEED).ok()?;
     let seed_bytes = if std::path::Path::new(&seed_source).exists() {
         std::fs::read(&seed_source).ok()?
     } else {

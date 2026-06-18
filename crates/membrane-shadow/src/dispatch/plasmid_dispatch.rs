@@ -209,7 +209,7 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
     let timeout = cli::extract_flag_value(args, "--timeout").and_then(|s| s.parse::<u64>().ok());
 
     let arch = plasmid::detect_target_triple();
-    let depot_dir = std::env::var("PLASMIDBIN_DEPOT").map_or_else(
+    let depot_dir = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT).map_or_else(
         |_| {
             crate::resolve_xdg_data_home()
                 .join("ecoPrimals")

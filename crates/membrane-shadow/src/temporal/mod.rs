@@ -12,6 +12,7 @@
 //!   - `temporal.sync`  → waterFall (wF): pull leader, push followers
 
 pub(super) mod cascade;
+mod nucleus_restart;
 mod post_sync;
 mod resolve;
 mod sync_engine;

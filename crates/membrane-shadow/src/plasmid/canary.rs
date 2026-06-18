@@ -16,6 +16,12 @@ use cellmembrane_types::service::{
     DEFAULT_CANARY_BIN_DIR, DEFAULT_CANARY_SOCKET_DIR, ENV_CANARY_BIN_DIR, ENV_CANARY_SOCKET_DIR,
 };
 
+pub use super::canary_remote::{
+    deregister_remote_canary, list_remote_canaries, load_remote_canaries,
+    register_remote_canary,
+};
+use super::canary_remote::remote_health_check;
+
 /// A canary primal instance — the previous known-good binary kept alive as fallback.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CanarySlot {
@@ -48,7 +54,7 @@ fn resolve_canary_socket_dir() -> PathBuf {
     )
 }
 
-fn resolve_canary_bin_dir() -> PathBuf {
+pub fn resolve_canary_bin_dir() -> PathBuf {
     PathBuf::from(
         std::env::var(ENV_CANARY_BIN_DIR).unwrap_or_else(|_| DEFAULT_CANARY_BIN_DIR.into()),
     )
@@ -150,7 +156,7 @@ const DEFAULT_MAX_AGE_HOURS: i64 = cellmembrane_types::service::DEFAULT_CANARY_M
 
 /// Check if a canary slot is stale (`promoted_at` older than max age).
 fn is_stale(slot: &CanarySlot) -> bool {
-    let max_hours = std::env::var("MEMBRANE_CANARY_MAX_AGE_HOURS")
+    let max_hours = std::env::var(cellmembrane_types::service::ENV_CANARY_MAX_AGE_HOURS)
         .ok()
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(DEFAULT_MAX_AGE_HOURS);
@@ -337,129 +343,6 @@ pub async fn teardown_all() {
     save_pool(&empty).await;
 }
 
-// ── Remote canary registry ───────────────────────────────────────────────
-
-/// A remote canary droplet entry (SSH-reachable warm standby).
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct RemoteCanary {
-    /// Gate name (e.g. "canary-fieldmouse").
-    pub gate_name: String,
-    /// Public IP of the remote droplet.
-    pub ip: String,
-    /// Provider droplet ID (for lifecycle management).
-    pub droplet_id: Option<u64>,
-    /// Primals available on this remote canary.
-    pub primals: Vec<String>,
-    /// When this remote was registered.
-    pub registered_at: String,
-}
-
-/// Registry of remote canary droplets.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub struct RemoteCanaryRegistry {
-    pub entries: Vec<RemoteCanary>,
-}
-
-/// Path to the remote canaries registry.
-fn remote_canaries_path() -> PathBuf {
-    resolve_canary_bin_dir().join("remote-canaries.toml")
-}
-
-/// Load the remote canary registry from disk.
-pub async fn load_remote_canaries() -> RemoteCanaryRegistry {
-    let path = remote_canaries_path();
-    tokio::fs::read_to_string(&path).await.map_or_else(
-        |_| RemoteCanaryRegistry::default(),
-        |s| toml::from_str(&s).unwrap_or_default(),
-    )
-}
-
-/// Save the remote canary registry to disk.
-pub async fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
-    let path = remote_canaries_path();
-    if let Some(parent) = path.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
-    }
-    if let Ok(content) = toml::to_string_pretty(registry) {
-        let _ = tokio::fs::write(&path, content).await;
-    }
-}
-
-/// Register a newly provisioned remote canary droplet.
-pub async fn register_remote_canary(
-    gate_name: &str,
-    ip: &str,
-    droplet_id: Option<u64>,
-    primals: Vec<String>,
-) {
-    let mut registry = load_remote_canaries().await;
-    registry.entries.retain(|e| e.gate_name != gate_name);
-    registry.entries.push(RemoteCanary {
-        gate_name: gate_name.to_string(),
-        ip: ip.to_string(),
-        droplet_id,
-        primals,
-        registered_at: chrono::Utc::now().to_rfc3339(),
-    });
-    save_remote_canaries(&registry).await;
-}
-
-/// Remove a remote canary from the registry.
-pub async fn deregister_remote_canary(gate_name: &str) {
-    let mut registry = load_remote_canaries().await;
-    registry.entries.retain(|e| e.gate_name != gate_name);
-    save_remote_canaries(&registry).await;
-}
-
-/// SSH-based health check for a remote canary droplet.
-/// Discovers the crypto spine binary via capability registry for the probe socket.
-async fn remote_health_check(ip: &str) -> bool {
-    let spine_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-
-    let probe_cmd = format!(
-        "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:/run/membrane/{spine_binary}.sock 2>/dev/null"
-    );
-
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        tokio::process::Command::new("ssh")
-            .args([
-                "-o",
-                "ConnectTimeout=5",
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                &format!(
-                    "{}@{ip}",
-                    std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
-                        .unwrap_or_else(|_| {
-                            cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into()
-                        })
-                ),
-                &probe_cmd,
-            ])
-            .output(),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            output.status.success()
-                && (stdout.contains("\"status\"") || stdout.contains("\"result\""))
-        }
-        _ => false,
-    }
-}
-
-/// List all remote canary entries.
-pub async fn list_remote_canaries() -> Vec<RemoteCanary> {
-    load_remote_canaries().await.entries
-}
-
 // ── Internal helpers ──────────────────────────────────────────────────────
 
 async fn load_pool() -> CanaryPool {
@@ -542,6 +425,7 @@ async fn uds_probe(socket_path: &Path, request: &str) -> Result<String, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::canary_remote::{RemoteCanary, RemoteCanaryRegistry};
 
     #[test]
     fn pool_roundtrip() {
