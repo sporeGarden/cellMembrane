@@ -3,7 +3,12 @@
 # Instance name (%i) is the primal binary name.
 # Runs under the user session, sockets in $XDG_RUNTIME_DIR/biomeos/.
 #
+# Before installing, set your workspace root and target triple:
+#   systemctl --user set-environment ECOPRIMALS_ROOT=$HOME/Development/ecoPrimals
+#   systemctl --user set-environment MEMBRANE_TARGET=x86_64-unknown-linux-musl
+#
 # Install: cp membrane-nucleus@.service ~/.config/systemd/user/
+#          systemctl --user daemon-reload
 #          systemctl --user enable --now membrane-nucleus@beardog
 [Unit]
 Description=NUCLEUS Primal — %i (user session)
@@ -12,9 +17,10 @@ Wants=songbird-federation.service
 
 [Service]
 Type=simple
-ExecStart=%h/Development/ecoPrimals/infra/plasmidBin/primals/x86_64-unknown-linux-musl/%i server \
+ExecStart=${ECOPRIMALS_ROOT}/infra/plasmidBin/primals/${MEMBRANE_TARGET}/%i server \
     --socket %t/biomeos/%i.sock
 Environment=ECOPRIMALS_ROOT=%h/Development/ecoPrimals
+Environment=MEMBRANE_TARGET=x86_64-unknown-linux-musl
 Environment=BIOMEOS_SOCKET_DIR=%t/biomeos
 Restart=always
 RestartSec=3
