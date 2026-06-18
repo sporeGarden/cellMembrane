@@ -9,7 +9,9 @@
 
 pub mod mirrors;
 
-pub use mirrors::{MirrorSyncResult, PushMirror, push_mirror_create, push_mirror_list, push_mirror_sync};
+pub use mirrors::{
+    MirrorSyncResult, PushMirror, push_mirror_create, push_mirror_list, push_mirror_sync,
+};
 
 use crate::config::ShadowConfig;
 use crate::error::{Result, ShadowError};

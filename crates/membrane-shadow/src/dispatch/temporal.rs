@@ -3,8 +3,8 @@
 //! Temporal domain dispatch — temporal.check, temporal.sync, temporal.cascade.
 
 use crate::cli::{self, TapMessage};
-use cellmembrane_types::PushTarget;
 use crate::{ShadowConfig, ShadowOutcome, identity, manifest, temporal};
+use cellmembrane_types::PushTarget;
 use tracing::info;
 
 pub(super) async fn dispatch_temporal(

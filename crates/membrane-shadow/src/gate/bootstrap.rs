@@ -351,7 +351,11 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
-async fn fetch_phase(config: &ShadowConfig, transport: cellmembrane_types::GateTransport, dry_run: bool) -> BootstrapPhase {
+async fn fetch_phase(
+    config: &ShadowConfig,
+    transport: cellmembrane_types::GateTransport,
+    dry_run: bool,
+) -> BootstrapPhase {
     let source = super::mesh::transport_to_fetch_source(transport);
     if dry_run {
         return BootstrapPhase {

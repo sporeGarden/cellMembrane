@@ -425,5 +425,4 @@ impl MembraneConfig {
     pub fn firewall(&self) -> FirewallRuleset {
         FirewallRuleset::for_composition(self.composition)
     }
-
 }

@@ -170,3 +170,112 @@ pub fn credential_files_for_paths(
 
     files
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::composition::MembraneComposition;
+
+    #[test]
+    fn credential_model_display() {
+        assert_eq!(CredentialModel::Age.to_string(), "age");
+        assert_eq!(CredentialModel::BtspVault.to_string(), "btsp_vault");
+        assert_eq!(CredentialModel::Manual.to_string(), "manual");
+    }
+
+    #[test]
+    fn credential_config_default_is_age() {
+        let config = CredentialConfig::default();
+        assert_eq!(config.model, CredentialModel::Age);
+        assert!(config.age_recipients.is_empty());
+    }
+
+    #[test]
+    fn relay_composition_has_relay_credentials() {
+        let paths = CredentialPaths {
+            membrane_base: "/test/membrane".into(),
+            songbird_config: "/test/songbird".into(),
+        };
+        let files = credential_files_for_paths(MembraneComposition::Relay, &paths);
+        assert!(
+            files.iter().any(|f| f.path.contains("relay-credentials")),
+            "Relay must include relay credentials"
+        );
+    }
+
+    #[test]
+    fn rustdesk_composition_adds_keys() {
+        let paths = CredentialPaths {
+            membrane_base: "/test/membrane".into(),
+            songbird_config: "/test/songbird".into(),
+        };
+        let files = credential_files_for_paths(MembraneComposition::RustDesk, &paths);
+        assert!(
+            files.iter().any(|f| f.path.contains("id_ed25519")),
+            "RustDesk must include private key"
+        );
+        assert!(
+            files.iter().any(|f| f.path.contains("id_ed25519.pub")),
+            "RustDesk must include public key"
+        );
+    }
+
+    #[test]
+    fn tower_composition_adds_tower_env() {
+        let paths = CredentialPaths {
+            membrane_base: "/test/membrane".into(),
+            songbird_config: "/test/songbird".into(),
+        };
+        let files = credential_files_for_paths(MembraneComposition::Tower, &paths);
+        assert!(
+            files.iter().any(|f| f.path.contains("tower.env")),
+            "Tower must include tower.env"
+        );
+    }
+
+    #[test]
+    fn credential_file_permissions_are_restrictive() {
+        let paths = CredentialPaths {
+            membrane_base: "/test".into(),
+            songbird_config: "/test".into(),
+        };
+        let files = credential_files_for_paths(MembraneComposition::Tower, &paths);
+        for file in &files {
+            assert!(
+                file.expected_mode == "600" || file.expected_mode == "644",
+                "credential file {} has unexpected mode: {}",
+                file.path,
+                file.expected_mode
+            );
+        }
+    }
+
+    #[test]
+    fn higher_composition_has_more_credentials() {
+        let paths = CredentialPaths {
+            membrane_base: "/test".into(),
+            songbird_config: "/test".into(),
+        };
+        let relay = credential_files_for_paths(MembraneComposition::Relay, &paths);
+        let tower = credential_files_for_paths(MembraneComposition::Tower, &paths);
+        assert!(
+            tower.len() > relay.len(),
+            "Tower ({}) should have more cred files than Relay ({})",
+            tower.len(),
+            relay.len()
+        );
+    }
+
+    #[test]
+    fn paths_use_configured_base() {
+        let paths = CredentialPaths {
+            membrane_base: "/custom/base".into(),
+            songbird_config: "/custom/songbird".into(),
+        };
+        let files = credential_files_for_paths(MembraneComposition::Relay, &paths);
+        assert!(
+            files.iter().any(|f| f.path.starts_with("/custom/")),
+            "paths should use the configured base"
+        );
+    }
+}

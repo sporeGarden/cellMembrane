@@ -8,7 +8,7 @@
 //! GitHub SSH write credentials live on golgiBody-ext (trans/shipping face).
 //! See `relay.rs` for the Rust-native K-Derm relay chain (replaces bash scripts).
 
-use super::{auth_header, API_TIMEOUT_READ, API_TIMEOUT_WRITE};
+use super::{API_TIMEOUT_READ, API_TIMEOUT_WRITE, auth_header};
 use crate::config::ShadowConfig;
 use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
@@ -138,10 +138,7 @@ pub async fn push_mirror_list(config: &ShadowConfig, full_name: &str) -> Result<
 ///
 /// Shadow for: `nestGate content.mirror.push_sync`
 #[cfg(feature = "http")]
-pub async fn push_mirror_sync(
-    config: &ShadowConfig,
-    full_name: &str,
-) -> Result<MirrorSyncResult> {
+pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<MirrorSyncResult> {
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}/mirror-sync", config.forgejo_api);
 

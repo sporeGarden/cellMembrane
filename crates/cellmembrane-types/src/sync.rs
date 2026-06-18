@@ -271,9 +271,18 @@ mod tests {
 
     #[test]
     fn gate_transport_serde_snake_case() {
-        assert_eq!(serde_json::to_string(&GateTransport::Wan).unwrap(), "\"wan\"");
-        assert_eq!(serde_json::to_string(&GateTransport::Lan).unwrap(), "\"lan\"");
-        assert_eq!(serde_json::to_string(&GateTransport::Adb).unwrap(), "\"adb\"");
+        assert_eq!(
+            serde_json::to_string(&GateTransport::Wan).unwrap(),
+            "\"wan\""
+        );
+        assert_eq!(
+            serde_json::to_string(&GateTransport::Lan).unwrap(),
+            "\"lan\""
+        );
+        assert_eq!(
+            serde_json::to_string(&GateTransport::Adb).unwrap(),
+            "\"adb\""
+        );
         assert_eq!(
             serde_json::to_string(&GateTransport::Local).unwrap(),
             "\"local\""

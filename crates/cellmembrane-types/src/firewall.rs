@@ -363,3 +363,135 @@ impl Ord for FirewallProtocol {
         (*self as u8).cmp(&(*other as u8))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relay_ruleset_always_includes_ssh() {
+        let ruleset = FirewallRuleset::for_composition(MembraneComposition::Relay);
+        assert!(
+            ruleset
+                .rules
+                .iter()
+                .any(|r| r.port == SSH_PORT && r.protocol == FirewallProtocol::Tcp),
+            "Relay composition must include SSH"
+        );
+    }
+
+    #[test]
+    fn rules_are_sorted_and_deduped() {
+        let ruleset = FirewallRuleset::for_composition(MembraneComposition::Tower);
+        for window in ruleset.rules.windows(2) {
+            assert!(
+                (window[0].port, window[0].protocol) <= (window[1].port, window[1].protocol),
+                "rules must be sorted: {:?} should come before {:?}",
+                window[0],
+                window[1]
+            );
+        }
+    }
+
+    #[test]
+    fn ufw_command_format() {
+        let rule = FirewallRule {
+            port: 443,
+            protocol: FirewallProtocol::Tcp,
+            comment: "HTTPS",
+        };
+        let cmd = rule.to_ufw_command();
+        assert!(cmd.contains("ufw allow 443/tcp"));
+        assert!(cmd.contains("comment 'HTTPS'"));
+    }
+
+    #[test]
+    fn nft_rule_format() {
+        let rule = FirewallRule {
+            port: 51820,
+            protocol: FirewallProtocol::Udp,
+            comment: "WireGuard",
+        };
+        let nft = rule.to_nft_rule();
+        assert!(nft.contains("udp dport 51820 accept"));
+        assert!(nft.contains("WireGuard"));
+    }
+
+    #[test]
+    fn ufw_script_has_reset_and_enable() {
+        let ruleset = FirewallRuleset::for_composition(MembraneComposition::Relay);
+        let script = ruleset.to_ufw_script();
+        assert!(script.starts_with("ufw --force reset"));
+        assert!(script.ends_with("ufw --force enable"));
+    }
+
+    #[test]
+    fn ports_returns_unique_sorted() {
+        let ruleset = FirewallRuleset::for_composition(MembraneComposition::Nest);
+        let ports = ruleset.ports();
+        for window in ports.windows(2) {
+            assert!(window[0] < window[1], "ports must be unique and sorted");
+        }
+    }
+
+    #[test]
+    fn higher_composition_has_more_rules() {
+        let relay = FirewallRuleset::for_composition(MembraneComposition::Relay);
+        let tower = FirewallRuleset::for_composition(MembraneComposition::Tower);
+        assert!(
+            tower.rules.len() >= relay.rules.len(),
+            "Tower ({}) should have >= Relay ({}) rules",
+            tower.rules.len(),
+            relay.rules.len()
+        );
+    }
+
+    #[test]
+    fn nftables_standalone_no_nat() {
+        let ruleset = FirewallRuleset::for_composition(MembraneComposition::Relay);
+        let script = ruleset.to_nftables_script(None);
+        assert!(script.contains("flush ruleset"));
+        assert!(script.contains("table inet membrane"));
+        assert!(!script.contains("masquerade"));
+        assert!(!script.contains("membrane-nat"));
+    }
+
+    #[test]
+    fn nftables_plasma_membrane_has_nat() {
+        let ruleset = FirewallRuleset::for_composition(MembraneComposition::Relay);
+        let config = NftablesConfig {
+            wan_interface: "enp1s0".into(),
+            lan_interface: "eno1".into(),
+            lan_subnet: "192.168.4.0/22".into(),
+            gate_name: "sporeGate".into(),
+            enable_nat: true,
+            enable_dhcp: true,
+            trust_lan_input: false,
+            wireguard_interface: Some("wg0".into()),
+            wireguard_port: 51820,
+            drop_ipv6_forward: true,
+        };
+        let script = ruleset.to_nftables_script(Some(&config));
+        assert!(script.contains("masquerade"));
+        assert!(script.contains("membrane-nat"));
+        assert!(script.contains("DHCP server"));
+        assert!(script.contains("WireGuard mesh overlay"));
+        assert!(script.contains("membrane-v6"));
+    }
+
+    #[test]
+    fn firewall_protocol_display() {
+        assert_eq!(FirewallProtocol::Tcp.to_string(), "tcp");
+        assert_eq!(FirewallProtocol::Udp.to_string(), "udp");
+    }
+
+    #[test]
+    fn firewall_rule_display() {
+        let rule = FirewallRule {
+            port: 22,
+            protocol: FirewallProtocol::Tcp,
+            comment: "SSH",
+        };
+        assert_eq!(rule.to_string(), "22/tcp (SSH)");
+    }
+}

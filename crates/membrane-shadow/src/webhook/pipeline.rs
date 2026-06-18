@@ -60,11 +60,15 @@ pub(super) async fn run_sandbox(
     repo_name: &str,
 ) -> crate::error::Result<Option<crate::ShadowOutcome>> {
     let arch = crate::plasmid::detect_target_triple();
-    let depot_binary = crate::plasmid::resolve_path(None, cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT, || {
-        crate::resolve_xdg_data_home()
-            .join("ecoPrimals")
-            .join("plasmidBin")
-    })
+    let depot_binary = crate::plasmid::resolve_path(
+        None,
+        cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
+        || {
+            crate::resolve_xdg_data_home()
+                .join("ecoPrimals")
+                .join("plasmidBin")
+        },
+    )
     .join("primals")
     .join(&arch)
     .join(primal_lower);

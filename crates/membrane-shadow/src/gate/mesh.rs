@@ -14,7 +14,9 @@ use cellmembrane_types::GateTransport;
 /// `local` uses SSH/rsync (VPS layer). All remote transports currently
 /// resolve to WAN HTTPS. As LAN rsync and ADB push mature, they will
 /// diverge from the WAN fallback.
-pub(super) const fn transport_to_fetch_source(transport: GateTransport) -> crate::plasmid::FetchSource {
+pub(super) const fn transport_to_fetch_source(
+    transport: GateTransport,
+) -> crate::plasmid::FetchSource {
     match transport {
         GateTransport::Local => crate::plasmid::FetchSource::Vps,
         _ => crate::plasmid::FetchSource::Wan,
@@ -54,15 +56,15 @@ pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
     let Ok(manifest) = crate::manifest::load_from_workspace(&workspace_root) else {
         return GateManifestProfile::default();
     };
-    manifest.gates.get(gate_name).map_or_else(
-        GateManifestProfile::default,
-        |p| GateManifestProfile {
+    manifest
+        .gates
+        .get(gate_name)
+        .map_or_else(GateManifestProfile::default, |p| GateManifestProfile {
             transport: p.transport.unwrap_or_default(),
             mesh_peer: p.mesh_peer.clone(),
             mobility: p.mobility.clone(),
             composition: p.composition.clone(),
-        },
-    )
+        })
 }
 
 /// Resolve just the transport mode (backwards compat helper).

@@ -34,6 +34,30 @@ pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
 pub use depot::{StalenessEntry, StalenessReport};
 
+/// Gracefully stop a process: SIGTERM → grace period → SIGKILL.
+///
+/// Uses `/proc/{pid}/` existence check to avoid signaling stale PIDs,
+/// and spawns minimal `kill` commands for signal delivery (safe under
+/// `#![forbid(unsafe_code)]`).
+pub(crate) async fn graceful_kill(pid: u32, grace_ms: u64) {
+    let pid_str = pid.to_string();
+    let proc_path = std::path::PathBuf::from(format!("/proc/{pid}"));
+    if !proc_path.exists() {
+        return;
+    }
+    let _ = tokio::process::Command::new("kill")
+        .arg(&pid_str)
+        .output()
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
+    if proc_path.exists() {
+        let _ = tokio::process::Command::new("kill")
+            .args(["-9", &pid_str])
+            .output()
+            .await;
+    }
+}
+
 /// Compute BLAKE3 hash of a file, returning hex string.
 pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
     depot::compute_blake3_file(path)

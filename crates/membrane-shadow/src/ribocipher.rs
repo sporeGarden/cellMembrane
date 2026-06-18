@@ -150,7 +150,9 @@ impl RiboCipherConfig {
             .and_then(|v| v.as_str())
             .map_or(UnsignalledPolicy::Reject, |s| match s {
                 "warn" => {
-                    tracing::warn!("unsignalled_policy = \"warn\" removed in Wave 116 — promoted to reject");
+                    tracing::warn!(
+                        "unsignalled_policy = \"warn\" removed in Wave 116 — promoted to reject"
+                    );
                     UnsignalledPolicy::Reject
                 }
                 "error" => UnsignalledPolicy::Error,

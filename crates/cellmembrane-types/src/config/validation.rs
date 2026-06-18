@@ -2,7 +2,7 @@
 
 //! `MembraneConfig` validation — sub-validators for each concern area.
 
-use super::{MembraneConfig, MIN_CUTOVER_GATE_DAYS};
+use super::{MIN_CUTOVER_GATE_DAYS, MembraneConfig};
 use crate::composition::MembraneComposition;
 use crate::envelope::EnvelopeTopology;
 use crate::service::TransportMode;
@@ -279,6 +279,181 @@ impl MembraneConfig {
         report.info(
             "firewall.ports",
             format!("{} firewall rules derived", fw.rules.len()),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::validation::Severity;
+
+    fn parse_config(toml_str: &str) -> super::MembraneConfig {
+        let file: crate::config::MembraneConfigFile = toml::from_str(toml_str).expect("valid TOML");
+        file.membrane
+    }
+
+    fn has_check(
+        entries: &[crate::validation::ReportEntry],
+        check: &str,
+        severity: Severity,
+    ) -> bool {
+        entries
+            .iter()
+            .any(|e| e.check == check && e.severity == severity)
+    }
+
+    #[test]
+    fn valid_relay_config_passes_name() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "test-gate"
+            composition = "relay"
+            "#,
+        );
+        let report = config.validate();
+        assert!(has_check(&report.entries, "config.name", Severity::Pass));
+    }
+
+    #[test]
+    fn empty_name_fails_validation() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = ""
+            composition = "relay"
+            "#,
+        );
+        let report = config.validate();
+        assert!(has_check(&report.entries, "config.name", Severity::Fail));
+    }
+
+    #[test]
+    fn tower_without_identity_fails() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "tower-test"
+            composition = "tower"
+            "#,
+        );
+        let report = config.validate();
+        assert!(has_check(
+            &report.entries,
+            "identity.required",
+            Severity::Fail
+        ));
+    }
+
+    #[test]
+    fn tower_with_identity_passes() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "tower-test"
+            composition = "tower"
+
+            [membrane.identity]
+            family_id = "test-family"
+            "#,
+        );
+        let report = config.validate();
+        assert!(has_check(
+            &report.entries,
+            "identity.family_id",
+            Severity::Pass
+        ));
+    }
+
+    #[test]
+    fn low_cutover_days_fails() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "telemetry-test"
+            composition = "relay"
+
+            [membrane.telemetry]
+            cutover_gate_days = 2
+            "#,
+        );
+        let report = config.validate();
+        assert!(has_check(
+            &report.entries,
+            "telemetry.cutover_days",
+            Severity::Fail
+        ));
+    }
+
+    #[test]
+    fn default_cutover_days_passes() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "telemetry-test"
+            composition = "relay"
+            "#,
+        );
+        let report = config.validate();
+        assert!(has_check(
+            &report.entries,
+            "telemetry.cutover_days",
+            Severity::Pass
+        ));
+    }
+
+    #[test]
+    fn validate_reports_composition_and_transport() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "multi-check"
+            composition = "nest"
+            "#,
+        );
+        let report = config.validate();
+        assert!(
+            report
+                .entries
+                .iter()
+                .any(|e| e.check == "config.composition")
+        );
+        assert!(report.entries.iter().any(|e| e.check == "transport.mode"));
+    }
+
+    #[test]
+    fn validate_reports_firewall_and_credentials() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "fw-test"
+            composition = "relay"
+            "#,
+        );
+        let report = config.validate();
+        assert!(report.entries.iter().any(|e| e.check == "firewall.ports"));
+        assert!(
+            report
+                .entries
+                .iter()
+                .any(|e| e.check == "credentials.files")
+        );
+    }
+
+    #[test]
+    fn relay_config_overall_passes() {
+        let config = parse_config(
+            r#"
+            [membrane]
+            name = "relay-gate"
+            composition = "relay"
+            "#,
+        );
+        let report = config.validate();
+        assert!(
+            report.is_ok(),
+            "relay config should pass: {}",
+            report.summary()
         );
     }
 }

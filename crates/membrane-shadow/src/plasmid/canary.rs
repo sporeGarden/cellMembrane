@@ -16,11 +16,10 @@ use cellmembrane_types::service::{
     DEFAULT_CANARY_BIN_DIR, DEFAULT_CANARY_SOCKET_DIR, ENV_CANARY_BIN_DIR, ENV_CANARY_SOCKET_DIR,
 };
 
-pub use super::canary_remote::{
-    deregister_remote_canary, list_remote_canaries, load_remote_canaries,
-    register_remote_canary,
-};
 use super::canary_remote::remote_health_check;
+pub use super::canary_remote::{
+    deregister_remote_canary, list_remote_canaries, load_remote_canaries, register_remote_canary,
+};
 
 /// A canary primal instance — the previous known-good binary kept alive as fallback.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -365,15 +364,7 @@ async fn save_pool(pool: &CanaryPool) {
 
 async fn kill_canary(slot: &CanarySlot) {
     if let Some(pid) = slot.pid {
-        let _ = tokio::process::Command::new("kill")
-            .arg(pid.to_string())
-            .output()
-            .await;
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        let _ = tokio::process::Command::new("kill")
-            .args(["-9", &pid.to_string()])
-            .output()
-            .await;
+        super::graceful_kill(pid, 300).await;
     }
 
     let _ = tokio::fs::remove_file(&slot.socket_path).await;
@@ -424,8 +415,8 @@ async fn uds_probe(socket_path: &Path, request: &str) -> Result<String, String> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::canary_remote::{RemoteCanary, RemoteCanaryRegistry};
+    use super::*;
 
     #[test]
     fn pool_roundtrip() {

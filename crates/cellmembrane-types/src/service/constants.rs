@@ -34,6 +34,8 @@ pub const INFRA_PLASMID_BIN: &str = "infra/plasmidBin";
 
 /// Environment variable for the `plasmidBin` depot directory.
 pub const ENV_PLASMIDBIN_DEPOT: &str = "PLASMIDBIN_DEPOT";
+/// Legacy environment variable for gate-specific `plasmidBin` path.
+pub const ENV_PLASMIDBIN_LEGACY: &str = "ECOPRIMALS_PLASMID_BIN";
 /// Environment variable for the security provider socket path.
 pub const ENV_SECURITY_PROVIDER: &str = "SONGBIRD_SECURITY_PROVIDER";
 /// Environment variable for the membrane install base directory.
@@ -268,6 +270,8 @@ pub const ENV_FRESHNESS_PUBLISHER: &str = "FRESHNESS_PUBLISHER";
 /// `DigitalOcean` API token for cloud provisioning (fieldMouse droplets).
 /// Fallback: `DO_TOKEN` (doctl-compatible).
 pub const ENV_DIGITALOCEAN_TOKEN: &str = "DIGITALOCEAN_TOKEN";
+/// `doctl`-compatible token fallback.
+pub const ENV_DO_TOKEN_COMPAT: &str = "DO_TOKEN";
 
 /// `DigitalOcean` REST API base URL.
 pub const DEFAULT_DIGITALOCEAN_API: &str = "https://api.digitalocean.com/v2";
