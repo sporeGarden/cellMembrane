@@ -43,6 +43,7 @@ pub mod identity;
 pub mod provider;
 pub mod service;
 pub mod signal;
+pub mod topology;
 pub mod transport;
 pub mod validation;
 
@@ -60,6 +61,10 @@ pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
     binary_integrity_for,
+};
+pub use topology::{
+    AffinityTable, BackboneLink, CytoplasmZone, NetworkSegment, ResolvedTopology, TopologyMap,
+    TopologyMeta, ZoneStatus,
 };
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};

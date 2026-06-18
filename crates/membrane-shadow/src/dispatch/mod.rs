@@ -101,6 +101,16 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("plasmid.") => {
             plasmid_dispatch::dispatch_plasmid(config, cmd, args).await
         }
+        c if c.starts_with("topology.") => {
+            let cmd = cmd.to_owned();
+            let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+            tokio::task::spawn_blocking(move || {
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                dispatch_topology_sync(&cmd, &refs)
+            })
+            .await
+            .unwrap_or_else(|e| Err(ShadowError::Config(format!("spawn_blocking: {e}"))))
+        }
         c if c.starts_with("relay.") => relay_dispatch::dispatch_relay(cmd, args).await,
         c if c.starts_with("content.") => {
             content_dispatch::dispatch_content(config, cmd, args).await
@@ -115,6 +125,63 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         #[cfg(feature = "cloudflare")]
         c if c.starts_with("cloudflare.") => crate::cloudflare::dispatch(cmd, args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
+    }
+}
+
+/// Dispatch topology commands.
+fn dispatch_topology_sync(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
+    let workspace_root = crate::temporal::resolve_workspace_root()?;
+    let map = crate::topology::load_topology_map(&workspace_root)?;
+
+    match cmd {
+        "topology.resolve" => {
+            let gate_name = args
+                .iter()
+                .position(|a| *a == "--gate")
+                .and_then(|i| args.get(i + 1))
+                .copied()
+                .or_else(|| args.first().filter(|a| !a.starts_with('-')).copied());
+
+            if let Some(name) = gate_name {
+                let resolved = map.resolve_gate(name);
+                let data = serde_json::to_value(&resolved)?;
+                Ok(ShadowOutcome::ok_with(
+                    crate::topology::format_resolved(&resolved),
+                    data,
+                ))
+            } else {
+                Err(ShadowError::Config(
+                    "topology.resolve requires a gate name: topology.resolve <gate> or --gate <name>"
+                        .into(),
+                ))
+            }
+        }
+        "topology.zones" => {
+            let data = serde_json::to_value(&map.zones)?;
+            let summary = map
+                .zones
+                .iter()
+                .map(|(id, z)| {
+                    format!(
+                        "{id}: {} ({}, {}G, {} gates)",
+                        z.hub_device,
+                        z.site,
+                        z.max_speed_mbps / 1000,
+                        z.gates.len()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            Ok(ShadowOutcome::ok_with(summary, data))
+        }
+        "topology.summary" => {
+            let summary = crate::topology::format_topology_summary(&map);
+            let data = serde_json::to_value(&map)?;
+            Ok(ShadowOutcome::ok_with(summary, data))
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown topology command: {cmd}"
+        ))),
     }
 }
 
