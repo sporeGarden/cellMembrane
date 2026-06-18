@@ -1,14 +1,14 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-18 (Wave 116c)
+**Last updated:** 2026-06-18 (Wave 116d)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
-**Wave 116c update (Deep Debt: String→Enum Evolution):** Major type evolution sprint:
-`DivergencePolicy`, `PushTarget`, `GateTransport`, `FetchStatus` enums replace String
-fields across manifest, temporal, impulse, and plasmid subsystems. `CytoplasmZone` wired
-directly into `GateProfile.zone`. `UnsignalledPolicy::Warn` removed (2 waves past deadline).
-JSON-RPC string building → `serde_json::json!`. Magic numbers extracted to named constants.
-Hetzner provider stub now errors explicitly. 22 files changed, 580 tests, 0 clippy.
+**Wave 116d update (Cross-team integration + continued type evolution):** Fixed P0
+topology dispatch collision (duplicate match arm making TOPOLOGY_MAP dead code), renamed
+`topology::CytoplasmZone` struct → `PhysicalZone` to resolve name collision with enum.
+Merged physical zone enrichment into `topology.resolve`. Typed `kderm_role` as
+`EnvelopeLayer`. Wired `INFRA_WATERING_HOLE` + `TOPOLOGY_MAP_FILENAME` constants.
+Fixed sovereignty ledger socket name to match bridge convention. 620 tests, 0 clippy.
 Per-gate agentic FRAGO pushed to wateringHole. 562 tests, zero warnings.
 **Wave 116 update (Gate Enrollment Pipeline):** Fresh binary rebuilt from `11a7c68` with
 ARP probe fix (uses detected LAN interface, not loopback). `InterfaceRole` Display impl
