@@ -82,6 +82,8 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let sovereignty_probes = super::sovereignty::probe_sovereignty().await;
     probes.extend(sovereignty_probes);
 
+    probes.push(probe_rootpulse_ledger());
+
     let vcs_probe = probe_vcs_parity().await;
     probes.push(vcs_probe);
 
@@ -433,6 +435,22 @@ pub(super) fn resolve_uid() -> String {
                 .trim()
                 .to_string()
         })
+}
+
+/// Probe rootpulse ledger state — checks if a session has been committed on this gate.
+fn probe_rootpulse_ledger() -> StatusProbe {
+    crate::temporal::post_sync::load_rootpulse_session_pub().map_or_else(
+        || StatusProbe {
+            name: "rootpulse.ledger".into(),
+            ok: false,
+            detail: "no rootpulse session recorded — run rootpulse.commit or cascade with freshness".into(),
+        },
+        |s| StatusProbe {
+            name: "rootpulse.ledger".into(),
+            ok: true,
+            detail: format!("last session: {s}"),
+        },
+    )
 }
 
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {

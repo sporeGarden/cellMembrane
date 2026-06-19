@@ -139,20 +139,28 @@ pub fn mesh_address_from_topology(
     mesh_address(gate_name).map(String::from)
 }
 
+/// Bootstrap gate list for mesh address resolution before topology is loaded.
+///
+/// Format: `(gate_name, mesh_ip)`. These are permanent WG assignments.
+/// For runtime gate discovery, load topology data from `TOPOLOGY_MAP.toml`.
+pub const BOOTSTRAP_GATES: &[(&str, &str)] = &[
+    ("golgi", "10.13.37.1"),
+    ("sporeGate", "10.13.37.2"),
+    ("pepti", "10.13.37.4"),
+    ("eastGate", "10.13.37.5"),
+    ("flockGate", "10.13.37.6"),
+];
+
 /// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
 ///
 /// Built-in fallback registry. Once assigned, an address is permanent.
 /// Once topology data is loaded, prefer [`mesh_address_from_topology`].
 #[must_use]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
-    match gate_name {
-        "golgi" => Some("10.13.37.1"),
-        "sporeGate" => Some("10.13.37.2"),
-        "pepti" => Some("10.13.37.4"),
-        "eastGate" => Some("10.13.37.5"),
-        "flockGate" => Some("10.13.37.6"),
-        _ => None,
-    }
+    BOOTSTRAP_GATES
+        .iter()
+        .find(|(name, _)| *name == gate_name)
+        .map(|(_, ip)| *ip)
 }
 
 #[cfg(test)]

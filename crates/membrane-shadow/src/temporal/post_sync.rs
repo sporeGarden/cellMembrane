@@ -73,9 +73,6 @@ pub(super) async fn run_post_sync_phases(
                         Ok(()) => {}
                         Err(e) => lines.push(format!("  [freshness] auto-push: {e}")),
                     }
-
-                    let heads = collect_cascade_heads(root, repos).await;
-                    run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
                 }
                 Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
             }
@@ -85,46 +82,61 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.mode == CascadeMode::Sync {
-        let depot_summary = tokio::task::spawn_blocking(summarize_depot_freshness)
+        let heads = collect_cascade_heads(root, repos).await;
+        if !heads.is_empty() {
+            run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
+        }
+    }
+
+    if opts.mode == CascadeMode::Sync {
+        run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
+    }
+
+    harvest_info
+}
+
+/// Depot staleness reporting, auto-rebuild, and auto-fetch pipeline.
+async fn run_depot_staleness_and_fetch(
+    did_harvest: bool,
+    restart_updated: bool,
+    lines: &mut Vec<String>,
+) {
+    let depot_summary = tokio::task::spawn_blocking(summarize_depot_freshness)
+        .await
+        .unwrap_or_default();
+    if !depot_summary.is_empty() {
+        lines.push(depot_summary);
+    }
+    if !did_harvest {
+        let staleness = tokio::task::spawn_blocking(crate::plasmid::detect_depot_staleness)
             .await
-            .unwrap_or_default();
-        if !depot_summary.is_empty() {
-            lines.push(depot_summary);
-        }
-        if !do_harvest {
-            let staleness = tokio::task::spawn_blocking(crate::plasmid::detect_depot_staleness)
-                .await
-                .ok()
-                .and_then(std::result::Result::ok);
-            if let Some(report) = staleness.filter(|r| r.stale_count > 0) {
-                let auto_rebuild = std::env::var(cellmembrane_types::service::ENV_AUTO_REBUILD)
-                    .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+            .ok()
+            .and_then(std::result::Result::ok);
+        if let Some(report) = staleness.filter(|r| r.stale_count > 0) {
+            let auto_rebuild = std::env::var(cellmembrane_types::service::ENV_AUTO_REBUILD)
+                .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
 
-                if auto_rebuild {
-                    lines.push(format!(
-                        "  [depot] {}/{} stale — MEMBRANE_AUTO_REBUILD: triggering rebuild",
-                        report.stale_count, report.total
-                    ));
-                    run_auto_rebuild(lines).await;
-                } else {
-                    lines.push(format!(
-                        "  [depot] {}/{} stale — run with --with-rebuild to auto-fix",
-                        report.stale_count, report.total
-                    ));
-                }
-            }
-        }
-
-        if plasmidbin_was_pulled(lines) {
-            run_auto_fetch(lines).await;
-
-            if opts.restart_updated {
-                run_cascade_restart(lines).await;
+            if auto_rebuild {
+                lines.push(format!(
+                    "  [depot] {}/{} stale — MEMBRANE_AUTO_REBUILD: triggering rebuild",
+                    report.stale_count, report.total
+                ));
+                run_auto_rebuild(lines).await;
+            } else {
+                lines.push(format!(
+                    "  [depot] {}/{} stale — run with --with-rebuild to auto-fix",
+                    report.stale_count, report.total
+                ));
             }
         }
     }
 
-    harvest_info
+    if plasmidbin_was_pulled(lines) {
+        run_auto_fetch(lines).await;
+        if restart_updated {
+            run_cascade_restart(lines).await;
+        }
+    }
 }
 
 /// Run harvest after cascade sync — build any drifted primals locally.
@@ -391,6 +403,7 @@ async fn run_rootpulse_sovereignty(
     match crate::freshness::rootpulse_commit(wave_id, gate, heads).await {
         Ok(session) => {
             lines.push(format!("  [rootpulse] COMMITTED {session}"));
+            persist_rootpulse_session(wave_id, gate, &session);
         }
         Err(e) => {
             lines.push(format!("  [rootpulse] SKIP: {e}"));
@@ -412,6 +425,24 @@ async fn run_rootpulse_sovereignty(
             }
         }
     }
+}
+
+/// Public wrapper for dispatch access.
+pub async fn collect_cascade_heads_pub(
+    root: &std::path::Path,
+    repos: &[(&str, &crate::manifest::RepoEntry)],
+) -> std::collections::BTreeMap<String, String> {
+    collect_cascade_heads(root, repos).await
+}
+
+/// Public wrapper for dispatch access.
+pub fn persist_rootpulse_session_pub(wave_id: u32, gate: &str, session_id: &str) {
+    persist_rootpulse_session(wave_id, gate, session_id);
+}
+
+/// Public wrapper for dispatch access.
+pub fn load_rootpulse_session_pub() -> Option<String> {
+    load_rootpulse_session()
 }
 
 /// Collect HEAD SHAs for all cloned repos in the cascade set.
@@ -496,4 +527,36 @@ pub(super) fn summarize_depot_freshness() -> String {
 fn is_freshness_publisher() -> bool {
     std::env::var(cellmembrane_types::service::ENV_FRESHNESS_PUBLISHER)
         .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+}
+
+/// Persist rootpulse session to gate-local state (not the shared manifest).
+///
+/// Writes to `{workspace}/infra/wateringHole/.rootpulse_state.toml`.
+fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
+    let Ok(root) = crate::temporal::resolve_workspace_root() else {
+        return;
+    };
+    let state_path = root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join(".rootpulse_state.toml");
+    let content = format!(
+        "# Last rootpulse commit — auto-generated, do not edit\n\
+         wave = {wave_id}\n\
+         gate = \"{gate}\"\n\
+         session = \"{session_id}\"\n\
+         timestamp = \"{}\"\n",
+        chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
+    );
+    let _ = std::fs::write(&state_path, content);
+}
+
+/// Load the last rootpulse session ID from gate-local state.
+pub(super) fn load_rootpulse_session() -> Option<String> {
+    let root = crate::temporal::resolve_workspace_root().ok()?;
+    let state_path = root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join(".rootpulse_state.toml");
+    let contents = std::fs::read_to_string(&state_path).ok()?;
+    let table: toml::Table = contents.parse().ok()?;
+    table.get("session").and_then(|v| v.as_str()).map(String::from)
 }

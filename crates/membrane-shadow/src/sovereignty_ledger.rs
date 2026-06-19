@@ -208,4 +208,104 @@ mod tests {
         assert!(check.verified);
         assert_eq!(check.repo, "cellMembrane");
     }
+
+    #[test]
+    fn session_id_format() {
+        let session = format!(
+            "wave-{}-cascade-{}",
+            116,
+            chrono::Utc::now().format("%Y%m%dT%H%M%S")
+        );
+        assert!(session.starts_with("wave-116-cascade-"));
+        assert!(session.len() > 25);
+    }
+
+    #[test]
+    fn agent_did_format() {
+        let did = format!("did:primal:cellMembrane:{}", "sporeGate");
+        assert_eq!(did, "did:primal:cellMembrane:sporeGate");
+    }
+
+    #[test]
+    fn default_socket_path_uses_constants() {
+        let expected = PathBuf::from(cellmembrane_types::service::DEFAULT_SOCKET_BASE)
+            .join(cellmembrane_types::service::NEURAL_API_SOCKET_NAME);
+        assert!(
+            expected.to_str().unwrap().contains("neural-api"),
+            "default socket path should contain neural-api"
+        );
+    }
+
+    #[test]
+    fn mark_all_unverified_preserves_repos() {
+        let mut heads = BTreeMap::new();
+        heads.insert("biomeOS".into(), "aaa".into());
+        heads.insert("cellMembrane".into(), "bbb".into());
+        heads.insert("whitePaper".into(), "ccc".into());
+
+        let checks = mark_all_unverified(&heads, "offline");
+        assert_eq!(checks.len(), 3);
+        let repos: Vec<&str> = checks.iter().map(|c| c.repo.as_str()).collect();
+        assert!(repos.contains(&"biomeOS"));
+        assert!(repos.contains(&"cellMembrane"));
+        assert!(repos.contains(&"whitePaper"));
+        for check in &checks {
+            assert!(!check.verified);
+            assert!(check.detail.contains("offline"));
+        }
+    }
+
+    #[test]
+    fn mark_all_unverified_empty_heads() {
+        let heads = BTreeMap::new();
+        let checks = mark_all_unverified(&heads, "no repos");
+        assert!(checks.is_empty());
+    }
+
+    #[test]
+    fn sovereignty_check_mismatch_detail() {
+        let check = SovereigntyCheck {
+            repo: "biomeOS".into(),
+            verified: false,
+            detail: "MISMATCH: VCS=abc12345 ledger=def67890".into(),
+        };
+        assert!(!check.verified);
+        assert!(check.detail.contains("MISMATCH"));
+        assert!(check.detail.contains("VCS="));
+        assert!(check.detail.contains("ledger="));
+    }
+
+    #[test]
+    fn graph_request_structure() {
+        let session_id = "wave-116-cascade-20260619T120000";
+        let agent_did = "did:primal:cellMembrane:sporeGate";
+        let params = serde_json::json!({
+            "session_id": session_id,
+            "agent_did": agent_did,
+            "wave_id": 116_u32,
+            "heads": {"cellMembrane": "abc123"},
+            "gate": "sporeGate",
+        });
+        let request_body = serde_json::json!({
+            "graph_id": "rootpulse_commit",
+            "params": {
+                "SESSION_ID": session_id,
+                "AGENT_DID": agent_did,
+                "FAMILY_ID": "default",
+            },
+            "metadata": params,
+        });
+        assert_eq!(
+            request_body["graph_id"].as_str().unwrap(),
+            "rootpulse_commit"
+        );
+        assert_eq!(
+            request_body["metadata"]["gate"].as_str().unwrap(),
+            "sporeGate"
+        );
+        assert_eq!(
+            request_body["params"]["SESSION_ID"].as_str().unwrap(),
+            session_id
+        );
+    }
 }

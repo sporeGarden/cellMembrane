@@ -110,6 +110,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))
         }
+        c if c.starts_with("rootpulse.") => dispatch_rootpulse(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
         c if c.starts_with("webhook.") => dispatch_webhook(config, cmd, args).await,
         c if c.starts_with("pepti.") => dispatch_pepti(config, cmd, args).await,
@@ -320,4 +321,126 @@ fn checks_to_json(checks: &[(&str, bool, String)]) -> serde_json::Value {
             })
             .collect::<Vec<_>>()
     )
+}
+
+/// Resolve gate name from `--gate` flag, `GATE_NAME` env var, or identity file.
+async fn resolve_gate_name(args: &[&str], root: &std::path::Path) -> String {
+    if let Some(g) = cli::extract_flag_value(args, "--gate") {
+        return g.to_string();
+    }
+    if let Ok(g) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
+        if !g.is_empty() {
+            return g;
+        }
+    }
+    let root = root.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        crate::identity::resolve(&root).map_or_else(|_| "unknown".into(), |id| id.name)
+    })
+    .await
+    .unwrap_or_else(|_| "unknown".into())
+}
+
+/// Dispatch rootpulse sovereignty ledger commands.
+async fn dispatch_rootpulse(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
+    match cmd {
+        "rootpulse.commit" => dispatch_rootpulse_commit(args).await,
+        "rootpulse.verify" => dispatch_rootpulse_verify(args).await,
+        "rootpulse.status" => {
+            let session = crate::temporal::post_sync::load_rootpulse_session_pub();
+            Ok(session.map_or_else(
+                || ShadowOutcome::ok_with(
+                    "no rootpulse session recorded on this gate".to_string(),
+                    serde_json::json!({ "last_session": null }),
+                ),
+                |s| ShadowOutcome::ok_with(
+                    format!("last rootpulse session: {s}"),
+                    serde_json::json!({ "last_session": s }),
+                ),
+            ))
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown rootpulse command: {cmd}"
+        ))),
+    }
+}
+
+async fn dispatch_rootpulse_commit(args: &[&str]) -> Result<ShadowOutcome> {
+    let root = crate::temporal::resolve_workspace_root()?;
+    let m = crate::manifest::load_from_workspace_async(&root).await?;
+    let gate = resolve_gate_name(args, &root).await;
+    let wave = cli::extract_flag_value(args, "--wave")
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(m.meta.wave);
+
+    let repos = m.gate_repos(&gate);
+    let heads = crate::temporal::post_sync::collect_cascade_heads_pub(&root, &repos).await;
+
+    if heads.is_empty() {
+        return Ok(ShadowOutcome::fail(
+            "no cloned repos found — nothing to commit",
+        ));
+    }
+
+    match crate::sovereignty_ledger::rootpulse_commit(wave, &gate, &heads).await {
+        Ok(session) => {
+            crate::temporal::post_sync::persist_rootpulse_session_pub(wave, &gate, &session);
+            Ok(ShadowOutcome::ok_with(
+                format!("rootpulse committed: {session}"),
+                serde_json::json!({
+                    "session": session,
+                    "wave": wave,
+                    "gate": gate,
+                    "repos": heads.len(),
+                }),
+            ))
+        }
+        Err(e) => Ok(ShadowOutcome::fail(format!("rootpulse commit failed: {e}"))),
+    }
+}
+
+async fn dispatch_rootpulse_verify(args: &[&str]) -> Result<ShadowOutcome> {
+    let root = crate::temporal::resolve_workspace_root()?;
+    let m = crate::manifest::load_from_workspace_async(&root).await?;
+    let gate = resolve_gate_name(args, &root).await;
+
+    let repos = m.gate_repos(&gate);
+    let heads = crate::temporal::post_sync::collect_cascade_heads_pub(&root, &repos).await;
+
+    let checks = crate::sovereignty_ledger::sovereignty_verify(m.meta.wave, &heads).await;
+
+    if checks.is_empty() {
+        return Ok(ShadowOutcome::ok_with(
+            "rootpulse ledger unavailable — graceful skip",
+            serde_json::json!({ "status": "unavailable" }),
+        ));
+    }
+
+    let verified = checks.iter().filter(|c| c.verified).count();
+    let total = checks.len();
+    let all_ok = verified == total;
+    let detail_lines: Vec<String> = checks
+        .iter()
+        .map(|c| {
+            let icon = if c.verified { "OK" } else { "MISMATCH" };
+            format!("  [{icon}] {}: {}", c.repo, c.detail)
+        })
+        .collect();
+    let msg = format!(
+        "sovereignty: {verified}/{total} verified\n{}",
+        detail_lines.join("\n")
+    );
+    Ok(ShadowOutcome {
+        ok: all_ok,
+        message: msg,
+        data: Some(serde_json::json!({
+            "verified": verified,
+            "total": total,
+            "checks": checks.iter().map(|c| serde_json::json!({
+                "repo": c.repo,
+                "verified": c.verified,
+                "detail": c.detail,
+            })).collect::<Vec<_>>(),
+        })),
+    })
 }

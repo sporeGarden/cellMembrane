@@ -303,17 +303,17 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
 }
 
 fn topology_mesh() -> ShadowOutcome {
-    let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
+    let gates = discover_mesh_gates();
     let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
 
-    for gate in &known {
+    for gate in &gates {
         if let Some(ip) = mesh_address(gate) {
             let zone = ZoneLabel::for_gate(gate);
             lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
         }
     }
 
-    let data: Vec<serde_json::Value> = known
+    let data: Vec<serde_json::Value> = gates
         .iter()
         .filter_map(|g| {
             mesh_address(g).map(|ip| {
@@ -327,6 +327,29 @@ fn topology_mesh() -> ShadowOutcome {
         .collect();
 
     ShadowOutcome::ok_with(lines.join("\n"), serde_json::json!(data))
+}
+
+/// Discover mesh gates from topology map, falling back to cytoplasm bootstrap set.
+fn discover_mesh_gates() -> Vec<String> {
+    if let Ok(root) = temporal::resolve_workspace_root() {
+        if let Ok(map) = topology::load_topology_map(&root) {
+            let mut gates: Vec<String> = map
+                .segments
+                .values()
+                .filter(|s| s.transport.contains("wireguard") || s.transport.contains("overlay"))
+                .flat_map(|s| s.gates.iter().cloned())
+                .collect();
+            gates.sort();
+            gates.dedup();
+            if !gates.is_empty() {
+                return gates;
+            }
+        }
+    }
+    cellmembrane_types::cytoplasm::BOOTSTRAP_GATES
+        .iter()
+        .map(|&(name, _)| name.to_string())
+        .collect()
 }
 
 // ── Identity domain ──────────────────────────────────────────────────
