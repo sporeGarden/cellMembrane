@@ -3,13 +3,12 @@
 # and DOMAIN_OWNER_MAP auto-discovery.
 #
 # Primal: cellMembrane
-# Gate: ironGate
-# Role: Inner membrane — sovereign periplasm controller
+# Team: sporeGate
+# Role: Sovereign external surface — VPS gate control, relay, webhook cascade
 
 [identity]
 primal = "cellMembrane"
-gate = "ironGate"
-composition = "tower"
+composition = "nucleus"
 binary = "membrane"
 
 [provided_capabilities]

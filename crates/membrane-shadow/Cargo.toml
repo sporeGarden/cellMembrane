@@ -6,7 +6,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Sovereign shadow functions — typed Rust API for agentic golgiBody VPS control"
+description = "Sovereign shadow functions — typed Rust CLI for cellMembrane gate control"
 
 [[bin]]
 name = "membrane"

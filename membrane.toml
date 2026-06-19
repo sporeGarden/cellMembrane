@@ -1,8 +1,9 @@
 # cellMembrane reference configuration
-# Wave 111: 3-tier diesel engine (sandbox/main/canary) with fieldMouse provisioning
+# Wave 116+: 3-tier diesel engine (sandbox/main/canary) with fieldMouse provisioning
 # Inner membrane (golgiBody): Forgejo, NUCLEUS 13/13, sovereign services
-# Peptidoglycan (peptidoglycan): Build hub, workspace, temporal sync convergence
+# Peptidoglycan (pepti): Build hub, workspace, temporal sync convergence
 # Outer membrane (golgiBody-ext): sporePrint hosting, TURN relay, public-facing
+# WireGuard mesh: 5-node (golgi .1, sporeGate .2, pepti .4, eastGate .5, flockGate .6)
 # Canary (fieldMouse): Warm standby droplet, previous-good binaries, auto-failover
 
 [membrane]

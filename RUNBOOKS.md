@@ -1,14 +1,14 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (ironGate team)
-**Last updated:** 2026-06-17 (Wave 115)
+**Last updated:** 2026-06-19 (Wave 118)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
-> **Note (Wave 107):** The `membrane` Rust CLI now replaces most `deploy_membrane.sh`
-> invocations. Prefer: `membrane gate.status` (health), `membrane gate.bootstrap`
+> **Note (Wave 118):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
+> for all operational flows. Use: `membrane gate.status` (health), `membrane gate.bootstrap`
 > (enrollment), `membrane plasmid.refresh` (binary push), `membrane temporal.cascade`
-> (sync). The `deploy_membrane.sh` commands below are preserved as reference for
-> legacy flows and are being absorbed into the Rust CLI.
+> (sync), `membrane rootpulse.status` (sovereignty). Legacy `deploy_membrane.sh`
+> references below are retained as fossil record only — do not use operationally.
 
 ---
 

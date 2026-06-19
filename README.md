@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 116) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 118) |
 
 ---
 
@@ -55,29 +55,28 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 539 tests — pedantic clippy clean
+cargo test                  # 680 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
+**Wave 116–118 (Deep Debt Evolution + Topology Convergence):**
+Webhook cascade wiring (Forgejo→`temporal.sync`, GitHub→`relay.mediate`). Manifest-driven
+cascade repos (replaces static list). `rootpulse.commit/verify/status` dispatch + gate health
+probe. SSH consolidated into `ssh.rs` extensions (`exec_on_host`, `cat_remote`, `scp_to_host`).
+Git ops centralized through `git_ops.rs` (`git_output_opt`, `head_short`). `current_wave()`
+deduplicated into canonical `freshness.rs` helper. Gate identity unified through
+`identity::resolve()` with `tracing::warn!` on fallback. All hardcoded `infra/*` paths replaced
+with constants. `CytoplasmZone` split to `cytoplasm.rs` with `ZoneLabel` + `BOOTSTRAP_GATES`.
+Topology-aware mesh discovery. 680 tests, zero clippy, all files under 600L.
+
 **Wave 115 (Sovereign Mesh & Gate Hardening):**
-`gate.bootstrap` per-phase timeouts (120s) + `identity.git` phase (detects missing git
-config + SSH keys). `depot.integrity` command (generate/verify checksums.toml with
-BLAKE3). Smart refactor: `bootstrap.rs` 861L → 555L via `gate/nucleus.rs` (systemd
-unit management) + `gate/mesh.rs` (mesh peer configuration). All sync phases evolved
-to `spawn_blocking` (prevents executor stalls on binary copy). Zero `as` casts in
-production, zero `.expect()` in production. `option_if_let_else` promoted from allow
-to warn. SSH user `root@` evolved to `MEMBRANE_PROVISION_SSH_USER` env var. Caddy
-admin endpoint evolved to `CADDY_ADMIN_ENDPOINT` env var. 539 tests, zero clippy.
+`gate.bootstrap` per-phase timeouts, identity detection, depot integrity, bootstrap smart
+refactor (861L→555L), `spawn_blocking` for all fs ops. 539 tests, zero clippy.
 
 **Wave 107–109 (Deterministic Deployment + guideStone):**
-`gate.bootstrap` (6 phases), `gate.status`, `plasmid.build` (Rust build pipeline),
-`gate.profile`, `deployment.toml` emission, BUILD-ELF-01, HARVEST-NAME-01, GATE-PROFILE-01.
-
-**Wave 105–106 (WAN Depot + Cross-Topology Validation):**
-WAN depot SHIPPED. aarch64 14/14 built. 3-gate → 4-gate mesh collective. `gate.bootstrap`
-validated on strandGate + ironGate. Cascade auto-fetch. NUCLEUS supervision (biomeOS v4.17).
-TCP-only fallback shipped. Deterministic deployment standard codified (6 invariants).
+`gate.bootstrap` (6 phases), `gate.status`, `plasmid.build`, `gate.profile`,
+`deployment.toml`, BUILD-ELF-01.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
@@ -191,6 +190,8 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | riboCipher + dispatch SRP (Wave 111): mito-tier HKDF+HMAC complete, dispatch gate.rs extracted (762L→264+518L), error propagation modernized, Neural API constants shared, 391 tests | DONE |
 | Deep debt evolution (Wave 113): zero-copy temporal (Arc manifest, Cow defaults), idiomatic Rust (safe casts, structured logging), ecosystem compliance (SPDX headers, cargo-deny CI) | DONE |
 | Bootstrap robustness + depot integrity (Wave 115): per-phase timeouts, identity detection, depot.integrity command, bootstrap 861→555L smart refactor, spawn_blocking for fs ops, 514 tests | DONE |
+| Gate enrollment + topology convergence (Wave 116): preflight checks, InterfaceRole, ARP probes, CytoplasmZone→ZoneLabel split, topology-aware mesh, 5-node WG mesh, 620 tests | DONE |
+| Deep debt consolidation (Wave 116–118): webhook cascade wiring, rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos, current_wave dedup, identity unification, hardcoded path constants, 680 tests | DONE |
 
 ---
 
@@ -276,71 +277,69 @@ gardens/cellMembrane/
         lib.rs                # Crate root, re-exports, doc-tests
         channels.rs           # Signal / Relay / Surface
         composition.rs        # Relay → RustDesk → Tower → Nest + iter_binaries()
-        config.rs             # membrane.toml parser + validator + DeployPaths
+        config/               # membrane.toml parser + validator + DeployPaths
         credentials.rs        # age / BTSP vault / manual
+        cytoplasm.rs          # ZoneLabel, mesh address, BOOTSTRAP_GATES
         envelope.rs           # K-Derm topology — monoderm/diderm, bonding, channel proteins
         error.rs              # Typed ConfigError (thiserror)
-        firewall.rs           # UFW rules from composition (SSH_PORT constant)
+        firewall.rs           # UFW + nftables rules from composition
         identity.rs           # Family ID, gate ID
         provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
-        service/              # Static service registry — zero allocation, const fn
-          mod.rs              # Types, enums, ServicePaths, impl MembraneService (705L)
-          registry.rs         # 17 const service entries + ALL_SERVICES array (304L)
+        service/              # Static service registry + path constants
+          mod.rs              # Types, enums, ServicePaths, env vars, path constants
+          registry.rs         # 17 const service entries + ALL_SERVICES array
+        signal.rs             # Ribocipher signal types
+        sync.rs               # Sync config, GateTransport
+        topology.rs           # TopologyMap TOML parser
         validation.rs         # Report pattern (pass/fail/warn) + doc-tests
-      tests/
-        channels.rs           # Channel trust, ports, crypto, serde (4 tests)
-        composition.rs        # Ladder ordering, specs, NUCLEUS, serde (21 tests)
-        coverage.rs           # Deep coverage expansion (63 tests)
-        envelope.rs           # K-Derm topology, layers, bonding, policies (27 tests)
-        firewall.rs           # UFW derivation per composition (5 tests)
-        service.rs            # Registry, binary integrity, credentials (15 tests)
-        transport.rs          # TransportMode, UDS helpers, health checks (13 tests)
-        integration.rs        # Cross-module: config parsing, validation, topology (23 tests)
     membrane-shadow/          # Sovereign shadow functions CLI (#![forbid(unsafe_code)])
       src/
-        dispatch/             # CLI command router (6 domain submodules)
-          mod.rs              # Top-level run() router + Neural Bridge delegation
+        dispatch/             # CLI command router (7 domain submodules)
+          mod.rs              # Top-level run() router + rootpulse + Neural Bridge
           temporal.rs         # cascade, check, sync dispatch
           impulse.rs          # impulse + potential sense dispatch
           infra.rs            # repo, mirror, service, token (remote VPS API)
-          gate.rs             # gate status, health, bootstrap, provision (local self-management)
-          data.rs             # manifest, identity, context, plasmid, relay
-        gate/                 # Gate operations (modular: bootstrap, health, verify, mesh, nucleus)
-          mod.rs              # VPS-oriented: info, pull, check
+          gate.rs             # gate status, health, bootstrap, provision
+          data.rs             # manifest, identity, context, plasmid, relay, topology
+          relay_dispatch.rs   # relay.run/mediate/ship dispatch
+        gate/                 # Gate operations (modular)
           bootstrap.rs        # Local enrollment (per-phase timeouts, spawn_blocking)
-          health.rs           # Native async UDS JSON-RPC probes + status
+          health.rs           # Native async UDS probes + rootpulse + status
           verify.rs           # Dual checksum verification (git + WAN)
-          mesh.rs             # Mesh peer configuration (transport resolution, songbird UDS)
+          mesh.rs             # Mesh peer configuration (transport, songbird UDS)
           nucleus.rs          # NUCLEUS systemd management (unit generation, secrets)
-          local.rs            # Shared helpers (identity, depot path resolution)
+          local.rs            # Shared helpers (identity via identity::resolve, depot paths)
+          interface.rs        # Network interface detection (ip link/addr)
+          preflight.rs        # Pre-bootstrap checks (ports, services, ARP)
+          sovereignty.rs      # Sovereignty verification probes
         relay.rs              # K-Derm relay chain (SSH+cat, no rsync)
-        impulse/              # Inter-gate impulse (7 submodules, native UDS JSON-RPC)
-        temporal/             # Temporal sync + cascade
-          mod.rs              # Manifest-driven temporal cascade + tree-parity
-          resolve.rs          # Authority-first divergence resolution + push logic
-          cascade.rs          # Cascade orchestration + restart/rebuild modes
-        freshness.rs          # Wave freshness publishing + binary drift detection
+        ssh.rs                # SSH transport (exec, raw, on_host, cat_remote, scp)
+        git_ops.rs            # Git operations (add/commit/push, rev-parse, reconcile)
+        impulse/              # Inter-gate impulse (native UDS JSON-RPC)
+        temporal/             # Temporal sync + cascade + post_sync rootpulse
+        freshness.rs          # Wave freshness, current_wave(), binary drift detection
+        context.rs            # Context braid lifecycle
         plasmid/              # Primal binary lifecycle
-          mod.rs              # Registry-derived primal list, target triple, shared utils
+          mod.rs              # Registry-derived primal list, graceful_kill, shared utils
           fetch.rs            # Fetch + WAN checksum verification + BLAKE3
           harvest.rs          # Build + checksum + atomic publish to git
-          refresh.rs          # Atomic push to VPS + checksum coherence check
+          sandbox.rs          # Ephemeral isolated validation
+          canary.rs           # Previous-good pool (retire → failover)
+          drift.rs            # Source divergence detection
+          download.rs         # SSH + WAN binary download
           toolchain.rs        # ELF validation + NDK cross-compile + strip
-          sandbox.rs          # Ephemeral isolated validation (spin-up → probe → teardown)
-          canary.rs           # Previous-good pool (retire → health-watch → failover)
-        caddy.rs              # Caddy TLS + depot + checksums provisioning
-        cloudflare.rs         # Cloudflare API v4 (DNS, cache, SSL, zones)
-        forgejo.rs            # Forgejo REST API (native reqwest)
+        caddy/                # Caddy TLS + depot provisioning
+        webhook/              # Webhook receiver (Forgejo + GitHub cascade wiring)
         bridge.rs             # Neural API bridge (UDS discovery)
-        config.rs / ssh.rs    # Config resolution + SSH/SCP transport
-  specs/                      # Formal architecture specs (5 documents)
-  experiments/                # Validated experiment records
-  README.md
-  RUNBOOKS.md
-  GLACIAL_SHIFT_TRACKER.md
-  VPS_STATE.md
-  IRONGATE_VERIFICATION.md
-  .gitignore
+        identity.rs           # Gate identity resolution (canonical)
+        config.rs             # ShadowConfig resolution
+        manifest.rs           # Ecosystem manifest parser
+        sovereignty_ledger.rs # rootpulse sovereignty ledger
+  specs/                      # Formal architecture specs (6 documents)
+  config/                     # capability_registry.toml
+  deploy/                     # Systemd units, hooks, provisioning
+  experiments/                # Validated experiment records (fossil record)
+  .forgejo/workflows/ci.yml   # Forgejo CI pipeline
 ```
 
 ---
@@ -366,7 +365,7 @@ plasmidBin remote dir centralized via `ECOPRIMALS_PLASMID_BIN` env var, stale so
 
 | Resource | Location | Relationship |
 |----------|----------|-------------|
-| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Operational tool (being absorbed into Rust CLI) |
+| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Legacy — fully replaced by `membrane` CLI (fossil record) |
 | Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
 | fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
 | K-NOME programming | `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md` | K-Derm topology parallels K-NOME methodology |
