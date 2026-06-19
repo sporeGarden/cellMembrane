@@ -558,5 +558,8 @@ pub(super) fn load_rootpulse_session() -> Option<String> {
         .join(".rootpulse_state.toml");
     let contents = std::fs::read_to_string(&state_path).ok()?;
     let table: toml::Table = contents.parse().ok()?;
-    table.get("session").and_then(|v| v.as_str()).map(String::from)
+    table
+        .get("session")
+        .and_then(|v| v.as_str())
+        .map(String::from)
 }

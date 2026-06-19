@@ -90,34 +90,18 @@ pub async fn remote_health_check(ip: &str) -> bool {
         "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:/run/membrane/{spine_binary}.sock 2>/dev/null"
     );
 
+    let user = std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into());
+
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        tokio::process::Command::new("ssh")
-            .args([
-                "-o",
-                "ConnectTimeout=5",
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                &format!(
-                    "{}@{ip}",
-                    std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
-                        .unwrap_or_else(|_| {
-                            cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into()
-                        })
-                ),
-                &probe_cmd,
-            ])
-            .output(),
+        crate::ssh::exec_on_host(&user, ip, &probe_cmd, 5),
     )
     .await;
 
     match result {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            output.status.success()
-                && (stdout.contains("\"status\"") || stdout.contains("\"result\""))
+        Ok(Ok((stdout, code))) => {
+            code == 0 && (stdout.contains("\"status\"") || stdout.contains("\"result\""))
         }
         _ => false,
     }

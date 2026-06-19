@@ -19,28 +19,12 @@ fn provision_ssh_user() -> String {
 /// Run a command on the remote host via SSH with retry logic for fresh droplets.
 pub(super) async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
     let user = provision_ssh_user();
-    let output = tokio::process::Command::new("ssh")
-        .args([
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            &format!("{user}@{ip}"),
-            command,
-        ])
-        .output()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("SSH exec failed: {e}")))?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    let (stdout, code) = crate::ssh::exec_on_host(&user, ip, command, 10).await?;
+    if code == 0 {
+        Ok(stdout)
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
         Err(ShadowError::Parse(format!(
-            "SSH command failed (exit {}): {stderr}",
-            output.status.code().unwrap_or(-1)
+            "SSH command failed (exit {code}): {stdout}"
         )))
     }
 }
@@ -127,27 +111,17 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
             "{}/{primal}",
             cellmembrane_types::service::DEFAULT_INSTALL_BASE
         );
-        let scp_result = tokio::process::Command::new("scp")
-            .args([
-                "-o",
-                "ConnectTimeout=10",
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                &local_path.to_string_lossy(),
-                &format!("{}@{ip}:{remote_path}", provision_ssh_user()),
-            ])
-            .output()
-            .await;
-
-        match scp_result {
-            Ok(output) if output.status.success() => deployed += 1,
-            Ok(output) => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                error!(primal, stderr = %stderr, "SCP failed");
-            }
-            Err(e) => error!(primal, error = %e, "SCP error"),
+        match crate::ssh::scp_to_host(
+            &provision_ssh_user(),
+            ip,
+            &local_path.to_string_lossy(),
+            &remote_path,
+            10,
+        )
+        .await
+        {
+            Ok(()) => deployed += 1,
+            Err(e) => error!(primal, error = %e, "SCP failed"),
         }
     }
 

@@ -182,19 +182,7 @@ fn braid_filepath(workspace_root: &Path, gate: &str, project: &str) -> PathBuf {
 }
 
 fn current_wave(workspace_root: &Path) -> u32 {
-    let freshness = workspace_root
-        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
-        .join("freshness.toml");
-    if let Ok(contents) = std::fs::read_to_string(&freshness) {
-        if let Ok(val) = contents.parse::<toml::Table>() {
-            if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {
-                if let Some(id) = wave.get("id").and_then(toml::Value::as_integer) {
-                    return u32::try_from(id).unwrap_or(0);
-                }
-            }
-        }
-    }
-    0
+    crate::freshness::current_wave(workspace_root)
 }
 
 // ── Operations ────────────────────────────────────────────────────────────
@@ -360,8 +348,13 @@ pub fn sense(
                 continue;
             };
 
-            if let Ok(braid) = toml::from_str::<ContextBraid>(&contents) {
-                braids.push(braid);
+            match toml::from_str::<ContextBraid>(&contents) {
+                Ok(braid) => braids.push(braid),
+                Err(e) => tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "skipping corrupt context braid"
+                ),
             }
         }
     }

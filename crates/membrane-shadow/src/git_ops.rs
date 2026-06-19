@@ -245,6 +245,16 @@ pub async fn git_success(repo_path: &Path, args: &[&str]) -> bool {
         .is_ok_and(|r| r.is_ok_and(|s| s.success()))
 }
 
+/// Run a git command, returning stdout as `Option` (returns `None` on failure/timeout).
+pub async fn git_output_opt(repo_path: &Path, args: &[&str]) -> Option<String> {
+    git_output(repo_path, args).await.ok()
+}
+
+/// Resolve HEAD as a short ref (8 chars). Returns `None` if not a git repo.
+pub async fn head_short(repo_path: &Path) -> Option<String> {
+    git_output_opt(repo_path, &["rev-parse", "--short=8", "HEAD"]).await
+}
+
 /// Count commits in a rev-list range (e.g. `"origin/main..HEAD"`).
 pub async fn rev_list_count(repo_path: &Path, range: &str) -> u32 {
     git_output(repo_path, &["rev-list", "--count", range])

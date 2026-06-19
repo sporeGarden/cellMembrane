@@ -4,29 +4,34 @@
 
 use std::path::PathBuf;
 
-/// Resolve the local gate identity from env or filesystem.
+/// Resolve the local gate identity, delegating to the canonical `identity::resolve()`.
 ///
-/// Priority: `GATE_NAME` env → `/opt/ecoPrimals/.gate` → `~/.gate` → "unknown".
+/// Falls back through workspace root candidates. Returns `"unknown"` only if
+/// all resolution paths fail — callers should treat this as degraded state.
 #[must_use]
 pub fn resolve_local_gate_identity() -> String {
-    if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        return name;
+    let roots = candidate_workspace_roots();
+    for root in &roots {
+        if let Ok(id) = crate::identity::resolve(root) {
+            return id.name;
+        }
+    }
+    tracing::warn!(
+        "gate identity unresolved — all candidate roots exhausted, returning \"unknown\""
+    );
+    "unknown".into()
+}
+
+fn candidate_workspace_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::with_capacity(3);
+    if let Ok(root) = crate::resolve_workspace_root() {
+        roots.push(root);
     }
     let ecoprimals_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
-    let candidates = [
-        PathBuf::from(&ecoprimals_root).join(".gate"),
-        dirs_home().join(".gate"),
-    ];
-    for path in &candidates {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            let trimmed = content.trim().to_string();
-            if !trimmed.is_empty() {
-                return trimmed;
-            }
-        }
-    }
-    "unknown".into()
+    roots.push(PathBuf::from(ecoprimals_root));
+    roots.push(dirs_home());
+    roots
 }
 
 fn dirs_home() -> PathBuf {

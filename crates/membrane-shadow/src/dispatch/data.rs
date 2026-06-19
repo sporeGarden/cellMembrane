@@ -332,17 +332,24 @@ fn topology_mesh() -> ShadowOutcome {
 /// Discover mesh gates from topology map, falling back to cytoplasm bootstrap set.
 fn discover_mesh_gates() -> Vec<String> {
     if let Ok(root) = temporal::resolve_workspace_root() {
-        if let Ok(map) = topology::load_topology_map(&root) {
-            let mut gates: Vec<String> = map
-                .segments
-                .values()
-                .filter(|s| s.transport.contains("wireguard") || s.transport.contains("overlay"))
-                .flat_map(|s| s.gates.iter().cloned())
-                .collect();
-            gates.sort();
-            gates.dedup();
-            if !gates.is_empty() {
-                return gates;
+        match topology::load_topology_map(&root) {
+            Ok(map) => {
+                let mut gates: Vec<String> = map
+                    .segments
+                    .values()
+                    .filter(|s| {
+                        s.transport.contains("wireguard") || s.transport.contains("overlay")
+                    })
+                    .flat_map(|s| s.gates.iter().cloned())
+                    .collect();
+                gates.sort();
+                gates.dedup();
+                if !gates.is_empty() {
+                    return gates;
+                }
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "topology map unavailable, using bootstrap gates");
             }
         }
     }

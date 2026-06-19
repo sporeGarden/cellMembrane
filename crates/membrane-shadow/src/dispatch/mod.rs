@@ -349,14 +349,18 @@ async fn dispatch_rootpulse(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
         "rootpulse.status" => {
             let session = crate::temporal::post_sync::load_rootpulse_session_pub();
             Ok(session.map_or_else(
-                || ShadowOutcome::ok_with(
-                    "no rootpulse session recorded on this gate".to_string(),
-                    serde_json::json!({ "last_session": null }),
-                ),
-                |s| ShadowOutcome::ok_with(
-                    format!("last rootpulse session: {s}"),
-                    serde_json::json!({ "last_session": s }),
-                ),
+                || {
+                    ShadowOutcome::ok_with(
+                        "no rootpulse session recorded on this gate".to_string(),
+                        serde_json::json!({ "last_session": null }),
+                    )
+                },
+                |s| {
+                    ShadowOutcome::ok_with(
+                        format!("last rootpulse session: {s}"),
+                        serde_json::json!({ "last_session": s }),
+                    )
+                },
             ))
         }
         _ => Ok(ShadowOutcome::fail(format!(
@@ -508,9 +512,7 @@ mod tests {
 
     #[tokio::test]
     async fn rootpulse_unknown_subcommand() {
-        let result = dispatch_rootpulse("rootpulse.invalid", &[])
-            .await
-            .unwrap();
+        let result = dispatch_rootpulse("rootpulse.invalid", &[]).await.unwrap();
         assert!(!result.ok);
         assert!(result.message.contains("unknown rootpulse command"));
     }

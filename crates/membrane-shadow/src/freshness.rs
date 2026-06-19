@@ -186,6 +186,7 @@ async fn pull_rebase_both_remotes(wh_dir: &Path) {
             .output()
             .await
         else {
+            warn!(remote, "freshness pull-rebase failed to execute");
             continue;
         };
 
@@ -375,6 +376,21 @@ fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<Strin
 /// Async git rev-parse HEAD.
 async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
     crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
+}
+
+/// Read the current wave ID from `freshness.toml` in the workspace.
+///
+/// Returns `0` if the file is missing, unparseable, or has no wave ID.
+/// This is the canonical source — do not duplicate.
+#[must_use]
+pub fn current_wave(workspace_root: &Path) -> u32 {
+    let path = workspace_root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("freshness.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return 0;
+    };
+    toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
 }
 
 #[cfg(test)]

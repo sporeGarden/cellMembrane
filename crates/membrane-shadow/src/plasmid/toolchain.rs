@@ -216,11 +216,11 @@ pub async fn try_clone(url: &str, clone_dir: &Path) -> bool {
             tracing::debug!(error = %e, "clone_dir cleanup (may not exist)");
         }
     }
-    let result = tokio::process::Command::new("git")
-        .args(["clone", "--depth", "1", url, &clone_dir.to_string_lossy()])
-        .output()
-        .await;
-    result.is_ok_and(|o| o.status.success())
+    crate::git_ops::git_success(
+        std::path::Path::new("."),
+        &["clone", "--depth", "1", url, &clone_dir.to_string_lossy()],
+    )
+    .await
 }
 
 #[cfg(test)]

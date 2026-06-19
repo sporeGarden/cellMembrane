@@ -110,6 +110,98 @@ pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) 
     }
 }
 
+/// Execute a command on a host using `user@ip` form (provisioning/enrollment).
+///
+/// Accepts new host keys on first connect (`StrictHostKeyChecking=accept-new`).
+pub async fn exec_on_host(
+    user: &str,
+    host: &str,
+    command: &str,
+    timeout: u32,
+) -> Result<(String, i32)> {
+    let dest = format!("{user}@{host}");
+    let output = Command::new("ssh")
+        .args([
+            "-o",
+            &format!("ConnectTimeout={timeout}"),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            &dest,
+            command,
+        ])
+        .output()
+        .await?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let code = output.status.code().unwrap_or(-1);
+    Ok((stdout, code))
+}
+
+/// Transfer a local file to a host using `user@ip` form (provisioning/enrollment).
+///
+/// Accepts new host keys on first connect.
+pub async fn scp_to_host(
+    user: &str,
+    host: &str,
+    local_path: &str,
+    remote_path: &str,
+    timeout: u32,
+) -> Result<()> {
+    let dest = format!("{user}@{host}:{remote_path}");
+    let output = Command::new("scp")
+        .args([
+            "-o",
+            &format!("ConnectTimeout={timeout}"),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            local_path,
+            &dest,
+        ])
+        .output()
+        .await?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(ShadowError::Ssh(format!(
+            "scp to {host} failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        )))
+    }
+}
+
+/// Fetch a remote file's contents via SSH `cat` (depot binary download).
+pub async fn cat_remote(host: &str, remote_path: &str, timeout: u32) -> Result<Vec<u8>> {
+    let output = Command::new("ssh")
+        .args([
+            "-o",
+            &format!("ConnectTimeout={timeout}"),
+            "-o",
+            "BatchMode=yes",
+            host,
+            &format!("cat {remote_path}"),
+        ])
+        .output()
+        .await?;
+
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(ShadowError::Ssh(format!(
+            "ssh cat {remote_path} failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

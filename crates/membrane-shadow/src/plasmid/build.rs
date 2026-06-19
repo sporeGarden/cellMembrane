@@ -248,16 +248,5 @@ async fn stage_to_depot(
 }
 
 async fn get_head(repo_dir: &Path) -> Option<String> {
-    let output = tokio::process::Command::new("git")
-        .args(["rev-parse", "--short=8", "HEAD"])
-        .current_dir(repo_dir)
-        .output()
-        .await
-        .ok()?;
-
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        None
-    }
+    crate::git_ops::head_short(repo_dir).await
 }

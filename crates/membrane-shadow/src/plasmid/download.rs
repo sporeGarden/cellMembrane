@@ -52,21 +52,8 @@ pub(super) async fn download_asset(
 }
 
 async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
-    let output = tokio::process::Command::new("ssh")
-        .args([
-            "-o",
-            "ConnectTimeout=30",
-            "-o",
-            "BatchMode=yes",
-            host,
-            "cat",
-            remote_path,
-        ])
-        .output()
-        .await;
-
-    match output {
-        Ok(o) if o.status.success() && !o.stdout.is_empty() => atomic_write(dest, &o.stdout).await,
+    match crate::ssh::cat_remote(host, remote_path, 30).await {
+        Ok(data) if !data.is_empty() => atomic_write(dest, &data).await,
         _ => false,
     }
 }

@@ -48,17 +48,10 @@ async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
 }
 
 async fn try_ls_remote_head(url: &str) -> Option<String> {
-    let output = tokio::process::Command::new("git")
-        .args(["ls-remote", url, "HEAD"])
-        .output()
-        .await
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout.split_whitespace().next().map(|s| s[..8].to_string())
+    let output =
+        crate::git_ops::git_output_opt(std::path::Path::new("."), &["ls-remote", url, "HEAD"])
+            .await?;
+    output.split_whitespace().next().map(|s| s[..8].to_string())
 }
 
 pub(super) async fn clone_source(
@@ -109,24 +102,10 @@ pub(super) async fn check_clone_freshness(
     }
 
     let github_url = format!("https://github.com/{}.git", source.repo);
-    let output = tokio::process::Command::new("git")
-        .args(["ls-remote", &github_url, "HEAD"])
-        .current_dir(clone_dir)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .await
-        .ok()?;
+    let output =
+        crate::git_ops::git_output_opt(clone_dir, &["ls-remote", &github_url, "HEAD"]).await?;
 
-    if !output.status.success() {
-        return None;
-    }
-
-    let remote_head = String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_string();
+    let remote_head = output.split_whitespace().next().unwrap_or("").to_string();
 
     if remote_head.is_empty() {
         return None;

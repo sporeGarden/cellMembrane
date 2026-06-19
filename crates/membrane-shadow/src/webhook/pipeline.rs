@@ -69,7 +69,12 @@ pub(super) async fn run_cascade_pipeline(
     let repo_path = manifest
         .repos
         .iter()
-        .find(|(_, entry)| entry.local_path.to_lowercase().contains(&action.repo_name.to_lowercase()))
+        .find(|(_, entry)| {
+            entry
+                .local_path
+                .to_lowercase()
+                .contains(&action.repo_name.to_lowercase())
+        })
         .map(|(_, entry)| entry.local_path.clone());
 
     let path = repo_path.unwrap_or_else(|| {
@@ -87,8 +92,7 @@ pub(super) async fn run_cascade_pipeline(
                 path = %path,
                 "webhook cascade: syncing from Forgejo push"
             );
-            let result =
-                crate::temporal::sync_with_target(&root, &path, push_target).await?;
+            let result = crate::temporal::sync_with_target(&root, &path, push_target).await?;
             Ok(crate::ShadowOutcome::ok(format!(
                 "webhook: {} cascade sync — {}",
                 action.repo_name,
@@ -102,8 +106,7 @@ pub(super) async fn run_cascade_pipeline(
                 "webhook cascade: relaying from GitHub push"
             );
             let relay_config = crate::relay::RelayConfig::from_env();
-            let (pulled, failures) =
-                crate::relay::mediate(&relay_config, &[path.as_str()]).await;
+            let (pulled, failures) = crate::relay::mediate(&relay_config, &[path.as_str()]).await;
             let ok = failures.is_empty();
             Ok(crate::ShadowOutcome {
                 ok,

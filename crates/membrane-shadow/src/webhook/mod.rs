@@ -185,10 +185,16 @@ const BOOTSTRAP_CASCADE_REPOS: &[&str] =
 /// cascade instead of harvest.
 fn cascade_repos_from_manifest(known_primals: &[&str]) -> Vec<String> {
     let Ok(root) = crate::temporal::resolve_workspace_root() else {
-        return BOOTSTRAP_CASCADE_REPOS.iter().map(|s| (*s).to_string()).collect();
+        return BOOTSTRAP_CASCADE_REPOS
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
     };
     let Ok(manifest) = crate::manifest::load_from_workspace(&root) else {
-        return BOOTSTRAP_CASCADE_REPOS.iter().map(|s| (*s).to_string()).collect();
+        return BOOTSTRAP_CASCADE_REPOS
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
     };
     manifest
         .repos

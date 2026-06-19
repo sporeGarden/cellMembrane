@@ -27,6 +27,7 @@ pub(super) const fn transport_to_fetch_source(
 ///
 /// Fields beyond `transport` and `mesh_peer` are staged for profile-driven
 /// bootstrap evolution (Wave 117+: composition-aware NUCLEUS, manifest mobility).
+#[derive(Default)]
 pub(super) struct GateManifestProfile {
     pub transport: GateTransport,
     pub mesh_peer: Option<String>,
@@ -34,18 +35,6 @@ pub(super) struct GateManifestProfile {
     pub mobility: Option<String>,
     #[allow(dead_code, reason = "staged for composition-aware NUCLEUS (Wave 117+)")]
     pub composition: Option<String>,
-}
-
-impl Default for GateManifestProfile {
-    #[allow(clippy::derivable_impls)]
-    fn default() -> Self {
-        Self {
-            transport: GateTransport::default(),
-            mesh_peer: None,
-            mobility: None,
-            composition: None,
-        }
-    }
 }
 
 /// Resolve gate profile fields from the ecosystem manifest.

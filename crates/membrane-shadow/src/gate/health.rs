@@ -346,10 +346,12 @@ async fn probe_vcs_parity() -> StatusProbe {
     let local_paths: Vec<String> = crate::manifest::load_from_workspace_async(&workspace)
         .await
         .map_or_else(
-            |_| vec![
-                cellmembrane_types::service::INFRA_PLASMID_BIN.into(),
-                cellmembrane_types::service::INFRA_WATERING_HOLE.into(),
-            ],
+            |_| {
+                vec![
+                    cellmembrane_types::service::INFRA_PLASMID_BIN.into(),
+                    cellmembrane_types::service::INFRA_WATERING_HOLE.into(),
+                ]
+            },
             |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
         );
 
@@ -381,19 +383,7 @@ async fn probe_vcs_parity() -> StatusProbe {
 }
 
 async fn git_rev_parse(repo_dir: &Path, refspec: &str) -> Option<String> {
-    let output = tokio::process::Command::new("git")
-        .args(["rev-parse", refspec])
-        .current_dir(repo_dir)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .await
-        .ok()?;
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        None
-    }
+    crate::git_ops::git_output_opt(repo_dir, &["rev-parse", refspec]).await
 }
 
 // ── Native UDS JSON-RPC client (delegates to crate::jsonrpc) ──────────
@@ -446,7 +436,9 @@ fn probe_rootpulse_ledger() -> StatusProbe {
         || StatusProbe {
             name: "rootpulse.ledger".into(),
             ok: false,
-            detail: "no rootpulse session recorded — run rootpulse.commit or cascade with freshness".into(),
+            detail:
+                "no rootpulse session recorded — run rootpulse.commit or cascade with freshness"
+                    .into(),
         },
         |s| StatusProbe {
             name: "rootpulse.ledger".into(),
