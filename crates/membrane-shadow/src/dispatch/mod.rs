@@ -444,3 +444,74 @@ async fn dispatch_rootpulse_verify(args: &[&str]) -> Result<ShadowOutcome> {
         })),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bridge_mapping_known_commands() {
+        assert!(bridge_mapping("gate.info").is_some());
+        assert!(bridge_mapping("gate.pull").is_some());
+        assert!(bridge_mapping("service.list").is_some());
+        assert!(bridge_mapping("repo.list").is_some());
+        assert!(bridge_mapping("token.create").is_some());
+    }
+
+    #[test]
+    fn bridge_mapping_unknown_returns_none() {
+        assert!(bridge_mapping("rootpulse.commit").is_none());
+        assert!(bridge_mapping("temporal.cascade").is_none());
+        assert!(bridge_mapping("depot.integrity").is_none());
+        assert!(bridge_mapping("unknown.command").is_none());
+    }
+
+    #[test]
+    fn bridge_mapping_returns_correct_domain() {
+        let (domain, method) = bridge_mapping("gate.info").unwrap();
+        assert_eq!(domain, "gate");
+        assert_eq!(method, "gate.info");
+
+        let (domain, method) = bridge_mapping("repo.list").unwrap();
+        assert_eq!(domain, "content");
+        assert_eq!(method, "content.repo.list");
+    }
+
+    #[test]
+    fn webhook_provider_parse() {
+        let provider = parse_webhook_provider(&["--provider", "github"]);
+        assert_eq!(provider, crate::webhook::WebhookProvider::GitHub);
+
+        let provider = parse_webhook_provider(&["--provider", "forgejo"]);
+        assert_eq!(provider, crate::webhook::WebhookProvider::Forgejo);
+    }
+
+    #[test]
+    fn webhook_provider_default_is_forgejo() {
+        let provider = parse_webhook_provider(&[]);
+        assert_eq!(provider, crate::webhook::WebhookProvider::Forgejo);
+    }
+
+    #[tokio::test]
+    async fn unknown_command_returns_fail() {
+        let config = ShadowConfig::default();
+        let result = run(&config, "nonexistent.command", &[]).await.unwrap();
+        assert!(!result.ok);
+        assert!(result.message.contains("unknown command"));
+    }
+
+    #[tokio::test]
+    async fn rootpulse_status_returns_ok() {
+        let result = dispatch_rootpulse("rootpulse.status", &[]).await.unwrap();
+        assert!(result.ok);
+    }
+
+    #[tokio::test]
+    async fn rootpulse_unknown_subcommand() {
+        let result = dispatch_rootpulse("rootpulse.invalid", &[])
+            .await
+            .unwrap();
+        assert!(!result.ok);
+        assert!(result.message.contains("unknown rootpulse command"));
+    }
+}

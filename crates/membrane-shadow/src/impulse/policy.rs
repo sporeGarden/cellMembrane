@@ -63,7 +63,9 @@ pub fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[Imp
 
 /// Load external ack files for a given impulse ID from `impulses/acks/`.
 pub fn load_external_acks(workspace_root: &Path, impulse_id: &str) -> Vec<ImpulseAck> {
-    let acks_dir = workspace_root.join("infra/wateringHole/impulses/acks");
+    let acks_dir = workspace_root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("impulses/acks");
     if !acks_dir.exists() {
         return vec![];
     }

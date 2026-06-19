@@ -155,7 +155,9 @@ pub struct WeaveArgs<'a> {
 // ── Path Helpers ──────────────────────────────────────────────────────────
 
 fn context_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("infra/wateringHole/context")
+    workspace_root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("context")
 }
 
 fn gate_context_dir(workspace_root: &Path, gate: &str) -> PathBuf {
@@ -180,7 +182,9 @@ fn braid_filepath(workspace_root: &Path, gate: &str, project: &str) -> PathBuf {
 }
 
 fn current_wave(workspace_root: &Path) -> u32 {
-    let freshness = workspace_root.join("infra/wateringHole/freshness.toml");
+    let freshness = workspace_root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("freshness.toml");
     if let Ok(contents) = std::fs::read_to_string(&freshness) {
         if let Ok(val) = contents.parse::<toml::Table>() {
             if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {

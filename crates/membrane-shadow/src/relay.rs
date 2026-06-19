@@ -146,7 +146,7 @@ fn resolve_membrane_toml_path() -> Option<PathBuf> {
 /// Returns `Err` only for infrastructure failures (IO, serialization).
 pub async fn run(config: &RelayConfig, repo_paths: &[&str]) -> Result<RelayResult> {
     let paths: Vec<&str> = if repo_paths.is_empty() {
-        vec!["infra/wateringHole"]
+        vec![cellmembrane_types::service::INFRA_WATERING_HOLE]
     } else {
         repo_paths.to_vec()
     };

@@ -53,7 +53,9 @@ pub async fn publish_freshness_toml(
     manifest: &crate::manifest::EcosystemManifest,
     repos: &[(&str, &crate::manifest::RepoEntry)],
 ) -> Result<()> {
-    let freshness_path = root.join("infra/wateringHole/freshness.toml");
+    let freshness_path = root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("freshness.toml");
 
     // Preserve existing heads from repos this gate doesn't track (merge, not overwrite).
     let mut heads = tokio::fs::read_to_string(&freshness_path)

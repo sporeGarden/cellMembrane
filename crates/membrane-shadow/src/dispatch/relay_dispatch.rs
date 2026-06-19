@@ -24,7 +24,7 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
         "relay.mediate" => {
             let config = relay::RelayConfig::from_env();
             let paths: Vec<&str> = if args.is_empty() {
-                vec!["infra/wateringHole"]
+                vec![cellmembrane_types::service::INFRA_WATERING_HOLE]
             } else {
                 args.to_vec()
             };
@@ -45,7 +45,7 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
         "relay.ship" => {
             let config = relay::RelayConfig::from_env();
             let paths: Vec<&str> = if args.is_empty() {
-                vec!["infra/wateringHole"]
+                vec![cellmembrane_types::service::INFRA_WATERING_HOLE]
             } else {
                 args.to_vec()
             };

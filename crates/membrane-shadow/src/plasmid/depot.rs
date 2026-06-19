@@ -193,7 +193,7 @@ pub fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
                 .unwrap_or_else(|| {
                     PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
                 });
-            eco_root.join("infra/plasmidBin")
+            eco_root.join(cellmembrane_types::service::INFRA_PLASMID_BIN)
         },
     );
     if !path.exists() {

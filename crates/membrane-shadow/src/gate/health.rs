@@ -346,7 +346,10 @@ async fn probe_vcs_parity() -> StatusProbe {
     let local_paths: Vec<String> = crate::manifest::load_from_workspace_async(&workspace)
         .await
         .map_or_else(
-            |_| vec!["infra/plasmidBin".into(), "infra/wateringHole".into()],
+            |_| vec![
+                cellmembrane_types::service::INFRA_PLASMID_BIN.into(),
+                cellmembrane_types::service::INFRA_WATERING_HOLE.into(),
+            ],
             |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
         );
 

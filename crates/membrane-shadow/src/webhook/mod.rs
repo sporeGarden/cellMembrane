@@ -173,13 +173,38 @@ pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Resu
     }
 }
 
-/// Repos that should trigger git cascade (relay chain) rather than harvest.
-const CASCADE_REPOS: &[&str] = &["cellmembrane", "wateringhole", "whitepaper", "primalspring"];
+/// Bootstrap list of repos that trigger cascade when no manifest is loaded.
+///
+/// Once topology data is available, prefer [`cascade_repos_from_manifest`].
+const BOOTSTRAP_CASCADE_REPOS: &[&str] =
+    &["cellmembrane", "wateringhole", "whitepaper", "primalspring"];
+
+/// Derive cascade repo list from manifest (non-primal ecosystem repos).
+///
+/// Any repo in the manifest that isn't a known primal binary triggers
+/// cascade instead of harvest.
+fn cascade_repos_from_manifest(known_primals: &[&str]) -> Vec<String> {
+    let Ok(root) = crate::temporal::resolve_workspace_root() else {
+        return BOOTSTRAP_CASCADE_REPOS.iter().map(|s| (*s).to_string()).collect();
+    };
+    let Ok(manifest) = crate::manifest::load_from_workspace(&root) else {
+        return BOOTSTRAP_CASCADE_REPOS.iter().map(|s| (*s).to_string()).collect();
+    };
+    manifest
+        .repos
+        .keys()
+        .filter(|name| {
+            let lower = name.to_lowercase();
+            !known_primals.iter().any(|p| p.to_lowercase() == lower)
+        })
+        .map(|name| name.to_lowercase())
+        .collect()
+}
 
 /// Determine what action to take for a push event.
 ///
 /// Triggers harvest for known primal repos on default branch.
-/// Triggers git cascade for ecosystem infrastructure repos.
+/// Triggers git cascade for ecosystem infrastructure repos (manifest-driven).
 #[must_use]
 pub fn classify_push(
     event: &PushEvent,
@@ -194,7 +219,8 @@ pub fn classify_push(
     let is_default_branch = branch == event.repository.default_branch;
     let repo_lower = event.repository.name.to_lowercase();
     let is_known_primal = known_primals.iter().any(|p| p.to_lowercase() == repo_lower);
-    let is_cascade_repo = CASCADE_REPOS.iter().any(|r| *r == repo_lower);
+    let cascade_repos = cascade_repos_from_manifest(known_primals);
+    let is_cascade_repo = cascade_repos.contains(&repo_lower);
 
     let should_harvest = is_default_branch && is_known_primal;
     let should_cascade = is_default_branch && is_cascade_repo;
@@ -257,10 +283,7 @@ pub async fn handle_push(
             branch = %action.branch,
             "git cascade triggered by webhook"
         );
-        return Ok(crate::ShadowOutcome::ok(format!(
-            "webhook: {} cascade queued (provider: {:?}, branch: {})",
-            action.repo_name, action.provider, action.branch
-        )));
+        return pipeline::run_cascade_pipeline(&action, config).await;
     }
 
     info!(
@@ -488,6 +511,54 @@ mod tests {
         assert_eq!(event.repository.name, "biomeOS");
         assert_eq!(event.after, "abc123def456");
         assert_eq!(event.commits.len(), 1);
+    }
+
+    #[test]
+    fn classify_push_github_cascade_repo() {
+        let event = sample_push_event("cellMembrane", "main", "main");
+        let primals = &["biomeos", "beardog"];
+        let action = classify_push(&event, primals, WebhookProvider::GitHub);
+        assert!(!action.should_harvest);
+        assert!(action.should_cascade);
+        assert_eq!(action.provider, WebhookProvider::GitHub);
+    }
+
+    #[test]
+    fn classify_push_primal_overrides_cascade() {
+        let event = sample_push_event("cellMembrane", "main", "main");
+        let primals = &["cellmembrane"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert!(action.should_harvest, "primal match triggers harvest");
+        assert!(
+            !action.should_cascade,
+            "manifest-driven cascade excludes known primals"
+        );
+    }
+
+    #[test]
+    fn bootstrap_cascade_repos_are_not_primals() {
+        let primals = &["biomeos", "beardog", "songbird", "skunkbat"];
+        for repo in BOOTSTRAP_CASCADE_REPOS {
+            assert!(
+                !primals.iter().any(|p| p.to_lowercase() == *repo),
+                "bootstrap cascade repo '{repo}' should not be a primal"
+            );
+        }
+    }
+
+    #[test]
+    fn provider_no_headers_returns_none() {
+        let headers: Vec<(String, String)> = vec![];
+        assert!(WebhookProvider::detect(&headers).is_none());
+    }
+
+    #[test]
+    fn provider_irrelevant_headers_returns_none() {
+        let headers = vec![
+            ("Content-Type".to_string(), "application/json".to_string()),
+            ("X-Request-Id".to_string(), "123".to_string()),
+        ];
+        assert!(WebhookProvider::detect(&headers).is_none());
     }
 
     fn sample_push_event(repo: &str, branch: &str, default: &str) -> PushEvent {

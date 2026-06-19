@@ -256,7 +256,9 @@ pub struct PotentialHealth {
 
 #[must_use]
 pub fn impulses_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("infra/wateringHole/impulses")
+    workspace_root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("impulses")
 }
 
 #[must_use]
@@ -266,7 +268,9 @@ pub fn active_dir(workspace_root: &Path) -> PathBuf {
 
 #[must_use]
 pub fn current_wave(workspace_root: &Path) -> u32 {
-    let freshness = workspace_root.join("infra/wateringHole/freshness.toml");
+    let freshness = workspace_root
+        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+        .join("freshness.toml");
     if let Ok(contents) = std::fs::read_to_string(&freshness) {
         if let Ok(val) = contents.parse::<toml::Table>() {
             if let Some(wave) = val.get("wave").and_then(|w| w.as_table()) {
