@@ -36,6 +36,7 @@ pub mod channels;
 pub mod composition;
 pub mod config;
 pub mod credentials;
+pub mod cytoplasm;
 pub mod envelope;
 pub mod error;
 pub mod firewall;
@@ -52,9 +53,9 @@ pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, Tru
 pub use composition::{CompositionSpec, MembraneComposition};
 pub use config::{DeployPaths, MembraneConfig, ShadowMode};
 pub use credentials::{CredentialFile, CredentialModel, credential_files_for};
+pub use cytoplasm::{ZoneLabel, mesh_address, mesh_address_from_topology};
 pub use envelope::{
-    BondType, BoundaryPolicy, BraidPolicy, ChannelProtein, CytoplasmZone, EnvelopeLayer,
-    EnvelopeTopology, mesh_address,
+    BondType, BoundaryPolicy, BraidPolicy, ChannelProtein, EnvelopeLayer, EnvelopeTopology,
 };
 pub use error::ConfigError;
 pub use firewall::{FirewallRule, FirewallRuleset, NftablesConfig};

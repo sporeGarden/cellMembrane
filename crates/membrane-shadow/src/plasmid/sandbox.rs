@@ -199,16 +199,7 @@ pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
 /// Kill the sandbox process and clean up socket/binary.
 pub async fn teardown(instance: &SandboxInstance) {
     if let Some(pid) = instance.pid {
-        let _ = tokio::process::Command::new("kill")
-            .arg(pid.to_string())
-            .output()
-            .await;
-        // Grace period then force-kill
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ = tokio::process::Command::new("kill")
-            .args(["-9", &pid.to_string()])
-            .output()
-            .await;
+        super::graceful_kill(pid, 500).await;
     }
 
     let _ = tokio::fs::remove_file(&instance.socket_path).await;

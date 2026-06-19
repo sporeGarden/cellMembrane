@@ -293,102 +293,6 @@ impl fmt::Display for ChannelProtein {
     }
 }
 
-/// Cytoplasm zone — physical topology grouping within the plasma membrane.
-///
-/// Maps to the K-Derm model where the cytoplasm is segmented into zones by
-/// physical switching fabric. Gates in the same zone share L2 connectivity;
-/// cross-zone traffic traverses backbone links or `WireGuard` overlay.
-///
-/// Zone assignments are authoritative in the ecosystem manifest
-/// (`ecosystem_manifest.toml` `[gates.<name>] zone = "..."`) but can be
-/// derived from gate name as a fallback.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CytoplasmZone {
-    /// Hub 1: CRS310 backbone, sporeGate plasma membrane, 10G fabric.
-    Backbone,
-    /// Hub 2: Omada `SX3008F` (standalone L2), Flint 2 `WiFi`, house 2 gates.
-    House2,
-    /// Hub 3: Garage, planned compute + outdoor `WiFi`.
-    Garage,
-    /// WAN: gates outside the plasma membrane (VPS, offsite, public internet).
-    Wan,
-    /// Unknown or unassigned zone.
-    #[default]
-    Unassigned,
-}
-
-impl CytoplasmZone {
-    /// Parse a zone string from the manifest. Falls back to `Unassigned`.
-    #[must_use]
-    pub fn from_manifest(s: &str) -> Self {
-        match s {
-            "backbone" => Self::Backbone,
-            "house2" => Self::House2,
-            "garage" => Self::Garage,
-            "wan" => Self::Wan,
-            _ => Self::Unassigned,
-        }
-    }
-
-    /// Derive zone from gate name using known topology assignments.
-    #[must_use]
-    pub fn for_gate(gate_name: &str) -> Self {
-        match gate_name {
-            "eastGate" | "sporeGate" | "northGate" | "ironGate" => Self::Backbone,
-            "strandGate" | "southGate" | "swiftGate" | "fieldGate" => Self::House2,
-            "golgi" | "pepti" | "flockGate" => Self::Wan,
-            _ => Self::Unassigned,
-        }
-    }
-
-    /// Short label suitable for display and serialization.
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Backbone => "backbone",
-            Self::House2 => "house2",
-            Self::Garage => "garage",
-            Self::Wan => "wan",
-            Self::Unassigned => "unassigned",
-        }
-    }
-
-    /// Whether this zone has L2 (direct switched) connectivity to the backbone.
-    #[must_use]
-    pub const fn has_l2_backbone(self) -> bool {
-        matches!(self, Self::Backbone)
-    }
-
-    /// Whether gates in this zone require `WireGuard` overlay for inter-zone traffic.
-    #[must_use]
-    pub const fn requires_overlay(self) -> bool {
-        matches!(self, Self::Wan | Self::Garage)
-    }
-}
-
-impl fmt::Display for CytoplasmZone {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
-/// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
-///
-/// Static registry of assigned mesh IPs. Once assigned, an address is permanent.
-/// Gates without an entry have not yet been peered.
-#[must_use]
-pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
-    match gate_name {
-        "golgi" => Some("10.13.37.1"),
-        "sporeGate" => Some("10.13.37.2"),
-        "pepti" => Some("10.13.37.4"),
-        "eastGate" => Some("10.13.37.5"),
-        "flockGate" => Some("10.13.37.6"),
-        _ => None,
-    }
-}
-
 /// How braid (`sweetGrass` provenance attribution) is handled when crossing
 /// a membrane boundary — the vesicle transport policy.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -493,107 +397,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cytoplasm_zone_for_gate_backbone() {
-        assert_eq!(CytoplasmZone::for_gate("eastGate"), CytoplasmZone::Backbone);
-        assert_eq!(CytoplasmZone::for_gate("sporeGate"), CytoplasmZone::Backbone);
-        assert_eq!(CytoplasmZone::for_gate("northGate"), CytoplasmZone::Backbone);
-        assert_eq!(CytoplasmZone::for_gate("ironGate"), CytoplasmZone::Backbone);
-    }
-
-    #[test]
-    fn cytoplasm_zone_for_gate_house2() {
-        assert_eq!(CytoplasmZone::for_gate("strandGate"), CytoplasmZone::House2);
-        assert_eq!(CytoplasmZone::for_gate("southGate"), CytoplasmZone::House2);
-        assert_eq!(CytoplasmZone::for_gate("swiftGate"), CytoplasmZone::House2);
-        assert_eq!(CytoplasmZone::for_gate("fieldGate"), CytoplasmZone::House2);
-    }
-
-    #[test]
-    fn cytoplasm_zone_for_gate_wan() {
-        assert_eq!(CytoplasmZone::for_gate("golgi"), CytoplasmZone::Wan);
-        assert_eq!(CytoplasmZone::for_gate("pepti"), CytoplasmZone::Wan);
-        assert_eq!(CytoplasmZone::for_gate("flockGate"), CytoplasmZone::Wan);
-    }
-
-    #[test]
-    fn cytoplasm_zone_unknown_gate() {
-        assert_eq!(CytoplasmZone::for_gate("newGate"), CytoplasmZone::Unassigned);
-    }
-
-    #[test]
-    fn cytoplasm_zone_from_manifest_string() {
-        assert_eq!(CytoplasmZone::from_manifest("backbone"), CytoplasmZone::Backbone);
-        assert_eq!(CytoplasmZone::from_manifest("house2"), CytoplasmZone::House2);
-        assert_eq!(CytoplasmZone::from_manifest("garage"), CytoplasmZone::Garage);
-        assert_eq!(CytoplasmZone::from_manifest("wan"), CytoplasmZone::Wan);
-        assert_eq!(CytoplasmZone::from_manifest("bogus"), CytoplasmZone::Unassigned);
-    }
-
-    #[test]
-    fn cytoplasm_zone_display() {
-        assert_eq!(CytoplasmZone::Backbone.to_string(), "backbone");
-        assert_eq!(CytoplasmZone::Wan.to_string(), "wan");
-        assert_eq!(CytoplasmZone::Unassigned.to_string(), "unassigned");
-    }
-
-    #[test]
-    fn cytoplasm_zone_l2_and_overlay() {
-        assert!(CytoplasmZone::Backbone.has_l2_backbone());
-        assert!(!CytoplasmZone::Wan.has_l2_backbone());
-        assert!(CytoplasmZone::Wan.requires_overlay());
-        assert!(CytoplasmZone::Garage.requires_overlay());
-        assert!(!CytoplasmZone::Backbone.requires_overlay());
-        assert!(!CytoplasmZone::House2.requires_overlay());
-    }
-
-    #[test]
-    fn cytoplasm_zone_serde_roundtrip() {
-        let zone = CytoplasmZone::Backbone;
-        let json = serde_json::to_string(&zone).unwrap();
-        assert_eq!(json, "\"backbone\"");
-        let parsed: CytoplasmZone = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed, zone);
-    }
-
-    #[test]
-    fn cytoplasm_zone_default_is_unassigned() {
-        assert_eq!(CytoplasmZone::default(), CytoplasmZone::Unassigned);
-    }
-
-    #[test]
-    fn mesh_address_known_gates() {
-        assert_eq!(mesh_address("golgi"), Some("10.13.37.1"));
-        assert_eq!(mesh_address("sporeGate"), Some("10.13.37.2"));
-        assert_eq!(mesh_address("pepti"), Some("10.13.37.4"));
-        assert_eq!(mesh_address("eastGate"), Some("10.13.37.5"));
-        assert_eq!(mesh_address("flockGate"), Some("10.13.37.6"));
-    }
-
-    #[test]
-    fn mesh_address_unpeered_returns_none() {
-        assert_eq!(mesh_address("ironGate"), None);
-        assert_eq!(mesh_address("northGate"), None);
-        assert_eq!(mesh_address("newGate"), None);
-    }
-
-    #[test]
-    fn mesh_addresses_unique() {
-        let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
-        let addrs: Vec<_> = known.iter().filter_map(|g| mesh_address(g)).collect();
-        let mut seen = std::collections::HashSet::new();
-        assert!(addrs.iter().all(|a| seen.insert(a)));
-    }
-
-    #[test]
-    fn mesh_addresses_in_subnet() {
-        let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
-        for gate in &known {
-            let ip = mesh_address(gate).unwrap();
-            assert!(ip.starts_with("10.13.37."), "{gate} address not in 10.13.37.0/24");
-        }
-    }
-
-    #[test]
     fn envelope_monoderm_boundary_count() {
         assert_eq!(EnvelopeTopology::Monoderm.boundary_count(), 1);
     }
@@ -601,5 +404,51 @@ mod tests {
     #[test]
     fn envelope_diderm_boundary_count() {
         assert_eq!(EnvelopeTopology::Diderm.boundary_count(), 2);
+    }
+
+    #[test]
+    fn diderm_has_periplasm() {
+        assert!(EnvelopeTopology::Diderm.has_periplasm());
+        assert!(!EnvelopeTopology::Monoderm.has_periplasm());
+    }
+
+    #[test]
+    fn diderm_has_five_layers() {
+        assert_eq!(EnvelopeTopology::Diderm.layers().len(), 5);
+    }
+
+    #[test]
+    fn monoderm_has_three_layers() {
+        assert_eq!(EnvelopeTopology::Monoderm.layers().len(), 3);
+    }
+
+    #[test]
+    fn boundary_policy_plasma_membrane() {
+        let policy = BoundaryPolicy::plasma_membrane();
+        assert_eq!(policy.layer, EnvelopeLayer::PlasmaMembrane);
+        assert!(!policy.permitted_bonds.is_empty());
+    }
+
+    #[test]
+    fn braid_policy_for_bond_types() {
+        assert_eq!(
+            BraidPolicy::for_bond(BondType::Covalent),
+            BraidPolicy::PassThrough
+        );
+        assert_eq!(BraidPolicy::for_bond(BondType::Ionic), BraidPolicy::Verify);
+        assert_eq!(BraidPolicy::for_bond(BondType::Weak), BraidPolicy::Block);
+    }
+
+    #[test]
+    fn channel_protein_bond_mapping() {
+        assert_eq!(
+            BondType::Covalent.channel_protein(),
+            ChannelProtein::Aquaporin
+        );
+        assert_eq!(BondType::Ionic.channel_protein(), ChannelProtein::GatedIon);
+        assert_eq!(
+            BondType::Weak.channel_protein(),
+            ChannelProtein::PassiveDiffusion
+        );
     }
 }

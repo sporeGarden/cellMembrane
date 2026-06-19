@@ -9,9 +9,9 @@
 use std::path::Path;
 
 use super::types::{RemotePosition, TemporalMatrix, TemporalSyncResult};
-use cellmembrane_types::{DivergencePolicy, PushTarget};
 use crate::error::Result;
 use crate::git_ops::{git_success as git_ok, rev_list_count};
+use cellmembrane_types::{DivergencePolicy, PushTarget};
 use tracing::error;
 
 /// The sovereign remote name, resolved from `MEMBRANE_SOVEREIGN_REMOTE` env var

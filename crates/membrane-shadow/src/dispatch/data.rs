@@ -8,7 +8,7 @@
 use crate::cli;
 use crate::error::ShadowError;
 use crate::{ShadowOutcome, context, identity, manifest, temporal, topology};
-use cellmembrane_types::envelope::{CytoplasmZone, mesh_address};
+use cellmembrane_types::cytoplasm::{ZoneLabel, mesh_address};
 
 // ── Manifest domain ──────────────────────────────────────────────────
 
@@ -118,7 +118,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         .gates
         .get(gate_name)
         .and_then(|p| p.zone)
-        .unwrap_or_else(|| CytoplasmZone::for_gate(gate_name));
+        .unwrap_or_else(|| ZoneLabel::for_gate(gate_name));
 
     let profile = m.gates.get(gate_name);
 
@@ -150,7 +150,10 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         format!("  composition: {composition}"),
         format!("  target:      {target}"),
         format!("  mobility:    {mobility}"),
-        format!("  envelope:    {envelope} ({} boundaries)", envelope.boundary_count()),
+        format!(
+            "  envelope:    {envelope} ({} boundaries)",
+            envelope.boundary_count()
+        ),
         format!("  mesh_ip:     {mesh_ip}"),
     ];
 
@@ -170,7 +173,9 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         lines.push("  overlay:     required (WireGuard)".into());
     }
     if profile.is_none() {
-        lines.push(format!("  ⚠ {gate_name} not in ecosystem manifest — zone derived from name"));
+        lines.push(format!(
+            "  ⚠ {gate_name} not in ecosystem manifest — zone derived from name"
+        ));
     }
 
     let mut data = serde_json::json!({
@@ -241,9 +246,7 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
         std::collections::BTreeMap::new();
 
     for (name, profile) in &m.gates {
-        let zone = profile
-            .zone
-            .unwrap_or_else(|| CytoplasmZone::for_gate(name));
+        let zone = profile.zone.unwrap_or_else(|| ZoneLabel::for_gate(name));
         zone_gates
             .entry(zone.label().to_owned())
             .or_default()
@@ -305,7 +308,7 @@ fn topology_mesh() -> ShadowOutcome {
 
     for gate in &known {
         if let Some(ip) = mesh_address(gate) {
-            let zone = CytoplasmZone::for_gate(gate);
+            let zone = ZoneLabel::for_gate(gate);
             lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
         }
     }
@@ -317,7 +320,7 @@ fn topology_mesh() -> ShadowOutcome {
                 serde_json::json!({
                     "gate": g,
                     "ip": ip,
-                    "zone": CytoplasmZone::for_gate(g).label(),
+                    "zone": ZoneLabel::for_gate(g).label(),
                 })
             })
         })

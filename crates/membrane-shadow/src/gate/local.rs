@@ -47,7 +47,7 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
     if let Ok(val) = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT) {
         return PathBuf::from(val);
     }
-    if let Ok(val) = std::env::var("ECOPRIMALS_PLASMID_BIN") {
+    if let Ok(val) = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_LEGACY) {
         return PathBuf::from(val);
     }
 

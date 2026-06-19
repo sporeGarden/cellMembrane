@@ -16,7 +16,7 @@ const POLL_TIMEOUT_SECS: u64 = 300;
 /// Checks `DIGITALOCEAN_TOKEN` first, then `DO_TOKEN` (doctl compat).
 fn resolve_token() -> Result<String> {
     std::env::var(cellmembrane_types::service::ENV_DIGITALOCEAN_TOKEN)
-        .or_else(|_| std::env::var("DO_TOKEN"))
+        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_DO_TOKEN_COMPAT))
         .map_err(|_| {
             ShadowError::Parse(
                 "DIGITALOCEAN_TOKEN or DO_TOKEN not set — required for cloud provisioning".into(),
@@ -333,7 +333,9 @@ mod tests {
     #[test]
     fn resolve_token_fails_without_env() {
         let result = resolve_token();
-        if std::env::var("DIGITALOCEAN_TOKEN").is_err() && std::env::var("DO_TOKEN").is_err() {
+        if std::env::var(cellmembrane_types::service::ENV_DIGITALOCEAN_TOKEN).is_err()
+            && std::env::var(cellmembrane_types::service::ENV_DO_TOKEN_COMPAT).is_err()
+        {
             assert!(result.is_err());
         }
     }

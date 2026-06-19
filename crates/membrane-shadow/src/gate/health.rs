@@ -417,7 +417,7 @@ fn resolve_mesh_relay_socket() -> String {
 }
 
 pub(super) fn resolve_biomeos_socket_dir() -> String {
-    std::env::var("BIOMEOS_SOCKET_DIR").unwrap_or_else(|_| {
+    std::env::var(cellmembrane_types::service::ENV_BIOMEOS_SOCKET_DIR).unwrap_or_else(|_| {
         let uid = resolve_uid();
         let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
         format!("/run/user/{uid}/{ns}")

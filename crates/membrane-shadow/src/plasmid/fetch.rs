@@ -395,11 +395,21 @@ fn format_fetch_outcome(
     bin_dir: &Path,
     results: &[FetchResult],
 ) -> ShadowOutcome {
-    let downloaded =
-        u32::try_from(results.iter().filter(|r| r.status == FetchStatus::Ok).count()).unwrap_or(u32::MAX);
+    let downloaded = u32::try_from(
+        results
+            .iter()
+            .filter(|r| r.status == FetchStatus::Ok)
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
     let verified = u32::try_from(results.iter().filter(|r| r.verified).count()).unwrap_or(u32::MAX);
-    let skipped =
-        u32::try_from(results.iter().filter(|r| r.status == FetchStatus::Exists).count()).unwrap_or(u32::MAX);
+    let skipped = u32::try_from(
+        results
+            .iter()
+            .filter(|r| r.status == FetchStatus::Exists)
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
     let failed = u32::try_from(
         results
             .iter()

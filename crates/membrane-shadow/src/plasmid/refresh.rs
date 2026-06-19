@@ -284,7 +284,7 @@ fn resolve_refresh_source(override_dir: Option<&str>) -> PathBuf {
     if let Some(dir) = override_dir {
         return PathBuf::from(dir);
     }
-    if let Ok(staging) = std::env::var("PLASMIDBIN_STAGING") {
+    if let Ok(staging) = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_STAGING) {
         return PathBuf::from(staging);
     }
     let arch = detect_target_triple();

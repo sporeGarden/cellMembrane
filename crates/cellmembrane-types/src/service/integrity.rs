@@ -76,3 +76,59 @@ pub fn binary_integrity_for_paths(
 
     entries
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::composition::MembraneComposition;
+
+    #[test]
+    fn relay_composition_has_integrity_entries() {
+        let paths = ServicePaths::from_env();
+        let entries = binary_integrity_for_paths(MembraneComposition::Relay, &paths);
+        assert!(!entries.is_empty(), "Relay should have integrity entries");
+    }
+
+    #[test]
+    fn primals_use_blake3() {
+        let paths = ServicePaths::from_env();
+        let entries = binary_integrity_for_paths(MembraneComposition::Relay, &paths);
+        for entry in &entries {
+            if entry.require_static_musl {
+                assert_eq!(
+                    entry.hash_algorithm,
+                    HashAlgorithm::Blake3,
+                    "primal {} should use BLAKE3",
+                    entry.binary
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn higher_composition_has_more_entries() {
+        let paths = ServicePaths::from_env();
+        let relay = binary_integrity_for_paths(MembraneComposition::Relay, &paths);
+        let tower = binary_integrity_for_paths(MembraneComposition::Tower, &paths);
+        assert!(
+            tower.len() >= relay.len(),
+            "Tower ({}) should have >= Relay ({}) integrity entries",
+            tower.len(),
+            relay.len()
+        );
+    }
+
+    #[test]
+    fn install_paths_are_absolute() {
+        let paths = ServicePaths::from_env();
+        let entries = binary_integrity_for_paths(MembraneComposition::Relay, &paths);
+        for entry in &entries {
+            assert!(
+                entry.install_path.starts_with('/'),
+                "{} install path should be absolute: {}",
+                entry.binary,
+                entry.install_path
+            );
+        }
+    }
+}

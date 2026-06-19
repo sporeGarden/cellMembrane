@@ -7,7 +7,7 @@
 //! for repo metadata, gate profiles, and sync configuration.
 
 use crate::error::{Result, ShadowError};
-use cellmembrane_types::{CytoplasmZone, DivergencePolicy, EnvelopeLayer, GateTransport, PushTarget};
+use cellmembrane_types::{DivergencePolicy, EnvelopeLayer, GateTransport, PushTarget, ZoneLabel};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -196,7 +196,7 @@ pub struct GateProfile {
     /// Cytoplasm zone this gate is in (e.g., `"backbone"`, `"house2"`).
     /// Defined in `TOPOLOGY_MAP.toml [cytoplasm.zones.*]`.
     #[serde(default)]
-    pub zone: Option<CytoplasmZone>,
+    pub zone: Option<ZoneLabel>,
     /// Physical port on the zone's hub switch (e.g., `"sfp+2"`, `"ether8"`).
     #[serde(default)]
     pub hub_port: Option<String>,
@@ -528,12 +528,12 @@ repos = ["cellMembrane"]
         let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
 
         let sg = &manifest.gates["sporeGate"];
-        assert_eq!(sg.zone, Some(CytoplasmZone::Backbone));
+        assert_eq!(sg.zone, Some(ZoneLabel::Backbone));
         assert_eq!(sg.hub_port.as_deref(), Some("ether8"));
         assert_eq!(sg.link_speed_mbps, Some(2500));
 
         let fg = &manifest.gates["fieldGate"];
-        assert_eq!(fg.zone, Some(CytoplasmZone::House2));
+        assert_eq!(fg.zone, Some(ZoneLabel::House2));
         assert_eq!(fg.link_speed_mbps, Some(2500));
 
         let flock = &manifest.gates["flockGate"];

@@ -11,9 +11,9 @@ use tracing::info;
 
 use super::resolve;
 use super::types::{SyncAction, TemporalMatrix, TemporalSyncResult};
-use cellmembrane_types::PushTarget;
 use crate::error::Result;
 use crate::git_ops::{git_output as git, git_success as git_ok};
+use cellmembrane_types::PushTarget;
 
 /// Files that are machine-generated and safely discardable before a pull.
 pub(super) const REGENERABLE_METADATA: &[&str] =
@@ -220,10 +220,7 @@ pub(super) async fn sync_diverge(
 
     if let Some(m) = manifest {
         let entry = m.repos.values().find(|e| e.local_path == repo_path);
-        let policy = entry.map_or_else(
-            || m.sync.divergence_policy,
-            |e| m.divergence_policy_for(e),
-        );
+        let policy = entry.map_or_else(|| m.sync.divergence_policy, |e| m.divergence_policy_for(e));
         let positions: Vec<(String, u32, u32)> = matrix
             .positions
             .iter()
