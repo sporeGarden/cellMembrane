@@ -6,7 +6,9 @@
 **Wave 120 update (Deployment Isomorphism — Identity-Based Resolution):** `topology.service`
 identity-based service discovery. Manifest-authoritative `wg_ip` + `roles` on `GateProfile`.
 `wireguard.generate` and `caddy.generate` produce configs from manifest. `topology.roles` +
-`topology.mesh` manifest-aware. pepti decommissioned. 729 tests, zero clippy.
+`topology.mesh` manifest-aware. `gate.validate` generic composition trust barrier validation
+(evolved from `pepti.validate`). `wireguard.*` dispatch routing fixed. pepti decommissioned.
+729 tests, zero clippy.
 **Wave 119+ update (Native Detection + Error Normalization):** Shell-outs evolved to native
 Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs + `/proc/net/route`, `systemctl
 is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ssh`/`Io` across

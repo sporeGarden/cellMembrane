@@ -91,6 +91,7 @@ pub(super) async fn dispatch(
         }
         "gate.preflight" => dispatch_preflight(args).await,
         "firewall.generate" => dispatch_firewall_generate(args),
+        "gate.validate" => super::gate_validate(config, args, None).await,
         "wireguard.generate" => dispatch_wireguard_generate(args).await,
         #[cfg(feature = "http")]
         "gate.provision" => super::provision_dispatch::dispatch_provision(args).await,

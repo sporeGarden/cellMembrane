@@ -66,7 +66,9 @@ Manifest-authoritative `wg_ip` overrides `BOOTSTRAP_GATES` static registry. `wir
 produces `wg-quick` configs from manifest peers. `caddy.generate` renders Caddyfile from manifest
 roles + topology hosts. `topology.roles` maps all service→gate assignments. `topology.mesh` now
 prefers manifest IP. pepti decommissioned (Wave 120). `GateProfile.roles` and `GateProfile.wg_ip`
-fields. 729 tests, zero clippy.
+fields. `gate.validate` composition-tier trust barrier validation — generic evolution of
+`pepti.validate`, validates any gate against its declared composition. `wireguard.*` dispatch
+routing fixed. 729 tests, zero clippy.
 
 **Wave 119+ (Native Detection + Error Normalization):**
 Shell-outs evolved to native Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs +
