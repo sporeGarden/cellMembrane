@@ -148,14 +148,7 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     let spine_upper = spine.to_uppercase();
     let relay_upper = relay.to_uppercase();
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
-    let vps_peer =
-        std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER).unwrap_or_else(|_| {
-            format!(
-                "{}:{}",
-                cellmembrane_types::service::DEFAULT_VPS_HOST,
-                cellmembrane_types::service::DEFAULT_FEDERATION_PORT
-            )
-        });
+    let vps_peer = crate::manifest::resolve_federation_peer();
     let hub_id = std::env::var(cellmembrane_types::service::ENV_MESH_HUB_ID)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_MESH_HUB_ID.into());
     let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
@@ -352,14 +345,7 @@ async fn start_services(ip: &str) -> Result<String> {
 
 /// Phase 6: Join the mesh by peering with main production VPS.
 async fn join_mesh(ip: &str, gate_name: &str) -> Result<String> {
-    let vps_peer =
-        std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER).unwrap_or_else(|_| {
-            format!(
-                "{}:{}",
-                cellmembrane_types::service::DEFAULT_VPS_HOST,
-                cellmembrane_types::service::DEFAULT_FEDERATION_PORT
-            )
-        });
+    let vps_peer = crate::manifest::resolve_federation_peer();
     let relay = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );

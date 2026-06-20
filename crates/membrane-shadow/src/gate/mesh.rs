@@ -85,15 +85,9 @@ pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> Bo
     }
 }
 
-/// Resolve the primary mesh peer: manifest profile > env var > compiled default.
+/// Resolve the primary mesh peer: manifest profile > manifest roles > env var > constant.
 fn resolve_primary_peer(manifest_peer: Option<&str>) -> String {
-    manifest_peer.map_or_else(
-        || {
-            std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.into())
-        },
-        String::from,
-    )
+    manifest_peer.map_or_else(crate::manifest::resolve_federation_peer, String::from)
 }
 
 /// Configure mesh peering via songbird UDS JSON-RPC.

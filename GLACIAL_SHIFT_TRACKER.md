@@ -8,7 +8,8 @@ identity-based service discovery. Manifest-authoritative `wg_ip` + `roles` on `G
 `wireguard.generate` and `caddy.generate` produce configs from manifest. `topology.roles` +
 `topology.mesh` manifest-aware. `gate.validate` generic composition trust barrier validation
 (evolved from `pepti.validate`). `wireguard.*` dispatch routing fixed. pepti decommissioned.
-729 tests, zero clippy.
+Dependency evolution: `toml` 0.8→1.x, `nix` 0.29→0.31. Manifest-first federation
+peer resolution. `to_nftables_script` chain helpers. 731 tests, zero clippy.
 **Wave 119+ update (Native Detection + Error Normalization):** Shell-outs evolved to native
 Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs + `/proc/net/route`, `systemctl
 is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ssh`/`Io` across

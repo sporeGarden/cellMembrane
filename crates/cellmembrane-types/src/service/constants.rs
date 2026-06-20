@@ -179,6 +179,10 @@ pub const DEFAULT_NM_DISPATCHER_DIR: &str = "/etc/NetworkManager/dispatcher.d";
 pub const ENV_FAMILY_SEED: &str = "FAMILY_SEED";
 
 /// Default VPS host (golgiBody sovereign surface).
+///
+/// Last-resort fallback only. Production code should resolve via
+/// `manifest::resolve_federation_peer()` which checks: manifest roles →
+/// `MEMBRANE_VPS_PEER` env var → this constant.
 pub const DEFAULT_VPS_HOST: &str = "157.230.3.183";
 
 /// Default SSH alias for golgiBody (internal name used in ~/.ssh/config).
@@ -188,8 +192,9 @@ pub const DEFAULT_SSH_ALIAS_EXT: &str = "golgi-ext";
 /// Default SSH alias for peptidoglycan trust barrier.
 ///
 /// Deprecated (Wave 120): pepti node decommissioned. Build role absorbed
-/// by sporeGate sovereign CI. This constant remains as a fallback for
-/// `pepti.validate` until that command is evolved to role-based validation.
+/// by sporeGate sovereign CI. `pepti.validate` evolved to generic
+/// `gate.validate` with composition-tier awareness. This alias remains
+/// for backward compatibility only.
 pub const DEFAULT_PEPTI_SSH_ALIAS: &str = "pepti";
 
 /// Default `NestGate` service port.
@@ -207,6 +212,10 @@ pub const RUSTDESK_HBBS_PORT: u16 = 21115;
 pub const RUSTDESK_HBBR_PORT: u16 = 21117;
 
 /// Default VPS mesh peer address (hub songbird federation endpoint).
+///
+/// Last-resort fallback only. Production code should resolve via
+/// `manifest::resolve_federation_peer()` which checks: manifest roles →
+/// `MEMBRANE_VPS_PEER` env var → this constant.
 pub const DEFAULT_VPS_MESH_PEER: &str = "157.230.3.183:7700";
 
 /// Default mesh hub node identifier for peer addressing.

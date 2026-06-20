@@ -324,6 +324,19 @@ impl EcosystemManifest {
             .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate).map(String::from))
     }
 
+    /// Resolve the federation hub peer address from manifest roles.
+    ///
+    /// Looks for gates with role `"relay"` and a defined `wg_ip`, then builds
+    /// `{wg_ip}:{federation_port}`. Returns the first match, preferring manifest
+    /// data over hardcoded constants.
+    #[must_use]
+    pub fn federation_hub_address(&self) -> Option<String> {
+        let port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+        self.gates_for_role("relay")
+            .into_iter()
+            .find_map(|(name, _)| self.mesh_ip_for(name).map(|ip| format!("{ip}:{port}")))
+    }
+
     /// Get repos filtered by membrane type.
     #[must_use]
     pub fn repos_by_membrane(&self, membrane: &str) -> Vec<(&str, &RepoEntry)> {
@@ -458,6 +471,31 @@ pub async fn load_from_workspace_async(workspace_root: &Path) -> Result<Ecosyste
         ))
     })?;
     EcosystemManifest::load_async(path).await
+}
+
+/// Resolve the federation hub peer address with manifest-first priority.
+///
+/// Resolution chain: manifest (`gates_for_role("relay")` + `wg_ip`) →
+/// `MEMBRANE_VPS_PEER` env var → `DEFAULT_VPS_MESH_PEER` constant.
+#[must_use]
+pub fn resolve_federation_peer() -> String {
+    if let Ok(env_peer) = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER) {
+        if !env_peer.is_empty() {
+            return env_peer;
+        }
+    }
+    if let Ok(root) = crate::temporal::resolve_workspace_root() {
+        if let Ok(manifest) = load_from_workspace(&root) {
+            if let Some(addr) = manifest.federation_hub_address() {
+                return addr;
+            }
+        }
+    }
+    format!(
+        "{}:{}",
+        cellmembrane_types::service::DEFAULT_VPS_HOST,
+        cellmembrane_types::service::DEFAULT_FEDERATION_PORT
+    )
 }
 
 #[cfg(test)]
@@ -680,5 +718,43 @@ wg_ip = "10.13.37.1"
         let g = &manifest.gates["golgi"];
         assert_eq!(g.roles, vec!["forgejo", "relay"]);
         assert_eq!(g.wg_ip.as_deref(), Some("10.13.37.1"));
+    }
+
+    #[test]
+    fn federation_hub_from_relay_role() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.golgi]
+repos = []
+roles = ["relay", "forgejo"]
+wg_ip = "10.13.37.1"
+
+[gates.sporeGate]
+repos = []
+roles = ["build"]
+wg_ip = "10.13.37.2"
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let hub = manifest.federation_hub_address();
+        assert_eq!(hub, Some("10.13.37.1:7700".into()));
+    }
+
+    #[test]
+    fn federation_hub_none_without_relay_role() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.sporeGate]
+repos = []
+roles = ["build"]
+wg_ip = "10.13.37.2"
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert!(manifest.federation_hub_address().is_none());
     }
 }

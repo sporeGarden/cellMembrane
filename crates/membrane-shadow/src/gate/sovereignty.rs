@@ -85,8 +85,8 @@ async fn probe_s1_tls() -> StatusProbe {
 /// Federation port is always TCP. TURN may primarily use UDP but also listens on TCP.
 /// Federation reachability is the primary signal; TURN TCP is best-effort.
 async fn probe_s2_relay() -> StatusProbe {
-    let vps_host = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_VPS_HOST.into());
+    let peer = crate::manifest::resolve_federation_peer();
+    let vps_host = peer.split(':').next().unwrap_or(&peer).to_string();
 
     let fed_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
     let turn_port = cellmembrane_types::service::DEFAULT_TURN_PORT;

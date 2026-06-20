@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 729 tests — pedantic clippy clean
+cargo test                  # 731 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -68,7 +68,9 @@ roles + topology hosts. `topology.roles` maps all service→gate assignments. `t
 prefers manifest IP. pepti decommissioned (Wave 120). `GateProfile.roles` and `GateProfile.wg_ip`
 fields. `gate.validate` composition-tier trust barrier validation — generic evolution of
 `pepti.validate`, validates any gate against its declared composition. `wireguard.*` dispatch
-routing fixed. 729 tests, zero clippy.
+routing fixed. Dependency upgrades: `toml` 0.8→1.x, `nix` 0.29→0.31. Manifest-first
+federation peer resolution (`resolve_federation_peer()`). `to_nftables_script` refactored
+into chain helpers. 731 tests, zero clippy.
 
 **Wave 119+ (Native Detection + Error Normalization):**
 Shell-outs evolved to native Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs +

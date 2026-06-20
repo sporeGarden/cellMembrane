@@ -52,15 +52,15 @@ pub struct PushMirror {
 
 /// Request payload for creating a push mirror.
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct PushMirrorCreateRequest {
-    pub remote_address: String,
+struct PushMirrorCreateRequest {
+    remote_address: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub remote_username: Option<String>,
+    remote_username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub remote_password: Option<String>,
-    pub interval: String,
-    pub sync_on_commit: bool,
-    pub use_ssh: bool,
+    remote_password: Option<String>,
+    interval: String,
+    sync_on_commit: bool,
+    use_ssh: bool,
 }
 
 /// Create a push mirror from Forgejo to an external remote (typically GitHub).

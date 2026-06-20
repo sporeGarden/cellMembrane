@@ -228,7 +228,6 @@ impl FirewallRuleset {
     ///
     /// The generated script is idempotent: `flush ruleset` + full rebuild.
     #[must_use]
-    #[allow(clippy::too_many_lines)]
     pub fn to_nftables_script(&self, config: Option<&NftablesConfig>) -> String {
         let mut out = String::with_capacity(4096);
 
@@ -245,8 +244,17 @@ impl FirewallRuleset {
         );
 
         out.push_str("table inet membrane {\n");
+        self.emit_input_chain(&mut out, config);
+        Self::emit_forward_chain(&mut out, config);
+        out.push_str("    chain output {\n");
+        out.push_str("        type filter hook output priority 0; policy accept;\n");
+        out.push_str("    }\n");
+        out.push_str("}\n");
+        Self::emit_nat_tables(&mut out, config);
+        out
+    }
 
-        // ── input chain ──
+    fn emit_input_chain(&self, out: &mut String, config: Option<&NftablesConfig>) {
         out.push_str("    chain input {\n");
         out.push_str("        type filter hook input priority 0; policy drop;\n\n");
         out.push_str("        ct state established,related accept\n");
@@ -282,15 +290,14 @@ impl FirewallRuleset {
                 );
             }
         }
-
         for rule in &self.rules {
             let _ = writeln!(out, "{}", rule.to_nft_rule());
         }
-
         out.push_str("\n        log prefix \"nft-drop: \" drop\n");
         out.push_str("    }\n\n");
+    }
 
-        // ── forward chain ──
+    fn emit_forward_chain(out: &mut String, config: Option<&NftablesConfig>) {
         out.push_str("    chain forward {\n");
         if let Some(cfg) = config {
             out.push_str("        type filter hook forward priority 0; policy drop;\n\n");
@@ -317,38 +324,31 @@ impl FirewallRuleset {
             out.push_str("        ct state established,related accept\n");
         }
         out.push_str("    }\n\n");
+    }
 
-        // ── output chain ──
-        out.push_str("    chain output {\n");
-        out.push_str("        type filter hook output priority 0; policy accept;\n");
-        out.push_str("    }\n");
-        out.push_str("}\n");
+    fn emit_nat_tables(out: &mut String, config: Option<&NftablesConfig>) {
+        let Some(cfg) = config else { return };
 
-        // ── NAT table (plasma membrane only) ──
-        if let Some(cfg) = config {
-            if cfg.enable_nat {
-                out.push('\n');
-                out.push_str("table ip membrane-nat {\n");
-                out.push_str("    chain postrouting {\n");
-                out.push_str("        type nat hook postrouting priority srcnat;\n");
-                let _ = writeln!(out, "        oifname \"{}\" masquerade", cfg.wan_interface);
-                out.push_str("    }\n");
-                out.push_str("}\n");
-            }
-
-            if cfg.drop_ipv6_forward {
-                out.push('\n');
-                out.push_str("table ip6 membrane-v6 {\n");
-                out.push_str("    chain forward {\n");
-                out.push_str("        type filter hook forward priority 0; policy drop;\n");
-                out.push_str("        ct state established,related accept\n");
-                out.push_str("        drop\n");
-                out.push_str("    }\n");
-                out.push_str("}\n");
-            }
+        if cfg.enable_nat {
+            out.push('\n');
+            out.push_str("table ip membrane-nat {\n");
+            out.push_str("    chain postrouting {\n");
+            out.push_str("        type nat hook postrouting priority srcnat;\n");
+            let _ = writeln!(out, "        oifname \"{}\" masquerade", cfg.wan_interface);
+            out.push_str("    }\n");
+            out.push_str("}\n");
         }
 
-        out
+        if cfg.drop_ipv6_forward {
+            out.push('\n');
+            out.push_str("table ip6 membrane-v6 {\n");
+            out.push_str("    chain forward {\n");
+            out.push_str("        type filter hook forward priority 0; policy drop;\n");
+            out.push_str("        ct state established,related accept\n");
+            out.push_str("        drop\n");
+            out.push_str("    }\n");
+            out.push_str("}\n");
+        }
     }
 }
 
