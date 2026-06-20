@@ -133,7 +133,7 @@ pub fn resolve_workspace_root() -> Result<std::path::PathBuf> {
         }
     }
 
-    Err(ShadowError::Parse(
+    Err(ShadowError::Config(
         "cannot resolve ecoPrimals workspace root — set ECOPRIMALS_ROOT".into(),
     ))
 }

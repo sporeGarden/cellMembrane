@@ -59,18 +59,18 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
     let eco_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
 
-    let infra_depot = PathBuf::from(&eco_root).join("infra").join("plasmidBin");
+    let infra_depot = PathBuf::from(&eco_root).join(cellmembrane_types::service::INFRA_PLASMID_BIN);
     if infra_depot.join("checksums.toml").exists() || infra_depot.join("primals").is_dir() {
         return infra_depot;
     }
 
-    let flat_depot = PathBuf::from(&eco_root).join("plasmidBin");
+    let flat_depot = PathBuf::from(&eco_root).join(cellmembrane_types::service::PLASMID_BIN_DIR);
     if flat_depot.join("checksums.toml").exists() || flat_depot.join("primals").is_dir() {
         return flat_depot;
     }
 
     if let Ok(root) = crate::resolve_workspace_root() {
-        let ws_depot = root.join("plasmidBin");
+        let ws_depot = root.join(cellmembrane_types::service::PLASMID_BIN_DIR);
         if ws_depot.join("checksums.toml").exists() {
             return ws_depot;
         }
@@ -78,7 +78,7 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
 
     crate::resolve_xdg_data_home()
         .join("ecoPrimals")
-        .join("plasmidBin")
+        .join(cellmembrane_types::service::PLASMID_BIN_DIR)
 }
 
 /// Resolve the membrane install base directory.

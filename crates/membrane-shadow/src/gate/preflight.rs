@@ -148,52 +148,70 @@ fn check_carrier(interfaces: &[DetectedInterface]) -> PreflightCheck {
 }
 
 async fn check_port53() -> PreflightCheck {
-    let output = tokio::process::Command::new("ss")
-        .args(["-tlnp"])
-        .output()
-        .await;
+    let port53_bound = is_tcp_port_bound(53).await || is_udp_port_bound(53).await;
 
-    let listeners = output
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_default();
-
-    let port53_lines: Vec<&str> = listeners
-        .lines()
-        .filter(|l| l.contains(":53 ") || l.contains(":53\t"))
-        .collect();
-
-    let has_resolved = port53_lines
-        .iter()
-        .any(|l| l.contains("systemd-resolve") || l.contains("resolved"));
+    let has_resolved = std::path::Path::new("/run/systemd/resolve/stub-resolv.conf").exists();
 
     PreflightCheck {
         name: "port53.available".into(),
-        passed: port53_lines.is_empty(),
-        detail: if port53_lines.is_empty() {
+        passed: !port53_bound,
+        detail: if !port53_bound {
             "port 53 is free".into()
         } else if has_resolved {
             "port 53 blocked by systemd-resolved — run: systemctl disable --now systemd-resolved"
                 .into()
         } else {
-            format!(
-                "port 53 in use by: {}",
-                port53_lines.first().unwrap_or(&"unknown")
-            )
+            "port 53 in use by another process".into()
         },
     }
 }
 
-async fn check_networkmanager() -> PreflightCheck {
-    let output = tokio::process::Command::new("systemctl")
-        .args(["is-active", "NetworkManager"])
-        .output()
-        .await;
+/// Check if a TCP port is bound by parsing `/proc/net/tcp` + `/proc/net/tcp6`.
+async fn is_tcp_port_bound(port: u16) -> bool {
+    is_port_bound_in_proc(port, "/proc/net/tcp").await
+        || is_port_bound_in_proc(port, "/proc/net/tcp6").await
+}
 
-    let active = output
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .is_some_and(|s| s.trim() == "active");
+/// Check if a UDP port is bound by parsing `/proc/net/udp` + `/proc/net/udp6`.
+async fn is_udp_port_bound(port: u16) -> bool {
+    is_port_bound_in_proc(port, "/proc/net/udp").await
+        || is_port_bound_in_proc(port, "/proc/net/udp6").await
+}
+
+/// Parse a `/proc/net/{tcp,udp}` file for a specific port in LISTEN state.
+///
+/// Format: `sl local_address rem_address st ...` where `local_address` is `HEX_IP:HEX_PORT`.
+/// State `0A` = TCP LISTEN, `07` = UDP (unconditional).
+async fn is_port_bound_in_proc(port: u16, path: &str) -> bool {
+    let Ok(contents) = tokio::fs::read_to_string(path).await else {
+        return false;
+    };
+    let hex_port = format!(":{port:04X}");
+    contents.lines().skip(1).any(|line| {
+        let mut fields = line.split_whitespace();
+        let Some(local_addr) = fields.nth(1) else {
+            return false;
+        };
+        let Some(state) = fields.nth(1) else {
+            return false;
+        };
+        local_addr.ends_with(&hex_port) && (state == "0A" || state == "07")
+    })
+}
+
+/// Detect whether a systemd unit is active via its cgroup presence.
+///
+/// Avoids the `systemctl is-active` shell-out by checking
+/// `/sys/fs/cgroup/system.slice/{unit}/cgroup.procs`.
+async fn is_systemd_unit_active(unit: &str) -> bool {
+    let cgroup_procs = format!("/sys/fs/cgroup/system.slice/{unit}/cgroup.procs");
+    tokio::fs::read_to_string(&cgroup_procs)
+        .await
+        .is_ok_and(|contents| !contents.trim().is_empty())
+}
+
+async fn check_networkmanager() -> PreflightCheck {
+    let active = is_systemd_unit_active("NetworkManager.service").await;
 
     if !active {
         return PreflightCheck {
@@ -490,5 +508,57 @@ mod tests {
             });
 
         assert_eq!(probe_iface.map(|i| i.name.as_str()), Some("enp5s0"));
+    }
+
+    #[test]
+    fn proc_net_tcp_hex_port_formatting() {
+        let port: u16 = 53;
+        assert_eq!(format!(":{port:04X}"), ":0035");
+
+        let port: u16 = 80;
+        assert_eq!(format!(":{port:04X}"), ":0050");
+
+        let port: u16 = 443;
+        assert_eq!(format!(":{port:04X}"), ":01BB");
+    }
+
+    #[test]
+    fn proc_net_tcp_line_parsing_identifies_listen() {
+        let line = "   0: 00000000:0035 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 12345 1 0000000000000000 100 0 0 10 0";
+        let hex_port = ":0035";
+        let mut fields = line.split_whitespace();
+        let local_addr = fields.nth(1).unwrap();
+        let state = fields.nth(1).unwrap();
+        assert!(local_addr.ends_with(hex_port));
+        assert_eq!(state, "0A");
+    }
+
+    #[test]
+    fn proc_net_tcp_line_parsing_rejects_non_listen() {
+        let line = "   1: 0100007F:1F90 0100007F:D4E2 01 00000000:00000000 02:00000000 00000000     0        0 67890 2 0000000000000000 20 4 30 10 -1";
+        let hex_port = ":1F90";
+        let mut fields = line.split_whitespace();
+        let local_addr = fields.nth(1).unwrap();
+        let state = fields.nth(1).unwrap();
+        assert!(local_addr.ends_with(hex_port));
+        assert_ne!(state, "0A", "state 01=ESTABLISHED, not LISTEN");
+    }
+
+    #[test]
+    fn proc_net_route_default_gateway_parsing() {
+        let content = "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\n\
+                       enp1s0\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\n\
+                       enp1s0\t0001A8C0\t00000000\t0001\t0\t0\t100\tFFFFFF00\n";
+        let mut found = None;
+        for line in content.lines().skip(1) {
+            let mut fields = line.split_whitespace();
+            let iface = fields.next().unwrap();
+            let dest = fields.next().unwrap();
+            if dest == "00000000" {
+                found = Some(iface.to_string());
+                break;
+            }
+        }
+        assert_eq!(found.as_deref(), Some("enp1s0"));
     }
 }

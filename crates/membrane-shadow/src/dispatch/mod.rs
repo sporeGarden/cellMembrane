@@ -87,7 +87,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
                 impulse::dispatch_potential(&cmd, &refs)
             })
             .await
-            .unwrap_or_else(|e| Err(ShadowError::Config(format!("spawn_blocking: {e}"))))
+            .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
         }
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,
         "depot.integrity" => {
@@ -97,7 +97,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
                 plasmid_dispatch::dispatch_depot_integrity(&refs)
             })
             .await
-            .unwrap_or_else(|e| Err(ShadowError::Config(format!("spawn_blocking: {e}"))))
+            .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
         }
         c if c.starts_with("plasmid.") => {
             plasmid_dispatch::dispatch_plasmid(config, cmd, args).await
@@ -146,10 +146,10 @@ async fn dispatch_webhook(
         }
         "webhook.verify" => {
             let secret = std::env::var(cellmembrane_types::service::ENV_WEBHOOK_SECRET)
-                .map_err(|_| ShadowError::Parse("WEBHOOK_SECRET env var required".into()))?;
+                .map_err(|_| ShadowError::Config("WEBHOOK_SECRET env var required".into()))?;
             let body = cli::require_arg(args, 0, "body")?;
             let sig = cli::extract_flag_value(args, "--signature")
-                .ok_or_else(|| ShadowError::Parse("--signature flag required".into()))?;
+                .ok_or_else(|| ShadowError::Config("--signature flag required".into()))?;
             let provider = parse_webhook_provider(args);
             crate::webhook::verify_provider_signature(
                 provider,

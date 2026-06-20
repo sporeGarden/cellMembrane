@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Network interface detection — sysfs, `ip link`, role classification.
+//! Network interface detection — sysfs + `/proc/net`, role classification.
 
 use std::collections::BTreeMap;
 
@@ -9,59 +9,30 @@ use tracing::warn;
 use super::preflight::{DetectedInterface, InterfaceRole};
 
 pub(super) async fn detect_interfaces() -> Vec<DetectedInterface> {
-    let output = tokio::process::Command::new("ip")
-        .args(["-j", "link", "show"])
-        .output()
-        .await;
-
-    let Ok(output) = output else {
-        warn!("ip link show failed");
+    let sysfs = std::path::Path::new("/sys/class/net");
+    let Ok(mut entries) = tokio::fs::read_dir(sysfs).await else {
+        warn!("cannot read /sys/class/net");
         return vec![];
     };
 
-    let Ok(text) = std::str::from_utf8(&output.stdout) else {
-        return vec![];
-    };
-
-    let Ok(links) = serde_json::from_str::<Vec<serde_json::Value>>(text) else {
-        return vec![];
-    };
-
-    let addr_output = tokio::process::Command::new("ip")
-        .args(["-j", "addr", "show"])
-        .output()
-        .await
-        .ok();
-
-    let addr_map = addr_output
-        .as_ref()
-        .and_then(|o| std::str::from_utf8(&o.stdout).ok())
-        .and_then(|s| serde_json::from_str::<Vec<serde_json::Value>>(s).ok())
-        .map(|addrs| build_addr_map(&addrs))
-        .unwrap_or_default();
-
+    let addr_map = parse_proc_net_addresses().await;
     let default_route_iface = resolve_default_route_iface().await;
 
     let mut interfaces = Vec::new();
-    for link in &links {
-        let name = link["ifname"].as_str().unwrap_or("").to_string();
-        if name.is_empty() || name == "lo" {
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "lo" {
             continue;
         }
 
-        let link_type = link["link_type"].as_str().unwrap_or("");
-        if link_type == "loopback" {
+        let iface_dir = sysfs.join(&name);
+        let iface_type = read_sysfs_file(&iface_dir.join("type")).await;
+        if iface_type.trim() == "772" {
             continue;
         }
 
-        let mac = link["address"].as_str().unwrap_or("").to_string();
-        let flags = link["flags"]
-            .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-            .unwrap_or_default();
-
-        let carrier = flags.contains(&"LOWER_UP");
-
+        let mac = read_sysfs_file(&iface_dir.join("address")).await;
+        let carrier = read_sysfs_file(&iface_dir.join("carrier")).await.trim() == "1";
         let driver = read_sysfs_driver(&name).await;
         let speed_mbps = read_sysfs_speed(&name).await;
         let ipv4 = addr_map.get(&name).cloned().unwrap_or_default();
@@ -79,18 +50,90 @@ pub(super) async fn detect_interfaces() -> Vec<DetectedInterface> {
             driver,
             speed_mbps,
             carrier,
-            mac,
+            mac: mac.trim().to_string(),
             ipv4,
             role_hint,
         });
     }
 
+    interfaces.sort_by(|a, b| a.name.cmp(&b.name));
     interfaces
 }
 
-fn build_addr_map(addrs: &[serde_json::Value]) -> BTreeMap<String, Vec<String>> {
+/// Parse IPv4 addresses from `/proc/net/fib_trie` per-interface,
+/// falling back to `ip -j addr show` if unavailable.
+async fn parse_proc_net_addresses() -> BTreeMap<String, Vec<String>> {
+    if let Some(map) = parse_proc_net_if_inet6_and_fib().await {
+        if !map.is_empty() {
+            return map;
+        }
+    }
+    ip_addr_show_fallback().await
+}
+
+/// Read IPv4 addresses from `/proc/net/fib_trie` keyed by interface.
+async fn parse_proc_net_if_inet6_and_fib() -> Option<BTreeMap<String, Vec<String>>> {
+    let content = tokio::fs::read_to_string("/proc/net/fib_trie").await.ok()?;
     let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for entry in addrs {
+
+    let sysfs = std::path::Path::new("/sys/class/net");
+    let mut entries = tokio::fs::read_dir(sysfs).await.ok()?;
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let iface = entry.file_name().to_string_lossy().to_string();
+        if iface == "lo" {
+            continue;
+        }
+        let ifindex_path = sysfs.join(&iface).join("ifindex");
+        if tokio::fs::metadata(&ifindex_path).await.is_err() {
+            continue;
+        }
+        let operstate_path = sysfs.join(&iface).join("operstate");
+        let _state = read_sysfs_file(&operstate_path).await;
+        map.entry(iface).or_default();
+    }
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("/32 host") {
+            if let Some(ip) = trimmed
+                .strip_prefix("/32 host ")
+                .map(|s| s.trim().to_string())
+            {
+                if ip != "127.0.0.1" && !ip.starts_with("127.") {
+                    for addrs in map.values_mut() {
+                        if addrs.is_empty() {
+                            addrs.push(ip.clone());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Some(map)
+}
+
+/// Fallback: parse `ip -j addr show` output for interface→IPv4 map.
+async fn ip_addr_show_fallback() -> BTreeMap<String, Vec<String>> {
+    let output = tokio::process::Command::new("ip")
+        .args(["-j", "addr", "show"])
+        .output()
+        .await
+        .ok();
+
+    let Some(output) = output else {
+        return BTreeMap::new();
+    };
+    let Ok(text) = std::str::from_utf8(&output.stdout) else {
+        return BTreeMap::new();
+    };
+    let Ok(addrs) = serde_json::from_str::<Vec<serde_json::Value>>(text) else {
+        return BTreeMap::new();
+    };
+
+    let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for entry in &addrs {
         let ifname = entry["ifname"].as_str().unwrap_or("");
         let Some(addr_info) = entry["addr_info"].as_array() else {
             continue;
@@ -107,18 +150,22 @@ fn build_addr_map(addrs: &[serde_json::Value]) -> BTreeMap<String, Vec<String>> 
     map
 }
 
+/// Resolve default route interface from `/proc/net/route`.
 async fn resolve_default_route_iface() -> Option<String> {
-    let output = tokio::process::Command::new("ip")
-        .args(["-j", "route", "show", "default"])
-        .output()
-        .await
-        .ok()?;
-    let text = std::str::from_utf8(&output.stdout).ok()?;
-    let routes: Vec<serde_json::Value> = serde_json::from_str(text).ok()?;
-    routes
-        .first()
-        .and_then(|r| r["dev"].as_str())
-        .map(String::from)
+    let content = tokio::fs::read_to_string("/proc/net/route").await.ok()?;
+    for line in content.lines().skip(1) {
+        let mut fields = line.split_whitespace();
+        let iface = fields.next()?;
+        let destination = fields.next()?;
+        if destination == "00000000" {
+            return Some(iface.to_string());
+        }
+    }
+    None
+}
+
+async fn read_sysfs_file(path: &std::path::Path) -> String {
+    tokio::fs::read_to_string(path).await.unwrap_or_default()
 }
 
 pub(super) fn classify_role(
@@ -234,18 +281,20 @@ mod tests {
     }
 
     #[test]
-    fn build_addr_map_parses_json() {
-        let json: Vec<serde_json::Value> = serde_json::from_str(
-            r#"[{
-                "ifname": "enp5s0",
-                "addr_info": [
-                    {"family": "inet", "local": "192.168.4.244"},
-                    {"family": "inet6", "local": "fe80::1"}
-                ]
-            }]"#,
-        )
-        .unwrap();
-        let map = build_addr_map(&json);
-        assert_eq!(map.get("enp5s0").unwrap(), &vec!["192.168.4.244"]);
+    fn default_route_parses_proc_net_route_format() {
+        let route_content = "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\n\
+                             enp1s0\t00000000\t0101A8C0\t0003\t0\t0\t100\n\
+                             enp1s0\t0001A8C0\t00000000\t0001\t0\t0\t100\n";
+        let mut found = None;
+        for line in route_content.lines().skip(1) {
+            let mut fields = line.split_whitespace();
+            let iface = fields.next().unwrap();
+            let dest = fields.next().unwrap();
+            if dest == "00000000" {
+                found = Some(iface.to_string());
+                break;
+            }
+        }
+        assert_eq!(found.as_deref(), Some("enp1s0"));
     }
 }

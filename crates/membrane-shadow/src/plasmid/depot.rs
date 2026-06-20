@@ -197,7 +197,7 @@ pub fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
         },
     );
     if !path.exists() {
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "depot not found at {}",
             path.display()
         )));
@@ -207,8 +207,7 @@ pub fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
 
 pub(super) fn load_sources(depot_dir: &Path) -> Result<BTreeMap<String, SourceEntry>> {
     let path = depot_dir.join("sources.toml");
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| ShadowError::Parse(format!("cannot read sources.toml: {e}")))?;
+    let content = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
 
     let parsed: SourcesFile = toml::from_str(&content)?;
     Ok(parsed.sources)

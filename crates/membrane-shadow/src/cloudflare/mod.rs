@@ -42,7 +42,7 @@ impl CloudflareConfig {
         let api_token = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN)
             .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_API_TOKEN))
             .map_err(|_| {
-                ShadowError::Parse("CLOUDFLARE_API_TOKEN or CF_API_TOKEN required".into())
+                ShadowError::Config("CLOUDFLARE_API_TOKEN or CF_API_TOKEN required".into())
             })?;
 
         let zone_id = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_ZONE)
@@ -56,7 +56,7 @@ impl CloudflareConfig {
         reqwest::Client::builder()
             .timeout(API_TIMEOUT)
             .build()
-            .map_err(|e| ShadowError::Parse(format!("HTTP client error: {e}")))
+            .map_err(|e| ShadowError::Config(format!("HTTP client build: {e}")))
     }
 
     fn auth_header(&self) -> (&str, String) {
@@ -166,7 +166,7 @@ pub async fn cache_purge(
     } else if let Some(file_urls) = urls {
         serde_json::json!({ "files": file_urls })
     } else {
-        return Err(ShadowError::Parse(
+        return Err(ShadowError::Config(
             "cache.purge requires --urls or --all".into(),
         ));
     };
@@ -271,8 +271,8 @@ async fn resolve_zone_id(cf: &CloudflareConfig, zone_name: &str) -> Result<Strin
         .find(|z| z.name == zone_name)
         .map(|z| z.id)
         .ok_or_else(|| {
-            ShadowError::Parse(format!(
-                "Zone '{zone_name}' not found in Cloudflare account"
+            ShadowError::Config(format!(
+                "zone '{zone_name}' not found in Cloudflare account"
             ))
         })
 }
@@ -362,7 +362,7 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
 
 fn extract_zone_arg<'a>(args: &[&'a str]) -> Result<&'a str> {
     extract_flag(args, "--zone").ok_or_else(|| {
-        ShadowError::Parse("--zone <domain> required (e.g. --zone primals.eco)".into())
+        ShadowError::Config("--zone <domain> required (e.g. --zone primals.eco)".into())
     })
 }
 
@@ -373,7 +373,7 @@ fn extract_flag<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
 }
 
 fn require_flag<'a>(args: &[&'a str], flag: &str) -> Result<&'a str> {
-    extract_flag(args, flag).ok_or_else(|| ShadowError::Parse(format!("{flag} is required")))
+    extract_flag(args, flag).ok_or_else(|| ShadowError::Config(format!("{flag} is required")))
 }
 
 fn extract_multi_flag<'a>(args: &[&'a str], flag: &str) -> Vec<&'a str> {

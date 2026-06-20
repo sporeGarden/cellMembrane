@@ -72,12 +72,12 @@ fn validate_shell_safe(input: &str, field: &str) -> Result<()> {
         '\'', '"', '`', '$', '\\', ';', '&', '|', '(', ')', '{', '}', '<', '>', '\n', '\r', '\0',
     ];
     if input.chars().any(|c| FORBIDDEN.contains(&c)) {
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "{field} contains forbidden characters: {input:?}"
         )));
     }
     if input.is_empty() {
-        return Err(ShadowError::Parse(format!("{field} cannot be empty")));
+        return Err(ShadowError::Config(format!("{field} cannot be empty")));
     }
     Ok(())
 }

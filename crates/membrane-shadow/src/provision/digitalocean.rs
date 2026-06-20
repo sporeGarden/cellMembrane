@@ -18,17 +18,16 @@ fn resolve_token() -> Result<String> {
     std::env::var(cellmembrane_types::service::ENV_DIGITALOCEAN_TOKEN)
         .or_else(|_| std::env::var(cellmembrane_types::service::ENV_DO_TOKEN_COMPAT))
         .map_err(|_| {
-            ShadowError::Parse(
+            ShadowError::Config(
                 "DIGITALOCEAN_TOKEN or DO_TOKEN not set — required for cloud provisioning".into(),
             )
         })
 }
 
 fn client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
+    Ok(reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| ShadowError::Parse(format!("HTTP client build failed: {e}")))
+        .build()?)
 }
 
 #[derive(Debug, Serialize)]
@@ -143,21 +142,17 @@ pub async fn create_droplet(req: &ProvisionRequest) -> Result<DropletState> {
         .bearer_auth(&token)
         .json(&body)
         .send()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API request failed: {e}")))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "DO API create failed ({status}): {body_text}"
         )));
     }
 
-    let parsed: CreateDropletResponse = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API response parse failed: {e}")))?;
+    let parsed: CreateDropletResponse = resp.json().await?;
 
     Ok(parsed.droplet.into_state(&req.profile))
 }
@@ -171,7 +166,7 @@ pub async fn wait_until_active(droplet_id: u64, profile: &str) -> Result<Droplet
 
     loop {
         if tokio::time::Instant::now() >= deadline {
-            return Err(ShadowError::Parse(format!(
+            return Err(ShadowError::Config(format!(
                 "droplet {droplet_id} did not become active within {POLL_TIMEOUT_SECS}s"
             )));
         }
@@ -182,8 +177,7 @@ pub async fn wait_until_active(droplet_id: u64, profile: &str) -> Result<Droplet
             .get(format!("{API_BASE}/droplets/{droplet_id}"))
             .bearer_auth(&token)
             .send()
-            .await
-            .map_err(|e| ShadowError::Parse(format!("DO API poll failed: {e}")))?;
+            .await?;
 
         if !resp.status().is_success() {
             continue;
@@ -210,21 +204,17 @@ pub async fn get_droplet(droplet_id: u64) -> Result<DropletState> {
         .get(format!("{API_BASE}/droplets/{droplet_id}"))
         .bearer_auth(&token)
         .send()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API get failed: {e}")))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "DO API get droplet failed ({status}): {body_text}"
         )));
     }
 
-    let parsed: GetDropletResponse = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API response parse failed: {e}")))?;
+    let parsed: GetDropletResponse = resp.json().await?;
 
     Ok(parsed.droplet.into_state("unknown"))
 }
@@ -238,15 +228,14 @@ pub async fn destroy_droplet(droplet_id: u64) -> Result<()> {
         .delete(format!("{API_BASE}/droplets/{droplet_id}"))
         .bearer_auth(&token)
         .send()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API destroy failed: {e}")))?;
+        .await?;
 
     let status = resp.status();
     if status.is_success() || status.as_u16() == 404 {
         Ok(())
     } else {
         let body_text = resp.text().await.unwrap_or_default();
-        Err(ShadowError::Parse(format!(
+        Err(ShadowError::Config(format!(
             "DO API destroy failed ({status}): {body_text}"
         )))
     }
@@ -261,21 +250,17 @@ pub async fn list_ssh_keys() -> Result<Vec<SshKeyInfo>> {
         .get(format!("{API_BASE}/account/keys"))
         .bearer_auth(&token)
         .send()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API keys list failed: {e}")))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "DO API keys list failed ({status}): {body_text}"
         )));
     }
 
-    let parsed: ListKeysResponse = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API keys parse failed: {e}")))?;
+    let parsed: ListKeysResponse = resp.json().await?;
 
     Ok(parsed
         .ssh_keys
@@ -302,21 +287,17 @@ pub async fn list_membrane_droplets() -> Result<Vec<DropletState>> {
         .get(format!("{API_BASE}/droplets?tag_name=membrane"))
         .bearer_auth(&token)
         .send()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API list failed: {e}")))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "DO API list failed ({status}): {body_text}"
         )));
     }
 
-    let parsed: ListDropletsResponse = resp
-        .json()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("DO API list parse failed: {e}")))?;
+    let parsed: ListDropletsResponse = resp.json().await?;
 
     Ok(parsed
         .droplets

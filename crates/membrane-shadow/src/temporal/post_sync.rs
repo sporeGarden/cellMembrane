@@ -473,7 +473,7 @@ pub(super) fn summarize_depot_freshness() -> String {
                     |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
                 ),
             )
-            .join("plasmidBin")
+            .join(cellmembrane_types::service::PLASMID_BIN_DIR)
         },
     );
 

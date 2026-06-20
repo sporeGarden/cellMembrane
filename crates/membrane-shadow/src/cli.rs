@@ -11,13 +11,13 @@ use crate::{ShadowError, ShadowOutcome, context, impulse};
 pub fn require_arg<'a>(args: &[&'a str], idx: usize, name: &str) -> crate::Result<&'a str> {
     args.get(idx)
         .copied()
-        .ok_or_else(|| ShadowError::Parse(format!("{name} required")))
+        .ok_or_else(|| ShadowError::Config(format!("{name} required")))
 }
 
 /// Split `"org/name"` into `("org", "name")`.
 pub fn split_repo_path(path: &str) -> crate::Result<(&str, &str)> {
     path.split_once('/')
-        .ok_or_else(|| ShadowError::Parse(format!("expected org/name format, got: {path}")))
+        .ok_or_else(|| ShadowError::Config(format!("expected org/name format, got: {path}")))
 }
 
 /// Extract `--flag value` from a flat args slice.
@@ -31,9 +31,9 @@ pub fn extract_flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
 /// Parse `impulse.post` CLI arguments into typed `PostArgs`.
 pub fn parse_impulse_post_args<'a>(args: &[&'a str]) -> crate::Result<impulse::PostArgs<'a>> {
     let to_str = extract_flag_value(args, "--to")
-        .ok_or_else(|| ShadowError::Parse("--to <gate> required".into()))?;
+        .ok_or_else(|| ShadowError::Config("--to <gate> required".into()))?;
     let subject = extract_flag_value(args, "--subject")
-        .ok_or_else(|| ShadowError::Parse("--subject required".into()))?;
+        .ok_or_else(|| ShadowError::Config("--subject required".into()))?;
 
     let type_str = extract_flag_value(args, "--type").unwrap_or("status");
     let impulse_type = match type_str {
@@ -42,7 +42,7 @@ pub fn parse_impulse_post_args<'a>(args: &[&'a str]) -> crate::Result<impulse::P
         "request" => impulse::ImpulseType::Request,
         "announce" => impulse::ImpulseType::Announce,
         _ => {
-            return Err(ShadowError::Parse(format!(
+            return Err(ShadowError::Config(format!(
                 "unknown impulse type: {type_str} (expected: frago|status|request|announce)"
             )));
         }
@@ -71,9 +71,9 @@ pub fn parse_impulse_post_args<'a>(args: &[&'a str]) -> crate::Result<impulse::P
 /// Parse `context.weave` CLI arguments into typed `WeaveArgs`.
 pub fn parse_context_weave_args<'a>(args: &[&'a str]) -> crate::Result<context::WeaveArgs<'a>> {
     let project = extract_flag_value(args, "--project")
-        .ok_or_else(|| ShadowError::Parse("--project <path> required".into()))?;
+        .ok_or_else(|| ShadowError::Config("--project <path> required".into()))?;
     let summary = extract_flag_value(args, "--summary")
-        .ok_or_else(|| ShadowError::Parse("--summary required".into()))?;
+        .ok_or_else(|| ShadowError::Config("--summary required".into()))?;
 
     let status_str = extract_flag_value(args, "--status").unwrap_or("active");
     let status = match status_str {
@@ -82,7 +82,7 @@ pub fn parse_context_weave_args<'a>(args: &[&'a str]) -> crate::Result<context::
         "blocked" => context::FocusStatus::Blocked,
         "complete" => context::FocusStatus::Complete,
         _ => {
-            return Err(ShadowError::Parse(format!(
+            return Err(ShadowError::Config(format!(
                 "unknown status: {status_str} (expected: active|paused|blocked|complete)"
             )));
         }

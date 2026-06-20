@@ -137,7 +137,7 @@ pub(super) async fn run_sandbox(
         || {
             crate::resolve_xdg_data_home()
                 .join("ecoPrimals")
-                .join("plasmidBin")
+                .join(cellmembrane_types::service::PLASMID_BIN_DIR)
         },
     )
     .join("primals")

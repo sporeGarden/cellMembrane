@@ -454,9 +454,11 @@ mod tests {
     }
 
     #[test]
-    fn check_checksum_coherence_no_depot_returns_none() {
-        let result = check_checksum_coherence("beardog", "abc123");
-        // No depot in test env — returns None (no divergence signal)
-        assert!(result.is_none());
+    fn check_checksum_coherence_unknown_primal_returns_none() {
+        let result = check_checksum_coherence("__nonexistent_test_primal__", "abc123");
+        assert!(
+            result.is_none(),
+            "unknown primal should not trigger divergence"
+        );
     }
 }

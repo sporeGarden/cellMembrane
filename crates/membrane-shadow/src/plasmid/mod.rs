@@ -538,7 +538,9 @@ mod tests {
             Err(e) => {
                 let msg = e.to_string();
                 assert!(
-                    msg.contains("depot not found") || msg.contains("cannot read"),
+                    msg.contains("depot not found")
+                        || msg.contains("cannot read")
+                        || msg.contains("No such file"),
                     "unexpected error: {msg}"
                 );
             }

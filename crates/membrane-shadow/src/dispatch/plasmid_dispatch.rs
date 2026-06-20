@@ -52,7 +52,7 @@ pub(super) async fn dispatch_plasmid(
             let primal = cli::extract_flag_value(args, "--primal")
                 .or_else(|| args.iter().find(|a| !a.starts_with('-')).copied());
             let Some(primal) = primal else {
-                return Err(ShadowError::Parse(
+                return Err(ShadowError::Config(
                     "plasmid.build requires --primal <name> or positional primal name".into(),
                 ));
             };
@@ -213,7 +213,7 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
         |_| {
             crate::resolve_xdg_data_home()
                 .join("ecoPrimals")
-                .join("plasmidBin")
+                .join(cellmembrane_types::service::PLASMID_BIN_DIR)
                 .join("primals")
                 .join(arch)
         },

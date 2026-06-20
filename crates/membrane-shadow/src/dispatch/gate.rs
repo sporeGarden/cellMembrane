@@ -83,7 +83,7 @@ pub(super) async fn dispatch(
         "gate.status" => dispatch_status().await,
         "gate.profile" => {
             let gate_name = args.first().ok_or_else(|| {
-                crate::error::ShadowError::Parse(
+                crate::error::ShadowError::Config(
                     "gate.profile requires gate name: membrane gate.profile <gate>".into(),
                 )
             })?;
@@ -275,7 +275,7 @@ async fn dispatch_health_audit(
         plasmid::depot::detect_stale_primals(&depot_dir)
     })
     .await
-    .map_err(|e| crate::error::ShadowError::Parse(format!("spawn failed: {e}")))??;
+    .map_err(|e| crate::error::ShadowError::Config(format!("spawn failed: {e}")))??;
 
     let mut entries: Vec<serde_json::Value> = Vec::new();
     for entry in &local_report.entries {
@@ -364,7 +364,7 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
         .or_else(|| args.first().filter(|a| !a.starts_with("--")).copied())
         .unwrap_or("relay");
     let composition = MembraneComposition::parse_name(comp_str).ok_or_else(|| {
-        crate::error::ShadowError::Parse(format!(
+        crate::error::ShadowError::Config(format!(
             "unknown composition: {comp_str} (expected: {})",
             MembraneComposition::all()
                 .iter()
@@ -409,7 +409,7 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
         "ufw" => fw.to_ufw_script(),
         "nftables" | "nft" => fw.to_nftables_script(nft_config.as_ref()),
         other => {
-            return Err(crate::error::ShadowError::Parse(format!(
+            return Err(crate::error::ShadowError::Config(format!(
                 "unknown format: {other} (expected: nftables, ufw)"
             )));
         }

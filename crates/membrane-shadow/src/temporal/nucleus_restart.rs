@@ -18,7 +18,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
                     |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
                 ),
             )
-            .join("plasmidBin")
+            .join(cellmembrane_types::service::PLASMID_BIN_DIR)
         },
     );
     let bin_dir = depot_dir.join("primals").join(&arch);

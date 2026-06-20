@@ -277,6 +277,25 @@ fn permissions_phase(dry_run: bool) -> BootstrapPhase {
     }
 }
 
+/// Hardlink or copy a binary to dest, setting 0755 permissions.
+fn link_or_copy_binary(src: &std::path::Path, dest: &std::path::Path) -> bool {
+    if !src.exists() {
+        return false;
+    }
+    if let Err(e) = std::fs::remove_file(dest) {
+        tracing::debug!(error = %e, "pre-link cleanup (may not exist)");
+    }
+    if std::fs::hard_link(src, dest).is_ok() || std::fs::copy(src, dest).is_ok() {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755)) {
+            tracing::warn!(error = %e, path = %dest.display(), "chmod 755 failed");
+        }
+        true
+    } else {
+        false
+    }
+}
+
 fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     let install_dir = super::resolve_install_base();
 
@@ -309,39 +328,14 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
         if !src.exists() {
             continue;
         }
-        let dest = target_dir.join(primal);
-        if let Err(e) = std::fs::remove_file(&dest) {
-            tracing::debug!(error = %e, "pre-link cleanup (may not exist)");
-        }
-        if std::fs::hard_link(&src, &dest).is_ok() || std::fs::copy(&src, &dest).is_ok() {
-            use std::os::unix::fs::PermissionsExt;
-            if let Err(e) = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
-            {
-                tracing::warn!(error = %e, path = %dest.display(), "failed to set binary permissions");
-            }
+        if link_or_copy_binary(&src, &target_dir.join(primal)) {
             installed += 1;
         } else {
             failed += 1;
         }
     }
 
-    let membrane_src = bin_dir.join("membrane");
-    let membrane_dest = target_dir.join("membrane");
-    if membrane_src.exists() {
-        if let Err(e) = std::fs::remove_file(&membrane_dest) {
-            tracing::debug!(error = %e, "pre-link membrane cleanup (may not exist)");
-        }
-        if std::fs::hard_link(&membrane_src, &membrane_dest).is_ok()
-            || std::fs::copy(&membrane_src, &membrane_dest).is_ok()
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Err(e) =
-                std::fs::set_permissions(&membrane_dest, std::fs::Permissions::from_mode(0o755))
-            {
-                tracing::warn!(error = %e, "failed to set membrane binary permissions");
-            }
-        }
-    }
+    link_or_copy_binary(&bin_dir.join("membrane"), &target_dir.join("membrane"));
 
     let ok = failed == 0 && installed > 0;
     BootstrapPhase {

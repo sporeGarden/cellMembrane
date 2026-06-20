@@ -129,8 +129,7 @@ pub fn verify_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     }
 
     let checksums_path = depot_dir.join("checksums.toml");
-    let content = std::fs::read_to_string(&checksums_path)
-        .map_err(|e| ShadowError::Parse(format!("cannot read checksums.toml: {e}")))?;
+    let content = std::fs::read_to_string(&checksums_path).map_err(ShadowError::Io)?;
     let parsed: ChecksumFile = toml::from_str(&content)?;
 
     let primals_dir = depot_dir.join("primals");

@@ -33,6 +33,9 @@ pub const TOPOLOGY_MAP_FILENAME: &str = "TOPOLOGY_MAP.toml";
 /// Infra path fragment for the binary depot (`plasmidBin`).
 pub const INFRA_PLASMID_BIN: &str = "infra/plasmidBin";
 
+/// Directory name for the binary depot.
+pub const PLASMID_BIN_DIR: &str = "plasmidBin";
+
 // ── Standard deployment environment variables ────────────────────────
 
 /// Environment variable for the `plasmidBin` depot directory.

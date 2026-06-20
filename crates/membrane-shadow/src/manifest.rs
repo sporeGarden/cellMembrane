@@ -396,7 +396,7 @@ impl WaveState {
 /// Returns error if manifest not found or unparseable.
 pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
-        ShadowError::Parse(format!(
+        ShadowError::Config(format!(
             "ecosystem_manifest.toml not found under {}",
             workspace_root.display()
         ))
@@ -410,7 +410,7 @@ pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
 /// Returns error if manifest not found or unparseable.
 pub async fn load_from_workspace_async(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
-        ShadowError::Parse(format!(
+        ShadowError::Config(format!(
             "ecosystem_manifest.toml not found under {}",
             workspace_root.display()
         ))

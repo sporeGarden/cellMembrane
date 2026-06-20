@@ -16,7 +16,7 @@ pub(super) async fn dispatch_temporal(
         "temporal.check" => {
             let root = temporal::resolve_workspace_root()?;
             if args.is_empty() {
-                return Err(crate::ShadowError::Parse(
+                return Err(crate::ShadowError::Config(
                     "temporal.check requires at least one repo path".into(),
                 ));
             }
@@ -37,7 +37,7 @@ pub(super) async fn dispatch_temporal(
         "temporal.sync" => {
             let root = temporal::resolve_workspace_root()?;
             if args.is_empty() {
-                return Err(crate::ShadowError::Parse(
+                return Err(crate::ShadowError::Config(
                     "temporal.sync requires at least one repo path".into(),
                 ));
             }
@@ -93,7 +93,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         identity::resolve_async(&root)
             .await
             .map_err(|e| {
-                crate::ShadowError::Parse(format!(
+                crate::ShadowError::Config(format!(
                     "cannot resolve gate identity — set GATE_NAME or configure identity: {e}"
                 ))
             })?

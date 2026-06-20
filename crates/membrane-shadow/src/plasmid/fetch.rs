@@ -183,11 +183,15 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 // ── Path resolution ──────────────────────────────────────────────────────────
 
 fn resolve_dest(override_dest: Option<&str>) -> PathBuf {
-    super::resolve_path(override_dest, "ECOPRIMALS_PLASMID_BIN", || {
-        crate::resolve_xdg_data_home()
-            .join("ecoPrimals")
-            .join("plasmidBin")
-    })
+    super::resolve_path(
+        override_dest,
+        cellmembrane_types::service::ENV_PLASMIDBIN_LEGACY,
+        || {
+            crate::resolve_xdg_data_home()
+                .join("ecoPrimals")
+                .join(cellmembrane_types::service::PLASMID_BIN_DIR)
+        },
+    )
 }
 
 // ── Release tag resolution ───────────────────────────────────────────────────

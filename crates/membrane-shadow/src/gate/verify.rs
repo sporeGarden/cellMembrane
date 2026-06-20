@@ -29,7 +29,9 @@ pub fn verify_local_depot(arch: &str) -> (bool, String) {
     let checksums_path = if dest_root.join("checksums.toml").exists() {
         dest_root.join("checksums.toml")
     } else if let Ok(workspace) = crate::temporal::resolve_workspace_root() {
-        let ws_path = workspace.join("infra/plasmidBin/checksums.toml");
+        let ws_path = workspace
+            .join(cellmembrane_types::service::INFRA_PLASMID_BIN)
+            .join("checksums.toml");
         if ws_path.exists() {
             ws_path
         } else {

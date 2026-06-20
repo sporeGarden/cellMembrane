@@ -23,8 +23,8 @@ pub(super) async fn ssh_exec(ip: &str, command: &str) -> Result<String> {
     if code == 0 {
         Ok(stdout)
     } else {
-        Err(ShadowError::Parse(format!(
-            "SSH command failed (exit {code}): {stdout}"
+        Err(ShadowError::Ssh(format!(
+            "command failed (exit {code}): {stdout}"
         )))
     }
 }
@@ -45,8 +45,8 @@ async fn wait_for_ssh(ip: &str) -> Result<()> {
             "SSH not ready"
         );
     }
-    Err(ShadowError::Parse(format!(
-        "SSH not available on {ip} after {SSH_MAX_RETRIES} attempts"
+    Err(ShadowError::Ssh(format!(
+        "not available on {ip} after {SSH_MAX_RETRIES} attempts"
     )))
 }
 
@@ -92,7 +92,7 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
     let bin_dir = depot_dir.join("primals").join(&arch);
 
     if !bin_dir.exists() {
-        return Err(ShadowError::Parse(format!(
+        return Err(ShadowError::Config(format!(
             "depot bin dir not found: {}",
             bin_dir.display()
         )));
