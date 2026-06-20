@@ -1,8 +1,12 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-20 (Wave 119+)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Last updated:** 2026-06-20 (Wave 120)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 4-node WG mesh, deterministic deployment CODIFIED
+**Wave 120 update (Deployment Isomorphism — Identity-Based Resolution):** `topology.service`
+identity-based service discovery. Manifest-authoritative `wg_ip` + `roles` on `GateProfile`.
+`wireguard.generate` and `caddy.generate` produce configs from manifest. `topology.roles` +
+`topology.mesh` manifest-aware. pepti decommissioned. 729 tests, zero clippy.
 **Wave 119+ update (Native Detection + Error Normalization):** Shell-outs evolved to native
 Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs + `/proc/net/route`, `systemctl
 is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ssh`/`Io` across
@@ -11,7 +15,7 @@ is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ss
 **Wave 116–118 update (Deep Debt + Topology Convergence):** Webhook cascade wiring,
 rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos,
 identity unification, hardcoded path constants. 680 tests. Fixed P0 topology dispatch
-collision. 620 tests → 680 → 711.
+collision. 620 tests → 680 → 711 → 729.
 **Wave 116 update (Gate Enrollment Pipeline):** Fresh binary rebuilt from `11a7c68` with
 ARP probe fix (uses detected LAN interface, not loopback). `InterfaceRole` Display impl
 for clean preflight output. Gate enrollment pipeline validated: `gate.preflight`,

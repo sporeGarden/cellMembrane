@@ -243,10 +243,108 @@ pub async fn dispatch(
             let msg = tls::tls_revert_acme(config, domain).await?;
             Ok(crate::ShadowOutcome::ok(msg))
         }
+        "caddy.generate" => dispatch_caddy_generate(args).await,
         _ => Ok(crate::ShadowOutcome::fail(format!(
             "unknown caddy command: {cmd}"
         ))),
     }
+}
+
+// ── Manifest-driven Caddyfile generation ────────────────────────────
+
+async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> {
+    use cellmembrane_types::caddy::{CaddyConfig, CaddyVhost};
+
+    let root = crate::temporal::resolve_workspace_root()?;
+    let m = crate::manifest::load_from_workspace_async(&root).await?;
+
+    let gate_name = crate::cli::extract_flag_value(args, "--gate")
+        .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
+
+    let acme_email = crate::cli::extract_flag_value(args, "--email").map(String::from);
+
+    let topo = m.topology.as_ref();
+    let mut vhosts = Vec::new();
+
+    let caddy_gates = m.gates_for_role("caddy");
+    let is_caddy_gate = caddy_gates.iter().any(|(name, _)| *name == gate_name);
+
+    if !is_caddy_gate && caddy_gates.is_empty() {
+        return Ok(crate::ShadowOutcome::ok(String::from(
+            "no gate has role 'caddy' — add roles = [\"caddy\"] to a gate profile",
+        )));
+    }
+
+    if let Some(topo_data) = topo {
+        if let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane) {
+            let forgejo_gates = m.gates_for_role("forgejo");
+            if let Some((_, forgejo_profile)) = forgejo_gates.first() {
+                let forgejo_ip = forgejo_profile
+                    .wg_ip
+                    .as_deref()
+                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(forgejo_gates[0].0))
+                    .unwrap_or(inner_ip.as_str());
+                vhosts.push(CaddyVhost {
+                    domain: "git.primals.eco".into(),
+                    upstream: format!("{forgejo_ip}:3000"),
+                    path: None,
+                    tls: true,
+                    extra_directives: vec![],
+                });
+            }
+
+            let depot_gates = m.gates_for_role("depot");
+            if !depot_gates.is_empty() {
+                let depot_ip = depot_gates[0]
+                    .1
+                    .wg_ip
+                    .as_deref()
+                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(depot_gates[0].0))
+                    .unwrap_or(inner_ip.as_str());
+                vhosts.push(CaddyVhost {
+                    domain: "depot.primals.eco".into(),
+                    upstream: format!("{depot_ip}:8080"),
+                    path: None,
+                    tls: true,
+                    extra_directives: vec![],
+                });
+            }
+
+            let relay_gates = m.gates_for_role("relay");
+            if !relay_gates.is_empty() {
+                let relay_ip = relay_gates[0]
+                    .1
+                    .wg_ip
+                    .as_deref()
+                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(relay_gates[0].0))
+                    .unwrap_or(inner_ip.as_str());
+                vhosts.push(CaddyVhost {
+                    domain: "mesh.primal.eco".into(),
+                    upstream: format!("{relay_ip}:7700"),
+                    path: None,
+                    tls: true,
+                    extra_directives: vec![],
+                });
+            }
+        }
+    }
+
+    if vhosts.is_empty() {
+        return Ok(crate::ShadowOutcome::ok(String::from(
+            "no services resolved from manifest — ensure topology.hosts and gate roles are configured",
+        )));
+    }
+
+    let config = CaddyConfig {
+        gate_name: gate_name.into(),
+        acme_email,
+        vhosts,
+    };
+
+    let output = config.to_caddyfile();
+    let data = serde_json::to_value(&config)?;
+
+    Ok(crate::ShadowOutcome::ok_with(output, data))
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

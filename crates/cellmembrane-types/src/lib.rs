@@ -32,6 +32,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod caddy;
 pub mod channels;
 pub mod composition;
 pub mod config;
@@ -48,7 +49,9 @@ pub mod sync;
 pub mod topology;
 pub mod transport;
 pub mod validation;
+pub mod wireguard;
 
+pub use caddy::{CaddyConfig, CaddyVhost};
 pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, TrustLevel};
 pub use composition::{CompositionSpec, MembraneComposition};
 pub use config::{DeployPaths, MembraneConfig, ShadowMode};
@@ -72,6 +75,7 @@ pub use topology::{
 };
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
+pub use wireguard::{WgConfig, WgPeer};
 
 /// Shared serde default for boolean fields that should be `true` when omitted.
 pub(crate) const fn default_true() -> bool {

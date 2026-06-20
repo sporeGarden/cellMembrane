@@ -210,6 +210,20 @@ pub struct GateProfile {
     /// Site topology annotation (e.g., `"triangle_3hub_backbone"`).
     #[serde(default)]
     pub site_topology: Option<String>,
+    /// Roles this gate fulfills (e.g., `["relay", "depot", "dns_primary", "forgejo"]`).
+    ///
+    /// Roles are service-level capabilities: any gate can absorb any role via
+    /// `gate.bootstrap --roles`. Used by `topology.service` for identity-based
+    /// service resolution.
+    #[serde(default)]
+    pub roles: Vec<String>,
+    /// `WireGuard` mesh IP address for this gate (e.g., `"10.13.37.1"`).
+    ///
+    /// When set, overrides the `BOOTSTRAP_GATES` static registry and
+    /// `mesh_address_from_topology()` derivation. This is the authoritative
+    /// mesh address for the gate.
+    #[serde(default)]
+    pub wg_ip: Option<String>,
 }
 
 impl EcosystemManifest {
@@ -280,6 +294,34 @@ impl EcosystemManifest {
         orgs.sort_unstable();
         orgs.dedup();
         orgs
+    }
+
+    /// Resolve a service by role name — find which gate(s) provide it.
+    ///
+    /// Returns `(gate_name, gate_profile)` pairs for every gate whose `roles`
+    /// list contains the queried role. This is the identity-based resolution
+    /// that replaces hard-wired host→IP mappings.
+    ///
+    /// Example roles: `"forgejo"`, `"relay"`, `"depot"`, `"dns_primary"`,
+    /// `"dns_secondary"`, `"external_publisher"`, `"build_hub"`.
+    #[must_use]
+    pub fn gates_for_role(&self, role: &str) -> Vec<(&str, &GateProfile)> {
+        self.gates
+            .iter()
+            .filter(|(_, profile)| profile.roles.iter().any(|r| r == role))
+            .map(|(name, profile)| (name.as_str(), profile))
+            .collect()
+    }
+
+    /// Resolve a gate's `WireGuard` mesh IP — manifest-authoritative with fallback.
+    ///
+    /// Priority: `GateProfile.wg_ip` → `BOOTSTRAP_GATES` static registry.
+    #[must_use]
+    pub fn mesh_ip_for(&self, gate: &str) -> Option<String> {
+        self.gates
+            .get(gate)
+            .and_then(|p| p.wg_ip.clone())
+            .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate).map(String::from))
     }
 
     /// Get repos filtered by membrane type.
@@ -555,5 +597,88 @@ version = "1.0.0"
         assert_eq!(manifest.sync.default_branch, "main");
         assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::Flag);
         assert_eq!(manifest.sync.push_target, PushTarget::All);
+    }
+
+    #[test]
+    fn gates_for_role_finds_providers() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.golgi]
+repos = []
+roles = ["forgejo", "relay", "depot", "dns_primary"]
+wg_ip = "10.13.37.1"
+
+[gates.sporeGate]
+repos = ["cellMembrane"]
+roles = ["build_hub", "depot"]
+wg_ip = "10.13.37.2"
+
+[gates.eastGate]
+repos = ["cellMembrane"]
+roles = []
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+
+        let forgejo = manifest.gates_for_role("forgejo");
+        assert_eq!(forgejo.len(), 1);
+        assert_eq!(forgejo[0].0, "golgi");
+
+        let depot = manifest.gates_for_role("depot");
+        assert_eq!(depot.len(), 2);
+
+        let missing = manifest.gates_for_role("nonexistent");
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn mesh_ip_for_prefers_manifest() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.golgi]
+repos = []
+wg_ip = "10.13.37.100"
+
+[gates.sporeGate]
+repos = []
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(
+            manifest.mesh_ip_for("golgi"),
+            Some("10.13.37.100".into()),
+            "manifest wg_ip should override BOOTSTRAP_GATES"
+        );
+
+        assert_eq!(
+            manifest.mesh_ip_for("sporeGate"),
+            Some("10.13.37.2".into()),
+            "no manifest wg_ip → fall back to BOOTSTRAP_GATES"
+        );
+
+        assert_eq!(manifest.mesh_ip_for("unknown"), None, "unknown gate → None");
+    }
+
+    #[test]
+    fn roles_and_wg_ip_parse() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.golgi]
+repos = []
+roles = ["forgejo", "relay"]
+wg_ip = "10.13.37.1"
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let g = &manifest.gates["golgi"];
+        assert_eq!(g.roles, vec!["forgejo", "relay"]);
+        assert_eq!(g.wg_ip.as_deref(), Some("10.13.37.1"));
     }
 }

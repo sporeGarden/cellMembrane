@@ -91,6 +91,7 @@ pub(super) async fn dispatch(
         }
         "gate.preflight" => dispatch_preflight(args).await,
         "firewall.generate" => dispatch_firewall_generate(args),
+        "wireguard.generate" => dispatch_wireguard_generate(args).await,
         #[cfg(feature = "http")]
         "gate.provision" => super::provision_dispatch::dispatch_provision(args).await,
         #[cfg(feature = "http")]
@@ -416,6 +417,75 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     };
 
     Ok(ShadowOutcome::ok(script))
+}
+
+// ── WireGuard config generation ─────────────────────────────────────
+
+async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use cellmembrane_types::wireguard::{DEFAULT_WG_PORT, WgConfig, WgPeer};
+
+    let root = crate::temporal::resolve_workspace_root()?;
+    let m = crate::manifest::load_from_workspace_async(&root).await?;
+
+    let gate_name = cli::extract_flag_value(args, "--gate")
+        .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
+
+    let listen_port: u16 = cli::extract_flag_value(args, "--port")
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(DEFAULT_WG_PORT);
+
+    let subnet = cli::extract_flag_value(args, "--subnet")
+        .unwrap_or(cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET);
+
+    let local_ip = m.mesh_ip_for(gate_name).ok_or_else(|| {
+        crate::error::ShadowError::Config(format!(
+            "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
+        ))
+    })?;
+
+    let keepalive: u16 = cli::extract_flag_value(args, "--keepalive")
+        .and_then(|k| k.parse().ok())
+        .unwrap_or(25);
+
+    let mut peers = Vec::new();
+    for (name, profile) in &m.gates {
+        if name == gate_name {
+            continue;
+        }
+        let Some(mesh_ip) = m.mesh_ip_for(name) else {
+            continue;
+        };
+
+        let endpoint = profile
+            .mesh_peer
+            .as_deref()
+            .and_then(|p| p.split(':').next())
+            .map(String::from);
+
+        peers.push(WgPeer {
+            name: name.clone(),
+            mesh_ip,
+            public_key: None,
+            endpoint,
+            allowed_ips: vec![],
+            keepalive,
+        });
+    }
+
+    peers.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let config = WgConfig {
+        gate_name: gate_name.into(),
+        address: local_ip,
+        listen_port,
+        subnet: subnet.into(),
+        peers,
+    };
+
+    let output = config.to_wg_quick();
+    let data = serde_json::to_value(&config)?;
+
+    Ok(ShadowOutcome::ok_with(output, data))
 }
 
 // ── Pre-flight scanner ──────────────────────────────────────────────

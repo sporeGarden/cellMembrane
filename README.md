@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 119+) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 120) |
 
 ---
 
@@ -55,10 +55,18 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 711 tests — pedantic clippy clean
+cargo test                  # 729 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 120 (Deployment Isomorphism — Identity-Based Resolution):**
+`topology.service` identity-based service discovery — find any service by role, not host.
+Manifest-authoritative `wg_ip` overrides `BOOTSTRAP_GATES` static registry. `wireguard.generate`
+produces `wg-quick` configs from manifest peers. `caddy.generate` renders Caddyfile from manifest
+roles + topology hosts. `topology.roles` maps all service→gate assignments. `topology.mesh` now
+prefers manifest IP. pepti decommissioned (Wave 120). `GateProfile.roles` and `GateProfile.wg_ip`
+fields. 729 tests, zero clippy.
 
 **Wave 119+ (Native Detection + Error Normalization):**
 Shell-outs evolved to native Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs +
@@ -200,6 +208,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Gate enrollment + topology convergence (Wave 116): preflight checks, InterfaceRole, ARP probes, CytoplasmZone→ZoneLabel split, topology-aware mesh, 5-node WG mesh, 620 tests | DONE |
 | Deep debt consolidation (Wave 116–118): webhook cascade wiring, rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos, current_wave dedup, identity unification, hardcoded path constants, 680 tests | DONE |
 | Native evolution (Wave 119+): ss→/proc/net, ip→sysfs, systemctl→cgroup, ShadowError normalization (Parse→Config/Ssh/Io), .expect()→let-else+unreachable, PLASMID_BIN_DIR constant, reqwest From impl, 711 tests | DONE |
+| Deployment isomorphism (Wave 120): topology.service identity-based discovery, manifest-driven mesh IP (wg_ip), WireGuard config generation, Caddyfile generation from roles, topology.roles command, pepti decommission, 729 tests | DONE |
 
 ---
 
@@ -290,8 +299,10 @@ gardens/cellMembrane/
         cytoplasm.rs          # ZoneLabel, mesh address, BOOTSTRAP_GATES
         envelope.rs           # K-Derm topology — monoderm/diderm, bonding, channel proteins
         error.rs              # Typed ConfigError (thiserror)
+        caddy.rs              # Caddyfile generation from manifest roles
         firewall.rs           # UFW + nftables rules from composition
         identity.rs           # Family ID, gate ID
+        wireguard.rs          # WireGuard wg-quick config generation from manifest peers
         provider.rs           # DigitalOcean / Hetzner / bare metal / gate-local
         service/              # Static service registry + path constants
           mod.rs              # Types, enums, ServicePaths, env vars, path constants

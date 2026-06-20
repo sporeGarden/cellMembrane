@@ -56,14 +56,24 @@ rootpulse_commit = { protocol = "cli", description = "Commit cascade state to ro
 rootpulse_verify = { protocol = "cli", description = "Verify sovereignty across mesh gates" }
 rootpulse_status = { protocol = "cli", description = "Report rootPulse session state" }
 
-# Preflight + firewall
+# Preflight + firewall + config generation
 gate_preflight = { protocol = "cli", description = "Pre-bootstrap port/service/network checks" }
 firewall_generate = { protocol = "cli", description = "Generate nftables/UFW rules from composition" }
+wireguard_generate = { protocol = "cli", description = "Generate wg-quick config from manifest mesh peers" }
+
+# Topology + service discovery
+topology_resolve = { protocol = "cli", description = "Resolve gate topology (zone, transport, envelope, mesh IP)" }
+topology_service = { protocol = "cli", description = "Identity-based service discovery — find gates by role" }
+topology_roles = { protocol = "cli", description = "List all role→gate mappings from manifest" }
+topology_zones = { protocol = "cli", description = "Cytoplasm zone map with physical hub enrichment" }
+topology_mesh = { protocol = "cli", description = "WireGuard mesh peer listing with manifest-authoritative IPs" }
+topology_summary = { protocol = "cli", description = "Full TOPOLOGY_MAP.toml summary" }
 
 # Caddy TLS management
 caddy_status = { protocol = "ssh", description = "VPS Caddy health + vhosts + TLS status" }
 caddy_depot_provision = { protocol = "ssh", description = "Provision /depot/ HTTPS file server" }
 caddy_tls_check = { protocol = "ssh", description = "Check TLS certificate status for domain" }
+caddy_generate = { protocol = "cli", description = "Generate Caddyfile from manifest roles + topology" }
 
 # Provision (DigitalOcean)
 provision_create = { protocol = "api", description = "Create new droplet for gate deployment" }

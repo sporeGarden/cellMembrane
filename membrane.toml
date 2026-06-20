@@ -1,5 +1,5 @@
 # cellMembrane reference configuration
-# Wave 119+: 3-tier diesel engine (sandbox/main/canary) with fieldMouse provisioning
+# Wave 120: 3-tier diesel engine + identity-based service discovery + config generation
 # Inner membrane (golgiBody): Forgejo, NUCLEUS 13/13, sovereign services
 # Peptidoglycan (pepti): Build hub, workspace, temporal sync convergence
 # Outer membrane (golgiBody-ext): sporePrint hosting, TURN relay, public-facing

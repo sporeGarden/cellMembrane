@@ -95,6 +95,11 @@ pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result
             let gate_name = cli::require_arg(args, 0, "gate_name")?;
             topology_resolve(gate_name).await
         }
+        "topology.service" => {
+            let role = cli::require_arg(args, 0, "role")?;
+            topology_service_resolve(role).await
+        }
+        "topology.roles" => topology_roles().await,
         "topology.zones" => topology_zones().await,
         "topology.mesh" => Ok(topology_mesh()),
         "topology.summary" => {
@@ -132,7 +137,9 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
     let mobility = profile
         .and_then(|p| p.mobility.as_deref())
         .unwrap_or("unknown");
-    let mesh_ip = mesh_address(gate_name).unwrap_or("unpeered");
+    let mesh_ip_owned = m
+        .mesh_ip_for(gate_name)
+        .unwrap_or_else(|| "unpeered".into());
     let mesh_peer = profile.and_then(|p| p.mesh_peer.as_deref());
     let hub_port = profile.and_then(|p| p.hub_port.as_deref());
     let link_speed = profile.and_then(|p| p.link_speed_mbps);
@@ -154,7 +161,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
             "  envelope:    {envelope} ({} boundaries)",
             envelope.boundary_count()
         ),
-        format!("  mesh_ip:     {mesh_ip}"),
+        format!("  mesh_ip:     {mesh_ip_owned}"),
     ];
 
     if let Some(peer) = mesh_peer {
@@ -186,7 +193,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         "target": target,
         "mobility": mobility,
         "envelope": envelope.to_string(),
-        "mesh_ip": mesh_ip,
+        "mesh_ip": mesh_ip_owned,
         "mesh_peer": mesh_peer,
         "hub_port": hub_port,
         "link_speed_mbps": link_speed,
@@ -302,22 +309,150 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
     ))
 }
 
+/// Resolve which gate(s) provide a service role — identity-based discovery.
+///
+/// `membrane topology.service forgejo` → finds the gate with `roles = ["forgejo"]`
+/// and returns its mesh IP, zone, transport.
+async fn topology_service_resolve(role: &str) -> crate::Result<ShadowOutcome> {
+    let root = temporal::resolve_workspace_root()?;
+    let m = manifest::load_from_workspace_async(&root).await?;
+
+    let providers = m.gates_for_role(role);
+    if providers.is_empty() {
+        return Ok(ShadowOutcome::fail(format!(
+            "no gate provides role '{role}' — add roles = [\"{role}\"] to gate profile in ecosystem_manifest.toml"
+        )));
+    }
+
+    let mut lines = vec![format!("=== Service: {role} ===")];
+    let mut data_entries = Vec::new();
+
+    for (gate_name, profile) in &providers {
+        let mesh_ip = m
+            .mesh_ip_for(gate_name)
+            .unwrap_or_else(|| "unpeered".into());
+        let zone = profile
+            .zone
+            .unwrap_or_else(|| ZoneLabel::for_gate(gate_name));
+        let transport = profile.transport.unwrap_or_default();
+
+        lines.push(format!(
+            "  {gate_name:<14} {mesh_ip:<14} {zone} ({transport})"
+        ));
+
+        data_entries.push(serde_json::json!({
+            "gate": gate_name,
+            "mesh_ip": mesh_ip,
+            "zone": zone.label(),
+            "transport": transport.to_string(),
+            "roles": profile.roles,
+            "mesh_peer": profile.mesh_peer,
+            "composition": profile.composition,
+        }));
+    }
+
+    if providers.len() == 1 {
+        lines.push(format!(
+            "\n  → {role} is hosted on {} (single provider)",
+            providers[0].0
+        ));
+    } else {
+        lines.push(format!(
+            "\n  → {role} available on {} gates (multi-provider)",
+            providers.len()
+        ));
+    }
+
+    Ok(ShadowOutcome::ok_with(
+        lines.join("\n"),
+        serde_json::json!(data_entries),
+    ))
+}
+
+/// List all roles across all gates — shows the role→gate mapping.
+async fn topology_roles() -> crate::Result<ShadowOutcome> {
+    let root = temporal::resolve_workspace_root()?;
+    let m = manifest::load_from_workspace_async(&root).await?;
+
+    let mut role_map: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+
+    for (gate_name, profile) in &m.gates {
+        for role in &profile.roles {
+            role_map
+                .entry(role.clone())
+                .or_default()
+                .push(gate_name.clone());
+        }
+    }
+
+    if role_map.is_empty() {
+        return Ok(ShadowOutcome::ok(String::from(
+            "no roles defined — add roles = [...] to gate profiles in ecosystem_manifest.toml",
+        )));
+    }
+
+    let mut lines = vec!["=== Service Role Map ===".to_owned()];
+    let mut data = serde_json::Map::new();
+
+    for (role, gates) in &role_map {
+        lines.push(format!("  {role:<24} → {}", gates.join(", ")));
+        data.insert(role.clone(), serde_json::json!(gates));
+    }
+
+    lines.push(format!(
+        "\n{} roles across {} gates",
+        role_map.len(),
+        m.gates.len()
+    ));
+
+    Ok(ShadowOutcome::ok_with(
+        lines.join("\n"),
+        serde_json::Value::Object(data),
+    ))
+}
+
 fn topology_mesh() -> ShadowOutcome {
     let gates = discover_mesh_gates();
     let subnet = cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET;
     let mut lines = vec![format!("=== WireGuard Mesh ({subnet}) ===")];
 
+    let manifest = temporal::resolve_workspace_root().ok().and_then(|root| {
+        let path = root
+            .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
+            .join("ecosystem_manifest.toml");
+        crate::manifest::EcosystemManifest::load(&path).ok()
+    });
+
     for gate in &gates {
-        if let Some(ip) = mesh_address(gate) {
+        let ip = manifest
+            .as_ref()
+            .and_then(|m| m.mesh_ip_for(gate))
+            .or_else(|| mesh_address(gate).map(String::from));
+        if let Some(ip) = ip {
             let zone = ZoneLabel::for_gate(gate);
-            lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
+            let source = if manifest
+                .as_ref()
+                .and_then(|m| m.gates.get(gate.as_str()))
+                .and_then(|p| p.wg_ip.as_ref())
+                .is_some()
+            {
+                "manifest"
+            } else {
+                "bootstrap"
+            };
+            lines.push(format!("  {gate:<14} {ip:<14} {zone:<12} ({source})"));
         }
     }
 
     let data: Vec<serde_json::Value> = gates
         .iter()
         .filter_map(|g| {
-            mesh_address(g).map(|ip| {
+            let ip = manifest
+                .as_ref()
+                .and_then(|m| m.mesh_ip_for(g))
+                .or_else(|| mesh_address(g).map(String::from));
+            ip.map(|ip| {
                 serde_json::json!({
                     "gate": g,
                     "ip": ip,
