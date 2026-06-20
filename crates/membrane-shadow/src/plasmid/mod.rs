@@ -37,24 +37,22 @@ pub use depot::{StalenessEntry, StalenessReport};
 /// Gracefully stop a process: SIGTERM → grace period → SIGKILL.
 ///
 /// Uses `/proc/{pid}/` existence check to avoid signaling stale PIDs,
-/// and spawns minimal `kill` commands for signal delivery (safe under
-/// `#![forbid(unsafe_code)]`).
+/// using `nix::sys::signal::kill` for native signal delivery.
 pub(crate) async fn graceful_kill(pid: u32, grace_ms: u64) {
-    let pid_str = pid.to_string();
+    use nix::sys::signal::{Signal, kill};
+    use nix::unistd::Pid;
+
     let proc_path = std::path::PathBuf::from(format!("/proc/{pid}"));
     if !proc_path.exists() {
         return;
     }
-    let _ = tokio::process::Command::new("kill")
-        .arg(&pid_str)
-        .output()
-        .await;
+    let Ok(nix_pid) = i32::try_from(pid).map(Pid::from_raw) else {
+        return;
+    };
+    let _ = kill(nix_pid, Signal::SIGTERM);
     tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
     if proc_path.exists() {
-        let _ = tokio::process::Command::new("kill")
-            .args(["-9", &pid_str])
-            .output()
-            .await;
+        let _ = kill(nix_pid, Signal::SIGKILL);
     }
 }
 

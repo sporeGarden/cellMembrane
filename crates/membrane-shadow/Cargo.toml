@@ -26,6 +26,7 @@ tracing-subscriber = { workspace = true }
 cellmembrane-types = { path = "../cellmembrane-types", version = "0.1" }
 sha2 = "0.11.0"
 hmac = "0.13.0"
+nix = { version = "0.29", features = ["signal"] }
 
 [dev-dependencies]
 

@@ -186,6 +186,10 @@ pub const DEFAULT_SSH_ALIAS: &str = "golgi";
 /// Default SSH alias for golgiBody external relay endpoint.
 pub const DEFAULT_SSH_ALIAS_EXT: &str = "golgi-ext";
 /// Default SSH alias for peptidoglycan trust barrier.
+///
+/// Deprecated (Wave 120): pepti node decommissioned. Build role absorbed
+/// by sporeGate sovereign CI. This constant remains as a fallback for
+/// `pepti.validate` until that command is evolved to role-based validation.
 pub const DEFAULT_PEPTI_SSH_ALIAS: &str = "pepti";
 
 /// Default `NestGate` service port.

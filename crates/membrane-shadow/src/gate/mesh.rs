@@ -24,16 +24,11 @@ pub(super) const fn transport_to_fetch_source(
 }
 
 /// Resolved gate profile fields from the ecosystem manifest.
-///
-/// Fields beyond `transport` and `mesh_peer` are staged for profile-driven
-/// bootstrap evolution (Wave 117+: composition-aware NUCLEUS, manifest mobility).
 #[derive(Default)]
 pub(super) struct GateManifestProfile {
     pub transport: GateTransport,
     pub mesh_peer: Option<String>,
-    #[allow(dead_code, reason = "staged for composition-aware NUCLEUS (Wave 117+)")]
     pub mobility: Option<String>,
-    #[allow(dead_code, reason = "staged for composition-aware NUCLEUS (Wave 117+)")]
     pub composition: Option<String>,
 }
 
@@ -82,7 +77,7 @@ pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> Bo
             detail: format!("dry-run: would mesh.init {peer_info} as {gate_name}"),
         };
     }
-    let (ok, detail) = configure_mesh(gate_name, arch, profile.mesh_peer.as_deref()).await;
+    let (ok, detail) = configure_mesh(gate_name, arch, &profile).await;
     BootstrapPhase {
         name: "mesh.configure".into(),
         ok,
@@ -105,7 +100,7 @@ fn resolve_primary_peer(manifest_peer: Option<&str>) -> String {
 async fn configure_mesh(
     gate_name: &str,
     arch: &str,
-    manifest_peer: Option<&str>,
+    profile: &GateManifestProfile,
 ) -> (bool, String) {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
@@ -140,7 +135,7 @@ async fn configure_mesh(
         );
     }
 
-    let vps_peer = resolve_primary_peer(manifest_peer);
+    let vps_peer = resolve_primary_peer(profile.mesh_peer.as_deref());
 
     let mut peers: Vec<String> = vec![vps_peer.clone()];
     if let Ok(extra) = std::env::var(cellmembrane_types::service::ENV_MESH_PEERS) {
@@ -155,6 +150,8 @@ async fn configure_mesh(
     let params = serde_json::json!({
         "node_id": gate_name,
         "peers": peers,
+        "mobility": profile.mobility,
+        "composition": profile.composition,
     });
     let request = crate::jsonrpc::request_with_params("mesh.init", &params, 1);
 
