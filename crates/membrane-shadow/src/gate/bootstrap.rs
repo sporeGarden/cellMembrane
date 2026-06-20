@@ -574,3 +574,88 @@ fn emit_deployment_toml(
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bootstrap_phase_serializes() {
+        let phase = BootstrapPhase {
+            name: "depot.fetch".into(),
+            ok: true,
+            detail: "13/13 fetched".into(),
+        };
+        let json = serde_json::to_string(&phase).unwrap();
+        assert!(json.contains("depot.fetch"));
+        assert!(json.contains("13/13"));
+    }
+
+    #[test]
+    fn bootstrap_result_all_pass() {
+        let result = BootstrapResult {
+            gate_name: "testGate".into(),
+            arch: "x86_64-unknown-linux-musl".into(),
+            phases: vec![
+                BootstrapPhase {
+                    name: "fetch".into(),
+                    ok: true,
+                    detail: "done".into(),
+                },
+                BootstrapPhase {
+                    name: "health".into(),
+                    ok: true,
+                    detail: "ok".into(),
+                },
+            ],
+            all_pass: true,
+        };
+        assert!(result.all_pass);
+        assert_eq!(result.phases.len(), 2);
+    }
+
+    #[test]
+    fn bootstrap_result_partial_failure() {
+        let result = BootstrapResult {
+            gate_name: "testGate".into(),
+            arch: "x86_64-unknown-linux-musl".into(),
+            phases: vec![
+                BootstrapPhase {
+                    name: "fetch".into(),
+                    ok: true,
+                    detail: "done".into(),
+                },
+                BootstrapPhase {
+                    name: "health".into(),
+                    ok: false,
+                    detail: "timeout after 120s".into(),
+                },
+            ],
+            all_pass: false,
+        };
+        assert!(!result.all_pass);
+        assert!(!result.phases[1].ok);
+    }
+
+    #[test]
+    fn emit_deployment_toml_dry_run() {
+        let phase = emit_deployment_toml(
+            "testGate",
+            "x86_64-unknown-linux-musl",
+            cellmembrane_types::GateMobility::Fixed,
+            true,
+            true,
+        );
+        assert!(phase.ok);
+        assert!(phase.detail.contains("dry-run"));
+        assert!(phase.detail.contains("deployment.toml"));
+    }
+
+    #[test]
+    fn phase_timeout_is_configured() {
+        assert!(
+            PHASE_TIMEOUT.as_secs() >= 60,
+            "bootstrap phase timeout should be at least 60s"
+        );
+    }
+}

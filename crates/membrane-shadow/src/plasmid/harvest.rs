@@ -178,7 +178,7 @@ fn determine_primals(
 ) -> Result<Vec<String>> {
     if let Some(name) = args.primal.as_deref() {
         if !sources.contains_key(name) {
-            return Err(ShadowError::Parse(format!(
+            return Err(ShadowError::Config(format!(
                 "'{name}' not found in sources.toml"
             )));
         }
@@ -501,5 +501,67 @@ private = true
         std::fs::create_dir_all(&tmp).unwrap();
         assert!(load_provenance(&tmp).is_none());
         std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    fn test_source_entry(repo: &str) -> SourceEntry {
+        SourceEntry {
+            repo: repo.into(),
+            private: false,
+            build_args: None,
+            binary_name: None,
+        }
+    }
+
+    #[test]
+    fn determine_primals_single_valid() {
+        let mut sources = BTreeMap::new();
+        sources.insert(
+            "beardog".to_string(),
+            test_source_entry("ecoPrimals/bearDog"),
+        );
+        let args = HarvestArgs {
+            primal: Some("beardog".into()),
+            force: false,
+            dry_run: false,
+            depot_dir: None,
+            target: None,
+        };
+        let result = determine_primals(&args, &sources).unwrap();
+        assert_eq!(result, vec!["beardog"]);
+    }
+
+    #[test]
+    fn determine_primals_single_invalid() {
+        let sources = BTreeMap::new();
+        let args = HarvestArgs {
+            primal: Some("nonexistent".into()),
+            force: false,
+            dry_run: false,
+            depot_dir: None,
+            target: None,
+        };
+        assert!(determine_primals(&args, &sources).is_err());
+    }
+
+    #[test]
+    fn determine_primals_all_filtered() {
+        let mut sources = BTreeMap::new();
+        sources.insert(
+            "beardog".to_string(),
+            test_source_entry("ecoPrimals/bearDog"),
+        );
+        sources.insert(
+            "songbird".to_string(),
+            test_source_entry("ecoPrimals/songbird"),
+        );
+        let args = HarvestArgs {
+            primal: None,
+            force: false,
+            dry_run: false,
+            depot_dir: None,
+            target: None,
+        };
+        let result = determine_primals(&args, &sources).unwrap();
+        assert!(result.contains(&"beardog".to_string()));
     }
 }

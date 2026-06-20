@@ -304,7 +304,8 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
 
 fn topology_mesh() -> ShadowOutcome {
     let gates = discover_mesh_gates();
-    let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
+    let subnet = cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET;
+    let mut lines = vec![format!("=== WireGuard Mesh ({subnet}) ===")];
 
     for gate in &gates {
         if let Some(ip) = mesh_address(gate) {

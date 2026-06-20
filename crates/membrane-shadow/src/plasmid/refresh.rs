@@ -413,4 +413,50 @@ mod tests {
         let path = resolve_refresh_source(Some("/explicit/path"));
         assert_eq!(path, PathBuf::from("/explicit/path"));
     }
+
+    #[test]
+    fn find_local_binary_direct_name() {
+        let dir = std::env::temp_dir().join("membrane-test-find-bin");
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin_path = dir.join("beardog");
+        std::fs::write(&bin_path, b"fake-elf").unwrap();
+
+        let found = find_local_binary(&dir, "beardog");
+        assert!(found.is_some());
+        assert!(found.unwrap().contains("beardog"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn find_local_binary_suffixed() {
+        let dir = std::env::temp_dir().join("membrane-test-find-bin-suffix");
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin_path = dir.join("beardog-x86_64-linux-musl");
+        std::fs::write(&bin_path, b"fake-elf").unwrap();
+
+        let found = find_local_binary(&dir, "beardog");
+        assert!(found.is_some());
+        assert!(found.unwrap().contains("x86_64-linux-musl"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn find_local_binary_missing() {
+        let dir = std::env::temp_dir().join("membrane-test-find-bin-missing");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let found = find_local_binary(&dir, "nonexistent-primal");
+        assert!(found.is_none());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn check_checksum_coherence_no_depot_returns_none() {
+        let result = check_checksum_coherence("beardog", "abc123");
+        // No depot in test env — returns None (no divergence signal)
+        assert!(result.is_none());
+    }
 }

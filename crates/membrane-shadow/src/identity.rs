@@ -72,7 +72,7 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
         }
     }
 
-    Err(ShadowError::Parse(
+    Err(ShadowError::Config(
         "cannot resolve gate identity — set GATE_NAME or create .gate file".into(),
     ))
 }
@@ -80,7 +80,7 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
 /// Async variant — reads `.gate` file via `tokio::fs` to avoid blocking the runtime.
 ///
 /// # Errors
-/// Returns `ShadowError::Parse` if no identity can be resolved.
+/// Returns `ShadowError::Config` if no identity can be resolved.
 pub async fn resolve_async(workspace_root: &Path) -> Result<GateIdentity> {
     if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
         let name = name.trim().to_string();
@@ -103,7 +103,7 @@ pub async fn resolve_async(workspace_root: &Path) -> Result<GateIdentity> {
         }
     }
 
-    Err(ShadowError::Parse(
+    Err(ShadowError::Config(
         "cannot resolve gate identity — set GATE_NAME or create .gate file".into(),
     ))
 }

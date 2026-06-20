@@ -471,3 +471,99 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     }
     paths
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_mesh_json_with_peers() {
+        let result = serde_json::json!({
+            "peers": 3,
+            "reachable": 2,
+            "relay_enabled": false
+        });
+        let (ok, detail) = parse_mesh_json(&result);
+        assert!(ok);
+        assert!(detail.contains("3 peers"));
+        assert!(detail.contains("2 reachable"));
+    }
+
+    #[test]
+    fn parse_mesh_json_hub_listening() {
+        let result = serde_json::json!({
+            "relay_enabled": true,
+            "reachable_peers": 0
+        });
+        let (ok, detail) = parse_mesh_json(&result);
+        assert!(ok, "hub should be OK even with zero peers");
+        assert!(detail.contains("hub listening"));
+    }
+
+    #[test]
+    fn parse_mesh_json_zero_everything() {
+        let result = serde_json::json!({});
+        let (ok, detail) = parse_mesh_json(&result);
+        assert!(!ok);
+        assert!(detail.contains("0 peers"));
+    }
+
+    #[test]
+    fn parse_mesh_json_peer_array() {
+        let result = serde_json::json!({
+            "peers": ["gate1", "gate2"],
+            "reachable": 1
+        });
+        let (ok, detail) = parse_mesh_json(&result);
+        assert!(ok);
+        assert!(detail.contains("2 peers"));
+    }
+
+    #[test]
+    fn parse_mesh_response_valid_jsonrpc() {
+        let resp = r#"{"jsonrpc":"2.0","result":{"peers":4,"reachable":3},"id":1}"#;
+        let (ok, detail) = parse_mesh_response(resp);
+        assert!(ok);
+        assert!(detail.contains("4 peers"));
+        assert!(detail.contains("3 reachable"));
+    }
+
+    #[test]
+    fn parse_mesh_response_error() {
+        let resp =
+            r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"method not found"},"id":1}"#;
+        let (ok, detail) = parse_mesh_response(resp);
+        assert!(!ok);
+        assert!(detail.contains("method not found"));
+    }
+
+    #[test]
+    fn parse_mesh_response_malformed_with_result_keyword() {
+        let resp = r#"not json but has "result" in it"#;
+        let (ok, detail) = parse_mesh_response(resp);
+        assert!(ok);
+        assert_eq!(detail, "mesh responding");
+    }
+
+    #[test]
+    fn parse_mesh_response_malformed_no_result() {
+        let resp = "garbage data";
+        let (ok, detail) = parse_mesh_response(resp);
+        assert!(!ok);
+        assert!(detail.contains("unexpected"));
+    }
+
+    #[test]
+    fn resolve_primal_socket_paths_includes_socket_base() {
+        let paths = resolve_primal_socket_paths("beardog");
+        assert!(paths.iter().any(|p| p.contains("beardog.sock")));
+        assert!(paths.len() >= 2);
+    }
+
+    #[test]
+    fn resolve_uid_returns_non_empty() {
+        let uid = resolve_uid();
+        assert!(!uid.is_empty());
+        assert!(uid.parse::<u32>().is_ok(), "UID should be numeric");
+    }
+}

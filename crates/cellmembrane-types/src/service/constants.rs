@@ -116,6 +116,8 @@ pub const DEFAULT_WAN_IFACE: &str = "enp1s0";
 pub const DEFAULT_LAN_IFACE: &str = "eno1";
 /// Default LAN subnet CIDR.
 pub const DEFAULT_LAN_SUBNET: &str = "192.168.4.0/22";
+/// Default `WireGuard` mesh subnet CIDR.
+pub const DEFAULT_WG_MESH_SUBNET: &str = "10.13.37.0/24";
 /// Default systemd unit directory.
 pub const SYSTEMD_UNIT_DIR: &str = "/etc/systemd/system";
 /// Default secrets environment file path.
