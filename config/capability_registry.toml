@@ -37,6 +37,40 @@ gate_profile = { protocol = "cli", description = "Read gate profile from ecosyst
 ndk_check = { protocol = "cli", description = "Verify NDK toolchain for aarch64-linux-android cross-compilation" }
 harvest_android = { protocol = "cli", description = "plasmid.harvest --target aarch64-linux-android (NDK cross-compile pipeline)" }
 
+# Webhook cascade
+webhook_receive = { protocol = "http", description = "Receive push events from Forgejo/GitHub webhooks" }
+webhook_test = { protocol = "cli", description = "Test webhook event processing with sample JSON" }
+webhook_verify = { protocol = "cli", description = "Verify webhook HMAC signature" }
+
+# Depot integrity
+depot_integrity = { protocol = "cli", description = "Generate/verify BLAKE3 checksums for depot binaries" }
+
+# Sandbox + canary lifecycle
+plasmid_sandbox = { protocol = "cli", description = "Ephemeral isolated binary validation (UDS probe)" }
+plasmid_canary_list = { protocol = "cli", description = "List canary pool state (previous-good binaries)" }
+plasmid_canary_health = { protocol = "cli", description = "Health-check all canary instances" }
+plasmid_canary_promote = { protocol = "cli", description = "Rollback: canary → production" }
+
+# Rootpulse sovereignty
+rootpulse_commit = { protocol = "cli", description = "Commit cascade state to rootPulse ledger" }
+rootpulse_verify = { protocol = "cli", description = "Verify sovereignty across mesh gates" }
+rootpulse_status = { protocol = "cli", description = "Report rootPulse session state" }
+
+# Preflight + firewall
+gate_preflight = { protocol = "cli", description = "Pre-bootstrap port/service/network checks" }
+firewall_generate = { protocol = "cli", description = "Generate nftables/UFW rules from composition" }
+
+# Caddy TLS management
+caddy_status = { protocol = "ssh", description = "VPS Caddy health + vhosts + TLS status" }
+caddy_depot_provision = { protocol = "ssh", description = "Provision /depot/ HTTPS file server" }
+caddy_tls_check = { protocol = "ssh", description = "Check TLS certificate status for domain" }
+
+# Provision (DigitalOcean)
+provision_create = { protocol = "api", description = "Create new droplet for gate deployment" }
+provision_destroy = { protocol = "api", description = "Destroy provisioned droplet" }
+provision_list = { protocol = "api", description = "List membrane-tagged droplets" }
+provision_bootstrap = { protocol = "ssh", description = "Remote OS hardening + NUCLEUS install" }
+
 # K-Derm relay chain
 relay_mediate = { protocol = "ssh", description = "Inner→outer membrane relay (Forgejo→GitHub sync)" }
 relay_ship = { protocol = "ssh", description = "Push repos from inner to outer membrane" }

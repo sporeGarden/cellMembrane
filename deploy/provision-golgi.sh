@@ -1,5 +1,8 @@
 #!/bin/bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# DEPRECATED (Wave 119+): Use `membrane gate.bootstrap <gate> --mobile` instead.
+# Retained as fossil record — do not use operationally.
+#
 # provision-golgi.sh — One-shot provisioning for mobile golgi NUCs
 #
 # Usage: sudo ./provision-golgi.sh <gate-name>

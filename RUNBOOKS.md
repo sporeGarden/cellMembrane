@@ -1,10 +1,10 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (ironGate team)
-**Last updated:** 2026-06-19 (Wave 118)
+**Last updated:** 2026-06-20 (Wave 119+)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
-> **Note (Wave 118):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
+> **Note (Wave 119+):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
 > for all operational flows. Use: `membrane gate.status` (health), `membrane gate.bootstrap`
 > (enrollment), `membrane plasmid.refresh` (binary push), `membrane temporal.cascade`
 > (sync), `membrane rootpulse.status` (sovereignty). Legacy `deploy_membrane.sh`
@@ -26,15 +26,16 @@
 10. [Emergency Procedures](#10-emergency-procedures)
 11. [Self-Hosted GitHub Actions Runner](#11-self-hosted-github-actions-runner)
 12. [Sandbox Validation + Canary Pool](#12-sandbox-validation--canary-pool-wave-110)
+13. [Mesh Join — Gate as Plasmodium Gate](#13-mesh-join--gate-as-plasmodium-gate)
 
 ---
 
 ## 1. Daily Health Check
 
 ```bash
-# Full status via deploy script
-cd ../../infra/plasmidBin
-./deploy_membrane.sh status root@$VPS_IP
+# Full status via membrane CLI
+membrane gate.health
+membrane gate.status
 
 # Quick manual check
 ssh root@$VPS_IP "
@@ -463,7 +464,7 @@ GitHub. Evolving these to raw git + direct upload is future work.
 
 ---
 
-## 12. Mesh Join — ironGate as Plasmodium Gate
+## 13. Mesh Join — Gate as Plasmodium Gate
 
 ### Prerequisites
 

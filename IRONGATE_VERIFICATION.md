@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 118 (deep debt consolidation, topology convergence, 2026-06-19)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh, capability-based registry, riboCipher transport signals, rootpulse sovereignty pipeline, webhook cascade wiring
+**Last validated:** Wave 119+ (native detection evolution, error normalization, 2026-06-20)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh, capability-based registry, riboCipher transport signals, rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection
 
 ---
 

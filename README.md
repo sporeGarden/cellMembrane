@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 118) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 119+) |
 
 ---
 
@@ -55,10 +55,17 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 680 tests — pedantic clippy clean
+cargo test                  # 711 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 119+ (Native Detection + Error Normalization):**
+Shell-outs evolved to native Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs +
+`/proc/net/route`, `systemctl is-active` → cgroup detection. `ShadowError::Parse` normalized
+to `Config`/`Ssh`/`Io` across 29 files (22 genuine `Parse` remain). `.expect()` →
+`let-else + unreachable!()` in ribocipher. `PLASMID_BIN_DIR` constant eliminates 8 hardcoded
+literals. `reqwest` errors use `?` via `From` impl. 711 tests, zero clippy.
 
 **Wave 116–118 (Deep Debt Evolution + Topology Convergence):**
 Webhook cascade wiring (Forgejo→`temporal.sync`, GitHub→`relay.mediate`). Manifest-driven
@@ -68,7 +75,7 @@ Git ops centralized through `git_ops.rs` (`git_output_opt`, `head_short`). `curr
 deduplicated into canonical `freshness.rs` helper. Gate identity unified through
 `identity::resolve()` with `tracing::warn!` on fallback. All hardcoded `infra/*` paths replaced
 with constants. `CytoplasmZone` split to `cytoplasm.rs` with `ZoneLabel` + `BOOTSTRAP_GATES`.
-Topology-aware mesh discovery. 680 tests, zero clippy, all files under 600L.
+Topology-aware mesh discovery. 680 tests, zero clippy.
 
 **Wave 115 (Sovereign Mesh & Gate Hardening):**
 `gate.bootstrap` per-phase timeouts, identity detection, depot integrity, bootstrap smart
@@ -192,6 +199,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Bootstrap robustness + depot integrity (Wave 115): per-phase timeouts, identity detection, depot.integrity command, bootstrap 861→555L smart refactor, spawn_blocking for fs ops, 514 tests | DONE |
 | Gate enrollment + topology convergence (Wave 116): preflight checks, InterfaceRole, ARP probes, CytoplasmZone→ZoneLabel split, topology-aware mesh, 5-node WG mesh, 620 tests | DONE |
 | Deep debt consolidation (Wave 116–118): webhook cascade wiring, rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos, current_wave dedup, identity unification, hardcoded path constants, 680 tests | DONE |
+| Native evolution (Wave 119+): ss→/proc/net, ip→sysfs, systemctl→cgroup, ShadowError normalization (Parse→Config/Ssh/Io), .expect()→let-else+unreachable, PLASMID_BIN_DIR constant, reqwest From impl, 711 tests | DONE |
 
 ---
 
@@ -309,7 +317,7 @@ gardens/cellMembrane/
           mesh.rs             # Mesh peer configuration (transport, songbird UDS)
           nucleus.rs          # NUCLEUS systemd management (unit generation, secrets)
           local.rs            # Shared helpers (identity via identity::resolve, depot paths)
-          interface.rs        # Network interface detection (ip link/addr)
+          interface.rs        # Network interface detection (sysfs + /proc/net)
           preflight.rs        # Pre-bootstrap checks (ports, services, ARP)
           sovereignty.rs      # Sovereignty verification probes
         relay.rs              # K-Derm relay chain (SSH+cat, no rsync)

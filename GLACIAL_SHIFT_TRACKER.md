@@ -1,15 +1,17 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-18 (Wave 116d)
+**Last updated:** 2026-06-20 (Wave 119+)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
-**Wave 116d update (Cross-team integration + continued type evolution):** Fixed P0
-topology dispatch collision (duplicate match arm making TOPOLOGY_MAP dead code), renamed
-`topology::CytoplasmZone` struct → `PhysicalZone` to resolve name collision with enum.
-Merged physical zone enrichment into `topology.resolve`. Typed `kderm_role` as
-`EnvelopeLayer`. Wired `INFRA_WATERING_HOLE` + `TOPOLOGY_MAP_FILENAME` constants.
-Fixed sovereignty ledger socket name to match bridge convention. 620 tests, 0 clippy.
-Per-gate agentic FRAGO pushed to wateringHole. 562 tests, zero warnings.
+**Wave 119+ update (Native Detection + Error Normalization):** Shell-outs evolved to native
+Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs + `/proc/net/route`, `systemctl
+is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ssh`/`Io` across
+29 files (22 genuine `Parse` remain). `.expect()` → `let-else + unreachable!()` in ribocipher.
+`PLASMID_BIN_DIR` constant eliminates 8 hardcoded literals. 711 tests, zero clippy.
+**Wave 116–118 update (Deep Debt + Topology Convergence):** Webhook cascade wiring,
+rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos,
+identity unification, hardcoded path constants. 680 tests. Fixed P0 topology dispatch
+collision. 620 tests → 680 → 711.
 **Wave 116 update (Gate Enrollment Pipeline):** Fresh binary rebuilt from `11a7c68` with
 ARP probe fix (uses detected LAN interface, not loopback). `InterfaceRole` Display impl
 for clean preflight output. Gate enrollment pipeline validated: `gate.preflight`,

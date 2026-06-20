@@ -1,5 +1,8 @@
 # Experiment 001: NUCLEUS Full Deploy to VPS — Validated
 
+> **Fossil record (Wave 59).** Operational flows have been replaced by the `membrane`
+> Rust CLI. Open checklists below reflect Wave 59 state — do not use operationally.
+
 **Date:** May 28, 2026 (Wave 59)
 **VPS:** membrane-relay, $VPS_IP, DigitalOcean nyc1
 **Composition:** NUCLEUS (13 primals + RustDesk + Caddy + knot-dns = 17 services)
