@@ -61,13 +61,21 @@ pub enum HarvestStatus {
 /// Source entry from `sources.toml`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SourceEntry {
+    /// Repository path (e.g. `ecoPrimals/bearDog`).
     pub repo: String,
+    /// Whether this is a private repo (SSH-only access).
     #[serde(default)]
     pub private: bool,
+    /// Additional cargo build arguments.
     #[serde(default)]
     pub build_args: Option<String>,
+    /// Override binary name (when it differs from primal name).
     #[serde(default)]
     pub binary_name: Option<String>,
+    /// Whether this primal needs a glibc build for GPU/dlopen access.
+    /// When true, harvest builds both musl and gnu targets.
+    #[serde(default)]
+    pub gpu: bool,
 }
 
 /// Provenance entry from `provenance.toml`.
@@ -110,16 +118,38 @@ pub struct ChecksumEntry {
     pub size: u64,
 }
 
+/// Compute which target triples to build for a given primal.
+/// If CLI overrides target, use that. Otherwise: default host triple,
+/// plus gnu triple if the source is marked `gpu = true`.
+fn targets_for_primal(cli_target: Option<&str>, source: &SourceEntry) -> Vec<String> {
+    if let Some(t) = cli_target {
+        return vec![t.to_string()];
+    }
+    let mut targets = vec![detect_target_triple()];
+    if source.gpu && cfg!(target_arch = "x86_64") {
+        let gnu = cellmembrane_types::TargetArch::X86_64Gnu
+            .triple()
+            .to_string();
+        if !targets.contains(&gnu) {
+            targets.push(gnu);
+        }
+    }
+    targets
+}
+
 /// Harvest primals: detect changes, build, checksum, stage.
+///
+/// For GPU primals (`source.gpu = true`), builds both musl and gnu targets
+/// so gates with GPU hardware can run CUDA/Vulkan workloads via `dlopen`.
 pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     let depot_dir = resolve_depot(args.depot_dir.as_deref())?;
     let sources = load_sources(&depot_dir)?;
     let provenance = load_provenance(&depot_dir);
-    let target = args.target.clone().unwrap_or_else(detect_target_triple);
 
     let primals_to_harvest = determine_primals(args, &sources)?;
 
     let mut results: Vec<HarvestResult> = Vec::new();
+    let mut targets_built: Vec<String> = Vec::new();
 
     for primal in &primals_to_harvest {
         let Some(source) = sources.get(primal.as_str()) else {
@@ -143,17 +173,26 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             continue;
         }
 
-        if args.dry_run {
-            results.push(HarvestResult {
-                binary: primal.clone(),
-                status: HarvestStatus::Built,
-                detail: format!("dry-run: would clone {} and build", source.repo),
-            });
-            continue;
-        }
+        let targets = targets_for_primal(args.target.as_deref(), source);
+        for target in &targets {
+            if args.dry_run {
+                results.push(HarvestResult {
+                    binary: primal.clone(),
+                    status: HarvestStatus::Built,
+                    detail: format!(
+                        "dry-run: would clone {} and build for {target}",
+                        source.repo
+                    ),
+                });
+                continue;
+            }
 
-        let result = harvest_one(primal, source, &target, &depot_dir).await;
-        results.push(result);
+            let result = harvest_one(primal, source, target, &depot_dir).await;
+            if matches!(result.status, HarvestStatus::Built) && !targets_built.contains(target) {
+                targets_built.push(target.clone());
+            }
+            results.push(result);
+        }
     }
 
     if !args.dry_run {
@@ -162,8 +201,17 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             .filter(|r| matches!(r.status, HarvestStatus::Built))
             .collect();
         if !built.is_empty() {
-            if let Err(e) = update_depot_metadata(&depot_dir, &target, &built).await {
-                warn!(error = %e, "failed to update depot metadata");
+            for target in &targets_built {
+                let arch_results: Vec<&HarvestResult> = built
+                    .iter()
+                    .copied()
+                    .filter(|r| r.detail.contains(target))
+                    .collect();
+                if !arch_results.is_empty() {
+                    if let Err(e) = update_depot_metadata(&depot_dir, target, &arch_results).await {
+                        warn!(target, error = %e, "failed to update depot metadata");
+                    }
+                }
             }
             drift::publish_depot_checksums(&depot_dir).await;
         }
@@ -507,6 +555,7 @@ private = true
             private: false,
             build_args: None,
             binary_name: None,
+            gpu: false,
         }
     }
 
@@ -561,5 +610,55 @@ private = true
         };
         let result = determine_primals(&args, &sources).unwrap();
         assert!(result.contains(&"beardog".to_string()));
+    }
+
+    #[test]
+    fn targets_for_regular_primal() {
+        let source = test_source_entry("ecoPrimals/bearDog");
+        let targets = targets_for_primal(None, &source);
+        assert_eq!(targets.len(), 1);
+        assert!(targets[0].contains("musl"));
+    }
+
+    #[test]
+    fn targets_for_gpu_primal() {
+        let mut source = test_source_entry("ecoPrimals/barracuda");
+        source.gpu = true;
+        let targets = targets_for_primal(None, &source);
+        if cfg!(target_arch = "x86_64") {
+            assert_eq!(targets.len(), 2);
+            assert!(targets[0].contains("musl"));
+            assert!(targets[1].contains("gnu"));
+        }
+    }
+
+    #[test]
+    fn targets_cli_override_ignores_gpu() {
+        let mut source = test_source_entry("ecoPrimals/barracuda");
+        source.gpu = true;
+        let targets = targets_for_primal(Some("aarch64-unknown-linux-musl"), &source);
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0], "aarch64-unknown-linux-musl");
+    }
+
+    #[test]
+    fn source_entry_gpu_defaults_false() {
+        let toml_str = r#"
+[sources.beardog]
+repo = "ecoPrimals/bearDog"
+"#;
+        let parsed: super::super::depot::SourcesFile = toml::from_str(toml_str).unwrap();
+        assert!(!parsed.sources["beardog"].gpu);
+    }
+
+    #[test]
+    fn source_entry_gpu_parses() {
+        let toml_str = r#"
+[sources.barracuda]
+repo = "ecoPrimals/barracuda"
+gpu = true
+"#;
+        let parsed: super::super::depot::SourcesFile = toml::from_str(toml_str).unwrap();
+        assert!(parsed.sources["barracuda"].gpu);
     }
 }

@@ -30,7 +30,7 @@ pub enum ShadowError {
     Http(#[from] reqwest::Error),
 
     /// No Forgejo token available.
-    #[error("no forgejo token: set FORGEJO_TOKEN or create ~/.config/forgejo/token")]
+    #[error("no forgejo token: set FORGEJO_TOKEN env var (file-based tokens deprecated Wave 121)")]
     NoToken,
 
     /// Failed to parse response from VPS or API.

@@ -22,6 +22,8 @@ const ELF_MAGIC: [u8; 4] = [0x7f, b'E', b'L', b'F'];
 /// Validate the ELF binary matches the expected target architecture (BUILD-ELF-01).
 ///
 /// Reads ELF headers directly (no external `file` command dependency).
+/// For musl targets: also verifies static linkage (no `PT_INTERP` / `DT_NEEDED`).
+/// For gnu targets: allows dynamic linking (GPU primals need `dlopen` for CUDA/Vulkan).
 pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Result<(), String> {
     let data = tokio::fs::read(bin_path)
         .await

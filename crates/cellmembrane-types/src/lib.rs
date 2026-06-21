@@ -32,6 +32,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod arch;
 pub mod caddy;
 pub mod channels;
 pub mod composition;
@@ -51,6 +52,7 @@ pub mod transport;
 pub mod validation;
 pub mod wireguard;
 
+pub use arch::{GPU_PRIMALS, TargetArch, is_gpu_primal};
 pub use caddy::{CaddyConfig, CaddyVhost};
 pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, TrustLevel};
 pub use composition::{CompositionSpec, MembraneComposition};

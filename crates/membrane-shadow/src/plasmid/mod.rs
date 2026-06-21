@@ -92,16 +92,11 @@ pub(crate) fn nucleus_primals() -> Vec<&'static str> {
         .collect()
 }
 
-/// Detect the local platform's Rust target triple.
+/// Detect the local platform's default Rust target triple (musl static).
 pub(crate) fn detect_target_triple() -> String {
-    let arch = if cfg!(target_arch = "x86_64") {
-        "x86_64"
-    } else if cfg!(target_arch = "aarch64") {
-        "aarch64"
-    } else {
-        "unknown"
-    };
-    format!("{arch}-unknown-linux-musl")
+    cellmembrane_types::TargetArch::detect_host()
+        .triple()
+        .to_string()
 }
 
 /// Check NDK toolchain availability for Android cross-compilation.

@@ -323,14 +323,17 @@ fn check_checksum_coherence(primal: &str, actual_hash: &str) -> Option<String> {
 }
 
 /// Find a local binary for a primal in the source directory.
+/// Checks bare name first, then arch-suffixed variants (musl and gnu).
 fn find_local_binary(source_dir: &Path, primal: &str) -> Option<String> {
     let direct = source_dir.join(primal);
     if direct.is_file() {
         return Some(direct.to_string_lossy().into_owned());
     }
-    let suffixed = source_dir.join(format!("{primal}-x86_64-linux-musl"));
-    if suffixed.is_file() {
-        return Some(suffixed.to_string_lossy().into_owned());
+    for suffix in ["x86_64-linux-musl", "x86_64-linux-gnu"] {
+        let suffixed = source_dir.join(format!("{primal}-{suffix}"));
+        if suffixed.is_file() {
+            return Some(suffixed.to_string_lossy().into_owned());
+        }
     }
     None
 }

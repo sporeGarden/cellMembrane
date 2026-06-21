@@ -78,7 +78,7 @@ fn binary_integrity_relay_has_songbird() {
         songbird.hash_algorithm,
         cellmembrane_types::service::HashAlgorithm::Blake3
     );
-    assert!(songbird.require_static_musl);
+    assert!(songbird.require_static);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn binary_integrity_symbiotic_use_sha256() {
             cellmembrane_types::service::HashAlgorithm::Sha256,
             "Symbiotic {sym} should use SHA-256"
         );
-        assert!(!entry.unwrap().require_static_musl);
+        assert!(!entry.unwrap().require_static);
     }
 }
 

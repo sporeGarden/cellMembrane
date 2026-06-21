@@ -126,6 +126,9 @@ pub struct FetchSummary {
 
 /// Execute a full plasmid fetch operation.
 ///
+/// Fetches musl binaries for all primals. Additionally fetches gnu binaries
+/// for GPU primals (`barracuda`, `coralreef`) when the gate needs GPU support.
+///
 /// # Errors
 ///
 /// Returns `Err` on IO failures or if the release tag cannot be resolved.
@@ -169,7 +172,13 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
             }
         }
     }
-    let results = fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
+    let mut results =
+        fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
+
+    if should_fetch_gpu(&primals) {
+        let gnu_results = fetch_gpu_primals(&primals, &dest_root, &tag, args, config).await;
+        results.extend(gnu_results);
+    }
 
     Ok(format_fetch_outcome(
         args.source,
@@ -178,6 +187,50 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         &bin_dir,
         &results,
     ))
+}
+
+/// Whether any requested primals need GPU (gnu) builds.
+fn should_fetch_gpu(primals: &[&str]) -> bool {
+    primals
+        .iter()
+        .any(|p| cellmembrane_types::arch::is_gpu_primal(p))
+}
+
+/// Fetch gnu-target binaries for GPU primals into a parallel depot directory.
+async fn fetch_gpu_primals(
+    primals: &[&str],
+    dest_root: &Path,
+    tag: &str,
+    args: &FetchArgs,
+    config: &crate::ShadowConfig,
+) -> Vec<FetchResult> {
+    let gnu_arch = cellmembrane_types::TargetArch::X86_64Gnu.triple();
+    let gnu_bin_dir = dest_root.join("primals").join(gnu_arch);
+    if tokio::fs::create_dir_all(&gnu_bin_dir).await.is_err() {
+        return Vec::new();
+    }
+
+    let gpu_primals: Vec<&str> = primals
+        .iter()
+        .copied()
+        .filter(|p| cellmembrane_types::arch::is_gpu_primal(p))
+        .collect();
+
+    if gpu_primals.is_empty() {
+        return Vec::new();
+    }
+
+    let checksums = checksum::fetch_wan_checksums(gnu_arch).await;
+    fetch_primals(
+        &gpu_primals,
+        &gnu_bin_dir,
+        gnu_arch,
+        tag,
+        &checksums,
+        args,
+        config,
+    )
+    .await
 }
 
 // ── Path resolution ──────────────────────────────────────────────────────────

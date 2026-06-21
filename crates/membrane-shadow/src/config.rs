@@ -193,7 +193,11 @@ fn extract_overrides(parsed: &toml::Table) -> TomlOverrides {
     }
 }
 
-/// Resolve Forgejo token from env or file.
+/// Resolve Forgejo API token from environment.
+///
+/// Token priority: `FORGEJO_TOKEN` env var only.
+/// File-based token (`~/.config/forgejo/token`) deprecated (Wave 121) —
+/// all git operations use SSH keys; API tokens managed by bearDog BTSP when ready.
 async fn resolve_token() -> Option<String> {
     if let Ok(token) = std::env::var(cellmembrane_types::service::ENV_FORGEJO_TOKEN) {
         if !token.is_empty() {
@@ -203,9 +207,17 @@ async fn resolve_token() -> Option<String> {
 
     let home = std::env::var(cellmembrane_types::service::ENV_HOME).ok()?;
     let path = format!("{home}/.config/forgejo/token");
-    let token = tokio::fs::read_to_string(&path).await.ok()?;
-    let token = token.trim().to_string();
-    if token.is_empty() { None } else { Some(token) }
+    if let Ok(token) = tokio::fs::read_to_string(&path).await {
+        let token = token.trim().to_string();
+        if !token.is_empty() {
+            tracing::warn!(
+                "using deprecated file-based Forgejo token from {path} — \
+                 migrate to FORGEJO_TOKEN env var or bearDog BTSP auth"
+            );
+            return Some(token);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

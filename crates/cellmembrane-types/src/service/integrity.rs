@@ -17,8 +17,9 @@ pub struct BinaryIntegrity {
     pub install_path: String,
     /// Hash algorithm used for verification.
     pub hash_algorithm: HashAlgorithm,
-    /// Whether the binary must be a static musl ELF (stripped).
-    pub require_static_musl: bool,
+    /// Whether the binary must be statically linked (musl targets).
+    /// False for gnu targets that need dlopen (GPU primals).
+    pub require_static: bool,
 }
 
 /// Hash algorithm for binary verification.
@@ -58,7 +59,7 @@ pub fn binary_integrity_for_paths(
                 binary: svc.binary,
                 install_path: paths.install_path(svc),
                 hash_algorithm: HashAlgorithm::Blake3,
-                require_static_musl: true,
+                require_static: !crate::arch::is_gpu_primal(primal),
             });
         }
     }
@@ -69,7 +70,7 @@ pub fn binary_integrity_for_paths(
                 binary: svc.binary,
                 install_path: paths.install_path(svc),
                 hash_algorithm: HashAlgorithm::Sha256,
-                require_static_musl: false,
+                require_static: false,
             });
         }
     }
@@ -94,7 +95,7 @@ mod tests {
         let paths = ServicePaths::from_env();
         let entries = binary_integrity_for_paths(MembraneComposition::Relay, &paths);
         for entry in &entries {
-            if entry.require_static_musl {
+            if entry.require_static {
                 assert_eq!(
                     entry.hash_algorithm,
                     HashAlgorithm::Blake3,

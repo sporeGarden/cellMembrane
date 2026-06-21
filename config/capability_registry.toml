@@ -37,6 +37,7 @@ plasmid_build = { protocol = "cli", description = "guideStone-grade single-prima
 gate_profile = { protocol = "cli", description = "Read gate profile from ecosystem_manifest.toml" }
 ndk_check = { protocol = "cli", description = "Verify NDK toolchain for aarch64-linux-android cross-compilation" }
 harvest_android = { protocol = "cli", description = "plasmid.harvest --target aarch64-linux-android (NDK cross-compile pipeline)" }
+harvest_gnu = { protocol = "cli", description = "Dual-target depot — GPU primals built as x86_64-unknown-linux-gnu alongside musl" }
 
 # Webhook cascade
 webhook_receive = { protocol = "http", description = "Receive push events from Forgejo/GitHub webhooks" }
