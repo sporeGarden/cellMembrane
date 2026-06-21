@@ -1,10 +1,9 @@
 # cellMembrane reference configuration
-# Wave 120: 3-tier diesel engine + identity-based service discovery + config generation
-# Inner membrane (golgiBody): Forgejo, NUCLEUS 13/13, sovereign services
-# Peptidoglycan (pepti): Build hub, workspace, temporal sync convergence
-# Outer membrane (golgiBody-ext): sporePrint hosting, TURN relay, public-facing
-# WireGuard mesh: 5-node (golgi .1, sporeGate .2, pepti .4, eastGate .5, flockGate .6)
-# Canary (fieldMouse): Warm standby droplet, previous-good binaries, auto-failover
+# Wave 120: sole VPS + identity-based service discovery + config generation
+# golgi (sole VPS): Forgejo, WG hub, relay, depot, NUCLEUS 18 svc, sovereign CI
+# WireGuard mesh: 4-node (golgi .1, sporeGate .2, eastGate .5, flockGate .6)
+# pepti decommissioned (Wave 120) — build role absorbed by sporeGate sovereign CI
+# golgiBody-ext consolidated into golgi (Wave 120)
 
 [membrane]
 name = "membrane-relay"
@@ -22,30 +21,19 @@ type = "digitalocean"
 region = "nyc1"
 size = "s-1vcpu-2gb"
 
-# Inner membrane — sovereign periplasm
+# Sole VPS — consolidated golgi (inner + outer membrane functions)
 [membrane.layers.inner]
-host = "golgiBody"
+host = "golgi"
 ssh_alias = "golgi"
 ip = "157.230.3.183"
 size = "s-1vcpu-2gb"
-services = ["forgejo", "nucleus-primals", "knot-dns", "btsp-auth"]
-bond_types = ["covalent", "metallic"]
+services = ["forgejo", "nucleus-primals", "knot-dns", "btsp-auth", "caddy-tls", "turn-relay", "rustdesk", "wan-depot"]
+bond_types = ["covalent", "metallic", "ionic"]
 
-# Peptidoglycan — structural sync layer
-[membrane.layers.peptidoglycan]
-host = "peptidoglycan"
-ip = "157.230.209.218"
-size = "s-2vcpu-4gb"
-services = ["workspace", "builds", "temporal-sync", "membrane-binary"]
-bond_types = ["metallic"]
-
-# Outer membrane — public-facing
-[membrane.layers.outer]
-host = "golgiBody-ext"
-ip = "137.184.197.151"
-size = "s-1vcpu-2gb"
-services = ["caddy-tls", "sporeprint", "turn-relay", "rustdesk"]
-bond_types = ["ionic", "weak"]
+# Peptidoglycan layer (composition concept — not a physical host)
+# pepti node decommissioned Wave 120; build role → sporeGate sovereign CI
+# Retained as K-Derm layer reference (see MEMBRANE_COMPOSITION_MODEL.md)
+# [membrane.layers.peptidoglycan]  # DECOMMISSIONED
 
 [membrane.channels.signal]
 enabled = true

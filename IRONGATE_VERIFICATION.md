@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 119+ (native detection evolution, error normalization, 2026-06-20)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh, capability-based registry, riboCipher transport signals, rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection
+**Last validated:** Wave 120 (deployment isomorphism, deep debt sweep, pipeline dedupe, 2026-06-21)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 4-node WG mesh (golgi/sporeGate/eastGate/flockGate), capability-based registry, riboCipher transport signals, rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation
 
 ---
 
@@ -86,7 +86,7 @@ ironGate owns:
 - knot-dns zone management + NS cutover coordination
 - plasmidBin — binary harvesting, checksums, CI, refresh cycles
 - VPS deployment ops — systemd, bridges, firewall
-- Peptidoglycan self-refresh evolution
+- Sovereign CI pipeline (sporeGate build authority)
 
 projectNUCLEUS retains:
 - Architecture standards
