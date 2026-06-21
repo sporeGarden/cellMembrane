@@ -218,6 +218,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Native evolution (Wave 119+): ss→/proc/net, ip→sysfs, systemctl→cgroup, ShadowError normalization (Parse→Config/Ssh/Io), .expect()→let-else+unreachable, PLASMID_BIN_DIR constant, reqwest From impl, 711 tests | DONE |
 | Deployment isomorphism (Wave 120): topology.service identity-based discovery, manifest-driven mesh IP (wg_ip), WireGuard config generation, Caddyfile generation from roles, topology.roles command, pepti decommission, 729 tests | DONE |
 | Deep debt sweep (Wave 120): `.leak()` → owned String, HEALTH_REQUEST const, TOML parse warnings, CanaryStalenessReport rename, derived Ord, mesh parsing dedupe, `format_resolved` test-only, 731 tests | DONE |
+| Pipeline dedupe (Wave 120): build/harvest unified — shared `stage_to_depot_async`, `drift::clone_source`, `git_ops::head_short`. Service port constants (`DEFAULT_FORGEJO_HTTP_PORT`, `DEFAULT_DEPOT_HTTP_PORT`). BLAKE3 hash failure sentinel, 731 tests | DONE |
 
 ---
 

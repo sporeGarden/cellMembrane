@@ -65,7 +65,10 @@ pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
 pub(crate) async fn compute_blake3_file_async(path: std::path::PathBuf) -> String {
     tokio::task::spawn_blocking(move || depot::compute_blake3_file(&path))
         .await
-        .unwrap_or_default()
+        .unwrap_or_else(|e| {
+            tracing::error!(error = %e, "BLAKE3 hash task panicked — returning sentinel");
+            "HASH_FAILED".into()
+        })
 }
 
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.

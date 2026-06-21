@@ -293,9 +293,10 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
                     .as_deref()
                     .or_else(|| cellmembrane_types::cytoplasm::mesh_address(forgejo_gates[0].0))
                     .unwrap_or(inner_ip.as_str());
+                let forgejo_port = cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT;
                 vhosts.push(CaddyVhost {
                     domain: "git.primals.eco".into(),
-                    upstream: format!("{forgejo_ip}:3000"),
+                    upstream: format!("{forgejo_ip}:{forgejo_port}"),
                     path: None,
                     tls: true,
                     extra_directives: vec![],
@@ -310,9 +311,10 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
                     .as_deref()
                     .or_else(|| cellmembrane_types::cytoplasm::mesh_address(depot_gates[0].0))
                     .unwrap_or(inner_ip.as_str());
+                let depot_port = cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT;
                 vhosts.push(CaddyVhost {
                     domain: "depot.primals.eco".into(),
-                    upstream: format!("{depot_ip}:8080"),
+                    upstream: format!("{depot_ip}:{depot_port}"),
                     path: None,
                     tls: true,
                     extra_directives: vec![],
@@ -327,9 +329,10 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
                     .as_deref()
                     .or_else(|| cellmembrane_types::cytoplasm::mesh_address(relay_gates[0].0))
                     .unwrap_or(inner_ip.as_str());
+                let fed_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
                 vhosts.push(CaddyVhost {
                     domain: "mesh.primal.eco".into(),
-                    upstream: format!("{relay_ip}:7700"),
+                    upstream: format!("{relay_ip}:{fed_port}"),
                     path: None,
                     tls: true,
                     extra_directives: vec![],

@@ -122,12 +122,6 @@ pub(super) async fn check_clone_freshness(
     }
 }
 
-pub(super) async fn get_local_head(repo_dir: &Path) -> Option<String> {
-    crate::git_ops::git_output(repo_dir, &["rev-parse", "--short=8", "HEAD"])
-        .await
-        .ok()
-}
-
 /// Commit and push updated checksums.toml + provenance.toml to git.
 /// Non-fatal — harvest succeeds even if git publish fails.
 pub(super) async fn publish_depot_checksums(depot_dir: &Path) {

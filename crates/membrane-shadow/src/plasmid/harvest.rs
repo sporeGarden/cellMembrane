@@ -217,7 +217,9 @@ async fn harvest_one(
         };
     }
 
-    let head_commit = drift::get_local_head(&clone_dir).await.unwrap_or_default();
+    let head_commit = crate::git_ops::head_short(&clone_dir)
+        .await
+        .unwrap_or_default();
 
     if let Some(warning) =
         drift::check_clone_freshness(primal, source, &clone_dir, &head_commit).await
@@ -259,17 +261,7 @@ async fn harvest_one(
 
     toolchain::strip_binary(&bin_path, primal, target).await;
 
-    let primal_owned = primal.to_string();
-    let bin_path_owned = bin_path.clone();
-    let depot_owned = depot_dir.to_path_buf();
-    let target_owned = target.to_string();
-    let stage_result = tokio::task::spawn_blocking(move || {
-        stage_to_depot(&primal_owned, &bin_path_owned, &depot_owned, &target_owned)
-    })
-    .await
-    .unwrap_or_else(|_| Err("stage task panicked".into()));
-
-    match stage_result {
+    match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
             let _ = tokio::fs::remove_dir_all(&clone_dir).await;
             HarvestResult {
@@ -295,29 +287,35 @@ pub(super) use toolchain::{
     ANDROID_TARGET, ENV_ANDROID_NDK_HOME, resolve_ndk_linker, validate_elf_arch,
 };
 
-fn stage_to_depot(
+/// Async depot staging: copy binary → atomic rename → BLAKE3 checksum.
+/// Shared by both `plasmid.build` and `plasmid.harvest`.
+pub(super) async fn stage_to_depot_async(
     primal: &str,
     bin_path: &Path,
     depot_dir: &Path,
     target: &str,
 ) -> std::result::Result<(u64, String), String> {
     let staging_dir = depot_dir.join("primals").join(target);
-    if let Err(e) = std::fs::create_dir_all(&staging_dir) {
-        tracing::warn!(error = %e, dir = %staging_dir.display(), "failed to create staging directory");
-    }
+    tokio::fs::create_dir_all(&staging_dir)
+        .await
+        .map_err(|e| format!("depot staging dir create failed: {e}"))?;
     let dest = staging_dir.join(primal);
     let tmp = staging_dir.join(format!(".{primal}.new"));
 
-    std::fs::copy(bin_path, &tmp).map_err(|e| format!("copy to depot failed: {e}"))?;
-    std::fs::rename(&tmp, &dest).map_err(|e| format!("atomic rename failed: {e}"))?;
+    tokio::fs::copy(bin_path, &tmp)
+        .await
+        .map_err(|e| format!("copy to depot failed: {e}"))?;
+    tokio::fs::rename(&tmp, &dest)
+        .await
+        .map_err(|e| format!("atomic rename failed: {e}"))?;
 
-    let size = std::fs::metadata(&dest).map_or(0, |m| m.len());
-    let blake3 = compute_blake3_file(&dest);
+    let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
+    let blake3 = super::compute_blake3_file_async(dest).await;
     Ok((size, blake3))
 }
 
 pub(super) use super::depot::{
-    compute_blake3_file, load_provenance, load_sources, resolve_depot, update_depot_metadata,
+    load_provenance, load_sources, resolve_depot, update_depot_metadata,
 };
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {

@@ -12,7 +12,10 @@ Dependency evolution: `toml` 0.8→1.x, `nix` 0.29→0.31. Manifest-first federa
 peer resolution. `to_nftables_script` chain helpers. Deep debt: `.leak()` memory debt
 eliminated (owned `String` gate identity), `HEALTH_REQUEST` const centralized, corrupt
 TOML parse now warns instead of silently resetting, `CanaryStalenessReport` disambiguation,
-`FirewallProtocol` derives `Ord`, mesh response parsing deduped. 731 tests, zero clippy.
+`FirewallProtocol` derives `Ord`, mesh response parsing deduped. Build/harvest pipeline
+unified: `clone_source`, `stage_to_depot`, `get_head` deduped into single implementations.
+Service port constants added (`DEFAULT_FORGEJO_HTTP_PORT`, `DEFAULT_DEPOT_HTTP_PORT`).
+BLAKE3 hash failure uses sentinel instead of empty string. 731 tests, zero clippy.
 **Wave 119+ update (Native Detection + Error Normalization):** Shell-outs evolved to native
 Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs + `/proc/net/route`, `systemctl
 is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ssh`/`Io` across

@@ -25,7 +25,7 @@ use tracing::warn;
 
 use super::depot::{load_sources, resolve_depot, update_depot_metadata};
 use super::detect_target_triple;
-use super::harvest::{self, HarvestResult, HarvestStatus, validate_elf_arch};
+use super::harvest::{self, HarvestResult, HarvestStatus, stage_to_depot_async, validate_elf_arch};
 
 /// CLI arguments for `plasmid.build`.
 pub struct BuildArgs {
@@ -93,17 +93,7 @@ async fn build_one(
     let build_root = std::env::temp_dir().join("membrane-build");
     let clone_dir = build_root.join(primal);
 
-    // Phase 1: Clone (ephemeral — always fresh)
-    if clone_dir.exists() {
-        if let Err(e) = tokio::fs::remove_dir_all(&clone_dir).await {
-            tracing::debug!(error = %e, "stale clone_dir cleanup");
-        }
-    }
-    if let Err(e) = tokio::fs::create_dir_all(&build_root).await {
-        tracing::warn!(error = %e, dir = %build_root.display(), "failed to create build root");
-    }
-
-    if let Err(detail) = clone_source(primal, source, &clone_dir).await {
+    if let Err(detail) = super::drift::clone_source(primal, source, &build_root, &clone_dir).await {
         let status = if source.private {
             HarvestStatus::Skipped
         } else {
@@ -116,10 +106,11 @@ async fn build_one(
         };
     }
 
-    let head_commit = get_head(&clone_dir).await.unwrap_or_default();
+    let head_commit = crate::git_ops::head_short(&clone_dir)
+        .await
+        .unwrap_or_default();
 
-    // Phase 2: Build
-    if let Err(detail) = compile(source, target, &clone_dir).await {
+    if let Err(detail) = super::toolchain::build_binary(source, target, &clone_dir).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
@@ -127,7 +118,6 @@ async fn build_one(
         };
     }
 
-    // Phase 3: Locate binary (HARVEST-NAME-01 — resolve binary_name vs primal name)
     let binary_name = source.binary_name.as_deref().unwrap_or(primal);
     let bin_path = clone_dir
         .join("target")
@@ -147,7 +137,6 @@ async fn build_one(
         };
     }
 
-    // Phase 4: Validate ELF architecture (BUILD-ELF-01)
     if let Err(detail) = validate_elf_arch(&bin_path, target).await {
         return HarvestResult {
             binary: primal.into(),
@@ -156,11 +145,9 @@ async fn build_one(
         };
     }
 
-    // Phase 5: Strip
-    strip_binary(&bin_path, primal, target).await;
+    super::toolchain::strip_binary(&bin_path, primal, target).await;
 
-    // Phase 6: Stage to depot (atomic)
-    match stage_to_depot(primal, &bin_path, depot_dir, target).await {
+    match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
             let _ = tokio::fs::remove_dir_all(&clone_dir).await;
             HarvestResult {
@@ -180,73 +167,4 @@ async fn build_one(
             detail,
         },
     }
-}
-
-async fn clone_source(
-    primal: &str,
-    source: &harvest::SourceEntry,
-    clone_dir: &Path,
-) -> std::result::Result<(), String> {
-    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
-    let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
-    let github_url = format!("https://github.com/{}.git", source.repo);
-
-    if try_clone(&forgejo_url, clone_dir).await {
-        return Ok(());
-    }
-    if try_clone(&github_url, clone_dir).await {
-        return Ok(());
-    }
-
-    if source.private {
-        Err(format!("{primal}: private repo — SSH + HTTPS both failed"))
-    } else {
-        Err(format!("{primal}: git clone failed (Forgejo + GitHub)"))
-    }
-}
-
-async fn try_clone(url: &str, clone_dir: &Path) -> bool {
-    super::toolchain::try_clone(url, clone_dir).await
-}
-
-async fn compile(
-    source: &harvest::SourceEntry,
-    target: &str,
-    clone_dir: &Path,
-) -> std::result::Result<(), String> {
-    super::toolchain::build_binary(source, target, clone_dir).await
-}
-
-async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
-    super::toolchain::strip_binary(bin_path, primal, target).await;
-}
-
-async fn stage_to_depot(
-    primal: &str,
-    bin_path: &Path,
-    depot_dir: &Path,
-    target: &str,
-) -> std::result::Result<(u64, String), String> {
-    let staging_dir = depot_dir.join("primals").join(target);
-    tokio::fs::create_dir_all(&staging_dir)
-        .await
-        .map_err(|e| format!("depot staging dir create failed: {e}"))?;
-    let dest = staging_dir.join(primal);
-    let tmp = staging_dir.join(format!(".{primal}.new"));
-
-    tokio::fs::copy(bin_path, &tmp)
-        .await
-        .map_err(|e| format!("depot stage failed: {e}"))?;
-    tokio::fs::rename(&tmp, &dest)
-        .await
-        .map_err(|e| format!("atomic rename failed: {e}"))?;
-
-    let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
-    let blake3 = super::compute_blake3_file_async(dest).await;
-    Ok((size, blake3))
-}
-
-async fn get_head(repo_dir: &Path) -> Option<String> {
-    crate::git_ops::head_short(repo_dir).await
 }

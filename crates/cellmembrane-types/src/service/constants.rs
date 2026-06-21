@@ -200,6 +200,12 @@ pub const DEFAULT_PEPTI_SSH_ALIAS: &str = "pepti";
 /// Default `NestGate` service port.
 pub const DEFAULT_NESTGATE_PORT: u16 = 9500;
 
+/// Default Forgejo web UI / HTTP API port.
+pub const DEFAULT_FORGEJO_HTTP_PORT: u16 = 3000;
+
+/// Default WAN depot file-server port (Caddy upstream for `/depot/`).
+pub const DEFAULT_DEPOT_HTTP_PORT: u16 = 8080;
+
 /// Default songbird federation port.
 pub const DEFAULT_FEDERATION_PORT: u16 = 7700;
 
