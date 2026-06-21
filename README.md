@@ -70,7 +70,11 @@ fields. `gate.validate` composition-tier trust barrier validation — generic ev
 `pepti.validate`, validates any gate against its declared composition. `wireguard.*` dispatch
 routing fixed. Dependency upgrades: `toml` 0.8→1.x, `nix` 0.29→0.31. Manifest-first
 federation peer resolution (`resolve_federation_peer()`). `to_nftables_script` refactored
-into chain helpers. 731 tests, zero clippy.
+into chain helpers. Deep debt: `.leak()` memory debt eliminated (owned `String` gate identity),
+`HEALTH_REQUEST` const centralized (4 call sites), corrupt TOML parse now warns instead of
+silently resetting, `CanaryStalenessReport` disambiguated from depot variant,
+`FirewallProtocol` derives `Ord` (removed manual `as u8` cast), mesh response parsing
+deduped. 731 tests, zero clippy.
 
 **Wave 119+ (Native Detection + Error Normalization):**
 Shell-outs evolved to native Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs +
@@ -213,6 +217,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Deep debt consolidation (Wave 116–118): webhook cascade wiring, rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos, current_wave dedup, identity unification, hardcoded path constants, 680 tests | DONE |
 | Native evolution (Wave 119+): ss→/proc/net, ip→sysfs, systemctl→cgroup, ShadowError normalization (Parse→Config/Ssh/Io), .expect()→let-else+unreachable, PLASMID_BIN_DIR constant, reqwest From impl, 711 tests | DONE |
 | Deployment isomorphism (Wave 120): topology.service identity-based discovery, manifest-driven mesh IP (wg_ip), WireGuard config generation, Caddyfile generation from roles, topology.roles command, pepti decommission, 729 tests | DONE |
+| Deep debt sweep (Wave 120): `.leak()` → owned String, HEALTH_REQUEST const, TOML parse warnings, CanaryStalenessReport rename, derived Ord, mesh parsing dedupe, `format_resolved` test-only, 731 tests | DONE |
 
 ---
 

@@ -172,7 +172,7 @@ fn is_stale(slot: &CanarySlot) -> bool {
 ///
 /// Returns a report of each canary's age and staleness status.
 /// If `auto_refresh` is true, stale canaries are killed and removed from the pool.
-pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
+pub async fn staleness_audit(auto_refresh: bool) -> Vec<CanaryStalenessReport> {
     let pool = load_pool().await;
     let mut reports = Vec::with_capacity(pool.slots.len());
     let mut stale_primals = Vec::new();
@@ -183,7 +183,7 @@ pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
             chrono::Utc::now().signed_duration_since(t).num_hours()
         });
 
-        reports.push(StalenessReport {
+        reports.push(CanaryStalenessReport {
             primal: slot.primal.clone(),
             commit: slot.commit.clone(),
             promoted_at: slot.promoted_at.clone(),
@@ -212,7 +212,7 @@ pub async fn staleness_audit(auto_refresh: bool) -> Vec<StalenessReport> {
 
 /// Staleness report for a single canary slot.
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct StalenessReport {
+pub struct CanaryStalenessReport {
     pub primal: String,
     pub commit: String,
     pub promoted_at: String,
@@ -348,7 +348,12 @@ async fn load_pool() -> CanaryPool {
     let path = pool_state_path();
     tokio::fs::read_to_string(&path).await.map_or_else(
         |_| CanaryPool::default(),
-        |s| toml::from_str(&s).unwrap_or_default(),
+        |s| {
+            toml::from_str(&s).unwrap_or_else(|e| {
+                tracing::warn!(path = %path.display(), error = %e, "corrupt canary pool TOML — resetting");
+                CanaryPool::default()
+            })
+        },
     )
 }
 
@@ -371,7 +376,7 @@ async fn kill_canary(slot: &CanarySlot) {
 }
 
 async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
-    let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+    let request = crate::jsonrpc::HEALTH_REQUEST;
 
     if !slot.socket_path.exists() {
         return CanaryHealth {

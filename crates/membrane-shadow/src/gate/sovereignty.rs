@@ -220,7 +220,7 @@ async fn probe_s4_auth() -> StatusProbe {
     }
 
     let socket_paths = resolve_primal_socket_paths(binary_name);
-    let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+    let request = crate::jsonrpc::HEALTH_REQUEST;
 
     for socket_path in &socket_paths {
         if !Path::new(socket_path).exists() {

@@ -16,6 +16,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// Standard JSON-RPC health probe request. Used by canary, sandbox, health, and
+/// sovereignty probes to check liveness via UDS.
+pub const HEALTH_REQUEST: &str = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+
 /// Send a JSON-RPC request over UDS with riboCipher signal.
 ///
 /// In Reject mode (Wave 113 default): sends signal, no fallback.

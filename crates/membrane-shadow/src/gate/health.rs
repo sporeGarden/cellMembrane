@@ -168,30 +168,8 @@ fn parse_mesh_response(response: &str) -> (bool, String) {
         return (false, format!("mesh error: {msg}"));
     }
 
-    let result = json.get("result");
-    let peers = result
-        .and_then(|r| r.get("reachable_peers").or_else(|| r.get("peers")))
-        .and_then(|v| {
-            v.as_u64()
-                .or_else(|| v.as_array().map(|a| u64::try_from(a.len()).unwrap_or(0)))
-        })
-        .unwrap_or(0);
-    let reachable = result
-        .and_then(|r| r.get("reachable").or_else(|| r.get("reachable_peers")))
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0);
-    let federation = result
-        .and_then(|r| r.get("relay_enabled"))
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-
-    let detail = if federation && peers == 0 {
-        format!("hub listening, {reachable} reachable (no inbound peers yet)")
-    } else {
-        format!("{peers} peers, {reachable} reachable")
-    };
-
-    (reachable > 0 || peers > 0 || federation, detail)
+    json.get("result")
+        .map_or_else(|| (false, "no result field".into()), parse_mesh_json)
 }
 
 /// Health sweep: probe each primal via JSON-RPC, fall back to process detection.
@@ -240,7 +218,7 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
     }
 
     let socket_paths = resolve_primal_socket_paths(primal);
-    let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+    let request = crate::jsonrpc::HEALTH_REQUEST;
 
     for socket_path in &socket_paths {
         if !Path::new(socket_path).exists() {

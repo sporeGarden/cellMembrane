@@ -58,7 +58,7 @@ pub struct FirewallRule {
 }
 
 /// Protocol specifier for a firewall rule.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FirewallProtocol {
     /// TCP only.
@@ -349,18 +349,6 @@ impl FirewallRuleset {
             out.push_str("    }\n");
             out.push_str("}\n");
         }
-    }
-}
-
-impl PartialOrd for FirewallProtocol {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for FirewallProtocol {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (*self as u8).cmp(&(*other as u8))
     }
 }
 

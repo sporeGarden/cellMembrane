@@ -173,8 +173,9 @@ pub fn format_topology_summary(map: &TopologyMap) -> String {
 }
 
 /// Format a resolved gate topology for human output.
+#[cfg(test)]
 #[must_use]
-pub fn format_resolved(resolved: &cellmembrane_types::topology::ResolvedTopology) -> String {
+fn format_resolved(resolved: &cellmembrane_types::topology::ResolvedTopology) -> String {
     use std::fmt::Write;
     let mut out = String::new();
     let _ = writeln!(out, "Gate: {}", resolved.gate);

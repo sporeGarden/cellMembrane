@@ -9,7 +9,7 @@ use tracing::warn;
 
 /// Verify local depot binaries against the git-tracked `checksums.toml`.
 #[must_use]
-pub fn verify_local_depot(arch: &str) -> (bool, String) {
+pub(crate) fn verify_local_depot(arch: &str) -> (bool, String) {
     #[derive(serde::Deserialize)]
     struct ChecksumFile {
         #[serde(flatten)]

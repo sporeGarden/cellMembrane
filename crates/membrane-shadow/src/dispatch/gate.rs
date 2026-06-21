@@ -61,10 +61,10 @@ pub(super) async fn dispatch(
             let positional: Vec<&&str> = args.iter().filter(|a| !a.starts_with("--")).collect();
             let gate_name = positional
                 .first()
-                .copied()
-                .copied()
-                .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
-            let result = gate::bootstrap(config, gate_name, dry_run, mobility).await?;
+                .map_or_else(crate::gate::resolve_local_gate_identity, |&&s| {
+                    s.to_string()
+                });
+            let result = gate::bootstrap(config, &gate_name, dry_run, mobility).await?;
             let msg = format!(
                 "bootstrap {}: {}/{} phases passed{}{}{}",
                 result.gate_name,
@@ -371,9 +371,7 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
         .ok()
         .and_then(|root| crate::manifest::load_from_workspace(&root).ok());
 
-    let profile = manifest
-        .as_ref()
-        .and_then(|m| m.gates.get(gate_name));
+    let profile = manifest.as_ref().and_then(|m| m.gates.get(gate_name));
 
     let comp_str = cli::extract_flag_value(args, "--composition")
         .or_else(|| args.first().filter(|a| !a.starts_with("--")).copied())
@@ -451,7 +449,7 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
     let m = crate::manifest::load_from_workspace_async(&root).await?;
 
     let gate_name = cli::extract_flag_value(args, "--gate")
-        .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
+        .map_or_else(crate::gate::resolve_local_gate_identity, str::to_string);
 
     let listen_port: u16 = cli::extract_flag_value(args, "--port")
         .and_then(|p| p.parse().ok())
@@ -460,7 +458,7 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
     let subnet = cli::extract_flag_value(args, "--subnet")
         .unwrap_or(cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET);
 
-    let local_ip = m.mesh_ip_for(gate_name).ok_or_else(|| {
+    let local_ip = m.mesh_ip_for(&gate_name).ok_or_else(|| {
         crate::error::ShadowError::Config(format!(
             "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
         ))
@@ -470,19 +468,20 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
         .and_then(|k| k.parse().ok())
         .unwrap_or(25);
 
-    let hub_mode = cli::extract_flag_value(args, "--hub")
-        .unwrap_or_else(|| {
-            m.gates_for_role("wg_hub")
-                .first()
-                .map_or("", |&(name, _)| name)
-        });
+    let hub_mode = cli::extract_flag_value(args, "--hub").unwrap_or_else(|| {
+        m.gates_for_role("wg_hub")
+            .first()
+            .map_or("", |&(name, _)| name)
+    });
 
-    let is_local_hub = m.gates.get(gate_name)
+    let is_local_hub = m
+        .gates
+        .get(&gate_name)
         .is_some_and(|p| p.roles.iter().any(|r| r == "wg_hub"));
 
     let mut peers = Vec::new();
     for (name, profile) in &m.gates {
-        if name == gate_name {
+        if *name == gate_name {
             continue;
         }
         let Some(mesh_ip) = m.mesh_ip_for(name) else {
@@ -491,7 +490,9 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
 
         let is_hub = profile.roles.iter().any(|r| r == "wg_hub");
 
-        let endpoint = profile.wan_endpoint.as_deref()
+        let endpoint = profile
+            .wan_endpoint
+            .as_deref()
             .or(profile.host.as_deref())
             .map(String::from);
 
@@ -517,16 +518,14 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
         });
     }
 
-    if !is_local_hub && !hub_mode.is_empty()
-        && peers.iter().any(|p| p.name != hub_mode)
-    {
+    if !is_local_hub && !hub_mode.is_empty() && peers.iter().any(|p| p.name != hub_mode) {
         peers.retain(|p| p.name == hub_mode);
     }
 
     peers.sort_by(|a, b| a.name.cmp(&b.name));
 
     let config = WgConfig {
-        gate_name: gate_name.into(),
+        gate_name,
         address: local_ip,
         listen_port,
         subnet: subnet.into(),

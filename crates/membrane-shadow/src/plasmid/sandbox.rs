@@ -150,7 +150,7 @@ pub async fn spin_up_with_deps(
 /// delay between attempts (allows process startup time).
 pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
     let start = instance.started_at.unwrap_or_else(Instant::now);
-    let request = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
+    let request = crate::jsonrpc::HEALTH_REQUEST;
 
     for attempt in 0..SANDBOX_PROBE_RETRIES {
         if attempt > 0 {

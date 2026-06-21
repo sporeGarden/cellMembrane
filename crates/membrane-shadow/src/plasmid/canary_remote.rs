@@ -38,7 +38,12 @@ pub async fn load_remote_canaries() -> RemoteCanaryRegistry {
     let path = remote_canaries_path();
     tokio::fs::read_to_string(&path).await.map_or_else(
         |_| RemoteCanaryRegistry::default(),
-        |s| toml::from_str(&s).unwrap_or_default(),
+        |s| {
+            toml::from_str(&s).unwrap_or_else(|e| {
+                tracing::warn!(path = %path.display(), error = %e, "corrupt remote canary TOML — resetting");
+                RemoteCanaryRegistry::default()
+            })
+        },
     )
 }
 

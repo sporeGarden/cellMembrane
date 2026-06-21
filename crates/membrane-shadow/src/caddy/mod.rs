@@ -259,7 +259,7 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
     let m = crate::manifest::load_from_workspace_async(&root).await?;
 
     let gate_name = crate::cli::extract_flag_value(args, "--gate")
-        .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
+        .map_or_else(crate::gate::resolve_local_gate_identity, str::to_string);
 
     let acme_email = crate::cli::extract_flag_value(args, "--email").map(String::from);
 
@@ -345,7 +345,7 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
     }
 
     let config = CaddyConfig {
-        gate_name: gate_name.into(),
+        gate_name,
         acme_email,
         vhosts,
     };
