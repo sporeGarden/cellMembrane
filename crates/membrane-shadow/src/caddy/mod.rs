@@ -266,12 +266,21 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
     let topo = m.topology.as_ref();
     let mut vhosts = Vec::new();
 
-    let caddy_gates = m.gates_for_role("caddy");
+    let caddy_gates = {
+        let mut gates = m.gates_for_role("caddy");
+        if gates.is_empty() {
+            gates = m.gates_for_role("caddy_tls");
+        }
+        if gates.is_empty() {
+            gates = m.gates_for_role("tls_terminator");
+        }
+        gates
+    };
     let is_caddy_gate = caddy_gates.iter().any(|(name, _)| *name == gate_name);
 
     if !is_caddy_gate && caddy_gates.is_empty() {
         return Ok(crate::ShadowOutcome::ok(String::from(
-            "no gate has role 'caddy' — add roles = [\"caddy\"] to a gate profile",
+            "no gate has role 'caddy' or 'caddy_tls' — add roles = [\"caddy_tls\"] to a gate profile",
         )));
     }
 

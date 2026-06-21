@@ -362,8 +362,22 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     use cellmembrane_types::composition::MembraneComposition;
     use cellmembrane_types::firewall::{FirewallRuleset, NftablesConfig};
 
+    let gate_name_owned = cli::extract_flag_value(args, "--gate-name")
+        .or_else(|| cli::extract_flag_value(args, "--gate"))
+        .map_or_else(crate::gate::resolve_local_gate_identity, String::from);
+    let gate_name: &str = &gate_name_owned;
+
+    let manifest = crate::temporal::resolve_workspace_root()
+        .ok()
+        .and_then(|root| crate::manifest::load_from_workspace(&root).ok());
+
+    let profile = manifest
+        .as_ref()
+        .and_then(|m| m.gates.get(gate_name));
+
     let comp_str = cli::extract_flag_value(args, "--composition")
         .or_else(|| args.first().filter(|a| !a.starts_with("--")).copied())
+        .or_else(|| profile.and_then(|p| p.composition.as_deref()))
         .unwrap_or("relay");
     let composition = MembraneComposition::parse_name(comp_str).ok_or_else(|| {
         crate::error::ShadowError::Config(format!(
@@ -377,27 +391,35 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     })?;
 
     let fw = FirewallRuleset::for_composition(composition);
-
     let format = cli::extract_flag_value(args, "--format").unwrap_or("nftables");
 
-    let nft_config = if args.contains(&"--plasma-membrane") {
+    let is_plasma_membrane = args.contains(&"--plasma-membrane")
+        || profile.is_some_and(|p| p.roles.iter().any(|r| r == "nat_firewall"));
+
+    let nft_config = if is_plasma_membrane {
         let wan = cli::extract_flag_value(args, "--wan")
+            .or_else(|| profile.and_then(|p| p.wan_interface.as_deref()))
             .unwrap_or(cellmembrane_types::service::DEFAULT_WAN_IFACE);
         let lan = cli::extract_flag_value(args, "--lan")
+            .or_else(|| profile.and_then(|p| p.lan_interface.as_deref()))
             .unwrap_or(cellmembrane_types::service::DEFAULT_LAN_IFACE);
         let subnet = cli::extract_flag_value(args, "--subnet")
+            .or_else(|| profile.and_then(|p| p.lan_subnet.as_deref()))
             .unwrap_or(cellmembrane_types::service::DEFAULT_LAN_SUBNET);
-        let gate_name = cli::extract_flag_value(args, "--gate-name")
-            .unwrap_or_else(|| crate::gate::resolve_local_gate_identity().leak());
+        let has_wg = profile.is_some_and(|p| p.wg_ip.is_some());
         Some(NftablesConfig {
             wan_interface: wan.into(),
             lan_interface: lan.into(),
             lan_subnet: subnet.into(),
             gate_name: gate_name.into(),
             enable_nat: !args.contains(&"--no-nat"),
-            enable_dhcp: !args.contains(&"--no-dhcp"),
-            trust_lan_input: args.contains(&"--trust-lan"),
-            wireguard_interface: cli::extract_flag_value(args, "--wg-iface").map(Into::into),
+            enable_dhcp: !args.contains(&"--no-dhcp")
+                && profile.is_some_and(|p| p.roles.iter().any(|r| r == "dhcp")),
+            trust_lan_input: args.contains(&"--trust-lan")
+                || profile.is_some_and(|p| p.roles.iter().any(|r| r == "nat_firewall")),
+            wireguard_interface: cli::extract_flag_value(args, "--wg-iface")
+                .map(Into::into)
+                .or_else(|| if has_wg { Some("wg0".into()) } else { None }),
             wireguard_port: cli::extract_flag_value(args, "--wg-port")
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(cellmembrane_types::firewall::default_wg_port()),
@@ -448,6 +470,16 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
         .and_then(|k| k.parse().ok())
         .unwrap_or(25);
 
+    let hub_mode = cli::extract_flag_value(args, "--hub")
+        .unwrap_or_else(|| {
+            m.gates_for_role("wg_hub")
+                .first()
+                .map_or("", |&(name, _)| name)
+        });
+
+    let is_local_hub = m.gates.get(gate_name)
+        .is_some_and(|p| p.roles.iter().any(|r| r == "wg_hub"));
+
     let mut peers = Vec::new();
     for (name, profile) in &m.gates {
         if name == gate_name {
@@ -457,20 +489,38 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
             continue;
         };
 
-        let endpoint = profile
-            .mesh_peer
-            .as_deref()
-            .and_then(|p| p.split(':').next())
+        let is_hub = profile.roles.iter().any(|r| r == "wg_hub");
+
+        let endpoint = profile.wan_endpoint.as_deref()
+            .or(profile.host.as_deref())
             .map(String::from);
+
+        let allowed_ips = if is_hub && !is_local_hub {
+            vec![format!("{subnet}")]
+        } else if is_local_hub {
+            let mut ips = vec![format!("{mesh_ip}/32")];
+            if let Some(ref lan) = profile.lan_subnet {
+                ips.push(lan.clone());
+            }
+            ips
+        } else {
+            vec![format!("{mesh_ip}/32")]
+        };
 
         peers.push(WgPeer {
             name: name.clone(),
             mesh_ip,
-            public_key: None,
+            public_key: profile.wg_pubkey.clone(),
             endpoint,
-            allowed_ips: vec![],
+            allowed_ips,
             keepalive,
         });
+    }
+
+    if !is_local_hub && !hub_mode.is_empty()
+        && peers.iter().any(|p| p.name != hub_mode)
+    {
+        peers.retain(|p| p.name == hub_mode);
     }
 
     peers.sort_by(|a, b| a.name.cmp(&b.name));

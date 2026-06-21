@@ -169,7 +169,7 @@ impl MembraneComposition {
             "rustdesk" | "rust_desk" => Some(Self::RustDesk),
             "tower" => Some(Self::Tower),
             "nest" => Some(Self::Nest),
-            "nucleus" => Some(Self::Nucleus),
+            "nucleus" | "full" => Some(Self::Nucleus),
             "peptidoglycan" | "pepti" => Some(Self::Peptidoglycan),
             _ => None,
         }

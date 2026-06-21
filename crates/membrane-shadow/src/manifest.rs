@@ -172,6 +172,9 @@ pub struct GateProfile {
     /// List of repo short names this gate syncs.
     #[serde(default)]
     pub repos: Vec<String>,
+    /// IP or hostname of this gate (e.g., `"157.230.3.183"` for VPS gates).
+    #[serde(default)]
+    pub host: Option<String>,
     /// Target architecture (e.g. `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`).
     #[serde(default)]
     pub target: Option<String>,
@@ -224,6 +227,23 @@ pub struct GateProfile {
     /// mesh address for the gate.
     #[serde(default)]
     pub wg_ip: Option<String>,
+    /// WAN-facing network interface (e.g., `"enp1s0"`). Used by `firewall.generate`
+    /// to auto-derive `NftablesConfig` for plasma membrane gates.
+    #[serde(default)]
+    pub wan_interface: Option<String>,
+    /// LAN-facing network interface (e.g., `"eno1"`). Used by `firewall.generate`
+    /// to auto-derive `NftablesConfig` for plasma membrane gates.
+    #[serde(default)]
+    pub lan_interface: Option<String>,
+    /// LAN subnet in CIDR notation (e.g., `"192.168.4.0/22"`).
+    #[serde(default)]
+    pub lan_subnet: Option<String>,
+    /// Public key for this gate's `WireGuard` interface.
+    #[serde(default)]
+    pub wg_pubkey: Option<String>,
+    /// Public WAN endpoint host/IP (used by remote peers in wg0.conf).
+    #[serde(default)]
+    pub wan_endpoint: Option<String>,
 }
 
 impl EcosystemManifest {
