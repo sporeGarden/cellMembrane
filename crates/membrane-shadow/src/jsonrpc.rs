@@ -149,12 +149,58 @@ pub async fn call_via_relay(
     call(Path::new(&relay_socket), &relay_request).await
 }
 
-/// Route a JSON-RPC request through a `TransportEndpoint`.
+/// Send a JSON-RPC request over TCP with riboCipher signal.
+///
+/// Uses the same framing as UDS calls (riboCipher signal + NDJSON) but over
+/// a `WireGuard` mesh TCP connection. The `host:port` pair typically comes from
+/// manifest-resolved mesh IPs (e.g. `10.13.37.1:7700`).
+pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String, String> {
+    let addr = format!("{host}:{port}");
+    let stream = tokio::time::timeout(DEFAULT_TIMEOUT, tokio::net::TcpStream::connect(&addr))
+        .await
+        .map_err(|_| format!("tcp connect timeout: {addr}"))?
+        .map_err(|e| format!("tcp connect {addr}: {e}"))?;
+
+    let (reader, mut writer) = stream.into_split();
+
+    writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .map_err(|e| format!("tcp signal write: {e}"))?;
+    writer
+        .write_all(request.as_bytes())
+        .await
+        .map_err(|e| format!("tcp write: {e}"))?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|e| format!("tcp newline: {e}"))?;
+
+    let mut buf_reader = tokio::io::BufReader::new(reader);
+    let mut line = String::new();
+
+    let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
+        .await
+        .map_err(|_| format!("tcp read timeout: {addr}"))?
+        .map_err(|e| format!("tcp read: {e}"))?;
+
+    if let Err(e) = writer.shutdown().await {
+        tracing::debug!(error = %e, addr = %addr, "tcp writer shutdown (non-fatal)");
+    }
+
+    if read_result == 0 && line.is_empty() {
+        return Err(format!("tcp empty response: {addr}"));
+    }
+
+    Ok(line)
+}
+
+/// Route a JSON-RPC request through a [`cellmembrane_types::TransportEndpoint`].
 ///
 /// Dispatches to the appropriate transport based on the endpoint variant:
-/// - `Uds` → direct UDS call
-/// - `Tcp` → not yet implemented (returns error)
-/// - `MeshRelay` → routes through songBird relay
+/// - `Uds` → direct UDS call (local primal, no network)
+/// - `Tcp` → `WireGuard` mesh TCP (cross-gate, riboCipher framed)
+/// - `MeshRelay` → songBird relay (multi-hop, encrypted)
 ///
 /// This is the primary entry point for transport-agnostic capability calls.
 pub async fn call_endpoint(
@@ -163,10 +209,9 @@ pub async fn call_endpoint(
 ) -> Result<String, String> {
     match endpoint {
         cellmembrane_types::TransportEndpoint::Uds { path } => call(Path::new(path), request).await,
-        cellmembrane_types::TransportEndpoint::Tcp { host, port } => Err(format!(
-            "TCP transport not yet implemented for {host}:{port} — \
-                 use SSH or mesh relay for cross-gate calls"
-        )),
+        cellmembrane_types::TransportEndpoint::Tcp { host, port } => {
+            call_tcp(host, *port, request).await
+        }
         cellmembrane_types::TransportEndpoint::MeshRelay {
             peer_id,
             capability,
@@ -235,5 +280,35 @@ mod tests {
     fn default_timeout_is_reasonable() {
         assert!(DEFAULT_TIMEOUT.as_secs() >= 1);
         assert!(DEFAULT_TIMEOUT.as_secs() <= 30);
+    }
+
+    #[tokio::test]
+    async fn call_tcp_refuses_unreachable_host() {
+        let result = call_tcp("192.0.2.1", 1, "{}").await;
+        assert!(result.is_err(), "unreachable host should error");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("timeout") || err.contains("connect"),
+            "error should mention connection failure, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn call_endpoint_dispatches_uds() {
+        let ep = cellmembrane_types::TransportEndpoint::Uds {
+            path: "/tmp/nonexistent-test-socket.sock".into(),
+        };
+        let result = call_endpoint(&ep, r#"{"jsonrpc":"2.0","method":"health","id":1}"#).await;
+        assert!(result.is_err(), "nonexistent socket should error");
+    }
+
+    #[tokio::test]
+    async fn call_endpoint_dispatches_tcp() {
+        let ep = cellmembrane_types::TransportEndpoint::Tcp {
+            host: "192.0.2.1".into(),
+            port: 1,
+        };
+        let result = call_endpoint(&ep, "{}").await;
+        assert!(result.is_err(), "unreachable TCP should error");
     }
 }

@@ -423,7 +423,8 @@ fn topology_endpoint(gate_name: &str, capability_str: &str) -> ShadowOutcome {
     let Some(capability) = parse_capability_name(capability_str) else {
         return ShadowOutcome::fail(format!(
             "unknown capability: {capability_str} \
-             (try: crypto, relay, content, turn, observe, compute, storage, identity)"
+             (try: crypto, relay, content, turn, observe, compute, storage, identity, \
+             depot, build, auth, nest, biomeos, metrics)"
         ));
     };
 
@@ -453,15 +454,10 @@ fn topology_endpoint(gate_name: &str, capability_str: &str) -> ShadowOutcome {
 fn parse_capability_name(s: &str) -> Option<cellmembrane_types::service::ServiceCapability> {
     use cellmembrane_types::service::ServiceCapability;
     match s {
-        "crypto" | "security" | "signer" => Some(ServiceCapability::CryptoSigner),
-        "relay" | "mesh" | "mesh_relay" => Some(ServiceCapability::MeshRelay),
-        "content" | "forgejo" => Some(ServiceCapability::ContentServing),
-        "turn" | "stun" => Some(ServiceCapability::TurnServer),
-        "observe" | "observability" => Some(ServiceCapability::Observability),
-        "compute" => Some(ServiceCapability::ComputeOrchestration),
-        "storage" => Some(ServiceCapability::Storage),
-        "identity" => Some(ServiceCapability::Identity),
-        _ => None,
+        "signer" => Some(ServiceCapability::CryptoSigner),
+        "mesh" => Some(ServiceCapability::MeshRelay),
+        "observe" => Some(ServiceCapability::Observability),
+        _ => crate::resolve::role_to_capability(s),
     }
 }
 

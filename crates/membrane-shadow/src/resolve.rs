@@ -105,15 +105,20 @@ pub fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<TransportE
 }
 
 /// Map well-known role names to service capabilities.
-fn role_to_capability(role: &str) -> Option<ServiceCapability> {
+///
+/// Covers manifest role strings (e.g. `roles = ["forgejo", "relay"]`)
+/// and their semantic aliases.
+#[must_use]
+pub fn role_to_capability(role: &str) -> Option<ServiceCapability> {
     match role {
         "relay" | "mesh_relay" => Some(ServiceCapability::MeshRelay),
-        "security" | "crypto" => Some(ServiceCapability::CryptoSigner),
-        "content" | "forgejo" => Some(ServiceCapability::ContentServing),
-        "observability" => Some(ServiceCapability::Observability),
-        "compute" => Some(ServiceCapability::ComputeOrchestration),
-        "storage" => Some(ServiceCapability::Storage),
-        "identity" => Some(ServiceCapability::Identity),
+        "turn" | "stun" => Some(ServiceCapability::TurnServer),
+        "security" | "crypto" | "auth" => Some(ServiceCapability::CryptoSigner),
+        "content" | "forgejo" | "depot" => Some(ServiceCapability::ContentServing),
+        "observability" | "metrics" => Some(ServiceCapability::Observability),
+        "compute" | "build" | "build_hub" => Some(ServiceCapability::ComputeOrchestration),
+        "storage" | "nest" | "ledger" => Some(ServiceCapability::Storage),
+        "identity" | "biomeos" => Some(ServiceCapability::Identity),
         _ => None,
     }
 }
@@ -223,6 +228,23 @@ mod tests {
         assert!(role_to_capability("storage").is_some());
         assert!(role_to_capability("identity").is_some());
         assert!(role_to_capability("unknown_role").is_none());
+    }
+
+    #[test]
+    fn role_mapping_covers_manifest_aliases() {
+        assert!(role_to_capability("forgejo").is_some());
+        assert!(role_to_capability("depot").is_some());
+        assert!(role_to_capability("build").is_some());
+        assert!(role_to_capability("build_hub").is_some());
+        assert!(role_to_capability("turn").is_some());
+        assert!(role_to_capability("auth").is_some());
+        assert!(role_to_capability("nest").is_some());
+        assert!(role_to_capability("biomeos").is_some());
+        assert!(role_to_capability("metrics").is_some());
+        assert!(
+            role_to_capability("dns_primary").is_none(),
+            "DNS roles are infra, not primal capabilities"
+        );
     }
 
     #[test]
