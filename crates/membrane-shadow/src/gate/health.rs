@@ -389,7 +389,7 @@ fn resolve_mesh_relay_socket() -> String {
         })
 }
 
-pub(super) fn resolve_biomeos_socket_dir() -> String {
+pub(crate) fn resolve_biomeos_socket_dir() -> String {
     std::env::var(cellmembrane_types::service::ENV_BIOMEOS_SOCKET_DIR).unwrap_or_else(|_| {
         let uid = resolve_uid();
         let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
@@ -397,7 +397,7 @@ pub(super) fn resolve_biomeos_socket_dir() -> String {
     })
 }
 
-pub(super) fn resolve_uid() -> String {
+pub(crate) fn resolve_uid() -> String {
     std::env::var("UID")
         .or_else(|_| std::env::var("EUID"))
         .unwrap_or_else(|_| {
@@ -431,20 +431,20 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
     let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
         .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
+    let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
     let mut paths = vec![
         format!("{socket_base}/{primal}.sock"),
-        format!(
-            "{xdg_runtime}/{}/{primal}.sock",
-            cellmembrane_types::service::NEURAL_API_NAMESPACE
-        ),
+        format!("{xdg_runtime}/{ns}/{primal}.sock"),
     ];
-    // Check registry for alternative API socket (capability-driven, not hardcoded)
     if let Some(svc) = cellmembrane_types::MembraneService::all()
         .iter()
         .find(|s| s.binary == primal)
     {
         if let Some(api) = svc.api_socket {
             paths.insert(0, format!("{socket_base}/{api}.sock"));
+        }
+        for alias in svc.socket_aliases {
+            paths.push(format!("{socket_base}/{alias}.sock"));
         }
     }
     paths

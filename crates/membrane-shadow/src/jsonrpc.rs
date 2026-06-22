@@ -110,6 +110,70 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
     Ok(line)
 }
 
+/// Send a JSON-RPC request through a mesh relay endpoint.
+///
+/// Resolves the local songBird relay socket, then sends a `relay.forward` request
+/// wrapping the original method call. The relay infrastructure handles peer
+/// resolution, BTSP encryption, and multi-hop routing transparently.
+///
+/// This is the transport graduation for `TransportEndpoint::MeshRelay` — the
+/// abstraction boundary where physical topology becomes invisible.
+pub async fn call_via_relay(
+    peer_id: &str,
+    capability: &str,
+    request: &str,
+) -> Result<String, String> {
+    let relay_socket = crate::gate::health::resolve_primal_socket_paths(
+        cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::service::ServiceCapability::MeshRelay,
+        ),
+    )
+    .into_iter()
+    .find(|p| Path::new(p).exists())
+    .ok_or_else(|| {
+        format!("no songBird relay socket found — cannot route to {peer_id}/{capability}")
+    })?;
+
+    let relay_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "relay.forward",
+        "params": {
+            "peer_id": peer_id,
+            "capability": capability,
+            "payload": request,
+        },
+        "id": 1,
+    })
+    .to_string();
+
+    call(Path::new(&relay_socket), &relay_request).await
+}
+
+/// Route a JSON-RPC request through a `TransportEndpoint`.
+///
+/// Dispatches to the appropriate transport based on the endpoint variant:
+/// - `Uds` → direct UDS call
+/// - `Tcp` → not yet implemented (returns error)
+/// - `MeshRelay` → routes through songBird relay
+///
+/// This is the primary entry point for transport-agnostic capability calls.
+pub async fn call_endpoint(
+    endpoint: &cellmembrane_types::TransportEndpoint,
+    request: &str,
+) -> Result<String, String> {
+    match endpoint {
+        cellmembrane_types::TransportEndpoint::Uds { path } => call(Path::new(path), request).await,
+        cellmembrane_types::TransportEndpoint::Tcp { host, port } => Err(format!(
+            "TCP transport not yet implemented for {host}:{port} — \
+                 use SSH or mesh relay for cross-gate calls"
+        )),
+        cellmembrane_types::TransportEndpoint::MeshRelay {
+            peer_id,
+            capability,
+        } => call_via_relay(peer_id, capability, request).await,
+    }
+}
+
 /// Convenience: build a JSON-RPC request object for a method with no params.
 #[must_use]
 pub fn request(method: &str, id: u32) -> String {

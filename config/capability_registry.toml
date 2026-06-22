@@ -69,6 +69,7 @@ topology_service = { protocol = "cli", description = "Identity-based service dis
 topology_roles = { protocol = "cli", description = "List all role→gate mappings from manifest" }
 topology_zones = { protocol = "cli", description = "Cytoplasm zone map with physical hub enrichment" }
 topology_mesh = { protocol = "cli", description = "WireGuard mesh peer listing with manifest-authoritative IPs" }
+topology_endpoint = { protocol = "cli", description = "Resolve transport endpoint (UDS/TCP/mesh_relay) for gate+capability" }
 topology_summary = { protocol = "cli", description = "Full TOPOLOGY_MAP.toml summary" }
 
 # Caddy TLS management

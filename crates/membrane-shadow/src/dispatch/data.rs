@@ -99,6 +99,11 @@ pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result
             let role = cli::require_arg(args, 0, "role")?;
             topology_service_resolve(role).await
         }
+        "topology.endpoint" => {
+            let gate_name = cli::require_arg(args, 0, "gate_name")?;
+            let capability = cli::require_arg(args, 1, "capability")?;
+            Ok(topology_endpoint(gate_name, capability))
+        }
         "topology.roles" => topology_roles().await,
         "topology.zones" => topology_zones().await,
         "topology.mesh" => Ok(topology_mesh()),
@@ -410,6 +415,54 @@ async fn topology_roles() -> crate::Result<ShadowOutcome> {
         lines.join("\n"),
         serde_json::Value::Object(data),
     ))
+}
+
+fn topology_endpoint(gate_name: &str, capability_str: &str) -> ShadowOutcome {
+    let ctx = crate::resolve::ResolutionContext::from_env();
+
+    let Some(capability) = parse_capability_name(capability_str) else {
+        return ShadowOutcome::fail(format!(
+            "unknown capability: {capability_str} \
+             (try: crypto, relay, content, turn, observe, compute, storage, identity)"
+        ));
+    };
+
+    crate::resolve::resolve_endpoint(&ctx, gate_name, capability).map_or_else(
+        || ShadowOutcome::fail(format!("no transport path to {gate_name}/{capability_str}")),
+        |ep| {
+            let data = serde_json::json!({
+                "gate": gate_name,
+                "capability": capability_str,
+                "transport": ep.transport_name(),
+                "uri": ep.display_uri(),
+                "local": ep.is_local(),
+                "relayed": ep.is_relayed(),
+            });
+            ShadowOutcome::ok_with(
+                format!(
+                    "{gate_name}/{capability_str} → {} ({})",
+                    ep.display_uri(),
+                    ep.transport_name()
+                ),
+                data,
+            )
+        },
+    )
+}
+
+fn parse_capability_name(s: &str) -> Option<cellmembrane_types::service::ServiceCapability> {
+    use cellmembrane_types::service::ServiceCapability;
+    match s {
+        "crypto" | "security" | "signer" => Some(ServiceCapability::CryptoSigner),
+        "relay" | "mesh" | "mesh_relay" => Some(ServiceCapability::MeshRelay),
+        "content" | "forgejo" => Some(ServiceCapability::ContentServing),
+        "turn" | "stun" => Some(ServiceCapability::TurnServer),
+        "observe" | "observability" => Some(ServiceCapability::Observability),
+        "compute" => Some(ServiceCapability::ComputeOrchestration),
+        "storage" => Some(ServiceCapability::Storage),
+        "identity" => Some(ServiceCapability::Identity),
+        _ => None,
+    }
 }
 
 fn topology_mesh() -> ShadowOutcome {

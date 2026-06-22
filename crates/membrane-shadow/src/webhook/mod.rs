@@ -229,7 +229,7 @@ pub fn classify_push(
     let is_cascade_repo = cascade_repos.contains(&repo_lower);
 
     let should_harvest = is_default_branch && is_known_primal;
-    let should_cascade = is_default_branch && is_cascade_repo;
+    let should_cascade = is_default_branch && is_cascade_repo && !is_known_primal;
 
     let reason = if !is_default_branch {
         format!("non-default branch ({branch}), skipping")
