@@ -8,24 +8,24 @@
 //! -> `LoamSpine` (commit) -> `sweetGrass` (attribute).
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use crate::error::{Result, ShadowError};
 
 /// Register cascade state with the rootPulse provenance trio via NUCLEUS neural-api.
 ///
+/// Resolves the neural-api endpoint via the transport resolver — local UDS if on
+/// this gate, TCP over `WireGuard` mesh, or songBird relay for remote gates.
 /// Returns `Ok(session_id)` on success or an error if NUCLEUS is unreachable.
 pub async fn rootpulse_commit(
     wave_id: u32,
     gate: &str,
     heads: &BTreeMap<String, String>,
 ) -> Result<String> {
-    let socket_path = resolve_neural_api_socket();
-    if !socket_path.exists() {
-        return Err(ShadowError::Config(
-            "NUCLEUS neural-api socket not found — rootpulse commit skipped".into(),
-        ));
-    }
+    let endpoint = resolve_neural_api_endpoint().ok_or_else(|| {
+        ShadowError::Config(
+            "NUCLEUS neural-api endpoint not found — rootpulse commit skipped".into(),
+        )
+    })?;
 
     let session_id = format!(
         "wave-{wave_id}-cascade-{}",
@@ -55,7 +55,7 @@ pub async fn rootpulse_commit(
         42,
     );
 
-    let response = crate::jsonrpc::call(&socket_path, &request).await?;
+    let response = crate::jsonrpc::call_endpoint(&endpoint, &request).await?;
 
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
         if parsed.get("error").is_some() && parsed.get("result").is_none() {
@@ -91,10 +91,9 @@ pub async fn sovereignty_verify(
     wave_id: u32,
     heads: &BTreeMap<String, String>,
 ) -> Vec<SovereigntyCheck> {
-    let socket_path = resolve_neural_api_socket();
-    if !socket_path.exists() {
+    let Some(endpoint) = resolve_neural_api_endpoint() else {
         return Vec::new();
-    }
+    };
 
     let request = crate::jsonrpc::request_with_params(
         "graph.execute",
@@ -108,7 +107,7 @@ pub async fn sovereignty_verify(
         43,
     );
 
-    let Ok(response) = crate::jsonrpc::call(&socket_path, &request).await else {
+    let Ok(response) = crate::jsonrpc::call_endpoint(&endpoint, &request).await else {
         return Vec::new();
     };
 
@@ -181,16 +180,29 @@ fn mark_all_unverified(heads: &BTreeMap<String, String>, reason: &str) -> Vec<So
         .collect()
 }
 
-/// Resolve the NUCLEUS neural-api socket path.
-fn resolve_neural_api_socket() -> PathBuf {
-    if let Ok(path) = std::env::var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET) {
-        return PathBuf::from(path);
+/// Resolve the NUCLEUS neural-api endpoint via the transport resolver.
+///
+/// Tries local Identity capability first (finds `neural-api-default.sock` or
+/// `biomeos.sock`), then cross-gate resolution via manifest roles. Returns
+/// `None` if no reachable endpoint exists — the caller should degrade gracefully.
+fn resolve_neural_api_endpoint() -> Option<cellmembrane_types::TransportEndpoint> {
+    let ctx = crate::resolve::ResolutionContext::from_env();
+
+    if let Some(ep) = crate::resolve::resolve_endpoint(
+        &ctx,
+        &ctx.local_gate,
+        cellmembrane_types::service::ServiceCapability::Identity,
+    ) {
+        if let cellmembrane_types::TransportEndpoint::Uds { ref path } = ep {
+            if std::path::Path::new(path).exists() {
+                return Some(ep);
+            }
+        } else {
+            return Some(ep);
+        }
     }
 
-    let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
-
-    PathBuf::from(&socket_base).join(cellmembrane_types::service::NEURAL_API_SOCKET_NAME)
+    crate::resolve::resolve_by_role(&ctx, "biomeos")
 }
 
 #[cfg(test)]
@@ -238,13 +250,14 @@ mod tests {
     }
 
     #[test]
-    fn default_socket_path_uses_constants() {
-        let expected = PathBuf::from(cellmembrane_types::service::DEFAULT_SOCKET_BASE)
-            .join(cellmembrane_types::service::NEURAL_API_SOCKET_NAME);
-        assert!(
-            expected.to_str().unwrap().contains("neural-api"),
-            "default socket path should contain neural-api"
-        );
+    fn resolve_neural_api_endpoint_uses_resolver() {
+        let ep = resolve_neural_api_endpoint();
+        if let Some(cellmembrane_types::TransportEndpoint::Uds { path }) = &ep {
+            assert!(
+                path.contains("neural-api") || path.contains("biomeos"),
+                "resolved path should reference neural-api or biomeos, got: {path}"
+            );
+        }
     }
 
     #[test]

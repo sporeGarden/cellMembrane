@@ -33,32 +33,76 @@ pub fn try_relay_impulse(impulse: &ImpulseFile) {
 
     #[cfg(unix)]
     {
-        let Some(socket_path) = discover_socket(&relay_socket_name()) else {
+        let payload = serde_json::json!({
+            "id": impulse.impulse.id,
+            "type": impulse.impulse.impulse_type,
+            "from": impulse.from.gate,
+            "to": impulse.to.gates,
+            "subject": impulse.content.subject,
+            "priority": impulse.impulse.priority,
+        });
+
+        let Ok(payload_str) = serde_json::to_string(&payload) else {
             return;
         };
 
+        try_forward_to_gates(impulse, &payload_str);
+
+        let Some(socket_path) = discover_socket(&relay_socket_name()) else {
+            return;
+        };
         let notification = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": "mesh.publish",
             "params": {
                 "topic": format!("impulse/{}", impulse.from.gate),
-                "payload": {
-                    "id": impulse.impulse.id,
-                    "type": impulse.impulse.impulse_type,
-                    "from": impulse.from.gate,
-                    "to": impulse.to.gates,
-                    "subject": impulse.content.subject,
-                    "priority": impulse.impulse.priority,
-                }
+                "payload": payload,
             }
         });
-
         let Ok(request_str) = serde_json::to_string(&notification) else {
             return;
         };
-
         uds_send(&socket_path, &request_str);
+    }
+}
+
+/// Targeted cross-gate delivery via `relay.forward` for explicitly named gates.
+///
+/// Uses `resolve_endpoint` + `call_endpoint` for each target gate, routing
+/// through UDS (local), TCP (mesh), or songBird relay (NAT-traversal).
+/// Failures are silent — git push remains the reliable baseline.
+fn try_forward_to_gates(impulse: &ImpulseFile, payload: &str) {
+    let local_gate = crate::gate::resolve_local_gate_identity();
+    let ctx = crate::resolve::ResolutionContext::from_env();
+
+    let request = crate::jsonrpc::request_with_params(
+        "impulse.deliver",
+        &serde_json::json!({
+            "from": impulse.from.gate,
+            "impulse_id": impulse.impulse.id,
+            "payload": payload,
+        }),
+        1,
+    );
+
+    for gate in &impulse.to.gates {
+        if gate.eq_ignore_ascii_case(&local_gate) {
+            continue;
+        }
+        let Some(ep) = crate::resolve::resolve_endpoint(&ctx, gate, ServiceCapability::MeshRelay)
+        else {
+            continue;
+        };
+        let req = request.clone();
+        let _ = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            if let Ok(rt) = rt {
+                let _ = rt.block_on(crate::jsonrpc::call_endpoint(&ep, &req));
+            }
+        });
     }
 }
 
@@ -189,5 +233,37 @@ mod tests {
     fn discover_socket_returns_none_for_missing() {
         let result = discover_socket("nonexistent-primal-socket.sock");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn relay_socket_name_uses_capability() {
+        let name = relay_socket_name();
+        assert!(
+            name.contains("songbird"),
+            "relay socket should be songbird, got: {name}"
+        );
+        assert!(name.ends_with("-default.sock"));
+    }
+
+    #[test]
+    fn signer_socket_name_uses_capability() {
+        let name = signer_socket_name();
+        assert!(
+            name.contains("beardog"),
+            "signer socket should be beardog, got: {name}"
+        );
+        assert!(name.ends_with("-default.sock"));
+    }
+
+    #[test]
+    fn discover_socket_env_key_format() {
+        let env_key = format!(
+            "MEMBRANE_SOCKET_{}",
+            "songbird-default.sock"
+                .split_once('-')
+                .map_or("songbird-default.sock", |(prefix, _)| prefix)
+                .to_ascii_uppercase()
+        );
+        assert_eq!(env_key, "MEMBRANE_SOCKET_SONGBIRD");
     }
 }

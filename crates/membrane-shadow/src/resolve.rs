@@ -128,6 +128,10 @@ fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
 }
 
 /// Resolve a local UDS endpoint — check socket existence in priority order.
+///
+/// Checks `api_socket` convention (e.g. `neural-api-default.sock` for biomeOS),
+/// primary binary socket, and XDG fallbacks. Returns the first existing socket,
+/// or the highest-priority candidate if none exist.
 fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<TransportEndpoint> {
     if !svc.has_socket {
         return svc.port.map(|port| TransportEndpoint::Tcp {
@@ -137,10 +141,17 @@ fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<T
     }
 
     let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
-    let candidates = [
-        format!("{}/{}.sock", ctx.socket_base, svc.binary),
-        format!("{}/{ns}/{}.sock", ctx.xdg_runtime, svc.binary),
-    ];
+    let mut candidates: Vec<String> = Vec::with_capacity(6);
+
+    if let Some(api) = svc.api_socket {
+        candidates.push(format!("{}/{api}-default.sock", ctx.socket_base));
+        candidates.push(format!("{}/{api}.sock", ctx.socket_base));
+    }
+    candidates.push(format!("{}/{}.sock", ctx.socket_base, svc.binary));
+    candidates.push(format!("{}/{ns}/{}.sock", ctx.xdg_runtime, svc.binary));
+    if let Some(api) = svc.api_socket {
+        candidates.push(format!("{}/{ns}/{api}-default.sock", ctx.xdg_runtime));
+    }
 
     for path in &candidates {
         if std::path::Path::new(path).exists() {
@@ -321,5 +332,58 @@ mod tests {
             }
             _ => panic!("expected UDS"),
         }
+    }
+
+    #[test]
+    fn local_uds_resolves_biomeos_for_identity() {
+        let ctx = test_ctx("test");
+        let svc = MembraneService::with_capability(ServiceCapability::Identity).unwrap();
+        assert_eq!(
+            svc.binary, "biomeos",
+            "Identity capability should resolve to biomeOS"
+        );
+        assert_eq!(svc.api_socket, Some("neural-api"));
+        let ep = resolve_local_uds(&ctx, svc);
+        match ep.unwrap() {
+            TransportEndpoint::Uds { path } => {
+                assert!(
+                    path.contains("neural-api") || path.contains("biomeos"),
+                    "biomeOS UDS should resolve to neural-api or biomeos socket, got: {path}"
+                );
+            }
+            _ => panic!("expected UDS for biomeOS"),
+        }
+    }
+
+    #[test]
+    fn local_uds_candidates_include_api_and_binary() {
+        let ctx = test_ctx("test");
+        let svc = MembraneService::with_capability(ServiceCapability::Identity).unwrap();
+        let ep = resolve_local_uds(&ctx, svc).unwrap();
+        if let TransportEndpoint::Uds { path } = ep {
+            assert!(
+                path.contains("neural-api") || path.contains("biomeos"),
+                "expected neural-api or biomeos in path, got: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn identity_resolves_to_biomeos_not_sweetgrass() {
+        let svc = MembraneService::with_capability(ServiceCapability::Identity).unwrap();
+        assert_eq!(svc.binary, "biomeos");
+        assert_ne!(svc.binary, "sweetgrass");
+    }
+
+    #[test]
+    fn resolve_endpoint_identity_on_remote_gate() {
+        let ctx = test_ctx("sporeGate");
+        let ep = resolve_endpoint(&ctx, "golgi", ServiceCapability::Identity);
+        assert!(ep.is_some());
+        let ep = ep.unwrap();
+        assert!(
+            !ep.is_local() || ep.is_relayed(),
+            "remote gate should resolve to TCP or relay"
+        );
     }
 }

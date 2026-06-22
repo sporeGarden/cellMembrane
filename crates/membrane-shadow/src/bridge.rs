@@ -191,8 +191,11 @@ impl NeuralBridge {
 
 /// Try routing through the Neural API, falling back to shadow execution.
 ///
-/// Returns `Some(result)` if a primal handled the request, or `None` to
-/// indicate the shadow implementation should proceed.
+/// Discovery order:
+///   1. Local Neural API (biomeOS on this gate)
+///   2. Cross-gate resolver (finds biomeOS on another gate via manifest,
+///      routes through TCP or songBird relay.forward)
+///   3. `None` → caller proceeds with shadow implementation
 ///
 /// This is the core graduated composition primitive: as primals come online,
 /// they handle capabilities natively; when unavailable, shadow code runs.
@@ -201,11 +204,50 @@ pub async fn try_bridge(
     method: &str,
     params: serde_json::Value,
 ) -> Option<serde_json::Value> {
-    let bridge = NeuralBridge::discover()?;
-    match bridge.capability_call(domain, method, params).await {
-        BridgeResult::Handled(result) => Some(result),
-        BridgeResult::Fallthrough => None,
+    if let Some(bridge) = NeuralBridge::discover() {
+        match bridge.capability_call(domain, method, params.clone()).await {
+            BridgeResult::Handled(result) => return Some(result),
+            BridgeResult::Fallthrough => {}
+        }
     }
+
+    try_cross_gate_bridge(domain, method, &params).await
+}
+
+/// Attempt cross-gate neural-api resolution via the transport resolver.
+///
+/// If no local biomeOS is running, resolves the "biomeos" role from the
+/// manifest and routes through `call_endpoint` (TCP or relay.forward).
+async fn try_cross_gate_bridge(
+    domain: &str,
+    method: &str,
+    params: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let ctx = crate::resolve::ResolutionContext::from_env();
+    let ep = crate::resolve::resolve_by_role(&ctx, "biomeos")?;
+
+    if ep.is_local() {
+        return None;
+    }
+
+    let request = crate::jsonrpc::request_with_params(
+        "capability.call",
+        &serde_json::json!({
+            "capability": domain,
+            "method": method,
+            "params": params,
+        }),
+        1,
+    );
+
+    let response = crate::jsonrpc::call_endpoint(&ep, &request).await.ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&response).ok()?;
+
+    if parsed.get("error").is_some() {
+        return None;
+    }
+
+    parsed.get("result").cloned()
 }
 
 #[cfg(test)]
@@ -263,5 +305,23 @@ mod tests {
         assert!(bridge.is_some() || bridge.is_none());
 
         std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[tokio::test]
+    async fn cross_gate_bridge_falls_through_without_manifest() {
+        let result = try_cross_gate_bridge("gate", "gate.status", &serde_json::json!({})).await;
+        assert!(
+            result.is_none(),
+            "cross-gate bridge should fall through without manifest"
+        );
+    }
+
+    #[tokio::test]
+    async fn try_bridge_returns_none_when_all_paths_fail() {
+        let result = try_bridge("service", "service.list", serde_json::json!({})).await;
+        assert!(
+            result.is_none(),
+            "should return None when no primal or cross-gate path available"
+        );
     }
 }

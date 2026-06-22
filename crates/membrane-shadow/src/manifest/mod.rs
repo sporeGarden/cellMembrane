@@ -213,10 +213,10 @@ pub struct GateProfile {
     /// Functional roles this gate performs (e.g., `["build_hub", "depot", "firewall"]`).
     #[serde(default)]
     pub roles: Vec<String>,
-    /// WireGuard mesh IP (e.g., `"10.13.37.2"`).
+    /// `WireGuard` mesh IP (e.g., `"10.13.37.2"`).
     #[serde(default)]
     pub wg_ip: Option<String>,
-    /// WireGuard public key.
+    /// `WireGuard` public key.
     #[serde(default)]
     pub wg_pubkey: Option<String>,
     /// Hostname or primary IP for SSH/direct access.
@@ -231,7 +231,7 @@ pub struct GateProfile {
     /// LAN subnet this gate serves (e.g., `"192.168.4.0/22"`).
     #[serde(default)]
     pub lan_subnet: Option<String>,
-    /// WAN endpoint for WireGuard peers to reach this gate.
+    /// WAN endpoint for `WireGuard` peers to reach this gate.
     #[serde(default)]
     pub wan_endpoint: Option<String>,
 }
@@ -347,7 +347,7 @@ impl EcosystemManifest {
             .collect()
     }
 
-    /// Resolve the WireGuard mesh IP for a named gate.
+    /// Resolve the `WireGuard` mesh IP for a named gate.
     #[must_use]
     pub fn mesh_ip_for(&self, gate: &str) -> Option<String> {
         self.gates.get(gate).and_then(|p| p.wg_ip.clone())
@@ -361,9 +361,10 @@ pub use wave::{ExitCriterion, WaveState};
 /// Falls back to the hardcoded VPS address if manifest is unavailable.
 #[must_use]
 pub fn resolve_federation_peer() -> String {
-    let workspace = std::env::var("ECOPRIMALS_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/home/sporegate/Development/ecoPrimals"));
+    let workspace = std::env::var("ECOPRIMALS_ROOT").map_or_else(
+        |_| PathBuf::from("/home/sporegate/Development/ecoPrimals"),
+        PathBuf::from,
+    );
     if let Ok(manifest) = load_from_workspace(&workspace) {
         let hub_gates = manifest.gates_for_role("wg_hub");
         if let Some((_, profile)) = hub_gates.first() {

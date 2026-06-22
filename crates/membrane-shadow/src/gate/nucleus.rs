@@ -237,12 +237,9 @@ fn generate_secrets_env() -> String {
         return config_dir;
     }
 
-    let secret = match csprng_hex(64) {
-        Some(s) => s,
-        None => {
-            tracing::warn!("failed to read /dev/urandom — secrets.env not generated");
-            return config_dir;
-        }
+    let Some(secret) = csprng_hex(64) else {
+        tracing::warn!("failed to read /dev/urandom — secrets.env not generated");
+        return config_dir;
     };
     let content = format!("NESTGATE_JWT_SECRET={secret}\n");
     if let Ok(mut f) = std::fs::File::create(&env_file) {
@@ -412,8 +409,12 @@ mod tests {
     fn generate_unit_content_has_systemd_sections() {
         let svc = MembraneService::with_capability(ServiceCapability::CryptoSigner)
             .expect("CryptoSigner must exist");
-        let content =
-            generate_unit_content(svc, "/usr/bin/beardog server --socket /run/x", "", "/etc/membrane");
+        let content = generate_unit_content(
+            svc,
+            "/usr/bin/beardog server --socket /run/x",
+            "",
+            "/etc/membrane",
+        );
         assert!(content.contains("[Unit]"), "missing [Unit]");
         assert!(content.contains("[Service]"), "missing [Service]");
         assert!(content.contains("[Install]"), "missing [Install]");
