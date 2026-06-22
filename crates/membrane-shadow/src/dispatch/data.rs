@@ -95,18 +95,6 @@ pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result
             let gate_name = cli::require_arg(args, 0, "gate_name")?;
             topology_resolve(gate_name).await
         }
-        "topology.service" => {
-            let role = cli::require_arg(args, 0, "role")?;
-            topology_service_resolve(role).await
-        }
-        "topology.endpoint" => {
-            let first = cli::require_arg(args, 0, "gate_or_role")?;
-            args.get(1).copied().map_or_else(
-                || Ok(topology_endpoint_by_role(first)),
-                |second| Ok(topology_endpoint(first, second)),
-            )
-        }
-        "topology.roles" => topology_roles().await,
         "topology.zones" => topology_zones().await,
         "topology.mesh" => Ok(topology_mesh()),
         "topology.summary" => {
@@ -144,9 +132,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
     let mobility = profile
         .and_then(|p| p.mobility.as_deref())
         .unwrap_or("unknown");
-    let mesh_ip_owned = m
-        .mesh_ip_for(gate_name)
-        .unwrap_or_else(|| "unpeered".into());
+    let mesh_ip = mesh_address(gate_name).unwrap_or("unpeered");
     let mesh_peer = profile.and_then(|p| p.mesh_peer.as_deref());
     let hub_port = profile.and_then(|p| p.hub_port.as_deref());
     let link_speed = profile.and_then(|p| p.link_speed_mbps);
@@ -168,7 +154,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
             "  envelope:    {envelope} ({} boundaries)",
             envelope.boundary_count()
         ),
-        format!("  mesh_ip:     {mesh_ip_owned}"),
+        format!("  mesh_ip:     {mesh_ip}"),
     ];
 
     if let Some(peer) = mesh_peer {
@@ -200,7 +186,7 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         "target": target,
         "mobility": mobility,
         "envelope": envelope.to_string(),
-        "mesh_ip": mesh_ip_owned,
+        "mesh_ip": mesh_ip,
         "mesh_peer": mesh_peer,
         "hub_port": hub_port,
         "link_speed_mbps": link_speed,
@@ -316,219 +302,21 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
     ))
 }
 
-/// Resolve which gate(s) provide a service role — identity-based discovery.
-///
-/// `membrane topology.service forgejo` → finds the gate with `roles = ["forgejo"]`
-/// and returns its mesh IP, zone, transport.
-async fn topology_service_resolve(role: &str) -> crate::Result<ShadowOutcome> {
-    let root = temporal::resolve_workspace_root()?;
-    let m = manifest::load_from_workspace_async(&root).await?;
-
-    let providers = m.gates_for_role(role);
-    if providers.is_empty() {
-        return Ok(ShadowOutcome::fail(format!(
-            "no gate provides role '{role}' — add roles = [\"{role}\"] to gate profile in ecosystem_manifest.toml"
-        )));
-    }
-
-    let mut lines = vec![format!("=== Service: {role} ===")];
-    let mut data_entries = Vec::new();
-
-    for (gate_name, profile) in &providers {
-        let mesh_ip = m
-            .mesh_ip_for(gate_name)
-            .unwrap_or_else(|| "unpeered".into());
-        let zone = profile
-            .zone
-            .unwrap_or_else(|| ZoneLabel::for_gate(gate_name));
-        let transport = profile.transport.unwrap_or_default();
-
-        lines.push(format!(
-            "  {gate_name:<14} {mesh_ip:<14} {zone} ({transport})"
-        ));
-
-        data_entries.push(serde_json::json!({
-            "gate": gate_name,
-            "mesh_ip": mesh_ip,
-            "zone": zone.label(),
-            "transport": transport.to_string(),
-            "roles": profile.roles,
-            "mesh_peer": profile.mesh_peer,
-            "composition": profile.composition,
-        }));
-    }
-
-    if providers.len() == 1 {
-        lines.push(format!(
-            "\n  → {role} is hosted on {} (single provider)",
-            providers[0].0
-        ));
-    } else {
-        lines.push(format!(
-            "\n  → {role} available on {} gates (multi-provider)",
-            providers.len()
-        ));
-    }
-
-    Ok(ShadowOutcome::ok_with(
-        lines.join("\n"),
-        serde_json::json!(data_entries),
-    ))
-}
-
-/// List all roles across all gates — shows the role→gate mapping.
-async fn topology_roles() -> crate::Result<ShadowOutcome> {
-    let root = temporal::resolve_workspace_root()?;
-    let m = manifest::load_from_workspace_async(&root).await?;
-
-    let mut role_map: std::collections::BTreeMap<String, Vec<String>> =
-        std::collections::BTreeMap::new();
-
-    for (gate_name, profile) in &m.gates {
-        for role in &profile.roles {
-            role_map
-                .entry(role.clone())
-                .or_default()
-                .push(gate_name.clone());
-        }
-    }
-
-    if role_map.is_empty() {
-        return Ok(ShadowOutcome::ok(String::from(
-            "no roles defined — add roles = [...] to gate profiles in ecosystem_manifest.toml",
-        )));
-    }
-
-    let mut lines = vec!["=== Service Role Map ===".to_owned()];
-    let mut data = serde_json::Map::new();
-
-    for (role, gates) in &role_map {
-        lines.push(format!("  {role:<24} → {}", gates.join(", ")));
-        data.insert(role.clone(), serde_json::json!(gates));
-    }
-
-    lines.push(format!(
-        "\n{} roles across {} gates",
-        role_map.len(),
-        m.gates.len()
-    ));
-
-    Ok(ShadowOutcome::ok_with(
-        lines.join("\n"),
-        serde_json::Value::Object(data),
-    ))
-}
-
-fn topology_endpoint(gate_name: &str, capability_str: &str) -> ShadowOutcome {
-    let ctx = crate::resolve::ResolutionContext::from_env();
-
-    let Some(capability) = parse_capability_name(capability_str) else {
-        return ShadowOutcome::fail(format!(
-            "unknown capability: {capability_str} \
-             (try: crypto, relay, content, turn, observe, compute, storage, identity, \
-             depot, build, auth, nest, biomeos, metrics)"
-        ));
-    };
-
-    crate::resolve::resolve_endpoint(&ctx, gate_name, capability).map_or_else(
-        || ShadowOutcome::fail(format!("no transport path to {gate_name}/{capability_str}")),
-        |ep| {
-            let data = serde_json::json!({
-                "gate": gate_name,
-                "capability": capability_str,
-                "transport": ep.transport_name(),
-                "uri": ep.display_uri(),
-                "local": ep.is_local(),
-                "relayed": ep.is_relayed(),
-            });
-            ShadowOutcome::ok_with(
-                format!(
-                    "{gate_name}/{capability_str} → {} ({})",
-                    ep.display_uri(),
-                    ep.transport_name()
-                ),
-                data,
-            )
-        },
-    )
-}
-
-fn topology_endpoint_by_role(role: &str) -> ShadowOutcome {
-    let ctx = crate::resolve::ResolutionContext::from_env();
-
-    crate::resolve::resolve_by_role(&ctx, role).map_or_else(
-        || {
-            ShadowOutcome::fail(format!(
-                "no transport path for role '{role}' — no gate provides it"
-            ))
-        },
-        |ep| {
-            let data = serde_json::json!({
-                "role": role,
-                "transport": ep.transport_name(),
-                "uri": ep.display_uri(),
-                "local": ep.is_local(),
-                "relayed": ep.is_relayed(),
-            });
-            ShadowOutcome::ok_with(
-                format!("{role} → {} ({})", ep.display_uri(), ep.transport_name()),
-                data,
-            )
-        },
-    )
-}
-
-fn parse_capability_name(s: &str) -> Option<cellmembrane_types::service::ServiceCapability> {
-    use cellmembrane_types::service::ServiceCapability;
-    match s {
-        "signer" => Some(ServiceCapability::CryptoSigner),
-        "mesh" => Some(ServiceCapability::MeshRelay),
-        "observe" => Some(ServiceCapability::Observability),
-        _ => crate::resolve::role_to_capability(s),
-    }
-}
-
 fn topology_mesh() -> ShadowOutcome {
-    let gates = discover_mesh_gates();
-    let subnet = cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET;
-    let mut lines = vec![format!("=== WireGuard Mesh ({subnet}) ===")];
+    let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
+    let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
 
-    let manifest = temporal::resolve_workspace_root().ok().and_then(|root| {
-        let path = root
-            .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
-            .join("ecosystem_manifest.toml");
-        crate::manifest::EcosystemManifest::load(&path).ok()
-    });
-
-    for gate in &gates {
-        let ip = manifest
-            .as_ref()
-            .and_then(|m| m.mesh_ip_for(gate))
-            .or_else(|| mesh_address(gate).map(String::from));
-        if let Some(ip) = ip {
+    for gate in &known {
+        if let Some(ip) = mesh_address(gate) {
             let zone = ZoneLabel::for_gate(gate);
-            let source = if manifest
-                .as_ref()
-                .and_then(|m| m.gates.get(gate.as_str()))
-                .and_then(|p| p.wg_ip.as_ref())
-                .is_some()
-            {
-                "manifest"
-            } else {
-                "bootstrap"
-            };
-            lines.push(format!("  {gate:<14} {ip:<14} {zone:<12} ({source})"));
+            lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
         }
     }
 
-    let data: Vec<serde_json::Value> = gates
+    let data: Vec<serde_json::Value> = known
         .iter()
         .filter_map(|g| {
-            let ip = manifest
-                .as_ref()
-                .and_then(|m| m.mesh_ip_for(g))
-                .or_else(|| mesh_address(g).map(String::from));
-            ip.map(|ip| {
+            mesh_address(g).map(|ip| {
                 serde_json::json!({
                     "gate": g,
                     "ip": ip,
@@ -539,36 +327,6 @@ fn topology_mesh() -> ShadowOutcome {
         .collect();
 
     ShadowOutcome::ok_with(lines.join("\n"), serde_json::json!(data))
-}
-
-/// Discover mesh gates from topology map, falling back to cytoplasm bootstrap set.
-fn discover_mesh_gates() -> Vec<String> {
-    if let Ok(root) = temporal::resolve_workspace_root() {
-        match topology::load_topology_map(&root) {
-            Ok(map) => {
-                let mut gates: Vec<String> = map
-                    .segments
-                    .values()
-                    .filter(|s| {
-                        s.transport.contains("wireguard") || s.transport.contains("overlay")
-                    })
-                    .flat_map(|s| s.gates.iter().cloned())
-                    .collect();
-                gates.sort();
-                gates.dedup();
-                if !gates.is_empty() {
-                    return gates;
-                }
-            }
-            Err(e) => {
-                tracing::debug!(error = %e, "topology map unavailable, using bootstrap gates");
-            }
-        }
-    }
-    cellmembrane_types::cytoplasm::BOOTSTRAP_GATES
-        .iter()
-        .map(|&(name, _)| name.to_string())
-        .collect()
 }
 
 // ── Identity domain ──────────────────────────────────────────────────
@@ -657,95 +415,5 @@ pub(super) async fn dispatch_context(cmd: &str, args: &[&str]) -> crate::Result<
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown context command: {cmd}"
         ))),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cellmembrane_types::service::ServiceCapability;
-
-    #[test]
-    fn parse_capability_name_aliases() {
-        assert_eq!(
-            parse_capability_name("signer"),
-            Some(ServiceCapability::CryptoSigner)
-        );
-        assert_eq!(
-            parse_capability_name("mesh"),
-            Some(ServiceCapability::MeshRelay)
-        );
-        assert_eq!(
-            parse_capability_name("observe"),
-            Some(ServiceCapability::Observability)
-        );
-    }
-
-    #[test]
-    fn parse_capability_name_roles() {
-        assert_eq!(
-            parse_capability_name("relay"),
-            Some(ServiceCapability::MeshRelay)
-        );
-        assert_eq!(
-            parse_capability_name("security"),
-            Some(ServiceCapability::CryptoSigner)
-        );
-        assert_eq!(
-            parse_capability_name("content"),
-            Some(ServiceCapability::ContentServing)
-        );
-        assert_eq!(
-            parse_capability_name("compute"),
-            Some(ServiceCapability::ComputeOrchestration)
-        );
-        assert_eq!(
-            parse_capability_name("storage"),
-            Some(ServiceCapability::Storage)
-        );
-    }
-
-    #[test]
-    fn parse_capability_name_service_names() {
-        assert_eq!(
-            parse_capability_name("forgejo"),
-            Some(ServiceCapability::ContentServing)
-        );
-        assert_eq!(
-            parse_capability_name("depot"),
-            Some(ServiceCapability::ContentServing)
-        );
-        assert_eq!(
-            parse_capability_name("build"),
-            Some(ServiceCapability::ComputeOrchestration)
-        );
-        assert_eq!(
-            parse_capability_name("auth"),
-            Some(ServiceCapability::CryptoSigner)
-        );
-        assert_eq!(
-            parse_capability_name("nest"),
-            Some(ServiceCapability::Storage)
-        );
-    }
-
-    #[test]
-    fn parse_capability_name_unknown() {
-        assert!(parse_capability_name("nonexistent").is_none());
-        assert!(parse_capability_name("").is_none());
-    }
-
-    #[test]
-    fn topology_endpoint_unknown_capability_fails() {
-        let outcome = topology_endpoint("golgi", "nonexistent");
-        assert!(!outcome.ok);
-        assert!(outcome.message.contains("unknown capability"));
-    }
-
-    #[test]
-    fn topology_endpoint_by_role_unknown_fails() {
-        let outcome = topology_endpoint_by_role("nonexistent_role");
-        assert!(!outcome.ok);
-        assert!(outcome.message.contains("no transport path"));
     }
 }

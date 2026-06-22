@@ -172,9 +172,6 @@ pub struct GateProfile {
     /// List of repo short names this gate syncs.
     #[serde(default)]
     pub repos: Vec<String>,
-    /// IP or hostname of this gate (e.g., `"157.230.3.183"` for VPS gates).
-    #[serde(default)]
-    pub host: Option<String>,
     /// Target architecture (e.g. `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`).
     #[serde(default)]
     pub target: Option<String>,
@@ -213,35 +210,28 @@ pub struct GateProfile {
     /// Site topology annotation (e.g., `"triangle_3hub_backbone"`).
     #[serde(default)]
     pub site_topology: Option<String>,
-    /// Roles this gate fulfills (e.g., `["relay", "depot", "dns_primary", "forgejo"]`).
-    ///
-    /// Roles are service-level capabilities: any gate can absorb any role via
-    /// `gate.bootstrap --roles`. Used by `topology.service` for identity-based
-    /// service resolution.
+    /// Functional roles this gate performs (e.g., `["build_hub", "depot", "firewall"]`).
     #[serde(default)]
     pub roles: Vec<String>,
-    /// `WireGuard` mesh IP address for this gate (e.g., `"10.13.37.1"`).
-    ///
-    /// When set, overrides the `BOOTSTRAP_GATES` static registry and
-    /// `mesh_address_from_topology()` derivation. This is the authoritative
-    /// mesh address for the gate.
+    /// WireGuard mesh IP (e.g., `"10.13.37.2"`).
     #[serde(default)]
     pub wg_ip: Option<String>,
-    /// WAN-facing network interface (e.g., `"enp1s0"`). Used by `firewall.generate`
-    /// to auto-derive `NftablesConfig` for plasma membrane gates.
-    #[serde(default)]
-    pub wan_interface: Option<String>,
-    /// LAN-facing network interface (e.g., `"eno1"`). Used by `firewall.generate`
-    /// to auto-derive `NftablesConfig` for plasma membrane gates.
-    #[serde(default)]
-    pub lan_interface: Option<String>,
-    /// LAN subnet in CIDR notation (e.g., `"192.168.4.0/22"`).
-    #[serde(default)]
-    pub lan_subnet: Option<String>,
-    /// Public key for this gate's `WireGuard` interface.
+    /// WireGuard public key.
     #[serde(default)]
     pub wg_pubkey: Option<String>,
-    /// Public WAN endpoint host/IP (used by remote peers in wg0.conf).
+    /// Hostname or primary IP for SSH/direct access.
+    #[serde(default)]
+    pub host: Option<String>,
+    /// WAN-facing interface name (e.g., `"enp1s0"`).
+    #[serde(default)]
+    pub wan_interface: Option<String>,
+    /// LAN-facing interface name (e.g., `"eno1"`).
+    #[serde(default)]
+    pub lan_interface: Option<String>,
+    /// LAN subnet this gate serves (e.g., `"192.168.4.0/22"`).
+    #[serde(default)]
+    pub lan_subnet: Option<String>,
+    /// WAN endpoint for WireGuard peers to reach this gate.
     #[serde(default)]
     pub wan_endpoint: Option<String>,
 }
@@ -316,47 +306,6 @@ impl EcosystemManifest {
         orgs
     }
 
-    /// Resolve a service by role name — find which gate(s) provide it.
-    ///
-    /// Returns `(gate_name, gate_profile)` pairs for every gate whose `roles`
-    /// list contains the queried role. This is the identity-based resolution
-    /// that replaces hard-wired host→IP mappings.
-    ///
-    /// Example roles: `"forgejo"`, `"relay"`, `"depot"`, `"dns_primary"`,
-    /// `"dns_secondary"`, `"external_publisher"`, `"build_hub"`.
-    #[must_use]
-    pub fn gates_for_role(&self, role: &str) -> Vec<(&str, &GateProfile)> {
-        self.gates
-            .iter()
-            .filter(|(_, profile)| profile.roles.iter().any(|r| r == role))
-            .map(|(name, profile)| (name.as_str(), profile))
-            .collect()
-    }
-
-    /// Resolve a gate's `WireGuard` mesh IP — manifest-authoritative with fallback.
-    ///
-    /// Priority: `GateProfile.wg_ip` → `BOOTSTRAP_GATES` static registry.
-    #[must_use]
-    pub fn mesh_ip_for(&self, gate: &str) -> Option<String> {
-        self.gates
-            .get(gate)
-            .and_then(|p| p.wg_ip.clone())
-            .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate).map(String::from))
-    }
-
-    /// Resolve the federation hub peer address from manifest roles.
-    ///
-    /// Looks for gates with role `"relay"` and a defined `wg_ip`, then builds
-    /// `{wg_ip}:{federation_port}`. Returns the first match, preferring manifest
-    /// data over hardcoded constants.
-    #[must_use]
-    pub fn federation_hub_address(&self) -> Option<String> {
-        let port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
-        self.gates_for_role("relay")
-            .into_iter()
-            .find_map(|(name, _)| self.mesh_ip_for(name).map(|ip| format!("{ip}:{port}")))
-    }
-
     /// Get repos filtered by membrane type.
     #[must_use]
     pub fn repos_by_membrane(&self, membrane: &str) -> Vec<(&str, &RepoEntry)> {
@@ -386,10 +335,48 @@ impl EcosystemManifest {
     pub fn forgejo_clone_url(&self, entry: &RepoEntry) -> String {
         format!("{}/{}.git", self.sync.forgejo_ssh, entry.forgejo_repo)
     }
+
+    /// Find gates that have a specific role in their roles list.
+    /// Returns `(gate_name, &GateProfile)` tuples.
+    #[must_use]
+    pub fn gates_for_role(&self, role: &str) -> Vec<(&str, &GateProfile)> {
+        self.gates
+            .iter()
+            .filter(|(_, profile)| profile.roles.iter().any(|r| r == role))
+            .map(|(name, profile)| (name.as_str(), profile))
+            .collect()
+    }
+
+    /// Resolve the WireGuard mesh IP for a named gate.
+    #[must_use]
+    pub fn mesh_ip_for(&self, gate: &str) -> Option<String> {
+        self.gates.get(gate).and_then(|p| p.wg_ip.clone())
+    }
 }
 
 mod wave;
 pub use wave::{ExitCriterion, WaveState};
+
+/// Resolve the federation peer address from the manifest (golgi by default).
+/// Falls back to the hardcoded VPS address if manifest is unavailable.
+#[must_use]
+pub fn resolve_federation_peer() -> String {
+    let workspace = std::env::var("ECOPRIMALS_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/home/sporegate/Development/ecoPrimals"));
+    if let Ok(manifest) = load_from_workspace(&workspace) {
+        let hub_gates = manifest.gates_for_role("wg_hub");
+        if let Some((_, profile)) = hub_gates.first() {
+            if let Some(ref host) = profile.host {
+                return format!("{host}:7700");
+            }
+            if let Some(ref ip) = profile.wg_ip {
+                return format!("{ip}:7700");
+            }
+        }
+    }
+    "10.13.37.1:7700".to_string()
+}
 
 /// Convenience: load manifest from workspace root.
 ///
@@ -397,7 +384,7 @@ pub use wave::{ExitCriterion, WaveState};
 /// Returns error if manifest not found or unparseable.
 pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
-        ShadowError::Config(format!(
+        ShadowError::Parse(format!(
             "ecosystem_manifest.toml not found under {}",
             workspace_root.display()
         ))
@@ -411,37 +398,12 @@ pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
 /// Returns error if manifest not found or unparseable.
 pub async fn load_from_workspace_async(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
-        ShadowError::Config(format!(
+        ShadowError::Parse(format!(
             "ecosystem_manifest.toml not found under {}",
             workspace_root.display()
         ))
     })?;
     EcosystemManifest::load_async(path).await
-}
-
-/// Resolve the federation hub peer address with manifest-first priority.
-///
-/// Resolution chain: manifest (`gates_for_role("relay")` + `wg_ip`) →
-/// `MEMBRANE_VPS_PEER` env var → `DEFAULT_VPS_MESH_PEER` constant.
-#[must_use]
-pub fn resolve_federation_peer() -> String {
-    if let Ok(env_peer) = std::env::var(cellmembrane_types::service::ENV_VPS_MESH_PEER) {
-        if !env_peer.is_empty() {
-            return env_peer;
-        }
-    }
-    if let Ok(root) = crate::temporal::resolve_workspace_root() {
-        if let Ok(manifest) = load_from_workspace(&root) {
-            if let Some(addr) = manifest.federation_hub_address() {
-                return addr;
-            }
-        }
-    }
-    format!(
-        "{}:{}",
-        cellmembrane_types::service::DEFAULT_VPS_HOST,
-        cellmembrane_types::service::DEFAULT_FEDERATION_PORT
-    )
 }
 
 #[cfg(test)]
@@ -581,126 +543,5 @@ version = "1.0.0"
         assert_eq!(manifest.sync.default_branch, "main");
         assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::Flag);
         assert_eq!(manifest.sync.push_target, PushTarget::All);
-    }
-
-    #[test]
-    fn gates_for_role_finds_providers() {
-        let toml_str = r#"
-[meta]
-version = "1.0.0"
-[sync]
-
-[gates.golgi]
-repos = []
-roles = ["forgejo", "relay", "depot", "dns_primary"]
-wg_ip = "10.13.37.1"
-
-[gates.sporeGate]
-repos = ["cellMembrane"]
-roles = ["build_hub", "depot"]
-wg_ip = "10.13.37.2"
-
-[gates.eastGate]
-repos = ["cellMembrane"]
-roles = []
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-
-        let forgejo = manifest.gates_for_role("forgejo");
-        assert_eq!(forgejo.len(), 1);
-        assert_eq!(forgejo[0].0, "golgi");
-
-        let depot = manifest.gates_for_role("depot");
-        assert_eq!(depot.len(), 2);
-
-        let missing = manifest.gates_for_role("nonexistent");
-        assert!(missing.is_empty());
-    }
-
-    #[test]
-    fn mesh_ip_for_prefers_manifest() {
-        let toml_str = r#"
-[meta]
-version = "1.0.0"
-[sync]
-
-[gates.golgi]
-repos = []
-wg_ip = "10.13.37.100"
-
-[gates.sporeGate]
-repos = []
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-
-        assert_eq!(
-            manifest.mesh_ip_for("golgi"),
-            Some("10.13.37.100".into()),
-            "manifest wg_ip should override BOOTSTRAP_GATES"
-        );
-
-        assert_eq!(
-            manifest.mesh_ip_for("sporeGate"),
-            Some("10.13.37.2".into()),
-            "no manifest wg_ip → fall back to BOOTSTRAP_GATES"
-        );
-
-        assert_eq!(manifest.mesh_ip_for("unknown"), None, "unknown gate → None");
-    }
-
-    #[test]
-    fn roles_and_wg_ip_parse() {
-        let toml_str = r#"
-[meta]
-version = "1.0.0"
-[sync]
-
-[gates.golgi]
-repos = []
-roles = ["forgejo", "relay"]
-wg_ip = "10.13.37.1"
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        let g = &manifest.gates["golgi"];
-        assert_eq!(g.roles, vec!["forgejo", "relay"]);
-        assert_eq!(g.wg_ip.as_deref(), Some("10.13.37.1"));
-    }
-
-    #[test]
-    fn federation_hub_from_relay_role() {
-        let toml_str = r#"
-[meta]
-version = "1.0.0"
-[sync]
-
-[gates.golgi]
-repos = []
-roles = ["relay", "forgejo"]
-wg_ip = "10.13.37.1"
-
-[gates.sporeGate]
-repos = []
-roles = ["build"]
-wg_ip = "10.13.37.2"
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        let hub = manifest.federation_hub_address();
-        assert_eq!(hub, Some("10.13.37.1:7700".into()));
-    }
-
-    #[test]
-    fn federation_hub_none_without_relay_role() {
-        let toml_str = r#"
-[meta]
-version = "1.0.0"
-[sync]
-
-[gates.sporeGate]
-repos = []
-roles = ["build"]
-wg_ip = "10.13.37.2"
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        assert!(manifest.federation_hub_address().is_none());
     }
 }
