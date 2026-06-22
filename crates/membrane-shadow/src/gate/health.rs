@@ -120,7 +120,7 @@ async fn probe_mesh_status() -> (bool, String) {
 
     match uds_jsonrpc_call(&socket_path, &request.to_string()).await {
         Ok(response) => parse_mesh_response(&response),
-        Err(e) => (false, e),
+        Err(e) => (false, e.to_string()),
     }
 }
 
@@ -366,10 +366,7 @@ async fn git_rev_parse(repo_dir: &Path, refspec: &str) -> Option<String> {
 
 // ── Native UDS JSON-RPC client (delegates to crate::jsonrpc) ──────────
 
-pub(crate) async fn uds_jsonrpc_call(
-    socket_path: &str,
-    request: &str,
-) -> std::result::Result<String, String> {
+pub(crate) async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> crate::Result<String> {
     let policy = crate::ribocipher::RiboCipherConfig::probe_policy();
     crate::jsonrpc::call_with_policy(Path::new(socket_path), request, &policy).await
 }

@@ -55,10 +55,20 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 769 tests — pedantic clippy clean
+cargo test                  # 791 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 123+ (Deep Debt Evolution — Typed RPC Errors + Visibility + Smart Refactors):**
+`ShadowError::Rpc` variant replaces all `Result<_, String>` in JSON-RPC transport (7 async
+functions, 5 caller sites evolved to typed `?` propagation). Visibility tightened: `pub fn` →
+`pub(crate) fn` across cli.rs (7 fns), topology.rs (3 fns), freshness.rs (2 fns), resolve.rs
+(3 fns). `manifest.rs` smart refactored (780L → 706L `mod.rs` + 142L `wave.rs`) extracting
+`WaveState` + `ExitCriterion` lifecycle types. `topology.endpoint <role>` single-arg shortcut
+wires `resolve_by_role` into dispatch. `ironGate` added to `BOOTSTRAP_GATES` (5-node complete).
+Webhook test coverage expanded (+11 tests: classify edge cases, signature verification,
+provider detection). Dispatch capability parsing tests (+6 tests). 791 tests, zero warnings.
 
 **Wave 123 (Deep Evolution — Wire Format Fix + Sovereignty Coverage):**
 `ServiceCapability::wire_name()` const method + `Display` impl — fixes mesh relay routing
@@ -247,6 +257,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Quorum Phase 1 (Wave 123): `gate.quorum` systemd cascade timer, `generate_cascade_timer()` + `install_cascade_timer()`, randomized delay, 754 tests | DONE |
 | TCP transport + role consolidation (Wave 123): `call_tcp()` riboCipher-framed JSON-RPC over WG mesh, `role_to_capability` canonical mapping, help text updated, 758 tests | DONE |
 | Wire format fix + sovereignty coverage (Wave 123): `ServiceCapability::wire_name()` const + `Display`, `parse_verify_response()` with 7-branch tests, `Ssh` → `Parse` error fix, structured JSON error detection, 769 tests | DONE |
+| Deep debt evolution (Wave 123+): `ShadowError::Rpc` typed RPC errors (7 fns, 5 callers), visibility tightening (15 fns `pub`→`pub(crate)`), manifest smart refactor (780L→706+142L), `topology.endpoint <role>` shortcut, `ironGate` in BOOTSTRAP_GATES, webhook+dispatch+wave tests, 791 tests | DONE |
 
 ---
 
@@ -390,7 +401,9 @@ gardens/cellMembrane/
         bridge.rs             # Neural API bridge (UDS discovery)
         identity.rs           # Gate identity resolution (canonical)
         config.rs             # ShadowConfig resolution
-        manifest.rs           # Ecosystem manifest parser
+        manifest/             # Ecosystem manifest parser
+          mod.rs              # EcosystemManifest, GateProfile, load/resolve
+          wave.rs             # WaveState lifecycle + ExitCriterion
         sovereignty_ledger.rs # rootpulse sovereignty ledger
   specs/                      # Formal architecture specs (6 documents)
   config/                     # capability_registry.toml

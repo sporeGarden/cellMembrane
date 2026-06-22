@@ -1,8 +1,15 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-22 (Wave 123)
+**Last updated:** 2026-06-22 (Wave 123+)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 123+ update (Deep Debt — Typed RPC Errors + Visibility + Smart Refactors):**
+`ShadowError::Rpc` typed variant replaces all `Result<_, String>` in JSON-RPC transport
+(7 async fns, 5 caller sites). Visibility tightened: 15 functions `pub` → `pub(crate)` across
+cli, topology, freshness, resolve modules. `manifest.rs` smart refactored (780L → 706L mod.rs
++ 142L wave.rs). `topology.endpoint <role>` single-arg dispatch shortcut. `ironGate` added to
+`BOOTSTRAP_GATES` (5-node bootstrap complete). Webhook test coverage (+11), dispatch capability
+tests (+6), WaveState lifecycle tests (+5). 791 tests, zero clippy/doc warnings.
 **Wave 123 update (Deep Evolution — Wire Format + Sovereignty + Quorum):**
 `ServiceCapability::wire_name()` fixes mesh relay routing bug (Debug format → serde snake_case).
 `parse_verify_response()` pure function for sovereignty ledger with 7-branch test coverage.

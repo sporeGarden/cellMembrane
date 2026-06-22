@@ -56,7 +56,7 @@ impl ResolutionContext {
 ///
 /// Returns `None` if no transport path can be determined.
 #[must_use]
-pub fn resolve_endpoint(
+pub(crate) fn resolve_endpoint(
     ctx: &ResolutionContext,
     target_gate: &str,
     capability: ServiceCapability,
@@ -80,7 +80,7 @@ pub fn resolve_endpoint(
 /// the transport to the first provider. Useful for service discovery:
 /// `resolve_by_role(ctx, "forgejo")` → endpoint for the gate hosting Forgejo.
 #[must_use]
-pub fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<TransportEndpoint> {
+pub(crate) fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<TransportEndpoint> {
     let manifest = load_manifest()?;
     let providers = manifest.gates_for_role(role);
     let (gate_name, profile) = providers.first()?;
@@ -109,7 +109,7 @@ pub fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<TransportE
 /// Covers manifest role strings (e.g. `roles = ["forgejo", "relay"]`)
 /// and their semantic aliases.
 #[must_use]
-pub fn role_to_capability(role: &str) -> Option<ServiceCapability> {
+pub(crate) fn role_to_capability(role: &str) -> Option<ServiceCapability> {
     match role {
         "relay" | "mesh_relay" => Some(ServiceCapability::MeshRelay),
         "turn" | "stun" => Some(ServiceCapability::TurnServer),

@@ -409,12 +409,12 @@ async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
             primal: slot.primal.clone(),
             commit: slot.commit.clone(),
             alive: false,
-            detail: e,
+            detail: e.to_string(),
         },
     }
 }
 
-async fn uds_probe(socket_path: &Path, request: &str) -> Result<String, String> {
+async fn uds_probe(socket_path: &Path, request: &str) -> crate::Result<String> {
     crate::jsonrpc::call(socket_path, request).await
 }
 

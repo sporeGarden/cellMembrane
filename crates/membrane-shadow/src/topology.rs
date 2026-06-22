@@ -20,7 +20,7 @@ use crate::error::{Result, ShadowError};
 ///
 /// Returns `ShadowError::Io` if the file is missing, or `ShadowError::Toml`
 /// if parsing fails.
-pub fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
+pub(crate) fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
     let path = workspace_root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
         .join(cellmembrane_types::service::TOPOLOGY_MAP_FILENAME);
@@ -33,7 +33,7 @@ pub fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
 /// The TOML uses nested `[cytoplasm.zones.<id>]` and `[segments.<id>]` sections
 /// which don't map to a flat serde struct directly. This function extracts each
 /// section manually for resilience against upstream TOML schema evolution.
-pub fn parse_topology_map(contents: &str) -> Result<TopologyMap> {
+pub(crate) fn parse_topology_map(contents: &str) -> Result<TopologyMap> {
     let table: toml::Table = contents.parse().map_err(ShadowError::Toml)?;
 
     let meta = table
@@ -123,7 +123,7 @@ fn extract_latency(table: &toml::Table) -> BTreeMap<String, LatencyEstimate> {
 
 /// Format a `TopologyMap` summary for human output.
 #[must_use]
-pub fn format_topology_summary(map: &TopologyMap) -> String {
+pub(crate) fn format_topology_summary(map: &TopologyMap) -> String {
     use std::fmt::Write;
     let mut out = String::new();
     let _ = writeln!(

@@ -335,7 +335,7 @@ pub fn resolve_workspace_root() -> Result<PathBuf> {
 }
 
 /// Re-export freshness tracking functions (for backward compat from dispatch).
-pub use crate::freshness::check_installed_freshness;
+pub(crate) use crate::freshness::check_installed_freshness;
 
 #[cfg(test)]
 mod tests {

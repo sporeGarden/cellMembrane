@@ -55,21 +55,17 @@ pub async fn rootpulse_commit(
         42,
     );
 
-    match crate::jsonrpc::call(&socket_path, &request).await {
-        Ok(response) => {
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
-                if parsed.get("error").is_some() && parsed.get("result").is_none() {
-                    return Err(ShadowError::Config(format!(
-                        "rootpulse commit graph error: {response}"
-                    )));
-                }
-            }
-            Ok(session_id)
+    let response = crate::jsonrpc::call(&socket_path, &request).await?;
+
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
+        if parsed.get("error").is_some() && parsed.get("result").is_none() {
+            return Err(ShadowError::Config(format!(
+                "rootpulse commit graph error: {response}"
+            )));
         }
-        Err(e) => Err(ShadowError::Parse(format!(
-            "rootpulse commit failed (UDS): {e}"
-        ))),
     }
+
+    Ok(session_id)
 }
 
 /// Sovereignty verification result for a single repo.

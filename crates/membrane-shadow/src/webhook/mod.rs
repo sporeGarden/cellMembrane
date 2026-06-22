@@ -584,4 +584,94 @@ mod tests {
             commits: vec![],
         }
     }
+
+    #[test]
+    fn classify_push_non_default_branch_skips() {
+        let event = sample_push_event("bearDog", "feature/x", "main");
+        let primals = &["beardog"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert!(!action.should_harvest);
+        assert!(!action.should_cascade);
+        assert!(action.reason.contains("non-default branch"));
+    }
+
+    #[test]
+    fn classify_push_unknown_repo_skips() {
+        let event = sample_push_event("randomRepo", "main", "main");
+        let primals = &["beardog", "songbird"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert!(!action.should_harvest);
+        assert!(
+            !action.should_cascade,
+            "unknown repo is neither primal nor cascade"
+        );
+    }
+
+    #[test]
+    fn classify_push_case_insensitive_primal_match() {
+        let event = sample_push_event("BearDog", "main", "main");
+        let primals = &["beardog"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert!(action.should_harvest, "case-insensitive primal match");
+    }
+
+    #[test]
+    fn classify_push_harvest_preserves_original_repo_name() {
+        let event = sample_push_event("BiomeOS", "main", "main");
+        let primals = &["biomeos"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert_eq!(action.repo_name, "BiomeOS", "preserves original casing");
+    }
+
+    #[test]
+    fn classify_push_branch_extracts_from_ref() {
+        let event = sample_push_event("bearDog", "main", "main");
+        let primals = &["beardog"];
+        let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+        assert_eq!(action.branch, "main");
+    }
+
+    #[test]
+    fn verify_signature_wrong_secret_fails() {
+        let body = b"test payload";
+        let sig = compute_hmac_hex(b"correct-secret", body);
+        assert!(verify_signature(b"wrong-secret", body, &sig).is_err());
+    }
+
+    #[test]
+    fn verify_signature_correct_secret_passes() {
+        let body = b"test payload";
+        let sig = compute_hmac_hex(b"mysecret", body);
+        assert!(verify_signature(b"mysecret", body, &sig).is_ok());
+    }
+
+    #[test]
+    fn provider_detect_case_insensitive() {
+        let headers = vec![("X-FORGEJO-SIGNATURE".to_string(), "abc".to_string())];
+        let (provider, _) = WebhookProvider::detect(&headers).expect("should detect");
+        assert_eq!(provider, WebhookProvider::Forgejo);
+    }
+
+    #[test]
+    fn provider_extract_github_strips_prefix() {
+        assert_eq!(
+            WebhookProvider::GitHub.extract_signature("sha256=deadbeef"),
+            "deadbeef"
+        );
+    }
+
+    #[test]
+    fn provider_extract_github_no_prefix_returns_as_is() {
+        assert_eq!(
+            WebhookProvider::GitHub.extract_signature("noprefix"),
+            "noprefix"
+        );
+    }
+
+    #[test]
+    fn constant_time_eq_basic() {
+        assert!(constant_time_eq(b"hello", b"hello"));
+        assert!(!constant_time_eq(b"hello", b"world"));
+        assert!(!constant_time_eq(b"short", b"longer"));
+    }
 }

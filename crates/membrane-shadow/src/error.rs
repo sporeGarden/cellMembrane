@@ -64,6 +64,10 @@ pub enum ShadowError {
     /// JSON serialization/deserialization error.
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// JSON-RPC transport failure (UDS, TCP, or relay).
+    #[error("rpc: {0}")]
+    Rpc(String),
 }
 
 /// Result type for shadow operations.
@@ -175,6 +179,9 @@ mod tests {
 
         let e = ShadowError::Config("missing key".into());
         assert_eq!(e.to_string(), "config: missing key");
+
+        let e = ShadowError::Rpc("connect timeout: /tmp/foo.sock".into());
+        assert_eq!(e.to_string(), "rpc: connect timeout: /tmp/foo.sock");
 
         let e = ShadowError::ForgejoApi {
             status: 404,

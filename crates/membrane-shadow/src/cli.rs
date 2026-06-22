@@ -8,28 +8,30 @@
 use crate::{ShadowError, ShadowOutcome, context, impulse};
 
 /// Extract a positional argument or return a parse error.
-pub fn require_arg<'a>(args: &[&'a str], idx: usize, name: &str) -> crate::Result<&'a str> {
+pub(crate) fn require_arg<'a>(args: &[&'a str], idx: usize, name: &str) -> crate::Result<&'a str> {
     args.get(idx)
         .copied()
         .ok_or_else(|| ShadowError::Config(format!("{name} required")))
 }
 
 /// Split `"org/name"` into `("org", "name")`.
-pub fn split_repo_path(path: &str) -> crate::Result<(&str, &str)> {
+pub(crate) fn split_repo_path(path: &str) -> crate::Result<(&str, &str)> {
     path.split_once('/')
         .ok_or_else(|| ShadowError::Config(format!("expected org/name format, got: {path}")))
 }
 
 /// Extract `--flag value` from a flat args slice.
 #[must_use]
-pub fn extract_flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
+pub(crate) fn extract_flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
     args.iter()
         .position(|a| *a == flag)
         .and_then(|i| args.get(i + 1).copied())
 }
 
 /// Parse `impulse.post` CLI arguments into typed `PostArgs`.
-pub fn parse_impulse_post_args<'a>(args: &[&'a str]) -> crate::Result<impulse::PostArgs<'a>> {
+pub(crate) fn parse_impulse_post_args<'a>(
+    args: &[&'a str],
+) -> crate::Result<impulse::PostArgs<'a>> {
     let to_str = extract_flag_value(args, "--to")
         .ok_or_else(|| ShadowError::Config("--to <gate> required".into()))?;
     let subject = extract_flag_value(args, "--subject")
@@ -69,7 +71,9 @@ pub fn parse_impulse_post_args<'a>(args: &[&'a str]) -> crate::Result<impulse::P
 }
 
 /// Parse `context.weave` CLI arguments into typed `WeaveArgs`.
-pub fn parse_context_weave_args<'a>(args: &[&'a str]) -> crate::Result<context::WeaveArgs<'a>> {
+pub(crate) fn parse_context_weave_args<'a>(
+    args: &[&'a str],
+) -> crate::Result<context::WeaveArgs<'a>> {
     let project = extract_flag_value(args, "--project")
         .ok_or_else(|| ShadowError::Config("--project <path> required".into()))?;
     let summary = extract_flag_value(args, "--summary")
@@ -105,7 +109,7 @@ pub fn parse_context_weave_args<'a>(args: &[&'a str]) -> crate::Result<context::
 
 /// Slugify a project path for display (e.g. `gardens/cellMembrane` → `gardens-cellmembrane`).
 #[must_use]
-pub fn context_slug(project: &str) -> String {
+pub(crate) fn context_slug(project: &str) -> String {
     project
         .to_lowercase()
         .chars()
@@ -118,7 +122,7 @@ pub fn context_slug(project: &str) -> String {
 }
 
 /// Extension trait for composing human-readable output.
-pub trait TapMessage {
+pub(crate) trait TapMessage {
     /// Transform the message field while preserving the rest.
     #[must_use]
     fn tap_message(self, f: impl FnOnce(&str) -> String) -> Self;

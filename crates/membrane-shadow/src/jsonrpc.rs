@@ -14,7 +14,13 @@ use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
+use crate::error::{Result, ShadowError};
+
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
+
+fn rpc_err(msg: impl std::fmt::Display) -> ShadowError {
+    ShadowError::Rpc(msg.to_string())
+}
 
 /// Standard JSON-RPC health probe request. Used by canary, sandbox, health, and
 /// sovereignty probes to check liveness via UDS.
@@ -25,7 +31,7 @@ pub const HEALTH_REQUEST: &str = r#"{"jsonrpc":"2.0","method":"health","params":
 /// In Reject mode (Wave 113 default): sends signal, no fallback.
 /// In Error/Warn mode: tries with signal first, falls back to raw JSON
 /// if the response is empty (legacy primal without riboCipher support).
-pub async fn call(socket_path: &Path, request: &str) -> Result<String, String> {
+pub async fn call(socket_path: &Path, request: &str) -> Result<String> {
     let policy = crate::ribocipher::RiboCipherConfig::default();
     call_with_policy(socket_path, request, &policy).await
 }
@@ -38,10 +44,10 @@ pub async fn call_with_policy(
     socket_path: &Path,
     request: &str,
     policy: &crate::ribocipher::RiboCipherConfig,
-) -> Result<String, String> {
+) -> Result<String> {
     match raw(socket_path, request, true).await {
         Ok(response) if !response.is_empty() => return Ok(response),
-        Ok(_) => {} // empty response — legacy primal
+        Ok(_) => {}
         Err(e) => {
             if !policy.allows_fallback() {
                 return Err(e);
@@ -50,10 +56,10 @@ pub async fn call_with_policy(
     }
 
     if !policy.allows_fallback() {
-        return Err(format!(
+        return Err(rpc_err(format_args!(
             "riboCipher REJECT: peer at {} did not respond to signal (policy=reject, no fallback)",
             socket_path.display()
-        ));
+        )));
     }
 
     raw(socket_path, request, false).await
@@ -62,14 +68,14 @@ pub async fn call_with_policy(
 /// Send a JSON-RPC request with explicit signal control.
 ///
 /// When `with_signal` is true, prepends `[0xEC, 0x01]` before the JSON payload.
-pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result<String, String> {
+pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result<String> {
     let stream = tokio::time::timeout(
         DEFAULT_TIMEOUT,
         tokio::net::UnixStream::connect(socket_path),
     )
     .await
-    .map_err(|_| format!("connect timeout: {}", socket_path.display()))?
-    .map_err(|e| format!("connect {}: {e}", socket_path.display()))?;
+    .map_err(|_| rpc_err(format_args!("connect timeout: {}", socket_path.display())))?
+    .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
 
     let (reader, mut writer) = stream.into_split();
 
@@ -77,34 +83,34 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
         writer
             .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
             .await
-            .map_err(|e| format!("signal write: {e}"))?;
+            .map_err(|e| rpc_err(format_args!("signal write: {e}")))?;
     }
     writer
         .write_all(request.as_bytes())
         .await
-        .map_err(|e| format!("write: {e}"))?;
+        .map_err(|e| rpc_err(format_args!("write: {e}")))?;
     writer
         .write_all(b"\n")
         .await
-        .map_err(|e| format!("newline: {e}"))?;
+        .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
 
-    // Read the NDJSON response line BEFORE shutting down write side.
-    // Some primals (beardog) close on seeing write EOF before responding.
     let mut buf_reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
 
     let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
         .await
-        .map_err(|_| format!("read timeout: {}", socket_path.display()))?
-        .map_err(|e| format!("read: {e}"))?;
+        .map_err(|_| rpc_err(format_args!("read timeout: {}", socket_path.display())))?
+        .map_err(|e| rpc_err(format_args!("read: {e}")))?;
 
-    // Shutdown write side after read (cleanup)
     if let Err(e) = writer.shutdown().await {
         tracing::debug!(error = %e, "writer shutdown (non-fatal)");
     }
 
     if read_result == 0 && line.is_empty() {
-        return Err(format!("empty response: {}", socket_path.display()));
+        return Err(rpc_err(format_args!(
+            "empty response: {}",
+            socket_path.display()
+        )));
     }
 
     Ok(line)
@@ -118,11 +124,7 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
 ///
 /// This is the transport graduation for `TransportEndpoint::MeshRelay` — the
 /// abstraction boundary where physical topology becomes invisible.
-pub async fn call_via_relay(
-    peer_id: &str,
-    capability: &str,
-    request: &str,
-) -> Result<String, String> {
+pub async fn call_via_relay(peer_id: &str, capability: &str, request: &str) -> Result<String> {
     let relay_socket = crate::gate::health::resolve_primal_socket_paths(
         cellmembrane_types::MembraneService::binary_for(
             cellmembrane_types::service::ServiceCapability::MeshRelay,
@@ -131,7 +133,9 @@ pub async fn call_via_relay(
     .into_iter()
     .find(|p| Path::new(p).exists())
     .ok_or_else(|| {
-        format!("no songBird relay socket found — cannot route to {peer_id}/{capability}")
+        rpc_err(format_args!(
+            "no songBird relay socket found — cannot route to {peer_id}/{capability}"
+        ))
     })?;
 
     let relay_request = serde_json::json!({
@@ -154,42 +158,42 @@ pub async fn call_via_relay(
 /// Uses the same framing as UDS calls (riboCipher signal + NDJSON) but over
 /// a `WireGuard` mesh TCP connection. The `host:port` pair typically comes from
 /// manifest-resolved mesh IPs (e.g. `10.13.37.1:7700`).
-pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String, String> {
+pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String> {
     let addr = format!("{host}:{port}");
     let stream = tokio::time::timeout(DEFAULT_TIMEOUT, tokio::net::TcpStream::connect(&addr))
         .await
-        .map_err(|_| format!("tcp connect timeout: {addr}"))?
-        .map_err(|e| format!("tcp connect {addr}: {e}"))?;
+        .map_err(|_| rpc_err(format_args!("tcp connect timeout: {addr}")))?
+        .map_err(|e| rpc_err(format_args!("tcp connect {addr}: {e}")))?;
 
     let (reader, mut writer) = stream.into_split();
 
     writer
         .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
         .await
-        .map_err(|e| format!("tcp signal write: {e}"))?;
+        .map_err(|e| rpc_err(format_args!("tcp signal write: {e}")))?;
     writer
         .write_all(request.as_bytes())
         .await
-        .map_err(|e| format!("tcp write: {e}"))?;
+        .map_err(|e| rpc_err(format_args!("tcp write: {e}")))?;
     writer
         .write_all(b"\n")
         .await
-        .map_err(|e| format!("tcp newline: {e}"))?;
+        .map_err(|e| rpc_err(format_args!("tcp newline: {e}")))?;
 
     let mut buf_reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
 
     let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
         .await
-        .map_err(|_| format!("tcp read timeout: {addr}"))?
-        .map_err(|e| format!("tcp read: {e}"))?;
+        .map_err(|_| rpc_err(format_args!("tcp read timeout: {addr}")))?
+        .map_err(|e| rpc_err(format_args!("tcp read: {e}")))?;
 
     if let Err(e) = writer.shutdown().await {
         tracing::debug!(error = %e, addr = %addr, "tcp writer shutdown (non-fatal)");
     }
 
     if read_result == 0 && line.is_empty() {
-        return Err(format!("tcp empty response: {addr}"));
+        return Err(rpc_err(format_args!("tcp empty response: {addr}")));
     }
 
     Ok(line)
@@ -206,7 +210,7 @@ pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String, St
 pub async fn call_endpoint(
     endpoint: &cellmembrane_types::TransportEndpoint,
     request: &str,
-) -> Result<String, String> {
+) -> Result<String> {
     match endpoint {
         cellmembrane_types::TransportEndpoint::Uds { path } => call(Path::new(path), request).await,
         cellmembrane_types::TransportEndpoint::Tcp { host, port } => {
@@ -286,7 +290,7 @@ mod tests {
     async fn call_tcp_refuses_unreachable_host() {
         let result = call_tcp("192.0.2.1", 1, "{}").await;
         assert!(result.is_err(), "unreachable host should error");
-        let err = result.unwrap_err();
+        let err = result.unwrap_err().to_string();
         assert!(
             err.contains("timeout") || err.contains("connect"),
             "error should mention connection failure, got: {err}"

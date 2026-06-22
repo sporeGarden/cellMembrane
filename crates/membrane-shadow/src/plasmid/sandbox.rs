@@ -459,7 +459,7 @@ pub fn list_active() -> Vec<SandboxInstance> {
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
-async fn uds_jsonrpc_probe(socket_path: &Path, request: &str) -> Result<String, String> {
+async fn uds_jsonrpc_probe(socket_path: &Path, request: &str) -> crate::Result<String> {
     crate::jsonrpc::call(socket_path, request).await
 }
 

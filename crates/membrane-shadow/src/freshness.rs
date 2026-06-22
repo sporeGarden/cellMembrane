@@ -258,7 +258,7 @@ async fn read_freshness_wave_id_async(path: &Path) -> u32 {
 /// the current HEAD of each primal's local source repo.
 ///
 /// Returns a formatted report string showing drift status per binary.
-pub fn check_installed_freshness() -> Result<String> {
+pub(crate) fn check_installed_freshness() -> Result<String> {
     use std::fmt::Write;
 
     let provenance_dir = dirs_provenance();
@@ -383,7 +383,7 @@ async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
 /// Returns `0` if the file is missing, unparseable, or has no wave ID.
 /// This is the canonical source — do not duplicate.
 #[must_use]
-pub fn current_wave(workspace_root: &Path) -> u32 {
+pub(crate) fn current_wave(workspace_root: &Path) -> u32 {
     let path = workspace_root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
         .join("freshness.toml");

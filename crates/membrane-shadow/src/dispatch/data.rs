@@ -100,9 +100,11 @@ pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result
             topology_service_resolve(role).await
         }
         "topology.endpoint" => {
-            let gate_name = cli::require_arg(args, 0, "gate_name")?;
-            let capability = cli::require_arg(args, 1, "capability")?;
-            Ok(topology_endpoint(gate_name, capability))
+            let first = cli::require_arg(args, 0, "gate_or_role")?;
+            args.get(1).copied().map_or_else(
+                || Ok(topology_endpoint_by_role(first)),
+                |second| Ok(topology_endpoint(first, second)),
+            )
         }
         "topology.roles" => topology_roles().await,
         "topology.zones" => topology_zones().await,
@@ -451,6 +453,31 @@ fn topology_endpoint(gate_name: &str, capability_str: &str) -> ShadowOutcome {
     )
 }
 
+fn topology_endpoint_by_role(role: &str) -> ShadowOutcome {
+    let ctx = crate::resolve::ResolutionContext::from_env();
+
+    crate::resolve::resolve_by_role(&ctx, role).map_or_else(
+        || {
+            ShadowOutcome::fail(format!(
+                "no transport path for role '{role}' — no gate provides it"
+            ))
+        },
+        |ep| {
+            let data = serde_json::json!({
+                "role": role,
+                "transport": ep.transport_name(),
+                "uri": ep.display_uri(),
+                "local": ep.is_local(),
+                "relayed": ep.is_relayed(),
+            });
+            ShadowOutcome::ok_with(
+                format!("{role} → {} ({})", ep.display_uri(), ep.transport_name()),
+                data,
+            )
+        },
+    )
+}
+
 fn parse_capability_name(s: &str) -> Option<cellmembrane_types::service::ServiceCapability> {
     use cellmembrane_types::service::ServiceCapability;
     match s {
@@ -630,5 +657,95 @@ pub(super) async fn dispatch_context(cmd: &str, args: &[&str]) -> crate::Result<
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown context command: {cmd}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cellmembrane_types::service::ServiceCapability;
+
+    #[test]
+    fn parse_capability_name_aliases() {
+        assert_eq!(
+            parse_capability_name("signer"),
+            Some(ServiceCapability::CryptoSigner)
+        );
+        assert_eq!(
+            parse_capability_name("mesh"),
+            Some(ServiceCapability::MeshRelay)
+        );
+        assert_eq!(
+            parse_capability_name("observe"),
+            Some(ServiceCapability::Observability)
+        );
+    }
+
+    #[test]
+    fn parse_capability_name_roles() {
+        assert_eq!(
+            parse_capability_name("relay"),
+            Some(ServiceCapability::MeshRelay)
+        );
+        assert_eq!(
+            parse_capability_name("security"),
+            Some(ServiceCapability::CryptoSigner)
+        );
+        assert_eq!(
+            parse_capability_name("content"),
+            Some(ServiceCapability::ContentServing)
+        );
+        assert_eq!(
+            parse_capability_name("compute"),
+            Some(ServiceCapability::ComputeOrchestration)
+        );
+        assert_eq!(
+            parse_capability_name("storage"),
+            Some(ServiceCapability::Storage)
+        );
+    }
+
+    #[test]
+    fn parse_capability_name_service_names() {
+        assert_eq!(
+            parse_capability_name("forgejo"),
+            Some(ServiceCapability::ContentServing)
+        );
+        assert_eq!(
+            parse_capability_name("depot"),
+            Some(ServiceCapability::ContentServing)
+        );
+        assert_eq!(
+            parse_capability_name("build"),
+            Some(ServiceCapability::ComputeOrchestration)
+        );
+        assert_eq!(
+            parse_capability_name("auth"),
+            Some(ServiceCapability::CryptoSigner)
+        );
+        assert_eq!(
+            parse_capability_name("nest"),
+            Some(ServiceCapability::Storage)
+        );
+    }
+
+    #[test]
+    fn parse_capability_name_unknown() {
+        assert!(parse_capability_name("nonexistent").is_none());
+        assert!(parse_capability_name("").is_none());
+    }
+
+    #[test]
+    fn topology_endpoint_unknown_capability_fails() {
+        let outcome = topology_endpoint("golgi", "nonexistent");
+        assert!(!outcome.ok);
+        assert!(outcome.message.contains("unknown capability"));
+    }
+
+    #[test]
+    fn topology_endpoint_by_role_unknown_fails() {
+        let outcome = topology_endpoint_by_role("nonexistent_role");
+        assert!(!outcome.ok);
+        assert!(outcome.message.contains("no transport path"));
     }
 }

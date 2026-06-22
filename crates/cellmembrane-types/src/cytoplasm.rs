@@ -148,6 +148,7 @@ pub const BOOTSTRAP_GATES: &[(&str, &str)] = &[
     ("sporeGate", "10.13.37.2"),
     ("eastGate", "10.13.37.5"),
     ("flockGate", "10.13.37.6"),
+    ("ironGate", "10.13.37.7"),
 ];
 
 /// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
@@ -239,6 +240,7 @@ mod tests {
         assert_eq!(mesh_address("sporeGate"), Some("10.13.37.2"));
         assert_eq!(mesh_address("eastGate"), Some("10.13.37.5"));
         assert_eq!(mesh_address("flockGate"), Some("10.13.37.6"));
+        assert_eq!(mesh_address("ironGate"), Some("10.13.37.7"));
     }
 
     #[test]
@@ -248,14 +250,13 @@ mod tests {
 
     #[test]
     fn mesh_address_unpeered_returns_none() {
-        assert_eq!(mesh_address("ironGate"), None);
         assert_eq!(mesh_address("northGate"), None);
         assert_eq!(mesh_address("newGate"), None);
     }
 
     #[test]
     fn mesh_addresses_unique() {
-        let known = ["golgi", "sporeGate", "eastGate", "flockGate"];
+        let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
         let addrs: Vec<_> = known.iter().filter_map(|g| mesh_address(g)).collect();
         let mut seen = std::collections::HashSet::new();
         assert!(addrs.iter().all(|a| seen.insert(a)));
@@ -263,7 +264,7 @@ mod tests {
 
     #[test]
     fn mesh_addresses_in_subnet() {
-        let known = ["golgi", "sporeGate", "eastGate", "flockGate"];
+        let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
         for gate in &known {
             let ip = mesh_address(gate).unwrap();
             assert!(
