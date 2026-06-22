@@ -15,7 +15,7 @@ pub mod health;
 mod interface;
 mod local;
 mod mesh;
-mod nucleus;
+pub(crate) mod nucleus;
 pub mod preflight;
 pub(crate) mod sovereignty;
 pub mod verify;

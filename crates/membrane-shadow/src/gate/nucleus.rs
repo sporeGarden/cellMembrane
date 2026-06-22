@@ -122,6 +122,104 @@ pub(super) fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
+// ── Quorum cascade timer ────────────────────────────────────────────
+
+/// Generate systemd timer + service units for autonomous cascade.
+///
+/// Runs `membrane temporal.cascade --source forgejo` periodically so the
+/// gate converges without human intervention. This is Quorum Phase 1:
+/// the gate autonomously pulls all ecosystem repos on a schedule.
+///
+/// The timer uses `OnCalendar` with `RandomizedDelaySec` to avoid
+/// thundering-herd across gates.
+pub fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> (String, String) {
+    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+
+    let service = format!(
+        r"[Unit]
+Description=Membrane Autonomous Cascade ({gate_name})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={install_base}/membrane temporal.cascade --source forgejo
+Environment=MEMBRANE_GATE_NAME={gate_name}
+TimeoutStartSec=300
+StandardOutput=journal
+StandardError=journal
+"
+    );
+
+    let timer = format!(
+        r"[Unit]
+Description=Membrane Cascade Timer ({gate_name}) — Quorum Phase 1
+
+[Timer]
+OnCalendar=*:0/{interval_minutes}
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"
+    );
+
+    (service, timer)
+}
+
+/// Install the cascade timer units and enable the timer.
+pub fn install_cascade_timer(
+    interval_minutes: u32,
+    gate_name: &str,
+    dry_run: bool,
+) -> super::BootstrapPhase {
+    if dry_run {
+        return super::BootstrapPhase {
+            name: "quorum.cascade-timer".into(),
+            ok: true,
+            detail: format!(
+                "dry-run: would install membrane-cascade.timer (every {interval_minutes}m)"
+            ),
+        };
+    }
+
+    let (service_content, timer_content) = generate_cascade_timer(interval_minutes, gate_name);
+    let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
+
+    let service_path = systemd_dir.join("membrane-cascade.service");
+    let timer_path = systemd_dir.join("membrane-cascade.timer");
+
+    let write_ok = std::fs::write(&service_path, &service_content).is_ok()
+        && std::fs::write(&timer_path, &timer_content).is_ok();
+
+    if !write_ok {
+        return super::BootstrapPhase {
+            name: "quorum.cascade-timer".into(),
+            ok: false,
+            detail: "failed to write systemd units".into(),
+        };
+    }
+
+    let _ = std::process::Command::new("systemctl")
+        .args(["daemon-reload"])
+        .output();
+
+    let enable_ok = std::process::Command::new("systemctl")
+        .args(["enable", "--now", "membrane-cascade.timer"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+
+    super::BootstrapPhase {
+        name: "quorum.cascade-timer".into(),
+        ok: enable_ok,
+        detail: format!(
+            "membrane-cascade.timer installed (every {interval_minutes}m, gate={gate_name})"
+        ),
+    }
+}
+
 // ── Secrets generation ──────────────────────────────────────────────
 
 fn generate_secrets_env() -> String {
@@ -402,5 +500,37 @@ mod tests {
         assert!(phase.ok, "dry-run should always succeed");
         assert_eq!(phase.name, "nucleus.start");
         assert!(phase.detail.contains("dry-run"));
+    }
+
+    #[test]
+    fn cascade_timer_generates_valid_units() {
+        let (service, timer) = generate_cascade_timer(15, "golgi");
+        assert!(service.contains("[Unit]"));
+        assert!(service.contains("[Service]"));
+        assert!(service.contains("temporal.cascade"));
+        assert!(service.contains("golgi"));
+        assert!(service.contains("Type=oneshot"));
+
+        assert!(timer.contains("[Timer]"));
+        assert!(timer.contains("OnCalendar=*:0/15"));
+        assert!(timer.contains("RandomizedDelaySec=60"));
+        assert!(timer.contains("Persistent=true"));
+        assert!(timer.contains("timers.target"));
+    }
+
+    #[test]
+    fn cascade_timer_custom_interval() {
+        let (_, timer) = generate_cascade_timer(30, "sporeGate");
+        assert!(timer.contains("OnCalendar=*:0/30"));
+        assert!(timer.contains("sporeGate"));
+    }
+
+    #[test]
+    fn cascade_timer_dry_run() {
+        let phase = install_cascade_timer(15, "test-gate", true);
+        assert!(phase.ok);
+        assert_eq!(phase.name, "quorum.cascade-timer");
+        assert!(phase.detail.contains("dry-run"));
+        assert!(phase.detail.contains("15m"));
     }
 }

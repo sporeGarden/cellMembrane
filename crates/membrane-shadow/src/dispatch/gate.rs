@@ -92,6 +92,7 @@ pub(super) async fn dispatch(
         "gate.preflight" => dispatch_preflight(args).await,
         "firewall.generate" => dispatch_firewall_generate(args),
         "gate.validate" => super::gate_validate(config, args, None).await,
+        "gate.quorum" => dispatch_quorum(args),
         "wireguard.generate" => dispatch_wireguard_generate(args).await,
         #[cfg(feature = "http")]
         "gate.provision" => super::provision_dispatch::dispatch_provision(args).await,
@@ -105,6 +106,46 @@ pub(super) async fn dispatch(
         "gate.provision.verify" => super::provision_dispatch::dispatch_provision_verify(args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
     }
+}
+
+// ── Quorum cascade timer ─────────────────────────────────────────────
+
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "dispatch adapter — must match arm signature"
+)]
+fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let dry_run = args.contains(&"--dry-run");
+    let interval: u32 = cli::extract_flag_value(args, "--interval")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(15);
+    let gate_name = crate::gate::resolve_local_gate_identity();
+
+    if args.contains(&"--generate") {
+        let (service, timer) = crate::gate::nucleus::generate_cascade_timer(interval, &gate_name);
+        let data = serde_json::json!({
+            "service": service,
+            "timer": timer,
+            "interval_minutes": interval,
+            "gate": gate_name,
+        });
+        return Ok(ShadowOutcome::ok_with(
+            format!(
+                "=== membrane-cascade.service ===\n{service}\n=== membrane-cascade.timer ===\n{timer}"
+            ),
+            data,
+        ));
+    }
+
+    let phase = crate::gate::nucleus::install_cascade_timer(interval, &gate_name, dry_run);
+    let data = serde_json::json!({
+        "phase": phase.name,
+        "ok": phase.ok,
+        "detail": &phase.detail,
+        "interval_minutes": interval,
+        "gate": gate_name,
+    });
+    Ok(ShadowOutcome::ok_with(phase.detail, data))
 }
 
 // ── Gate info ────────────────────────────────────────────────────────

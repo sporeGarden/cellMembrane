@@ -35,6 +35,7 @@ gate_status = { protocol = "cli", description = "Local gate health probe (depot,
 gate_validate = { protocol = "ssh", description = "Composition trust barrier validation — verify gate conforms to declared tier" }
 plasmid_build = { protocol = "cli", description = "guideStone-grade single-primal build with ELF validation + provenance" }
 gate_profile = { protocol = "cli", description = "Read gate profile from ecosystem_manifest.toml" }
+gate_quorum = { protocol = "cli", description = "Install autonomous cascade timer (Quorum Phase 1 — systemd timer)" }
 ndk_check = { protocol = "cli", description = "Verify NDK toolchain for aarch64-linux-android cross-compilation" }
 harvest_android = { protocol = "cli", description = "plasmid.harvest --target aarch64-linux-android (NDK cross-compile pipeline)" }
 harvest_gnu = { protocol = "cli", description = "Dual-target depot — GPU primals built as x86_64-unknown-linux-gnu alongside musl" }

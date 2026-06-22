@@ -47,6 +47,9 @@ Gate (biomeOS gate.*):
   gate.bootstrap <name> [--dry-run] [--mobile]
                                    One-command gate enrollment (fetch→verify→mesh→start→health)
                                    --mobile: write gate-name for NM reconnect hook
+  gate.quorum [--interval 15] [--generate] [--dry-run]
+                                   Install autonomous cascade timer (Quorum Phase 1)
+                                   --generate: print units without installing
 
 Temporal (waterFall temporal.*):
   temporal.check [repo_path...]    Temporal position matrix (local, all remotes)
