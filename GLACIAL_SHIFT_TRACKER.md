@@ -1,8 +1,21 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-20 (Wave 120)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 4-node WG mesh, deterministic deployment CODIFIED
+**Last updated:** 2026-06-22 (Wave 123)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 123 update (Deep Evolution — Wire Format + Sovereignty + Quorum):**
+`ServiceCapability::wire_name()` fixes mesh relay routing bug (Debug format → serde snake_case).
+`parse_verify_response()` pure function for sovereignty ledger with 7-branch test coverage.
+TCP transport graduated — `call_tcp()` riboCipher-framed over WireGuard mesh. Quorum Phase 1:
+`gate.quorum` installs systemd cascade timer. Role-to-capability mapping consolidated.
+Error variant semantic fix (`Ssh` → `Parse` for UDS failures). Fragile string detection →
+structured JSON field check. 769 tests, zero clippy/doc warnings.
+**Wave 121 update (Transport Evolution + Dual-Target Depot):** `TargetArch` enum typed
+target triples. Dual-target depot (musl + gnu for GPU primals). PAT deprecated. Transport
+endpoint resolver: `(gate, capability)` → `Uds|Tcp|MeshRelay`. `call_via_relay()` routes
+through songBird. `topology.endpoint` CLI. `MeshRelay` variant graduated to operational.
+Webhook `classify_push` bug fix (harvest vs cascade precedence). 5-node mesh (ironGate .7).
+751 tests, zero warnings.
 **Wave 120 update (Deployment Isomorphism — Identity-Based Resolution):** `topology.service`
 identity-based service discovery. Manifest-authoritative `wg_ip` + `roles` on `GateProfile`.
 `wireguard.generate` and `caddy.generate` produce configs from manifest. `topology.roles` +

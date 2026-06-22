@@ -4,12 +4,12 @@
 
 | | |
 |-|-|
-| **Owner** | cellMembrane team (ironGate) |
+| **Owner** | cellMembrane team (sporeGate) |
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 120) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 123) |
 
 ---
 
@@ -55,10 +55,29 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 731 tests — pedantic clippy clean
+cargo test                  # 769 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 123 (Deep Evolution — Wire Format Fix + Sovereignty Coverage):**
+`ServiceCapability::wire_name()` const method + `Display` impl — fixes mesh relay routing
+bug where Debug format produced `"cryptosigner"` instead of serde-correct `"crypto_signer"`.
+Sovereignty ledger `parse_verify_response()` extracted as pure function with 7 branch tests.
+Error variant fix (`Ssh` → `Parse` for UDS failures). Fragile `contains("error")` detection
+replaced with structured JSON field check. `is_local` case-insensitivity verified.
+769 tests, zero clippy/doc warnings.
+
+**Wave 121–123 (Transport Evolution + Quorum + Dual-Target):**
+`TargetArch` enum replaces stringly-typed target triples — `X86_64Musl`, `X86_64Gnu`,
+`Aarch64Musl` with `triple()`, `requires_static_linking()`, `supports_gpu()`. Dual-target
+depot: GPU primals (`barracuda`, `coralreef`) build gnu binaries alongside musl. PAT tokens
+deprecated (file-based `~/.config/forgejo/token` warns, env/BTSP preferred). TCP transport
+graduated — `call_tcp()` implements riboCipher-framed JSON-RPC over WireGuard mesh.
+`TransportEndpoint` resolver (`resolve.rs`) — unified `(gate, capability)` → `Uds|Tcp|MeshRelay`.
+`call_via_relay()` routes through songBird relay socket. `topology.endpoint` CLI command.
+Role-to-capability mapping consolidated. Quorum Phase 1: `gate.quorum` generates + installs
+`membrane-cascade.timer` for autonomous cascade. 5-node WG mesh (ironGate .7 joined).
 
 **Wave 120 (Deployment Isomorphism — Identity-Based Resolution):**
 `topology.service` identity-based service discovery — find any service by role, not host.
@@ -121,6 +140,7 @@ Typed Rust CLI for sovereign VPS control — replaces all bash sync/relay script
 membrane gate.status                      # Local gate health (native UDS probes + depot + mesh)
 membrane gate.bootstrap <name> [--dry-run] [--mobile]  # Profile-driven enrollment (7 phases)
 membrane gate.profile <name>              # Read gate profile from ecosystem_manifest.toml
+membrane gate.quorum [--interval 15] [--generate]      # Install autonomous cascade timer (Quorum P1)
 membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
 membrane temporal.cascade --with-restart  # Cascade + fetch + restart updated primals
 membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VPS
@@ -141,6 +161,10 @@ membrane depot.integrity --verify         # Verify existing checksums against de
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
+membrane topology.service <role>          # Find gate providing a service role
+membrane topology.endpoint <gate> <cap>   # Resolve transport endpoint (UDS/TCP/relay)
+membrane topology.roles                   # Map all service→gate assignments from manifest
+membrane topology.mesh                    # Show WireGuard mesh topology
 ```
 
 ---
@@ -219,6 +243,10 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Deployment isomorphism (Wave 120): topology.service identity-based discovery, manifest-driven mesh IP (wg_ip), WireGuard config generation, Caddyfile generation from roles, topology.roles command, pepti decommission, 729 tests | DONE |
 | Deep debt sweep (Wave 120): `.leak()` → owned String, HEALTH_REQUEST const, TOML parse warnings, CanaryStalenessReport rename, derived Ord, mesh parsing dedupe, `format_resolved` test-only, 731 tests | DONE |
 | Pipeline dedupe (Wave 120): build/harvest unified — shared `stage_to_depot_async`, `drift::clone_source`, `git_ops::head_short`. Service port constants (`DEFAULT_FORGEJO_HTTP_PORT`, `DEFAULT_DEPOT_HTTP_PORT`). BLAKE3 hash failure sentinel, 731 tests | DONE |
+| Transport evolution + dual-target (Wave 121): `TargetArch` enum, dual musl/gnu depot, PAT deprecated, `TransportEndpoint` resolver, `call_via_relay()`, `topology.endpoint` CLI, `MeshRelay` graduated, 751 tests | DONE |
+| Quorum Phase 1 (Wave 123): `gate.quorum` systemd cascade timer, `generate_cascade_timer()` + `install_cascade_timer()`, randomized delay, 754 tests | DONE |
+| TCP transport + role consolidation (Wave 123): `call_tcp()` riboCipher-framed JSON-RPC over WG mesh, `role_to_capability` canonical mapping, help text updated, 758 tests | DONE |
+| Wire format fix + sovereignty coverage (Wave 123): `ServiceCapability::wire_name()` const + `Display`, `parse_verify_response()` with 7-branch tests, `Ssh` → `Parse` error fix, structured JSON error detection, 769 tests | DONE |
 
 ---
 
