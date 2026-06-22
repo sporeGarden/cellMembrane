@@ -163,6 +163,33 @@ pub enum ServiceCapability {
     Identity,
 }
 
+impl ServiceCapability {
+    /// Stable wire-format name matching serde `snake_case` rename.
+    ///
+    /// Used in mesh relay routing (`TransportEndpoint::MeshRelay.capability`)
+    /// and JSON-RPC `relay.forward` envelopes.
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::MeshRelay => "mesh_relay",
+            Self::TurnServer => "turn_server",
+            Self::CryptoSigner => "crypto_signer",
+            Self::Security => "security",
+            Self::Observability => "observability",
+            Self::ContentServing => "content_serving",
+            Self::Storage => "storage",
+            Self::ComputeOrchestration => "compute_orchestration",
+            Self::Identity => "identity",
+        }
+    }
+}
+
+impl std::fmt::Display for ServiceCapability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.wire_name())
+    }
+}
+
 /// Health check strategy for a service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HealthCheckMethod {

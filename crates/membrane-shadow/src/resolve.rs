@@ -165,7 +165,7 @@ fn resolve_mesh_tcp(target_gate: &str, svc: &MembraneService) -> Option<Transpor
 fn resolve_mesh_relay(target_gate: &str, capability: ServiceCapability) -> TransportEndpoint {
     TransportEndpoint::MeshRelay {
         peer_id: target_gate.to_string(),
-        capability: format!("{capability:?}").to_lowercase(),
+        capability: capability.wire_name().to_string(),
     }
 }
 
@@ -213,10 +213,44 @@ mod tests {
                 capability,
             } => {
                 assert_eq!(peer_id, "eastGate");
-                assert!(!capability.is_empty());
+                assert_eq!(capability, "crypto_signer", "wire name must be snake_case");
             }
             _ => panic!("expected MeshRelay"),
         }
+    }
+
+    #[test]
+    fn mesh_relay_wire_names_are_snake_case() {
+        let cases = [
+            (ServiceCapability::MeshRelay, "mesh_relay"),
+            (ServiceCapability::TurnServer, "turn_server"),
+            (ServiceCapability::CryptoSigner, "crypto_signer"),
+            (ServiceCapability::Security, "security"),
+            (ServiceCapability::Observability, "observability"),
+            (ServiceCapability::ContentServing, "content_serving"),
+            (ServiceCapability::Storage, "storage"),
+            (
+                ServiceCapability::ComputeOrchestration,
+                "compute_orchestration",
+            ),
+            (ServiceCapability::Identity, "identity"),
+        ];
+        for (cap, expected) in cases {
+            let ep = resolve_mesh_relay("test", cap);
+            let TransportEndpoint::MeshRelay { capability, .. } = ep else {
+                panic!("expected MeshRelay");
+            };
+            assert_eq!(capability, expected, "wire_name mismatch for {cap:?}");
+        }
+    }
+
+    #[test]
+    fn is_local_case_insensitive() {
+        let ctx = test_ctx("sporeGate");
+        assert!(is_local(&ctx, "sporeGate"));
+        assert!(is_local(&ctx, "SPOREGATE"));
+        assert!(is_local(&ctx, "SporeGate"));
+        assert!(!is_local(&ctx, "eastGate"));
     }
 
     #[test]

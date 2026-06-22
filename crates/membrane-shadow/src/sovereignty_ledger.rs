@@ -57,14 +57,18 @@ pub async fn rootpulse_commit(
 
     match crate::jsonrpc::call(&socket_path, &request).await {
         Ok(response) => {
-            if response.contains("error") && !response.contains("result") {
-                return Err(ShadowError::Config(format!(
-                    "rootpulse commit graph error: {response}"
-                )));
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
+                if parsed.get("error").is_some() && parsed.get("result").is_none() {
+                    return Err(ShadowError::Config(format!(
+                        "rootpulse commit graph error: {response}"
+                    )));
+                }
             }
             Ok(session_id)
         }
-        Err(e) => Err(ShadowError::Ssh(format!("rootpulse commit failed: {e}"))),
+        Err(e) => Err(ShadowError::Parse(format!(
+            "rootpulse commit failed (UDS): {e}"
+        ))),
     }
 }
 
@@ -112,7 +116,18 @@ pub async fn sovereignty_verify(
         return Vec::new();
     };
 
-    let parsed: serde_json::Value = match serde_json::from_str(&response) {
+    parse_verify_response(&response, heads)
+}
+
+/// Parse a sovereignty verification JSON-RPC response against known HEADs.
+///
+/// Pure function — no I/O. Extracts `result.ledger_heads` from the response
+/// and compares each repo HEAD. Returns per-repo verification results.
+fn parse_verify_response(
+    response: &str,
+    heads: &BTreeMap<String, String>,
+) -> Vec<SovereigntyCheck> {
+    let parsed: serde_json::Value = match serde_json::from_str(response) {
         Ok(v) => v,
         Err(_) => return mark_all_unverified(heads, "ledger unreachable"),
     };
@@ -273,6 +288,80 @@ mod tests {
         assert!(check.detail.contains("MISMATCH"));
         assert!(check.detail.contains("VCS="));
         assert!(check.detail.contains("ledger="));
+    }
+
+    fn test_heads() -> BTreeMap<String, String> {
+        let mut heads = BTreeMap::new();
+        heads.insert("biomeOS".into(), "abc12345deadbeef".into());
+        heads.insert("cellMembrane".into(), "def67890cafebabe".into());
+        heads
+    }
+
+    #[test]
+    fn parse_verify_all_match() {
+        let response = r#"{"jsonrpc":"2.0","result":{"ledger_heads":{"biomeOS":"abc12345deadbeef","cellMembrane":"def67890cafebabe"}},"id":43}"#;
+        let checks = parse_verify_response(response, &test_heads());
+        assert_eq!(checks.len(), 2);
+        assert!(checks.iter().all(|c| c.verified), "all should match");
+        assert!(checks.iter().all(|c| c.detail == "sovereign match"));
+    }
+
+    #[test]
+    fn parse_verify_mismatch() {
+        let response = r#"{"jsonrpc":"2.0","result":{"ledger_heads":{"biomeOS":"abc12345deadbeef","cellMembrane":"TAMPERED_HASH"}},"id":43}"#;
+        let checks = parse_verify_response(response, &test_heads());
+        let cm = checks.iter().find(|c| c.repo == "cellMembrane").unwrap();
+        assert!(!cm.verified);
+        assert!(cm.detail.contains("MISMATCH"));
+        assert!(cm.detail.contains("def67890"));
+        assert!(cm.detail.contains("TAMPERED_HASH"));
+
+        let bio = checks.iter().find(|c| c.repo == "biomeOS").unwrap();
+        assert!(bio.verified);
+    }
+
+    #[test]
+    fn parse_verify_missing_from_ledger() {
+        let response =
+            r#"{"jsonrpc":"2.0","result":{"ledger_heads":{"biomeOS":"abc12345deadbeef"}},"id":43}"#;
+        let checks = parse_verify_response(response, &test_heads());
+        let cm = checks.iter().find(|c| c.repo == "cellMembrane").unwrap();
+        assert!(!cm.verified);
+        assert!(cm.detail.contains("(not in ledger)"));
+    }
+
+    #[test]
+    fn parse_verify_error_response() {
+        let response =
+            r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"ledger empty"},"id":43}"#;
+        let checks = parse_verify_response(response, &test_heads());
+        assert_eq!(checks.len(), 2);
+        assert!(checks.iter().all(|c| !c.verified));
+        assert!(checks[0].detail.contains("not yet initialized"));
+    }
+
+    #[test]
+    fn parse_verify_invalid_json() {
+        let checks = parse_verify_response("not json at all", &test_heads());
+        assert_eq!(checks.len(), 2);
+        assert!(checks.iter().all(|c| !c.verified));
+        assert!(checks[0].detail.contains("unreachable"));
+    }
+
+    #[test]
+    fn parse_verify_missing_ledger_heads_key() {
+        let response = r#"{"jsonrpc":"2.0","result":{"something_else": true},"id":43}"#;
+        let checks = parse_verify_response(response, &test_heads());
+        assert_eq!(checks.len(), 2);
+        assert!(checks.iter().all(|c| !c.verified));
+        assert!(checks[0].detail.contains("no ledger state"));
+    }
+
+    #[test]
+    fn parse_verify_empty_heads() {
+        let response = r#"{"jsonrpc":"2.0","result":{"ledger_heads":{}},"id":43}"#;
+        let checks = parse_verify_response(response, &BTreeMap::new());
+        assert!(checks.is_empty());
     }
 
     #[test]

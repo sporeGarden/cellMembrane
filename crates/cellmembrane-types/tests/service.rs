@@ -189,3 +189,46 @@ fn credential_files_grow_with_composition() {
         "Tower should have more credential files than RustDesk"
     );
 }
+
+#[test]
+fn capability_wire_name_matches_serde() {
+    use cellmembrane_types::service::ServiceCapability;
+
+    let variants = [
+        ServiceCapability::MeshRelay,
+        ServiceCapability::TurnServer,
+        ServiceCapability::CryptoSigner,
+        ServiceCapability::Security,
+        ServiceCapability::Observability,
+        ServiceCapability::ContentServing,
+        ServiceCapability::Storage,
+        ServiceCapability::ComputeOrchestration,
+        ServiceCapability::Identity,
+    ];
+    for cap in variants {
+        let serde_name = serde_json::to_string(&cap).unwrap();
+        let serde_name = serde_name.trim_matches('"');
+        assert_eq!(
+            cap.wire_name(),
+            serde_name,
+            "wire_name and serde rename must match for {cap:?}"
+        );
+    }
+}
+
+#[test]
+fn capability_display_equals_wire_name() {
+    use cellmembrane_types::service::ServiceCapability;
+
+    for cap in [
+        ServiceCapability::MeshRelay,
+        ServiceCapability::CryptoSigner,
+        ServiceCapability::Storage,
+    ] {
+        assert_eq!(
+            format!("{cap}"),
+            cap.wire_name(),
+            "Display and wire_name must match"
+        );
+    }
+}
