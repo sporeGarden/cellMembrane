@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! K-Derm relay chain — peptidoglycan sync relay (bash → Rust evolution).
+//! K-Derm relay chain — structural relay sync (bash → Rust evolution).
 //!
-//! Implements the golgiBody diderm relay chain:
+//! Implements the diderm relay chain (Peptidoglycan composition layer):
 //!
 //! ```text
-//! golgiBody-inner (cis) ──metallic──→ peptidoglycan ──ionic──→ golgiBody-ext (trans)
+//! golgi (cis) ──metallic──→ relay node ──ionic──→ ext (trans)
 //! ```
 //!
 //! Three stages:
 //! 1. **`mediate()`** — Pull from Forgejo (metallic bond inward), run impulse
-//!    cascade. Replaces `pepti-sync-relay.sh`.
-//! 2. **`ship_extracellular()`** — Push to GitHub via golgiBody-ext (ionic →
-//!    weak bond outward). Replaces `ext-github-push.sh`.
+//!    cascade. Evolved from legacy `pepti-sync-relay.sh`.
+//! 2. **`ship_extracellular()`** — Push to GitHub via ext node (ionic →
+//!    weak bond outward). Evolved from legacy `ext-github-push.sh`.
 //! 3. **`run()`** — Full relay chain: mediate + impulse sense + ship.
 //!    Exposed as `membrane relay.run <repo_path>`.
 //!
@@ -138,8 +138,8 @@ fn resolve_membrane_toml_path() -> Option<PathBuf> {
 
 /// Full relay chain: pull → impulse sense → ship extracellular.
 ///
-/// This is the Rust replacement for calling `pepti-sync-relay.sh` followed
-/// by `ext-github-push.sh`. Exposed as `membrane relay.run <repo_path>`.
+/// Evolved from the legacy shell scripts (`pepti-sync-relay.sh` +
+/// `ext-github-push.sh`). Exposed as `membrane relay.run <repo_path>`.
 ///
 /// # Errors
 ///
@@ -182,7 +182,7 @@ pub async fn run(config: &RelayConfig, repo_paths: &[&str]) -> Result<RelayResul
 
 /// Stage 1: Pull from Forgejo on the local node (metallic bond inward).
 ///
-/// Replaces the pull loop in `pepti-sync-relay.sh`.
+/// Evolved from the pull loop in `pepti-sync-relay.sh`.
 /// For each repo path, does a `git pull --ff-only forgejo main`.
 pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>, Vec<String>) {
     let mut pulled = Vec::new();
@@ -192,7 +192,7 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
         let local_path = config.ecoprimals_root.join(repo_path);
 
         if !local_path.join(".git").exists() {
-            debug!(repo = repo_path, "not cloned on peptidoglycan — skipping");
+            debug!(repo = repo_path, "not cloned on relay node — skipping");
             continue;
         }
 
@@ -225,9 +225,8 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
 
 /// Stage 2: Sense pending impulses in the wateringHole.
 ///
-/// Replaces the impulse detection in `pepti-sync-relay.sh` and
-/// `impulse-relay-hook.sh`. Uses the `impulse` module directly
-/// instead of shelling out to a membrane binary.
+/// Evolved from `pepti-sync-relay.sh` / `impulse-relay-hook.sh`.
+/// Uses the `impulse` module directly instead of shelling out.
 fn sense_impulses_blocking(ecoprimals_root: &Path) -> usize {
     match impulse::sense(ecoprimals_root, true, true) {
         Ok((_, count)) => {

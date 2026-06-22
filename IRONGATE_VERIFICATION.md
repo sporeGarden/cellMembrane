@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 123 (transport evolution, quorum, wire format fix, sovereignty coverage, 2026-06-22)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate), capability-based registry, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1)
+**Last validated:** Wave 124 (pepti decommission, typed plasmid errors, hardcode sweep, 2026-06-22)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate), capability-based registry, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), typed build/plasmid errors
 
 ---
 

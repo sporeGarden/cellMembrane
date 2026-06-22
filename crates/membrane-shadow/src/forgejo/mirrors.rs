@@ -2,11 +2,11 @@
 
 //! Forgejo push mirror operations — K-Derm relay chain to GitHub.
 //!
-//! These create/list/sync push mirrors via the Forgejo API on golgiBody-inner.
+//! These create/list/sync push mirrors via the Forgejo API on golgi.
 //! The K-Derm diderm relay chain handles actual GitHub propagation:
-//! inner (covalent) -> peptidoglycan (metallic) -> golgiBody-ext (ionic) -> GitHub (weak).
+//! inner (covalent) -> relay (metallic) -> ext (ionic) -> GitHub (weak).
 //! GitHub SSH write credentials live on golgiBody-ext (trans/shipping face).
-//! See `relay.rs` for the Rust-native K-Derm relay chain (replaces bash scripts).
+//! See `relay.rs` for the Rust-native K-Derm relay chain.
 
 use super::{API_TIMEOUT_READ, API_TIMEOUT_WRITE, auth_header};
 use crate::config::ShadowConfig;

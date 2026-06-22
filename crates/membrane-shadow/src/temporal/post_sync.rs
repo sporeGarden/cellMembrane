@@ -427,7 +427,7 @@ async fn run_rootpulse_sovereignty(
     }
 }
 
-/// Public wrapper for dispatch access.
+/// Wrapper for dispatch access.
 pub async fn collect_cascade_heads_pub(
     root: &std::path::Path,
     repos: &[(&str, &crate::manifest::RepoEntry)],
@@ -435,12 +435,12 @@ pub async fn collect_cascade_heads_pub(
     collect_cascade_heads(root, repos).await
 }
 
-/// Public wrapper for dispatch access.
+/// Wrapper for dispatch access.
 pub fn persist_rootpulse_session_pub(wave_id: u32, gate: &str, session_id: &str) {
     persist_rootpulse_session(wave_id, gate, session_id);
 }
 
-/// Public wrapper for dispatch access.
+/// Wrapper for dispatch access.
 pub fn load_rootpulse_session_pub() -> Option<String> {
     load_rootpulse_session()
 }

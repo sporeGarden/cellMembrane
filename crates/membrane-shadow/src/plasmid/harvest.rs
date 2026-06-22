@@ -252,7 +252,7 @@ async fn harvest_one(
     let build_root = std::env::temp_dir().join("membrane-harvest");
     let clone_dir = build_root.join(primal);
 
-    if let Err(detail) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
+    if let Err(e) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
         let status = if source.private {
             HarvestStatus::Skipped
         } else {
@@ -261,7 +261,7 @@ async fn harvest_one(
         return HarvestResult {
             binary: primal.into(),
             status,
-            detail,
+            detail: e.to_string(),
         };
     }
 
@@ -275,11 +275,11 @@ async fn harvest_one(
         warn!(primal, warning, "freshness warning");
     }
 
-    if let Err(detail) = toolchain::build_binary(source, target, &clone_dir).await {
+    if let Err(e) = toolchain::build_binary(source, target, &clone_dir).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
-            detail,
+            detail: e.to_string(),
         };
     }
 
@@ -299,11 +299,11 @@ async fn harvest_one(
     }
 
     // BUILD-ELF-01: validate architecture before staging
-    if let Err(detail) = validate_elf_arch(&bin_path, target).await {
+    if let Err(e) = validate_elf_arch(&bin_path, target).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
-            detail,
+            detail: e.to_string(),
         };
     }
 
@@ -323,10 +323,10 @@ async fn harvest_one(
                 ),
             }
         }
-        Err(detail) => HarvestResult {
+        Err(e) => HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
-            detail,
+            detail: e.to_string(),
         },
     }
 }
@@ -342,20 +342,20 @@ pub(super) async fn stage_to_depot_async(
     bin_path: &Path,
     depot_dir: &Path,
     target: &str,
-) -> std::result::Result<(u64, String), String> {
+) -> crate::Result<(u64, String)> {
     let staging_dir = depot_dir.join("primals").join(target);
-    tokio::fs::create_dir_all(&staging_dir)
-        .await
-        .map_err(|e| format!("depot staging dir create failed: {e}"))?;
+    tokio::fs::create_dir_all(&staging_dir).await.map_err(|e| {
+        crate::error::ShadowError::Build(format!("depot staging dir create failed: {e}"))
+    })?;
     let dest = staging_dir.join(primal);
     let tmp = staging_dir.join(format!(".{primal}.new"));
 
     tokio::fs::copy(bin_path, &tmp)
         .await
-        .map_err(|e| format!("copy to depot failed: {e}"))?;
+        .map_err(|e| crate::error::ShadowError::Build(format!("copy to depot failed: {e}")))?;
     tokio::fs::rename(&tmp, &dest)
         .await
-        .map_err(|e| format!("atomic rename failed: {e}"))?;
+        .map_err(|e| crate::error::ShadowError::Build(format!("atomic rename failed: {e}")))?;
 
     let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
     let blake3 = super::compute_blake3_file_async(dest).await;

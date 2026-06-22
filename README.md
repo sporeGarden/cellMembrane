@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 123) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 124) |
 
 ---
 
@@ -55,10 +55,20 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 791 tests — pedantic clippy clean
+cargo test                  # 788 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 124 (Deep Debt Evolution — Typed Plasmid Errors + pepti Decommission + Hardcode Sweep):**
+
+pepti decommissioned from live mesh registries (`mesh_address()`, `topology.mesh`), tests updated
+for ironGate 5-node mesh. `Result<_, String>` evolved to `ShadowError::Build` across 11 plasmid
+signatures (sandbox, canary, toolchain, drift, harvest). `resolve_federation_peer()` de-hardcoded
+(was `/home/sporegate/...` fallback, now uses `DEFAULT_ECOPRIMALS_ROOT` + `DEFAULT_VPS_MESH_PEER`).
+`canary_remote.rs` socket path now env-configurable via `MEMBRANE_SOCKET_BASE`. `ENV_VALIDATE_SSH_HOST`
+replaces legacy `PEPTI_SSH_HOST` for `gate.validate`. Stale pepti references cleaned from relay.rs,
+mirrors.rs, dispatch comments. 788 tests, zero clippy warnings.
 
 **Wave 123+ (Deep Debt Evolution — Typed RPC Errors + Visibility + Smart Refactors):**
 `ShadowError::Rpc` variant replaces all `Result<_, String>` in JSON-RPC transport (7 async
@@ -258,6 +268,8 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | TCP transport + role consolidation (Wave 123): `call_tcp()` riboCipher-framed JSON-RPC over WG mesh, `role_to_capability` canonical mapping, help text updated, 758 tests | DONE |
 | Wire format fix + sovereignty coverage (Wave 123): `ServiceCapability::wire_name()` const + `Display`, `parse_verify_response()` with 7-branch tests, `Ssh` → `Parse` error fix, structured JSON error detection, 769 tests | DONE |
 | Deep debt evolution (Wave 123+): `ShadowError::Rpc` typed RPC errors (7 fns, 5 callers), visibility tightening (15 fns `pub`→`pub(crate)`), manifest smart refactor (780L→706+142L), `topology.endpoint <role>` shortcut, `ironGate` in BOOTSTRAP_GATES, webhook+dispatch+wave tests, 791 tests | DONE |
+| relay.forward graduation (Wave 123): `call_endpoint()` wired into sovereignty_ledger, bridge, impulse. Cross-gate neural-api resolution via `resolve_by_role("biomeos")`. Identity capability mapping fixed (sweetgrass→Storage, biomeos→Identity). 800 tests | DONE |
+| Deep debt sweep (Wave 124): pepti decommissioned from live mesh, `Result<_,String>`→`ShadowError::Build` (11 sigs), hardcode sweep (developer paths, socket paths), `ENV_VALIDATE_SSH_HOST`, stale comment cleanup, 788 tests | DONE |
 
 ---
 

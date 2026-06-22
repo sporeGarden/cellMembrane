@@ -117,7 +117,15 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("rootpulse.") => dispatch_rootpulse(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
         c if c.starts_with("webhook.") => dispatch_webhook(config, cmd, args).await,
-        c if c.starts_with("pepti.") => dispatch_pepti(config, cmd, args).await,
+        "pepti.validate" => {
+            tracing::warn!("pepti.* namespace deprecated (Wave 120) — use gate.validate");
+            gate_validate(
+                config,
+                args,
+                Some(cellmembrane_types::MembraneComposition::Relay),
+            )
+            .await
+        }
         #[cfg(feature = "cloudflare")]
         c if c.starts_with("cloudflare.") => crate::cloudflare::dispatch(cmd, args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
@@ -166,28 +174,6 @@ async fn dispatch_webhook(
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown webhook command: {cmd}"
         ))),
-    }
-}
-
-/// Dispatch composition trust barrier validation commands.
-///
-/// `gate.validate` validates any gate against its manifest composition tier.
-/// `pepti.validate` is a backward-compatible alias (resolves to composition=Relay).
-async fn dispatch_pepti(
-    config: &ShadowConfig,
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
-    match cmd {
-        "pepti.validate" => {
-            gate_validate(
-                config,
-                args,
-                Some(cellmembrane_types::MembraneComposition::Relay),
-            )
-            .await
-        }
-        _ => Ok(ShadowOutcome::fail(format!("unknown pepti command: {cmd}"))),
     }
 }
 
@@ -341,14 +327,15 @@ async fn run_composition_checks(
     Ok(checks)
 }
 
-/// Resolve the SSH host for validation from args, env var, or pepti fallback.
+/// Resolve the SSH host for validation from args, env, or manifest.
 fn resolve_validate_host(config: &ShadowConfig, args: &[&str]) -> String {
     if let Some(host) = cli::extract_flag_value(args, "--host") {
         return host.to_string();
     }
     args.iter().find(|a| !a.starts_with("--")).map_or_else(
         || {
-            std::env::var(cellmembrane_types::service::ENV_PEPTI_SSH_HOST)
+            std::env::var(cellmembrane_types::service::ENV_VALIDATE_SSH_HOST)
+                .or_else(|_| std::env::var(cellmembrane_types::service::ENV_PEPTI_SSH_HOST))
                 .unwrap_or_else(|_| config.ssh_host.clone())
         },
         |&h| h.to_string(),

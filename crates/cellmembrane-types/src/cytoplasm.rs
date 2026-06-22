@@ -148,9 +148,9 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
     match gate_name {
         "golgi" => Some("10.13.37.1"),
         "sporeGate" => Some("10.13.37.2"),
-        "pepti" => Some("10.13.37.4"),
         "eastGate" => Some("10.13.37.5"),
         "flockGate" => Some("10.13.37.6"),
+        "ironGate" => Some("10.13.37.7"),
         _ => None,
     }
 }
@@ -178,7 +178,6 @@ mod tests {
     #[test]
     fn zone_for_gate_wan() {
         assert_eq!(ZoneLabel::for_gate("golgi"), ZoneLabel::Wan);
-        assert_eq!(ZoneLabel::for_gate("pepti"), ZoneLabel::Wan);
         assert_eq!(ZoneLabel::for_gate("flockGate"), ZoneLabel::Wan);
     }
 
@@ -231,21 +230,20 @@ mod tests {
     fn mesh_address_known_gates() {
         assert_eq!(mesh_address("golgi"), Some("10.13.37.1"));
         assert_eq!(mesh_address("sporeGate"), Some("10.13.37.2"));
-        assert_eq!(mesh_address("pepti"), Some("10.13.37.4"));
         assert_eq!(mesh_address("eastGate"), Some("10.13.37.5"));
         assert_eq!(mesh_address("flockGate"), Some("10.13.37.6"));
+        assert_eq!(mesh_address("ironGate"), Some("10.13.37.7"));
     }
 
     #[test]
     fn mesh_address_unpeered_returns_none() {
-        assert_eq!(mesh_address("ironGate"), None);
         assert_eq!(mesh_address("northGate"), None);
         assert_eq!(mesh_address("newGate"), None);
     }
 
     #[test]
     fn mesh_addresses_unique() {
-        let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
+        let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
         let addrs: Vec<_> = known.iter().filter_map(|g| mesh_address(g)).collect();
         let mut seen = std::collections::HashSet::new();
         assert!(addrs.iter().all(|a| seen.insert(a)));
@@ -253,7 +251,7 @@ mod tests {
 
     #[test]
     fn mesh_addresses_in_subnet() {
-        let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
+        let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
         for gate in &known {
             let ip = mesh_address(gate).unwrap();
             assert!(

@@ -358,11 +358,11 @@ mod wave;
 pub use wave::{ExitCriterion, WaveState};
 
 /// Resolve the federation peer address from the manifest (golgi by default).
-/// Falls back to the hardcoded VPS address if manifest is unavailable.
+/// Falls back to `DEFAULT_VPS_MESH_PEER` if manifest is unavailable.
 #[must_use]
 pub fn resolve_federation_peer() -> String {
     let workspace = std::env::var("ECOPRIMALS_ROOT").map_or_else(
-        |_| PathBuf::from("/home/sporegate/Development/ecoPrimals"),
+        |_| PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT),
         PathBuf::from,
     );
     if let Ok(manifest) = load_from_workspace(&workspace) {
@@ -376,7 +376,7 @@ pub fn resolve_federation_peer() -> String {
             }
         }
     }
-    "10.13.37.1:7700".to_string()
+    cellmembrane_types::service::DEFAULT_VPS_MESH_PEER.to_string()
 }
 
 /// Convenience: load manifest from workspace root.

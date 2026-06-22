@@ -303,7 +303,7 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
 }
 
 fn topology_mesh() -> ShadowOutcome {
-    let known = ["golgi", "sporeGate", "pepti", "eastGate", "flockGate"];
+    let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
     let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
 
     for gate in &known {

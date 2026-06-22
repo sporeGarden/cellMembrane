@@ -70,8 +70,10 @@ pub const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
 
 /// Namespace directory for biomeOS runtime sockets (under `XDG_RUNTIME_DIR` or /tmp).
 pub const NEURAL_API_NAMESPACE: &str = "biomeos";
-/// Environment variable for the peptidoglycan SSH host.
+/// Environment variable for the peptidoglycan SSH host (legacy, prefer `ENV_VALIDATE_SSH_HOST`).
 pub const ENV_PEPTI_SSH_HOST: &str = "PEPTI_SSH_HOST";
+/// Environment variable for the gate.validate SSH target host.
+pub const ENV_VALIDATE_SSH_HOST: &str = "MEMBRANE_VALIDATE_SSH_HOST";
 /// Environment variable for the Forgejo API token.
 pub const ENV_FORGEJO_TOKEN: &str = "FORGEJO_TOKEN";
 /// Environment variable for the Forgejo API URL.

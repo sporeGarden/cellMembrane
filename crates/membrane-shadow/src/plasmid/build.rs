@@ -93,7 +93,7 @@ async fn build_one(
     let build_root = std::env::temp_dir().join("membrane-build");
     let clone_dir = build_root.join(primal);
 
-    if let Err(detail) = super::drift::clone_source(primal, source, &build_root, &clone_dir).await {
+    if let Err(e) = super::drift::clone_source(primal, source, &build_root, &clone_dir).await {
         let status = if source.private {
             HarvestStatus::Skipped
         } else {
@@ -102,7 +102,7 @@ async fn build_one(
         return HarvestResult {
             binary: primal.into(),
             status,
-            detail,
+            detail: e.to_string(),
         };
     }
 
@@ -110,11 +110,11 @@ async fn build_one(
         .await
         .unwrap_or_default();
 
-    if let Err(detail) = super::toolchain::build_binary(source, target, &clone_dir).await {
+    if let Err(e) = super::toolchain::build_binary(source, target, &clone_dir).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
-            detail,
+            detail: e.to_string(),
         };
     }
 
@@ -137,11 +137,11 @@ async fn build_one(
         };
     }
 
-    if let Err(detail) = validate_elf_arch(&bin_path, target).await {
+    if let Err(e) = validate_elf_arch(&bin_path, target).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
-            detail,
+            detail: e.to_string(),
         };
     }
 
@@ -161,10 +161,10 @@ async fn build_one(
                 ),
             }
         }
-        Err(detail) => HarvestResult {
+        Err(e) => HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
-            detail,
+            detail: e.to_string(),
         },
     }
 }

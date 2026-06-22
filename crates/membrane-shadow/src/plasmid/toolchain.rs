@@ -10,6 +10,10 @@ use std::path::Path;
 use super::harvest::SourceEntry;
 use tracing::warn;
 
+const fn build_err(msg: String) -> crate::error::ShadowError {
+    crate::error::ShadowError::Build(msg)
+}
+
 /// Android NDK target triple for native grapheneGate binaries.
 pub const ANDROID_TARGET: &str = "aarch64-linux-android";
 
@@ -24,16 +28,16 @@ const ELF_MAGIC: [u8; 4] = [0x7f, b'E', b'L', b'F'];
 /// Reads ELF headers directly (no external `file` command dependency).
 /// For musl targets: also verifies static linkage (no `PT_INTERP` / `DT_NEEDED`).
 /// For gnu targets: allows dynamic linking (GPU primals need `dlopen` for CUDA/Vulkan).
-pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Result<(), String> {
+pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::Result<()> {
     let data = tokio::fs::read(bin_path)
         .await
-        .map_err(|e| format!("BUILD-ELF-01: cannot read binary: {e}"))?;
+        .map_err(|e| build_err(format!("BUILD-ELF-01: cannot read binary: {e}")))?;
 
     if data.len() < 64 || data[..4] != ELF_MAGIC {
-        return Err(format!(
+        return Err(build_err(format!(
             "BUILD-ELF-01: not a valid ELF binary: {}",
             bin_path.display()
-        ));
+        )));
     }
 
     // e_machine at offset 18 (ELF64: little-endian u16)
@@ -47,10 +51,10 @@ pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Re
     };
 
     if e_machine != expected_machine {
-        return Err(format!(
+        return Err(build_err(format!(
             "BUILD-ELF-01: arch mismatch — expected {arch_name} (0x{expected_machine:02X}) \
              for target '{target}', got e_machine=0x{e_machine:02X}"
-        ));
+        )));
     }
 
     // Static linkage: check for absence of PT_INTERP program header (type=3)
@@ -59,7 +63,7 @@ pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> std::result::Re
         let ph_off = usize::try_from(u64::from_le_bytes(
             data[32..40].try_into().unwrap_or([0; 8]),
         ))
-        .map_err(|_| "BUILD-ELF-01: phoff exceeds addressable range".to_string())?;
+        .map_err(|_| build_err("BUILD-ELF-01: phoff exceeds addressable range".into()))?;
         let ph_ent_size = usize::from(u16::from_le_bytes([data[54], data[55]]));
         let ph_num = usize::from(u16::from_le_bytes([data[56], data[57]]));
 
@@ -151,7 +155,7 @@ pub async fn build_binary(
     source: &SourceEntry,
     target: &str,
     clone_dir: &Path,
-) -> std::result::Result<(), String> {
+) -> crate::Result<()> {
     let target_dir = clone_dir.join("target");
     let mut cmd = tokio::process::Command::new("cargo");
     cmd.args([
@@ -186,10 +190,10 @@ pub async fn build_binary(
                 cmd.env("ANDROID_NDK_HOME", &ndk_home);
             }
         } else {
-            return Err(format!(
+            return Err(build_err(format!(
                 "NDK linker not found for {target}. Set {ENV_ANDROID_NDK_HOME} \
                  to the NDK root (e.g. /opt/android-ndk-r26d)"
-            ));
+            )));
         }
     } else if target == "aarch64-unknown-linux-musl" {
         let target_upper = target.to_uppercase().replace('-', "_");
@@ -205,9 +209,9 @@ pub async fn build_binary(
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr);
             let tail: String = stderr.lines().rev().take(5).collect::<Vec<_>>().join("\n");
-            Err(format!("cargo build failed:\n{tail}"))
+            Err(build_err(format!("cargo build failed:\n{tail}")))
         }
-        Err(e) => Err(format!("cargo build spawn failed: {e}")),
+        Err(e) => Err(build_err(format!("cargo build spawn failed: {e}"))),
     }
 }
 
@@ -259,7 +263,7 @@ mod tests {
         std::fs::write(&tmp, b"not an ELF binary").unwrap();
         let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("BUILD-ELF-01"));
+        assert!(result.unwrap_err().to_string().contains("BUILD-ELF-01"));
         let _ = std::fs::remove_file(&tmp);
     }
 
@@ -295,7 +299,7 @@ mod tests {
         std::fs::write(&tmp, &elf).unwrap();
         let result = validate_elf_arch(&tmp, "x86_64-unknown-linux-musl").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("arch mismatch"));
+        assert!(result.unwrap_err().to_string().contains("arch mismatch"));
         let _ = std::fs::remove_file(&tmp);
     }
 

@@ -91,8 +91,10 @@ pub async fn remote_health_check(ip: &str) -> bool {
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
 
+    let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
     let probe_cmd = format!(
-        "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:/run/membrane/{spine_binary}.sock 2>/dev/null"
+        "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:{socket_base}/{spine_binary}.sock 2>/dev/null"
     );
 
     let user = std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)

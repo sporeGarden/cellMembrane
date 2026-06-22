@@ -35,8 +35,8 @@ pub(super) async fn has_upstream_changes(
 /// Fetch HEAD from both outer (GitHub) and inner (Forgejo) membranes.
 ///
 /// Returns the commit that is farthest ahead — if either remote has a newer
-/// commit than provenance, we should detect drift. This ensures golgiBody
-/// sees GitHub pushes and peptidoglycan sees both layers.
+/// commit than provenance, we should detect drift. Both Forgejo and GitHub
+/// are checked to ensure all membrane layers see pushes.
 async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
     let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
@@ -59,7 +59,7 @@ pub(super) async fn clone_source(
     source: &SourceEntry,
     build_root: &Path,
     clone_dir: &Path,
-) -> std::result::Result<(), String> {
+) -> crate::Result<()> {
     if let Err(e) = tokio::fs::remove_dir_all(clone_dir).await {
         tracing::debug!(error = %e, "clone_dir cleanup (may not exist yet)");
     }
@@ -81,11 +81,13 @@ pub(super) async fn clone_source(
     }
 
     if source.private {
-        Err(format!(
+        Err(crate::error::ShadowError::Git(format!(
             "private repo — neither Forgejo SSH nor GitHub accessible ({primal})"
-        ))
+        )))
     } else {
-        Err("git clone failed on both Forgejo and GitHub".into())
+        Err(crate::error::ShadowError::Git(
+            "git clone failed on both Forgejo and GitHub".into(),
+        ))
     }
 }
 

@@ -1,18 +1,18 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (sporeGate team)
-**Last updated:** 2026-06-22 (Wave 123)
+**Last updated:** 2026-06-22 (Wave 124)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
-> **Note (Wave 123):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
+> **Note (Wave 124):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
 > for all operational flows. Use: `membrane gate.status` (health), `membrane gate.bootstrap`
 > (enrollment), `membrane plasmid.refresh` (binary push), `membrane temporal.cascade`
 > (sync), `membrane rootpulse.status` (sovereignty). Wave 120+:
 > `membrane topology.service <role>` (identity-based discovery), `membrane wireguard.generate`
 > (declarative WG config), `membrane caddy.generate` (Caddyfile from manifest),
-> `membrane gate.validate` (composition trust barrier). Wave 121+:
-> `membrane topology.endpoint <gate> <cap>` (transport resolver), `membrane gate.quorum`
-> (autonomous cascade timer). Legacy `deploy_membrane.sh`
+> `membrane gate.validate` (composition trust barrier — `pepti.validate` deprecated Wave 120).
+> Wave 121+: `membrane topology.endpoint <gate> <cap>` (transport resolver),
+> `membrane gate.quorum` (autonomous cascade timer). Legacy `deploy_membrane.sh`
 > references below are retained as fossil record only — do not use operationally.
 
 ---

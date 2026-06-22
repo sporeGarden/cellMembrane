@@ -1,8 +1,16 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-22 (Wave 123+)
+**Last updated:** 2026-06-22 (Wave 124)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 124 update (Deep Debt — pepti Decommission + Typed Plasmid Errors + Hardcode Sweep):**
+pepti fully decommissioned from live mesh registries (`mesh_address()`, `topology.mesh`, dispatch
+namespace). `Result<_, String>` evolved to `ShadowError::Build` across 11 plasmid function
+signatures (sandbox, canary, toolchain, drift, harvest). `resolve_federation_peer()` de-hardcoded
+(was `/home/sporegate/...` fallback → `DEFAULT_ECOPRIMALS_ROOT` + `DEFAULT_VPS_MESH_PEER`).
+`canary_remote.rs` socket path env-configurable. `ENV_VALIDATE_SSH_HOST` replaces legacy
+`PEPTI_SSH_HOST`. Stale pepti references cleaned from relay, mirrors, dispatch comments.
+788 tests, zero clippy/doc warnings.
 **Wave 123+ update (Deep Debt — Typed RPC Errors + Visibility + Smart Refactors):**
 `ShadowError::Rpc` typed variant replaces all `Result<_, String>` in JSON-RPC transport
 (7 async fns, 5 caller sites). Visibility tightened: 15 functions `pub` → `pub(crate)` across
