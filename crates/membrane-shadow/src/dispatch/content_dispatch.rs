@@ -32,8 +32,10 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
 
     let content_path = std::env::var(cellmembrane_types::service::ENV_NESTGATE_CONTENT_PATH)
         .unwrap_or_else(|_| {
-            let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+            let install_base = cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_INSTALL_BASE,
+                cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+            );
             format!("{install_base}/{content_binary}/content")
         });
     let (content_count_out, _) = crate::ssh::exec_raw(
@@ -54,8 +56,10 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
                 .and_then(|s| s.port)
                 .unwrap_or(cellmembrane_types::service::DEFAULT_NESTGATE_PORT)
         });
-    let bind = std::env::var(cellmembrane_types::service::ENV_NUCLEUS_BIND)
-        .unwrap_or_else(|_| cellmembrane_types::service::BIND_LOOPBACK.into());
+    let bind = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_NUCLEUS_BIND,
+        cellmembrane_types::service::BIND_LOOPBACK,
+    );
     let (curl_out, curl_code) = crate::ssh::exec_raw(
         config,
         &format!("curl -s -o /dev/null -w '%{{http_code}}' http://{bind}:{content_port}/health 2>/dev/null"),

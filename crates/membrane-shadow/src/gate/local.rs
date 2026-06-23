@@ -27,8 +27,10 @@ fn candidate_workspace_roots() -> Vec<PathBuf> {
     if let Ok(root) = crate::resolve_workspace_root() {
         roots.push(root);
     }
-    let ecoprimals_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
+    let ecoprimals_root = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
     roots.push(PathBuf::from(ecoprimals_root));
     roots.push(dirs_home());
     roots
@@ -56,8 +58,10 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
         return PathBuf::from(val);
     }
 
-    let eco_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into());
+    let eco_root = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
 
     let infra_depot = PathBuf::from(&eco_root).join(cellmembrane_types::service::INFRA_PLASMID_BIN);
     if infra_depot.join("checksums.toml").exists() || infra_depot.join("primals").is_dir() {
@@ -85,8 +89,10 @@ pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
 ///
 /// Priority: `MEMBRANE_INSTALL_BASE` env → default `/opt/membrane`.
 pub(super) fn resolve_install_base() -> String {
-    std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into())
+    cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    )
 }
 
 #[cfg(test)]

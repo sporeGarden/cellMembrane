@@ -31,18 +31,7 @@ pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus
         });
     }
 
-    let mut issuer = String::new();
-    let mut not_after = String::new();
-
-    for line in cert_section.lines() {
-        let trimmed = line.trim();
-        if let Some(val) = trimmed.strip_prefix("issuer=") {
-            issuer = val.to_string();
-        } else if let Some(val) = trimmed.strip_prefix("notAfter=") {
-            not_after = val.to_string();
-        }
-    }
-
+    let (issuer, not_after) = parse_cert_fields(cert_section);
     let days = parse_days_remaining(&not_after);
 
     Ok(CertStatus {
@@ -173,6 +162,23 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
     Ok(format!("{domain}: reverted to Caddy-managed ACME"))
 }
 
+/// Parse issuer and expiry from an openssl x509 output block.
+///
+/// Expects lines like `issuer=...` and `notAfter=...`. Returns `(issuer, not_after)`.
+fn parse_cert_fields(cert_section: &str) -> (String, String) {
+    let mut issuer = String::new();
+    let mut not_after = String::new();
+    for line in cert_section.lines() {
+        let trimmed = line.trim();
+        if let Some(val) = trimmed.strip_prefix("issuer=") {
+            issuer = val.to_string();
+        } else if let Some(val) = trimmed.strip_prefix("notAfter=") {
+            not_after = val.to_string();
+        }
+    }
+    (issuer, not_after)
+}
+
 /// Check ACME certificate provisioning logs for recent errors.
 pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
     let unit = cellmembrane_types::service::CADDY_SERVICE_UNIT;
@@ -182,4 +188,43 @@ pub async fn acme_log(config: &ShadowConfig, lines: u32) -> Result<String> {
     );
     let (out, _) = caddy_exec(config, &cmd).await?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_cert_fields_standard_output() {
+        let section = "\
+            issuer=C = US, O = Let's Encrypt, CN = E8\n\
+            notBefore=Jun  1 00:00:00 2026 GMT\n\
+            notAfter=Aug 30 23:59:59 2026 GMT\n\
+            subject=CN = membrane.primals.eco";
+        let (issuer, not_after) = parse_cert_fields(section);
+        assert_eq!(issuer, "C = US, O = Let's Encrypt, CN = E8");
+        assert_eq!(not_after, "Aug 30 23:59:59 2026 GMT");
+    }
+
+    #[test]
+    fn parse_cert_fields_empty_input() {
+        let (issuer, not_after) = parse_cert_fields("");
+        assert!(issuer.is_empty());
+        assert!(not_after.is_empty());
+    }
+
+    #[test]
+    fn parse_cert_fields_missing_fields() {
+        let (issuer, not_after) = parse_cert_fields("subject=CN = example.com");
+        assert!(issuer.is_empty());
+        assert!(not_after.is_empty());
+    }
+
+    #[test]
+    fn parse_cert_fields_whitespace_handling() {
+        let section = "  issuer=Test CA  \n  notAfter=Dec 31 23:59:59 2030 GMT  ";
+        let (issuer, not_after) = parse_cert_fields(section);
+        assert_eq!(issuer, "Test CA");
+        assert_eq!(not_after, "Dec 31 23:59:59 2030 GMT");
+    }
 }

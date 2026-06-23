@@ -247,13 +247,17 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
 // ── Token operations (bearDog auth.token.*) ─────────────────────────
 
 fn default_forgejo_data_dir() -> String {
-    std::env::var(cellmembrane_types::service::ENV_FORGEJO_DATA_DIR)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_DATA_DIR.into())
+    cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_FORGEJO_DATA_DIR,
+        cellmembrane_types::service::DEFAULT_FORGEJO_DATA_DIR,
+    )
 }
 
 fn default_forgejo_work_dir() -> String {
-    std::env::var(cellmembrane_types::service::ENV_FORGEJO_WORK_DIR)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_INSTALL_BASE.into())
+    cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_FORGEJO_WORK_DIR,
+        cellmembrane_types::service::DEFAULT_FORGEJO_INSTALL_BASE,
+    )
 }
 
 /// Forgejo data directory on the VPS. Resolution chain:

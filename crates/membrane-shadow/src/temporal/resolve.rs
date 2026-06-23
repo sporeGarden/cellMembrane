@@ -20,8 +20,10 @@ use tracing::error;
 pub(super) fn sovereign_remote() -> &'static str {
     static SOVEREIGN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     SOVEREIGN.get_or_init(|| {
-        std::env::var(cellmembrane_types::service::ENV_SOVEREIGN_REMOTE)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOVEREIGN_REMOTE.into())
+        cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_SOVEREIGN_REMOTE,
+            cellmembrane_types::service::DEFAULT_SOVEREIGN_REMOTE,
+        )
     })
 }
 

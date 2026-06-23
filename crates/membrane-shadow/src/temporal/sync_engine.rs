@@ -24,13 +24,7 @@ pub(super) async fn has_dirty_worktree(local_path: &Path) -> bool {
     let output = git(local_path, &["status", "--porcelain"])
         .await
         .unwrap_or_default();
-    output.lines().any(|l| {
-        let trimmed = l.trim();
-        trimmed.len() >= 3
-            && !REGENERABLE_METADATA
-                .iter()
-                .any(|m| trimmed[3..].trim().ends_with(m))
-    })
+    output.lines().any(is_porcelain_dirty)
 }
 
 /// Discard local modifications to regenerable metadata files before pulling.
@@ -43,7 +37,7 @@ pub(super) async fn discard_regenerable_dirty_files(local_path: &Path) -> Vec<St
     let mut discarded = Vec::new();
 
     for line in status_output.lines() {
-        let trimmed = line.trim();
+        let trimmed = line.trim_end();
         if trimmed.len() < 4 {
             continue;
         }
@@ -55,8 +49,7 @@ pub(super) async fn discard_regenerable_dirty_files(local_path: &Path) -> Vec<St
             continue;
         }
 
-        let is_unstaged_modify = xy == " M" || xy == "MM" || xy == "??" || xy == "UU";
-        if is_unstaged_modify && git_ok(local_path, &["checkout", "--", file]).await {
+        if is_discardable_xy(xy) && git_ok(local_path, &["checkout", "--", file]).await {
             discarded.push(file.to_string());
         }
     }
@@ -197,6 +190,25 @@ async fn try_pull_converge(
     ))
 }
 
+/// Classify a single `git status --porcelain` line as genuinely dirty.
+///
+/// A line is dirty if it's at least 3 characters (XY + space + filename)
+/// and the file is NOT one of the regenerable metadata files. Uses
+/// `trim_end` to preserve the leading XY status codes.
+fn is_porcelain_dirty(line: &str) -> bool {
+    let trimmed = line.trim_end();
+    trimmed.len() >= 3
+        && !REGENERABLE_METADATA
+            .iter()
+            .any(|m| trimmed[3..].trim().ends_with(m))
+}
+
+/// Whether a git status XY prefix represents an unstaged/untracked change
+/// suitable for auto-discard of regenerable files.
+fn is_discardable_xy(xy: &str) -> bool {
+    xy == " M" || xy == "MM" || xy == "??" || xy == "UU"
+}
+
 pub(super) async fn sync_diverge(
     workspace_root: &Path,
     local_path: &Path,
@@ -256,4 +268,74 @@ pub(super) async fn sync_diverge(
         pulled_from: None,
         pushed_to: vec![],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regenerable_metadata_contains_expected_files() {
+        assert!(REGENERABLE_METADATA.contains(&"checksums.toml"));
+        assert!(REGENERABLE_METADATA.contains(&"provenance.toml"));
+        assert!(REGENERABLE_METADATA.contains(&"freshness.toml"));
+        assert_eq!(REGENERABLE_METADATA.len(), 3);
+    }
+
+    #[test]
+    fn porcelain_dirty_detects_modified_source() {
+        assert!(is_porcelain_dirty(" M src/main.rs"));
+        assert!(is_porcelain_dirty("MM src/lib.rs"));
+        assert!(is_porcelain_dirty("?? new_file.rs"));
+        assert!(is_porcelain_dirty("A  added.rs"));
+    }
+
+    #[test]
+    fn porcelain_dirty_ignores_regenerable_files() {
+        assert!(!is_porcelain_dirty(" M checksums.toml"));
+        assert!(!is_porcelain_dirty("MM provenance.toml"));
+        assert!(!is_porcelain_dirty("?? freshness.toml"));
+    }
+
+    #[test]
+    fn porcelain_dirty_short_lines_not_dirty() {
+        assert!(!is_porcelain_dirty(""));
+        assert!(!is_porcelain_dirty("  "));
+        assert!(!is_porcelain_dirty("M"));
+    }
+
+    #[test]
+    fn porcelain_dirty_nested_regenerable_path() {
+        assert!(!is_porcelain_dirty(" M infra/plasmidBin/checksums.toml"));
+        assert!(!is_porcelain_dirty(" M some/path/provenance.toml"));
+    }
+
+    #[test]
+    fn porcelain_dirty_similar_but_not_regenerable() {
+        assert!(is_porcelain_dirty(" M checksums.toml.bak"));
+        assert!(is_porcelain_dirty(" M my_provenance.toml.old"));
+        assert!(is_porcelain_dirty(" M freshness_report.toml"));
+    }
+
+    #[test]
+    fn discardable_xy_recognizes_unstaged_and_untracked() {
+        assert!(is_discardable_xy(" M"));
+        assert!(is_discardable_xy("MM"));
+        assert!(is_discardable_xy("??"));
+        assert!(is_discardable_xy("UU"));
+    }
+
+    #[test]
+    fn discardable_xy_rejects_staged_only() {
+        assert!(!is_discardable_xy("A "));
+        assert!(!is_discardable_xy("D "));
+        assert!(!is_discardable_xy("R "));
+        assert!(!is_discardable_xy("M "));
+    }
+
+    #[test]
+    fn discardable_xy_rejects_deleted() {
+        assert!(!is_discardable_xy(" D"));
+        assert!(!is_discardable_xy("MD"));
+    }
 }

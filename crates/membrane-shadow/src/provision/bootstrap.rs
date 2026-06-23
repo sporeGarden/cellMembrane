@@ -12,8 +12,10 @@ const SSH_RETRY_DELAY_SECS: u64 = 10;
 const SSH_MAX_RETRIES: u32 = 12;
 
 fn provision_ssh_user() -> String {
-    std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into())
+    cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_PROVISION_SSH_USER,
+        cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER,
+    )
 }
 
 /// Run a command on the remote host via SSH with retry logic for fresh droplets.
@@ -67,8 +69,10 @@ async fn harden(ip: &str) -> Result<String> {
 
 /// Phase 2: Create directory structure.
 async fn setup_directories(ip: &str) -> Result<String> {
-    let base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::TurnServer,
     );
@@ -149,10 +153,14 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     let relay_upper = relay.to_uppercase();
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
     let vps_peer = crate::manifest::resolve_federation_peer();
-    let hub_id = std::env::var(cellmembrane_types::service::ENV_MESH_HUB_ID)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_MESH_HUB_ID.into());
-    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let hub_id = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_MESH_HUB_ID,
+        cellmembrane_types::service::DEFAULT_MESH_HUB_ID,
+    );
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
 
     let bearer_unit = format!(
         r"[Unit]

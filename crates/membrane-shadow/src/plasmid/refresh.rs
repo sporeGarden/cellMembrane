@@ -66,8 +66,10 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
     };
 
     let source_dir = resolve_refresh_source(args.source_dir.as_deref());
-    let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
 
     let mut results: Vec<RefreshResult> = Vec::new();
 
@@ -118,8 +120,10 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
 /// that are running on the inner membrane. Failures here are non-fatal — the
 /// refresh itself already succeeded.
 async fn sync_depot_binaries(config: &crate::ShadowConfig) {
-    let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
     let depot_root = format!(
         "{}/plasmidBin/primals",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT

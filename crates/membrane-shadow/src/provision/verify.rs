@@ -43,11 +43,7 @@ pub async fn verify_remote_gate(
 
     let health_count = match health_sweep(ip).await {
         Ok(detail) => {
-            let count = detail
-                .split('/')
-                .next()
-                .and_then(|s| s.trim().parse::<u32>().ok())
-                .unwrap_or(0);
+            let count = parse_health_count(&detail);
             phases.push(format!("health: {detail}"));
             count
         }
@@ -122,6 +118,15 @@ echo "canary.audit: stale=$STALE"
     }
 }
 
+/// Parse healthy count from a health sweep detail string like "13/13 healthy".
+fn parse_health_count(detail: &str) -> u32 {
+    detail
+        .split('/')
+        .next()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
 /// Register a remote canary and write gate identity during bootstrap.
 pub(super) async fn finalize_bootstrap(
     droplet: &DropletState,
@@ -139,5 +144,37 @@ pub(super) async fn finalize_bootstrap(
     match write_gate_identity(ip, gate_name, &droplet.profile).await {
         Ok(_) => phases.push("identity: written".into()),
         Err(e) => phases.push(format!("identity: FAIL — {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_health_count_standard_format() {
+        assert_eq!(parse_health_count("13/13 healthy"), 13);
+        assert_eq!(parse_health_count("5/13 healthy"), 5);
+        assert_eq!(parse_health_count("0/13 healthy"), 0);
+    }
+
+    #[test]
+    fn parse_health_count_edge_cases() {
+        assert_eq!(parse_health_count(""), 0);
+        assert_eq!(parse_health_count("not a number"), 0);
+        assert_eq!(parse_health_count("/13"), 0);
+    }
+
+    #[test]
+    fn parse_health_count_large_values() {
+        assert_eq!(parse_health_count("100/100 services"), 100);
+    }
+
+    #[test]
+    fn expected_healthy_from_composition() {
+        let comp = cellmembrane_types::MembraneComposition::parse_name("nucleus");
+        assert!(comp.is_some(), "nucleus should be a known composition");
+        let primals = comp.unwrap().spec().primals.len();
+        assert!(primals > 0, "nucleus should have primals");
     }
 }

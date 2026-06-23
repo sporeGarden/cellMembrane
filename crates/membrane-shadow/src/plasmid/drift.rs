@@ -29,7 +29,7 @@ pub(super) async fn has_upstream_changes(
 
     fetch_head_commit(&source.repo, depot_dir)
         .await
-        .is_none_or(|head| !head.starts_with(prev_commit) && !prev_commit.starts_with(&head))
+        .is_none_or(|head| !commits_match(&head, prev_commit))
 }
 
 /// Fetch HEAD from both outer (GitHub) and inner (Forgejo) membranes.
@@ -38,8 +38,10 @@ pub(super) async fn has_upstream_changes(
 /// commit than provenance, we should detect drift. Both Forgejo and GitHub
 /// are checked to ensure all membrane layers see pushes.
 async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
-    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
+    let forgejo_host = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_FORGEJO_SSH_HOST,
+        cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR,
+    );
 
     let forgejo = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await;
     let github = try_ls_remote_head(&format!("https://github.com/{repo}.git")).await;
@@ -67,8 +69,10 @@ pub(super) async fn clone_source(
         tracing::warn!(error = %e, dir = %build_root.display(), "failed to create build root");
     }
 
-    let forgejo_host = std::env::var(cellmembrane_types::service::ENV_FORGEJO_SSH_HOST)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR.into());
+    let forgejo_host = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_FORGEJO_SSH_HOST,
+        cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR,
+    );
     let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
     let github_url = format!("https://github.com/{}.git", source.repo);
 
@@ -113,14 +117,14 @@ pub(super) async fn check_clone_freshness(
         return None;
     }
 
-    if !remote_head.starts_with(local_head) && !local_head.starts_with(&remote_head) {
+    if commits_match(&remote_head, local_head) {
+        None
+    } else {
         Some(format!(
             "clone at {short_local} but origin HEAD is {short_remote} — source may be stale",
             short_local = &local_head[..8.min(local_head.len())],
             short_remote = &remote_head[..8.min(remote_head.len())],
         ))
-    } else {
-        None
     }
 }
 
@@ -182,5 +186,47 @@ pub(super) async fn has_upstream_changes_lenient(
 
     fetch_head_commit(&source.repo, depot_dir)
         .await
-        .is_some_and(|head| !head.starts_with(prev_commit) && !prev_commit.starts_with(&head))
+        .is_some_and(|head| !commits_match(&head, prev_commit))
+}
+
+/// Two (possibly truncated) commit SHAs match if one is a prefix of the other.
+fn commits_match(a: &str, b: &str) -> bool {
+    a.starts_with(b) || b.starts_with(a)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn commits_match_identical() {
+        assert!(commits_match("abc123", "abc123"));
+    }
+
+    #[test]
+    fn commits_match_prefix_left() {
+        assert!(commits_match("abc12345", "abc123"));
+    }
+
+    #[test]
+    fn commits_match_prefix_right() {
+        assert!(commits_match("abc123", "abc12345"));
+    }
+
+    #[test]
+    fn commits_match_different() {
+        assert!(!commits_match("abc123", "def456"));
+    }
+
+    #[test]
+    fn commits_match_empty() {
+        assert!(commits_match("", ""));
+        assert!(commits_match("abc", ""));
+        assert!(commits_match("", "abc"));
+    }
+
+    #[test]
+    fn commits_match_partial_overlap_not_prefix() {
+        assert!(!commits_match("abc123", "abc124"));
+    }
 }

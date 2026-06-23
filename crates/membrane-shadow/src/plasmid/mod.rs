@@ -319,8 +319,10 @@ pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate
 pub async fn depot_sync(
     config: &crate::ShadowConfig,
 ) -> crate::error::Result<crate::ShadowOutcome> {
-    let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
     let depot_root = format!(
         "{}/plasmidBin/primals",
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT

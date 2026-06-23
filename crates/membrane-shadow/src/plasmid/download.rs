@@ -17,8 +17,10 @@ pub(super) async fn download_asset(
 ) -> bool {
     match source {
         FetchSource::GitHub => {
-            let org = std::env::var(cellmembrane_types::service::ENV_GITHUB_ORG)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_GITHUB_ORG.into());
+            let org = cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_GITHUB_ORG,
+                cellmembrane_types::service::DEFAULT_GITHUB_ORG,
+            );
             let url =
                 format!("https://github.com/{org}/plasmidBin/releases/download/{tag}/{asset}");
             download_via_http(&url, dest).await
@@ -26,8 +28,10 @@ pub(super) async fn download_asset(
         FetchSource::Forgejo => {
             let api = &config.forgejo_api;
             let base = api.trim_end_matches("/api/v1");
-            let org = std::env::var(cellmembrane_types::service::ENV_FORGEJO_ORG)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_FORGEJO_ORG.into());
+            let org = cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_FORGEJO_ORG,
+                cellmembrane_types::service::DEFAULT_FORGEJO_ORG,
+            );
             let url = format!("{base}/{org}/plasmidBin/releases/download/{tag}/{asset}");
             download_via_http(&url, dest).await
         }

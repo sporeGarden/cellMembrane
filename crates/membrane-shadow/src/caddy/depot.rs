@@ -28,8 +28,10 @@ pub async fn depot_provision(config: &ShadowConfig) -> Result<String> {
         return Ok("depot route already provisioned in Caddyfile".into());
     }
 
-    let depot_hostname = std::env::var(cellmembrane_types::service::ENV_DEPOT_HOSTNAME)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME.into());
+    let depot_hostname = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
+        cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME,
+    );
     let escaped_hostname = depot_hostname.replace('.', r"\.");
     let inject_cmd = format!(
         r"cat > /tmp/depot-snippet.caddy << 'SNIPPET'
@@ -127,8 +129,10 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
         )));
     }
 
-    let depot_hostname = std::env::var(cellmembrane_types::service::ENV_DEPOT_HOSTNAME)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME.into());
+    let depot_hostname = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
+        cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME,
+    );
     Ok(format!(
         "checksums.toml route provisioned: https://{depot_hostname}/depot/checksums.toml → {checksums_path}"
     ))

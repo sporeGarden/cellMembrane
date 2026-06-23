@@ -19,16 +19,20 @@ use serde::{Deserialize, Serialize};
 fn caddy_admin_endpoint() -> &'static str {
     static ENDPOINT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     ENDPOINT.get_or_init(|| {
-        std::env::var(cellmembrane_types::service::ENV_CADDY_ADMIN_ENDPOINT)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CADDY_ADMIN_ENDPOINT.into())
+        cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_CADDY_ADMIN_ENDPOINT,
+            cellmembrane_types::service::DEFAULT_CADDY_ADMIN_ENDPOINT,
+        )
     })
 }
 
 fn caddy_bin_path() -> &'static str {
     static BIN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     BIN.get_or_init(|| {
-        let vps_bin_dir = std::env::var(cellmembrane_types::service::ENV_VPS_BIN_DIR)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+        let vps_bin_dir = cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_VPS_BIN_DIR,
+            cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+        );
         format!("{vps_bin_dir}/caddy")
     })
 }
@@ -36,8 +40,10 @@ fn caddy_bin_path() -> &'static str {
 fn caddyfile_path() -> &'static str {
     static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     PATH.get_or_init(|| {
-        let config_dir = std::env::var(cellmembrane_types::service::ENV_CONFIG_DIR)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CONFIG_DIR.into());
+        let config_dir = cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_CONFIG_DIR,
+            cellmembrane_types::service::DEFAULT_CONFIG_DIR,
+        );
         format!("{config_dir}/Caddyfile")
     })
 }

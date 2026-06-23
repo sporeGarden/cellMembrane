@@ -490,8 +490,10 @@ fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let hook_dir_str = std::env::var(cellmembrane_types::service::ENV_NM_DISPATCHER_DIR)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_NM_DISPATCHER_DIR.into());
+    let hook_dir_str = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_NM_DISPATCHER_DIR,
+        cellmembrane_types::service::DEFAULT_NM_DISPATCHER_DIR,
+    );
     let hook_dir = std::path::Path::new(&hook_dir_str);
     let hook_path = hook_dir.join("99-membrane-reconnect");
     let hook_content = format!(
@@ -523,8 +525,10 @@ fn emit_deployment_toml(
     dry_run: bool,
     all_pass: bool,
 ) -> BootstrapPhase {
-    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
     let deployment_path = std::path::Path::new(&install_base).join("deployment.toml");
 
     if dry_run {

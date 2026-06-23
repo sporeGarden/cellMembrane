@@ -424,8 +424,10 @@ fn probe_rootpulse_ledger() -> StatusProbe {
 }
 
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
-    let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
+    let socket_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SOCKET_BASE,
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    );
     let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
         .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
     let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;

@@ -133,8 +133,10 @@ pub(super) fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
 /// The timer uses `OnCalendar` with `RandomizedDelaySec` to avoid
 /// thundering-herd across gates.
 pub fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> (String, String) {
-    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
 
     let service = format!(
         r"[Unit]
@@ -226,8 +228,10 @@ fn generate_secrets_env() -> String {
     use std::io::Write as _;
     use std::os::unix::fs::PermissionsExt;
 
-    let config_dir = std::env::var(cellmembrane_types::service::ENV_CONFIG_DIR)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CONFIG_DIR.into());
+    let config_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_CONFIG_DIR,
+        cellmembrane_types::service::DEFAULT_CONFIG_DIR,
+    );
     let env_dir = std::path::Path::new(&config_dir);
     if let Err(e) = std::fs::create_dir_all(env_dir) {
         tracing::warn!(error = %e, "failed to create config directory for secrets");

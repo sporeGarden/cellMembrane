@@ -48,8 +48,10 @@ struct TomlOverrides {
 impl Default for ShadowConfig {
     fn default() -> Self {
         Self {
-            ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SSH_ALIAS.into()),
+            ssh_host: cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_SSH_HOST,
+                cellmembrane_types::service::DEFAULT_SSH_ALIAS,
+            ),
             ssh_host_ext: std::env::var(cellmembrane_types::service::ENV_SSH_HOST_EXT)
                 .or_else(|_| std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST))
                 .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SSH_ALIAS_EXT.into()),
@@ -79,8 +81,10 @@ impl ShadowConfig {
                 .ok()
                 .or(toml_overrides.ssh_host)
                 .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_SSH_ALIAS.into()),
-            ssh_host_ext: std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SSH_ALIAS_EXT.into()),
+            ssh_host_ext: cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_GOLGI_EXT_HOST,
+                cellmembrane_types::service::DEFAULT_SSH_ALIAS_EXT,
+            ),
             forgejo_api: std::env::var(cellmembrane_types::service::ENV_FORGEJO_API)
                 .ok()
                 .or(toml_overrides.forgejo_api)
@@ -99,8 +103,10 @@ impl ShadowConfig {
             forgejo_admin_user: std::env::var(cellmembrane_types::service::ENV_FORGEJO_ADMIN_USER)
                 .ok()
                 .or(toml_overrides.forgejo_admin_user),
-            service_filter: std::env::var(cellmembrane_types::service::ENV_SERVICE_FILTER)
-                .unwrap_or_else(|_| DEFAULT_SERVICE_FILTER.into()),
+            service_filter: cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_SERVICE_FILTER,
+                DEFAULT_SERVICE_FILTER,
+            ),
         };
 
         cfg.forgejo_token = resolve_token().await;
@@ -154,8 +160,10 @@ fn toml_search_paths() -> Vec<String> {
         }
     }
 
-    let config_dir = std::env::var(cellmembrane_types::service::ENV_CONFIG_DIR)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_CONFIG_DIR.into());
+    let config_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_CONFIG_DIR,
+        cellmembrane_types::service::DEFAULT_CONFIG_DIR,
+    );
     paths.push(format!("{config_dir}/membrane.toml"));
     paths
 }

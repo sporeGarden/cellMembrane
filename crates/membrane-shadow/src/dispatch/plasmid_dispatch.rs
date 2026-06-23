@@ -149,8 +149,10 @@ async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<S
             let primal = cli::extract_flag_value(args, "--primal").ok_or_else(|| {
                 ShadowError::Config("plasmid.canary.promote requires --primal".into())
             })?;
-            let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-                .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+            let install_dir = cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_INSTALL_BASE,
+                cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+            );
             let production_path = std::path::PathBuf::from(&install_dir).join(primal);
 
             match plasmid::canary::promote_canary(primal, &production_path).await {
@@ -237,8 +239,10 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
 
     let promote = args.contains(&"--promote");
     if promote {
-        let install_dir = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-            .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+        let install_dir = cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_INSTALL_BASE,
+            cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+        );
         let production_path = std::path::PathBuf::from(install_dir).join(primal);
 
         match plasmid::sandbox::validate_and_promote(&sandbox_args, &production_path).await {
