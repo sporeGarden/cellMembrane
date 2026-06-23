@@ -263,12 +263,12 @@ enum ShipResult {
     Failed,
 }
 
-/// Ship a single repo via SSH to golgiBody-ext.
+/// Ship a single repo via SSH to `golgiBody-ext`.
 ///
 /// The command on ext:
-///   1. Pull from Forgejo (keep ext in sync)
-///   2. Determine if ahead of GitHub remote
-///   3. If ahead, push to GitHub
+///   1. Fetch from Forgejo and hard-reset (sovereign authority)
+///   2. Determine if ahead of GitHub mirror remote
+///   3. If ahead, push with `--force-with-lease` (agentic divergence policy)
 async fn ship_one_repo(config: &RelayConfig, repo_path: &str) -> ShipResult {
     let eco_root = config.ecoprimals_root.to_string_lossy();
     let remote_script = format!(
@@ -276,13 +276,13 @@ async fn ship_one_repo(config: &RelayConfig, repo_path: &str) -> ShipResult {
 d="{eco_root}/{repo_path}"
 [ -d "$d/.git" ] || exit 2
 cd "$d"
-git pull --ff-only forgejo main --quiet 2>/dev/null || true
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+git fetch forgejo "$branch" --quiet 2>/dev/null && git reset --hard "forgejo/$branch" --quiet 2>/dev/null || true
 REMOTE=$(git remote get-url github >/dev/null 2>&1 && echo github || echo origin)
 git fetch "$REMOTE" --quiet 2>/dev/null || exit 3
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 ahead=$(git rev-list --count "$REMOTE/$branch..HEAD" 2>/dev/null || echo 0)
 [ "$ahead" -eq 0 ] && exit 4
-git push "$REMOTE" "$branch" --quiet 2>/dev/null || exit 5
+git push --force-with-lease "$REMOTE" "$branch" --quiet 2>/dev/null || exit 5
 echo "+$ahead"
 "#
     );

@@ -171,9 +171,9 @@ fn parse_cert_fields(cert_section: &str) -> (String, String) {
     for line in cert_section.lines() {
         let trimmed = line.trim();
         if let Some(val) = trimmed.strip_prefix("issuer=") {
-            issuer = val.to_string();
+            issuer = val.trim().to_string();
         } else if let Some(val) = trimmed.strip_prefix("notAfter=") {
-            not_after = val.to_string();
+            not_after = val.trim().to_string();
         }
     }
     (issuer, not_after)
