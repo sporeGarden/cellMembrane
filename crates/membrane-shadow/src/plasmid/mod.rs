@@ -451,9 +451,13 @@ pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
 
     for &primal in &registry_primals {
         if let Some(source) = sources.get(primal) {
-            let changed =
-                drift::has_upstream_changes_pub(primal, source, provenance.as_ref(), &depot_dir)
-                    .await;
+            let changed = drift::has_upstream_changes_lenient(
+                primal,
+                source,
+                provenance.as_ref(),
+                &depot_dir,
+            )
+            .await;
             if changed {
                 drifted.push(primal.to_string());
             } else {

@@ -18,6 +18,7 @@ const fn build_err(msg: String) -> crate::error::ShadowError {
 
 use cellmembrane_types::service::{
     DEFAULT_CANARY_BIN_DIR, DEFAULT_CANARY_SOCKET_DIR, ENV_CANARY_BIN_DIR, ENV_CANARY_SOCKET_DIR,
+    env_or,
 };
 
 use super::canary_remote::remote_health_check;
@@ -52,15 +53,11 @@ pub struct CanaryPool {
 }
 
 fn resolve_canary_socket_dir() -> PathBuf {
-    PathBuf::from(
-        std::env::var(ENV_CANARY_SOCKET_DIR).unwrap_or_else(|_| DEFAULT_CANARY_SOCKET_DIR.into()),
-    )
+    PathBuf::from(env_or(ENV_CANARY_SOCKET_DIR, DEFAULT_CANARY_SOCKET_DIR))
 }
 
 pub fn resolve_canary_bin_dir() -> PathBuf {
-    PathBuf::from(
-        std::env::var(ENV_CANARY_BIN_DIR).unwrap_or_else(|_| DEFAULT_CANARY_BIN_DIR.into()),
-    )
+    PathBuf::from(env_or(ENV_CANARY_BIN_DIR, DEFAULT_CANARY_BIN_DIR))
 }
 
 fn pool_state_path() -> PathBuf {
@@ -391,7 +388,7 @@ async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
         };
     }
 
-    match uds_probe(&slot.socket_path, request).await {
+    match crate::jsonrpc::call(&slot.socket_path, request).await {
         Ok(response) if response.contains("\"status\"") || response.contains("\"result\"") => {
             CanaryHealth {
                 primal: slot.primal.clone(),
@@ -416,10 +413,6 @@ async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
             detail: e.to_string(),
         },
     }
-}
-
-async fn uds_probe(socket_path: &Path, request: &str) -> crate::Result<String> {
-    crate::jsonrpc::call(socket_path, request).await
 }
 
 #[cfg(test)]

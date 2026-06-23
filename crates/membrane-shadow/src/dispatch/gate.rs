@@ -634,3 +634,45 @@ async fn dispatch_preflight(args: &[&str]) -> crate::Result<ShadowOutcome> {
     };
     Ok(outcome)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn unknown_command_fails() {
+        let config = ShadowConfig::default();
+        let result = dispatch(&config, "gate.nonexistent_xyz", &[]).await;
+        assert!(result.is_ok());
+        let outcome = result.unwrap();
+        assert!(!outcome.ok);
+        assert!(outcome.message.contains("unknown command"));
+    }
+
+    #[test]
+    fn quorum_dispatch_dry_run() {
+        let result = dispatch_quorum(&["--generate", "--dry-run"]);
+        assert!(result.is_ok());
+        let outcome = result.unwrap();
+        assert!(outcome.ok);
+        assert!(outcome.message.contains("timer"));
+    }
+
+    #[test]
+    fn quorum_dispatch_custom_interval() {
+        let result = dispatch_quorum(&["--generate", "--interval", "30"]);
+        assert!(result.is_ok());
+        let outcome = result.unwrap();
+        let data = outcome.data.unwrap();
+        assert_eq!(data["interval_minutes"], 30);
+    }
+
+    #[test]
+    fn profile_dispatch_missing_gate() {
+        let result = dispatch_profile("nonexistent_gate_xyz");
+        match result {
+            Ok(outcome) => assert!(!outcome.ok, "unknown gate should fail"),
+            Err(_) => {} // workspace not found is acceptable in test
+        }
+    }
+}

@@ -16,8 +16,10 @@ use super::health::{StatusProbe, resolve_primal_socket_paths, uds_jsonrpc_call};
 
 /// Resolve the sovereign domain for TLS and content probes.
 fn resolve_sovereign_domain() -> String {
-    std::env::var(cellmembrane_types::service::ENV_DEPOT_HOSTNAME)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME.into())
+    cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
+        cellmembrane_types::service::DEFAULT_DEPOT_HOSTNAME,
+    )
 }
 
 /// Probe all four sovereignty shadows (S1 TLS, S2 Relay, S3 Content, S4 Auth).
@@ -266,4 +268,47 @@ async fn tcp_reachable(addr: &str) -> bool {
     )
     .await
     .is_ok_and(|r| r.is_ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_sovereign_domain_returns_default() {
+        let domain = resolve_sovereign_domain();
+        assert!(
+            !domain.is_empty(),
+            "should return default hostname when env not set"
+        );
+        assert!(domain.contains('.'), "domain should contain a TLD");
+    }
+
+    #[test]
+    fn probe_names_are_namespaced() {
+        let names = [
+            "sovereignty.s1_tls",
+            "sovereignty.s2_relay",
+            "sovereignty.s3_content",
+            "sovereignty.s4_auth",
+        ];
+        for name in &names {
+            assert!(name.starts_with("sovereignty."));
+        }
+    }
+
+    #[tokio::test]
+    async fn tcp_unreachable_returns_false() {
+        assert!(!tcp_reachable("192.0.2.1:1").await);
+    }
+
+    #[tokio::test]
+    async fn probe_sovereignty_returns_four_probes() {
+        let probes = probe_sovereignty().await;
+        assert_eq!(probes.len(), 4);
+        assert_eq!(probes[0].name, "sovereignty.s1_tls");
+        assert_eq!(probes[1].name, "sovereignty.s2_relay");
+        assert_eq!(probes[2].name, "sovereignty.s3_content");
+        assert_eq!(probes[3].name, "sovereignty.s4_auth");
+    }
 }

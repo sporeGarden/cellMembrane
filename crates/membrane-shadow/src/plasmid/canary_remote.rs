@@ -91,14 +91,18 @@ pub async fn remote_health_check(ip: &str) -> bool {
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
 
-    let socket_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_SOCKET_BASE.into());
+    let socket_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SOCKET_BASE,
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    );
     let probe_cmd = format!(
         "echo '{{\"jsonrpc\":\"2.0\",\"method\":\"health\",\"id\":1}}' | socat - UNIX-CONNECT:{socket_base}/{spine_binary}.sock 2>/dev/null"
     );
 
-    let user = std::env::var(cellmembrane_types::service::ENV_PROVISION_SSH_USER)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER.into());
+    let user = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_PROVISION_SSH_USER,
+        cellmembrane_types::service::DEFAULT_PROVISION_SSH_USER,
+    );
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),

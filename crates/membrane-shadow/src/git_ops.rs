@@ -156,7 +156,7 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
 }
 
 /// Run a git command, returning an error on non-zero exit.
-async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
+pub async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
     let status = tokio::process::Command::new("git")
         .args(args)
         .current_dir(repo_dir)
@@ -171,6 +171,20 @@ async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+/// Resolve the full HEAD commit SHA (sync). Returns `None` if not a git repo.
+#[must_use]
+pub fn resolve_head_full(project_path: &Path) -> Option<String> {
+    if !project_path.join(".git").exists() {
+        return None;
+    }
+    std::process::Command::new("git")
+        .args(["-C", &project_path.to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
 /// Resolve the HEAD commit short SHA for a path containing a git repo.
@@ -255,6 +269,35 @@ pub async fn head_short(repo_path: &Path) -> Option<String> {
     git_output_opt(repo_path, &["rev-parse", "--short=8", "HEAD"]).await
 }
 
+/// Clone a repo from `url` into `dest`. Fails if `dest` already exists.
+pub async fn git_clone(url: &str, dest: &Path) -> Result<()> {
+    let status = tokio::time::timeout(
+        GIT_OP_TIMEOUT,
+        tokio::process::Command::new("git")
+            .args(["clone", url, &dest.to_string_lossy()])
+            .env("GIT_SSH_COMMAND", SSH_CMD_WITH_TIMEOUT)
+            .status(),
+    )
+    .await
+    .map_err(|_| {
+        ShadowError::Git(format!(
+            "git clone timed out after {}s",
+            GIT_OP_TIMEOUT.as_secs()
+        ))
+    })?
+    .map_err(ShadowError::Io)?;
+
+    if !status.success() {
+        return Err(ShadowError::Git(format!("git clone {url} failed")));
+    }
+    Ok(())
+}
+
+/// Fast-forward pull from `remote` on branch `main`.
+pub async fn pull_ff_only(repo_path: &Path, remote: &str) -> bool {
+    git_success(repo_path, &["pull", "--ff-only", remote, "main", "--quiet"]).await
+}
+
 /// Count commits in a rev-list range (e.g. `"origin/main..HEAD"`).
 pub async fn rev_list_count(repo_path: &Path, range: &str) -> u32 {
     git_output(repo_path, &["rev-list", "--count", range])
@@ -325,5 +368,51 @@ mod tests {
         let tmp = std::env::temp_dir().join("no-git-revlist");
         let count = rev_list_count(&tmp, "HEAD").await;
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn resolve_head_full_returns_full_sha() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        let full = resolve_head_full(workspace);
+        assert!(full.is_some());
+        let sha = full.unwrap();
+        assert_eq!(sha.len(), 40, "full SHA should be 40 hex chars");
+        assert!(sha.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn resolve_head_full_returns_none_for_missing() {
+        assert!(resolve_head_full(Path::new("/tmp/no-git-full-sha")).is_none());
+    }
+
+    #[tokio::test]
+    async fn git_clone_fails_for_bogus_url() {
+        let dest = std::env::temp_dir().join("git-clone-bogus-test");
+        let _ = std::fs::remove_dir_all(&dest);
+        let result = git_clone("https://invalid.test/no-repo.git", &dest).await;
+        assert!(result.is_err());
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[tokio::test]
+    async fn pull_ff_only_returns_false_for_missing_dir() {
+        let tmp = std::env::temp_dir().join("no-git-pull-ff");
+        assert!(!pull_ff_only(&tmp, "origin").await);
+    }
+
+    #[tokio::test]
+    async fn run_git_pub_works() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        assert!(run_git(workspace, &["status"]).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn run_git_fails_on_bad_args() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        let result = run_git(workspace, &["checkout", "--this-flag-does-not-exist"]).await;
+        assert!(result.is_err());
     }
 }

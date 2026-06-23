@@ -13,11 +13,10 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
         None,
         cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
         || {
-            std::path::PathBuf::from(
-                std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT).unwrap_or_else(
-                    |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
-                ),
-            )
+            std::path::PathBuf::from(cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+                cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+            ))
             .join(cellmembrane_types::service::PLASMID_BIN_DIR)
         },
     );

@@ -132,39 +132,16 @@ pub async fn auto_commit_freshness(
     // Re-publish freshness after pull so we merge our heads into the full remote set.
     publish_freshness_toml(root, manifest, repos).await?;
 
-    let add = tokio::process::Command::new("git")
-        .args(["add", "freshness.toml"])
-        .current_dir(&wh_dir)
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !add.status.success() {
+    if !crate::git_ops::git_success(&wh_dir, &["add", "freshness.toml"]).await {
         return Ok(());
     }
 
-    let diff = tokio::process::Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .current_dir(&wh_dir)
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
-    if diff.status.success() {
+    if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
         return Ok(());
     }
 
     let msg = format!("freshness: wave {local_wave} auto-publish by {gate}");
-    let commit = tokio::process::Command::new("git")
-        .args(["commit", "-m", &msg])
-        .current_dir(&wh_dir)
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
-    if !commit.status.success() {
-        return Err(ShadowError::Config(format!(
-            "freshness auto-commit failed: {}",
-            String::from_utf8_lossy(&commit.stderr)
-        )));
-    }
+    crate::git_ops::run_git(&wh_dir, &["commit", "-m", &msg]).await?;
 
     let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
     if !push_result.failed.is_empty() {
@@ -178,56 +155,26 @@ pub async fn auto_commit_freshness(
 }
 
 /// Pull-rebase from both forgejo and origin to sync before publishing.
+///
+/// On conflict, resolves freshness.toml with `--ours` strategy (local wins).
 async fn pull_rebase_both_remotes(wh_dir: &Path) {
     for remote in cellmembrane_types::service::DEFAULT_PUSH_REMOTES {
-        let Ok(pull) = tokio::process::Command::new("git")
-            .args(["pull", "--rebase", remote, "main"])
-            .current_dir(wh_dir)
-            .output()
-            .await
-        else {
-            warn!(remote, "freshness pull-rebase failed to execute");
-            continue;
-        };
-
-        if !pull.status.success() {
-            let stderr = String::from_utf8_lossy(&pull.stderr);
-            if stderr.contains("CONFLICT") {
-                tracing::info!("freshness.toml conflict detected, resolving with --ours");
-                if let Err(e) = tokio::process::Command::new("git")
-                    .args(["checkout", "--ours", "freshness.toml"])
-                    .current_dir(wh_dir)
-                    .output()
-                    .await
-                {
-                    tracing::warn!(error = %e, "git checkout --ours failed");
-                }
-                if let Err(e) = tokio::process::Command::new("git")
-                    .args(["add", "freshness.toml"])
-                    .current_dir(wh_dir)
-                    .output()
-                    .await
-                {
-                    tracing::warn!(error = %e, "git add freshness.toml failed");
-                }
-                if let Err(e) = tokio::process::Command::new("git")
-                    .args(["rebase", "--continue"])
-                    .env("GIT_EDITOR", "true")
-                    .current_dir(wh_dir)
-                    .output()
-                    .await
-                {
-                    tracing::warn!(error = %e, "git rebase --continue failed");
-                }
-            } else if !stderr.contains("Already up to date") {
-                tracing::warn!(%stderr, "freshness pull failed, aborting rebase");
-                if let Err(e) = tokio::process::Command::new("git")
-                    .args(["rebase", "--abort"])
-                    .current_dir(wh_dir)
-                    .output()
-                    .await
-                {
-                    tracing::warn!(error = %e, "git rebase --abort failed");
+        match crate::git_ops::git_output(wh_dir, &["pull", "--rebase", remote, "main"]).await {
+            Ok(_) => {}
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("CONFLICT") {
+                    tracing::info!("freshness.toml conflict detected, resolving with --ours");
+                    let _ = crate::git_ops::git_success(
+                        wh_dir,
+                        &["checkout", "--ours", "freshness.toml"],
+                    )
+                    .await;
+                    let _ = crate::git_ops::git_success(wh_dir, &["add", "freshness.toml"]).await;
+                    let _ = crate::git_ops::git_success(wh_dir, &["rebase", "--continue"]).await;
+                } else if !msg.contains("Already up to date") {
+                    warn!(%msg, "freshness pull failed, aborting rebase");
+                    let _ = crate::git_ops::git_success(wh_dir, &["rebase", "--abort"]).await;
                 }
             }
         }
@@ -360,17 +307,7 @@ fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<Strin
     } else {
         workspace_root.join(source_path)
     };
-
-    if !repo_dir.join(".git").exists() {
-        return None;
-    }
-
-    std::process::Command::new("git")
-        .args(["-C", &repo_dir.display().to_string(), "rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    crate::git_ops::resolve_head_full(&repo_dir)
 }
 
 /// Async git rev-parse HEAD.

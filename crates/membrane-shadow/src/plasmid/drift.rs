@@ -160,11 +160,11 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
     }
 }
 
-/// Public wrapper to check upstream changes for a primal — used by `status`.
+/// Check upstream changes for a primal — used by `status`.
 ///
 /// Uses lenient mode: if remote HEAD cannot be fetched (network failure),
 /// assume current rather than reporting false drift.
-pub(super) async fn has_upstream_changes_pub(
+pub(super) async fn has_upstream_changes_lenient(
     primal: &str,
     source: &SourceEntry,
     provenance: Option<&ProvenanceFile>,

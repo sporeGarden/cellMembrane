@@ -1,8 +1,17 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-22 (Wave 124)
+**Last updated:** 2026-06-23 (Wave 126)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 125–126 update (Consolidation + Typed Enums + Test Expansion):**
+git_ops consolidation — 9 scattered git shell-outs routed through `git_ops.rs` (`git_clone`,
+`pull_ff_only`, `resolve_head_full`, `run_git` pub). BLAKE3 canonical path (depot delegates
+to checksum). 5 stale constants purged. `env_or(key, default)` helper rolled out to 8+
+modules (sandbox, canary, provision, manifest, relay, post_sync, nucleus_restart, bootstrap,
+sovereignty). `_pub` wrapper smell eliminated. UDS probe wrappers deleted. `DivergeType` +
+`SuggestedAction` typed enums in impulse/policy.rs. Magic `:7700` → `DEFAULT_FEDERATION_PORT`.
+Raw `"HOME"` → `ENV_HOME`. First test coverage on dispatch/gate.rs and sovereignty.rs.
+810 tests, zero clippy/doc warnings.
 **Wave 124 update (Deep Debt — pepti Decommission + Typed Plasmid Errors + Hardcode Sweep):**
 pepti fully decommissioned from live mesh registries (`mesh_address()`, `topology.mesh`, dispatch
 namespace). `Result<_, String>` evolved to `ShadowError::Build` across 11 plasmid function

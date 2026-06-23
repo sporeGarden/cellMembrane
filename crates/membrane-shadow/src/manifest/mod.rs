@@ -361,18 +361,19 @@ pub use wave::{ExitCriterion, WaveState};
 /// Falls back to `DEFAULT_VPS_MESH_PEER` if manifest is unavailable.
 #[must_use]
 pub fn resolve_federation_peer() -> String {
-    let workspace = std::env::var("ECOPRIMALS_ROOT").map_or_else(
-        |_| PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT),
-        PathBuf::from,
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
     );
-    if let Ok(manifest) = load_from_workspace(&workspace) {
+    let port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    if let Ok(manifest) = load_from_workspace(std::path::Path::new(&workspace)) {
         let hub_gates = manifest.gates_for_role("wg_hub");
         if let Some((_, profile)) = hub_gates.first() {
             if let Some(ref host) = profile.host {
-                return format!("{host}:7700");
+                return format!("{host}:{port}");
             }
             if let Some(ref ip) = profile.wg_ip {
-                return format!("{ip}:7700");
+                return format!("{ip}:{port}");
             }
         }
     }

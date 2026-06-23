@@ -229,13 +229,9 @@ async fn clone_repo(
     full_path: &Path,
 ) -> RepoResult {
     let forgejo_url = manifest.forgejo_clone_url(entry);
-    let clone_result = tokio::process::Command::new("git")
-        .args(["clone", &forgejo_url, &full_path.to_string_lossy()])
-        .output()
-        .await;
-    match clone_result {
-        Ok(out) if out.status.success() => RepoResult::Cloned(format!("  {name:<35} CLONED")),
-        _ => RepoResult::Failed(format!("  {name:<35} CLONE FAILED")),
+    match crate::git_ops::git_clone(&forgejo_url, full_path).await {
+        Ok(()) => RepoResult::Cloned(format!("  {name:<35} CLONED")),
+        Err(_) => RepoResult::Failed(format!("  {name:<35} CLONE FAILED")),
     }
 }
 

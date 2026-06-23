@@ -1,10 +1,10 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (sporeGate team)
-**Last updated:** 2026-06-22 (Wave 124)
+**Last updated:** 2026-06-23 (Wave 126)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
-> **Note (Wave 124):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
+> **Note (Wave 126):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
 > for all operational flows. Use: `membrane gate.status` (health), `membrane gate.bootstrap`
 > (enrollment), `membrane plasmid.refresh` (binary push), `membrane temporal.cascade`
 > (sync), `membrane rootpulse.status` (sovereignty). Wave 120+:

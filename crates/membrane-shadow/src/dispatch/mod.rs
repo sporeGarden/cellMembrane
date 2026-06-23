@@ -412,7 +412,7 @@ async fn dispatch_rootpulse(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
         "rootpulse.commit" => dispatch_rootpulse_commit(args).await,
         "rootpulse.verify" => dispatch_rootpulse_verify(args).await,
         "rootpulse.status" => {
-            let session = crate::temporal::post_sync::load_rootpulse_session_pub();
+            let session = crate::temporal::post_sync::load_rootpulse_session();
             Ok(session.map_or_else(
                 || {
                     ShadowOutcome::ok_with(
@@ -443,7 +443,7 @@ async fn dispatch_rootpulse_commit(args: &[&str]) -> Result<ShadowOutcome> {
         .unwrap_or(m.meta.wave);
 
     let repos = m.gate_repos(&gate);
-    let heads = crate::temporal::post_sync::collect_cascade_heads_pub(&root, &repos).await;
+    let heads = crate::temporal::post_sync::collect_cascade_heads(&root, &repos).await;
 
     if heads.is_empty() {
         return Ok(ShadowOutcome::fail(
@@ -453,7 +453,7 @@ async fn dispatch_rootpulse_commit(args: &[&str]) -> Result<ShadowOutcome> {
 
     match crate::sovereignty_ledger::rootpulse_commit(wave, &gate, &heads).await {
         Ok(session) => {
-            crate::temporal::post_sync::persist_rootpulse_session_pub(wave, &gate, &session);
+            crate::temporal::post_sync::persist_rootpulse_session(wave, &gate, &session);
             Ok(ShadowOutcome::ok_with(
                 format!("rootpulse committed: {session}"),
                 serde_json::json!({
@@ -474,7 +474,7 @@ async fn dispatch_rootpulse_verify(args: &[&str]) -> Result<ShadowOutcome> {
     let gate = resolve_gate_name(args, &root).await;
 
     let repos = m.gate_repos(&gate);
-    let heads = crate::temporal::post_sync::collect_cascade_heads_pub(&root, &repos).await;
+    let heads = crate::temporal::post_sync::collect_cascade_heads(&root, &repos).await;
 
     let checks = crate::sovereignty_ledger::sovereignty_verify(m.meta.wave, &heads).await;
 

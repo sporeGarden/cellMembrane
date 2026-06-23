@@ -73,13 +73,13 @@ const ENV_PROVISION_SIZE: &str = "MEMBRANE_PROVISION_SIZE";
 
 impl Default for ProvisionRequest {
     fn default() -> Self {
+        use cellmembrane_types::service::env_or;
         Self {
-            name: std::env::var(ENV_PROVISION_NAME).unwrap_or_else(|_| "membrane-canary".into()),
-            region: std::env::var(ENV_PROVISION_REGION).unwrap_or_else(|_| "nyc1".into()),
-            size: std::env::var(ENV_PROVISION_SIZE).unwrap_or_else(|_| "s-1vcpu-2gb".into()),
+            name: env_or(ENV_PROVISION_NAME, "membrane-canary"),
+            region: env_or(ENV_PROVISION_REGION, "nyc1"),
+            size: env_or(ENV_PROVISION_SIZE, "s-1vcpu-2gb"),
             image: "debian-12-x64".into(),
-            profile: std::env::var(ENV_PROVISION_PROFILE)
-                .unwrap_or_else(|_| "canary-fieldmouse".into()),
+            profile: env_or(ENV_PROVISION_PROFILE, "canary-fieldmouse"),
             ssh_keys: Vec::new(),
             tags: vec!["membrane".into(), "canary".into(), "ecoprimals".into()],
         }

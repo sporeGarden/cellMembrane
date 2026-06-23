@@ -427,26 +427,8 @@ async fn run_rootpulse_sovereignty(
     }
 }
 
-/// Wrapper for dispatch access.
-pub async fn collect_cascade_heads_pub(
-    root: &std::path::Path,
-    repos: &[(&str, &crate::manifest::RepoEntry)],
-) -> std::collections::BTreeMap<String, String> {
-    collect_cascade_heads(root, repos).await
-}
-
-/// Wrapper for dispatch access.
-pub fn persist_rootpulse_session_pub(wave_id: u32, gate: &str, session_id: &str) {
-    persist_rootpulse_session(wave_id, gate, session_id);
-}
-
-/// Wrapper for dispatch access.
-pub fn load_rootpulse_session_pub() -> Option<String> {
-    load_rootpulse_session()
-}
-
 /// Collect HEAD SHAs for all cloned repos in the cascade set.
-async fn collect_cascade_heads(
+pub async fn collect_cascade_heads(
     root: &std::path::Path,
     repos: &[(&str, &crate::manifest::RepoEntry)],
 ) -> std::collections::BTreeMap<String, String> {
@@ -468,11 +450,10 @@ pub(super) fn summarize_depot_freshness() -> String {
         None,
         cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
         || {
-            std::path::PathBuf::from(
-                std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT).unwrap_or_else(
-                    |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
-                ),
-            )
+            std::path::PathBuf::from(cellmembrane_types::service::env_or(
+                cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+                cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+            ))
             .join(cellmembrane_types::service::PLASMID_BIN_DIR)
         },
     );
@@ -532,7 +513,7 @@ fn is_freshness_publisher() -> bool {
 /// Persist rootpulse session to gate-local state (not the shared manifest).
 ///
 /// Writes to `{workspace}/infra/wateringHole/.rootpulse_state.toml`.
-fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
+pub fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
     let Ok(root) = crate::temporal::resolve_workspace_root() else {
         return;
     };
@@ -551,7 +532,7 @@ fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
 }
 
 /// Load the last rootpulse session ID from gate-local state.
-pub(super) fn load_rootpulse_session() -> Option<String> {
+pub fn load_rootpulse_session() -> Option<String> {
     let root = crate::temporal::resolve_workspace_root().ok()?;
     let state_path = root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)

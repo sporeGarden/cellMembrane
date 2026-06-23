@@ -81,12 +81,12 @@ pub async fn post_sync_diverge(
         },
         payload: SyncPayload {
             repo: args.repo_path.clone(),
-            diverge_type,
+            diverge_type: diverge_type.to_string(),
             merge_base: String::new(),
             remotes: remotes_map,
             ahead: ahead_map,
             repo_policy: args.repo_policy.to_string(),
-            suggested_action: suggested,
+            suggested_action: suggested.to_string(),
         },
         meta: ImpulseOpMeta {
             created: ts_iso,
@@ -138,34 +138,43 @@ mod tests {
 
     #[test]
     fn classify_diverge_types() {
-        use super::super::policy::classify_diverge_type;
+        use super::super::policy::{DivergeType, classify_diverge_type};
 
         let positions = vec![("origin".into(), 0, 3)];
-        assert_eq!(classify_diverge_type(&positions), "origin_ahead");
+        assert_eq!(
+            classify_diverge_type(&positions),
+            DivergeType::RemoteAhead("origin".into())
+        );
 
         let positions = vec![("origin".into(), 2, 0)];
-        assert_eq!(classify_diverge_type(&positions), "local_ahead");
+        assert_eq!(classify_diverge_type(&positions), DivergeType::LocalAhead);
 
         let positions = vec![("origin".into(), 1, 2), ("forgejo".into(), 3, 0)];
-        assert_eq!(classify_diverge_type(&positions), "multi_remote_diverge");
+        assert_eq!(
+            classify_diverge_type(&positions),
+            DivergeType::MultiRemoteDiverge
+        );
     }
 
     #[test]
     fn suggest_action_merge_ff() {
-        use super::super::policy::suggest_action;
+        use super::super::policy::{DivergeType, SuggestedAction, suggest_action};
         use cellmembrane_types::DivergencePolicy;
 
         assert_eq!(
-            suggest_action("origin_ahead", DivergencePolicy::MergeFf),
-            "pull_leader_push_followers"
+            suggest_action(
+                &DivergeType::RemoteAhead("origin".into()),
+                DivergencePolicy::MergeFf
+            ),
+            SuggestedAction::PullLeaderPushFollowers
         );
         assert_eq!(
-            suggest_action("local_ahead", DivergencePolicy::ImpulseOnly),
-            "human_review"
+            suggest_action(&DivergeType::LocalAhead, DivergencePolicy::ImpulseOnly),
+            SuggestedAction::HumanReview
         );
         assert_eq!(
-            suggest_action("local_ahead", DivergencePolicy::Agentic),
-            "agentic_resolve"
+            suggest_action(&DivergeType::LocalAhead, DivergencePolicy::Agentic),
+            SuggestedAction::AgenticResolve
         );
     }
 

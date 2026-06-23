@@ -232,7 +232,7 @@ fn identity_phase() -> BootstrapPhase {
 }
 
 fn ssh_identity_ok() -> bool {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
+    let home = cellmembrane_types::service::env_or(cellmembrane_types::service::ENV_HOME, "/root");
     std::path::Path::new(&home).join(".ssh/id_ed25519").exists()
 }
 

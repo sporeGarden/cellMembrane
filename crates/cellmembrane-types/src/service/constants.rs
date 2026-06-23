@@ -56,10 +56,6 @@ pub const ENV_FORGEJO_SSH_HOST: &str = "FORGEJO_SSH_HOST";
 pub const ENV_ECOPRIMALS_ROOT: &str = "ECOPRIMALS_ROOT";
 /// Environment variable for the gate identity.
 pub const ENV_GATE_NAME: &str = "GATE_NAME";
-/// Environment variable for the songbird federation port.
-pub const ENV_FEDERATION_PORT: &str = "SONGBIRD_FEDERATION_PORT";
-/// Environment variable for the songbird production bind address.
-pub const ENV_PRODUCTION_BIND: &str = "SONGBIRD_PRODUCTION_BIND_ADDRESS";
 /// Environment variable for the webhook secret (HMAC-SHA256).
 pub const ENV_WEBHOOK_SECRET: &str = "WEBHOOK_SECRET";
 /// Environment variable for the `NeuralBridge` API socket path.
@@ -191,13 +187,6 @@ pub const DEFAULT_VPS_HOST: &str = "157.230.3.183";
 pub const DEFAULT_SSH_ALIAS: &str = "golgi";
 /// Default SSH alias for golgiBody external relay endpoint.
 pub const DEFAULT_SSH_ALIAS_EXT: &str = "golgi-ext";
-/// Default SSH alias for peptidoglycan trust barrier.
-///
-/// Deprecated (Wave 120): pepti node decommissioned. Build role absorbed
-/// by sporeGate sovereign CI. `pepti.validate` evolved to generic
-/// `gate.validate` with composition-tier awareness. This alias remains
-/// for backward compatibility only.
-pub const DEFAULT_PEPTI_SSH_ALIAS: &str = "pepti";
 
 /// Default `NestGate` service port.
 pub const DEFAULT_NESTGATE_PORT: u16 = 9500;
@@ -306,8 +295,6 @@ pub const ENV_DO_TOKEN_COMPAT: &str = "DO_TOKEN";
 pub const DEFAULT_DIGITALOCEAN_API: &str = "https://api.digitalocean.com/v2";
 /// Cloudflare REST API (v4) base URL.
 pub const DEFAULT_CLOUDFLARE_API: &str = "https://api.cloudflare.com/client/v4";
-/// GitHub REST API base URL.
-pub const DEFAULT_GITHUB_API: &str = "https://api.github.com";
 /// Default Forgejo admin username (for initial provisioning).
 pub const DEFAULT_FORGEJO_ADMIN_USER: &str = "admin";
 /// Default push remotes for K-Derm relay chain operations.
@@ -331,8 +318,6 @@ pub const DEFAULT_API_WRITE_TIMEOUT_SECS: u64 = 30;
 pub const DEFAULT_API_READ_TIMEOUT_SECS: u64 = 15;
 /// Cloudflare API timeout (seconds).
 pub const DEFAULT_CLOUDFLARE_TIMEOUT_SECS: u64 = 15;
-/// Cloud provision polling timeout (seconds).
-pub const DEFAULT_PROVISION_POLL_TIMEOUT_SECS: u64 = 300;
 /// Binary staleness threshold (seconds) — 7 days.
 pub const DEFAULT_STALENESS_THRESHOLD_SECS: u64 = 7 * 86_400;
 /// Canary maximum age (hours).
@@ -344,3 +329,43 @@ pub const DEFAULT_API_PAGE_SIZE: u32 = 50;
 
 /// Default push mirror sync interval (Forgejo -> GitHub).
 pub const DEFAULT_PUSH_MIRROR_INTERVAL: &str = "8h0m0s";
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+/// Read an environment variable, falling back to a compile-time default.
+///
+/// Reduces the `std::env::var(X).unwrap_or_else(|_| DEFAULT.into())` pattern
+/// that appears 50+ times across the codebase.
+#[must_use]
+pub fn env_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_or_returns_default_when_unset() {
+        let val = env_or("_CELLMEMBRANE_TEST_UNSET_VAR_xyz", "fallback");
+        assert_eq!(val, "fallback");
+    }
+
+    #[test]
+    fn default_socket_base_is_absolute() {
+        assert!(DEFAULT_SOCKET_BASE.starts_with('/'));
+    }
+
+    #[test]
+    fn default_push_remotes_nonempty() {
+        assert!(!DEFAULT_PUSH_REMOTES.is_empty());
+        assert!(DEFAULT_PUSH_REMOTES.contains(&"forgejo"));
+    }
+
+    #[test]
+    fn timeout_constants_reasonable() {
+        assert!(DEFAULT_SSH_TIMEOUT_SECS >= 5);
+        assert!(DEFAULT_GIT_OP_TIMEOUT_SECS >= 30);
+        assert!(DEFAULT_FETCH_TIMEOUT_SECS >= 60);
+    }
+}

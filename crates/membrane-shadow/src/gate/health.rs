@@ -407,7 +407,7 @@ pub(crate) fn resolve_uid() -> String {
 
 /// Probe rootpulse ledger state — checks if a session has been committed on this gate.
 fn probe_rootpulse_ledger() -> StatusProbe {
-    crate::temporal::post_sync::load_rootpulse_session_pub().map_or_else(
+    crate::temporal::post_sync::load_rootpulse_session().map_or_else(
         || StatusProbe {
             name: "rootpulse.ledger".into(),
             ok: false,

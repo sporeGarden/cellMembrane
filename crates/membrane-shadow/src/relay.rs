@@ -127,10 +127,12 @@ fn load_relay_from_membrane_toml() -> Option<MembraneRelayConfig> {
 
 /// Resolve `membrane.toml` location: `XDG_CONFIG_HOME`/ecoPrimals/membrane.toml.
 fn resolve_membrane_toml_path() -> Option<PathBuf> {
-    use cellmembrane_types::service::{ENV_HOME, ENV_XDG_CONFIG_HOME};
+    use cellmembrane_types::service::{ENV_XDG_CONFIG_HOME, env_or};
     let config_home = std::env::var(ENV_XDG_CONFIG_HOME).unwrap_or_else(|_| {
-        let home = std::env::var(ENV_HOME).unwrap_or_else(|_| "/tmp".into());
-        format!("{home}/.config")
+        format!(
+            "{}/.config",
+            env_or(cellmembrane_types::service::ENV_HOME, "/tmp")
+        )
     });
     let path = PathBuf::from(config_home).join("ecoPrimals/membrane.toml");
     if path.exists() { Some(path) } else { None }
@@ -196,27 +198,12 @@ pub async fn mediate(config: &RelayConfig, repo_paths: &[&str]) -> (Vec<String>,
             continue;
         }
 
-        let status = Command::new("git")
-            .args([
-                "pull",
-                "--ff-only",
-                &config.forgejo_remote,
-                "main",
-                "--quiet",
-            ])
-            .current_dir(&local_path)
-            .status()
-            .await;
-
-        match status {
-            Ok(s) if s.success() => {
-                info!(repo = repo_path, "pulled (metallic bond)");
-                pulled.push(repo_path.to_string());
-            }
-            _ => {
-                warn!(repo = repo_path, "pull failed — may be up to date");
-                failures.push(repo_path.to_string());
-            }
+        if crate::git_ops::pull_ff_only(&local_path, &config.forgejo_remote).await {
+            info!(repo = repo_path, "pulled (metallic bond)");
+            pulled.push(repo_path.to_string());
+        } else {
+            warn!(repo = repo_path, "pull failed — may be up to date");
+            failures.push(repo_path.to_string());
         }
     }
 

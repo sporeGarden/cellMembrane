@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 124) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 126) |
 
 ---
 
@@ -55,10 +55,25 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 788 tests — pedantic clippy clean
+cargo test                  # 810 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
+
+**Wave 125–126 (Consolidation + Typed Enums + Test Expansion):**
+git_ops consolidation — 9 scattered `Command::new("git")` calls in freshness.rs, relay.rs,
+cascade.rs routed through `git_ops.rs` with new `git_clone()`, `pull_ff_only()`,
+`resolve_head_full()`. BLAKE3 dedup — `depot::compute_blake3_file` delegates to
+`checksum::compute_blake3` as single canonical path. Stale constant purge (5 dead constants:
+`DEFAULT_PEPTI_SSH_ALIAS`, `ENV_FEDERATION_PORT`, `ENV_PRODUCTION_BIND`,
+`DEFAULT_GITHUB_API`, `DEFAULT_PROVISION_POLL_TIMEOUT_SECS`). `env_or(key, default)` helper
+eliminates 50+ `unwrap_or_else` patterns (rolled out to sandbox, canary, provision, manifest,
+relay, post_sync, nucleus_restart, bootstrap, sovereignty). `_pub` wrapper smell eliminated —
+inner fns `pub` directly, `has_upstream_changes_lenient` named for semantics. UDS probe
+wrappers deleted (sandbox/canary call `jsonrpc::call` directly). `DivergeType` + `SuggestedAction`
+typed enums replace stringly-typed divergence classification in `impulse/policy.rs`. Magic `:7700`
+→ `DEFAULT_FEDERATION_PORT`, raw `"HOME"` → `ENV_HOME`. Tests for dispatch/gate.rs (4) and
+gate/sovereignty.rs (4) — first coverage on these critical paths. 810 tests, zero warnings.
 
 **Wave 124 (Deep Debt Evolution — Typed Plasmid Errors + pepti Decommission + Hardcode Sweep):**
 
@@ -270,6 +285,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Deep debt evolution (Wave 123+): `ShadowError::Rpc` typed RPC errors (7 fns, 5 callers), visibility tightening (15 fns `pub`→`pub(crate)`), manifest smart refactor (780L→706+142L), `topology.endpoint <role>` shortcut, `ironGate` in BOOTSTRAP_GATES, webhook+dispatch+wave tests, 791 tests | DONE |
 | relay.forward graduation (Wave 123): `call_endpoint()` wired into sovereignty_ledger, bridge, impulse. Cross-gate neural-api resolution via `resolve_by_role("biomeos")`. Identity capability mapping fixed (sweetgrass→Storage, biomeos→Identity). 800 tests | DONE |
 | Deep debt sweep (Wave 124): pepti decommissioned from live mesh, `Result<_,String>`→`ShadowError::Build` (11 sigs), hardcode sweep (developer paths, socket paths), `ENV_VALIDATE_SSH_HOST`, stale comment cleanup, 788 tests | DONE |
+| Consolidation + typed enums (Wave 125–126): git_ops consolidation (9 shell-outs → `git_clone`/`pull_ff_only`/`resolve_head_full`), BLAKE3 canonical path, 5 stale constants purged, `env_or` helper + rollout, `_pub` wrapper cleanup, UDS probe dedup, `DivergeType`+`SuggestedAction` typed enums, magic `:7700`→`DEFAULT_FEDERATION_PORT`, dispatch/gate + sovereignty tests, 810 tests | DONE |
 
 ---
 

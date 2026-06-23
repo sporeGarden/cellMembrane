@@ -2,34 +2,88 @@
 
 use super::types::{ImpulseAck, ImpulseFile};
 use cellmembrane_types::DivergencePolicy;
+use std::fmt;
 use std::path::Path;
 
-#[must_use]
-pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> String {
-    let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
-    let behind_remotes: Vec<_> = positions.iter().filter(|(_, _, b)| *b > 0).collect();
+/// Typed divergence classification for cascade sync.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DivergeType {
+    /// A single remote is ahead of local (e.g. `forgejo_ahead`).
+    RemoteAhead(String),
+    /// Local is ahead of all remotes.
+    LocalAhead,
+    /// Multiple remotes have diverged from each other.
+    MultiRemoteDiverge,
+    /// General divergence (no clear leader).
+    Diverge,
+}
 
-    match (ahead_remotes.len(), behind_remotes.len()) {
-        (0, 1) => format!("{}_ahead", behind_remotes[0].0),
-        (1, 0) => "local_ahead".to_string(),
-        (_, _) if ahead_remotes.len() >= 2 || behind_remotes.len() >= 2 => {
-            "multi_remote_diverge".to_string()
+impl fmt::Display for DivergeType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::RemoteAhead(name) => write!(f, "{name}_ahead"),
+            Self::LocalAhead => f.write_str("local_ahead"),
+            Self::MultiRemoteDiverge => f.write_str("multi_remote_diverge"),
+            Self::Diverge => f.write_str("diverge"),
         }
-        _ => "diverge".to_string(),
+    }
+}
+
+/// Typed resolution action suggested by divergence policy.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SuggestedAction {
+    PullLeaderPushFollowers,
+    RebaseAndPush,
+    HumanReview,
+    AgenticResolve,
+    PushAll,
+    PullRemotePushOthers(String),
+}
+
+impl fmt::Display for SuggestedAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PullLeaderPushFollowers => f.write_str("pull_leader_push_followers"),
+            Self::RebaseAndPush => f.write_str("rebase_and_push"),
+            Self::HumanReview => f.write_str("human_review"),
+            Self::AgenticResolve => f.write_str("agentic_resolve"),
+            Self::PushAll => f.write_str("push_all"),
+            Self::PullRemotePushOthers(name) => write!(f, "pull_{name}_push_others"),
+        }
     }
 }
 
 #[must_use]
-pub fn suggest_action(diverge_type: &str, repo_policy: DivergencePolicy) -> String {
+pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> DivergeType {
+    let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
+    let behind_remotes: Vec<_> = positions.iter().filter(|(_, _, b)| *b > 0).collect();
+
+    match (ahead_remotes.len(), behind_remotes.len()) {
+        (0, 1) => DivergeType::RemoteAhead(behind_remotes[0].0.clone()),
+        (1, 0) => DivergeType::LocalAhead,
+        (_, _) if ahead_remotes.len() >= 2 || behind_remotes.len() >= 2 => {
+            DivergeType::MultiRemoteDiverge
+        }
+        _ => DivergeType::Diverge,
+    }
+}
+
+#[must_use]
+pub fn suggest_action(
+    diverge_type: &DivergeType,
+    repo_policy: DivergencePolicy,
+) -> SuggestedAction {
     match repo_policy {
-        DivergencePolicy::MergeFf => "pull_leader_push_followers".to_string(),
-        DivergencePolicy::MergeRebase => "rebase_and_push".to_string(),
-        DivergencePolicy::ImpulseOnly => "human_review".to_string(),
-        DivergencePolicy::Agentic => "agentic_resolve".to_string(),
+        DivergencePolicy::MergeFf => SuggestedAction::PullLeaderPushFollowers,
+        DivergencePolicy::MergeRebase => SuggestedAction::RebaseAndPush,
+        DivergencePolicy::ImpulseOnly => SuggestedAction::HumanReview,
+        DivergencePolicy::Agentic => SuggestedAction::AgenticResolve,
         DivergencePolicy::Flag => match diverge_type {
-            t if t.ends_with("_ahead") => format!("pull_{t}_push_others"),
-            "local_ahead" => "push_all".to_string(),
-            _ => "human_review".to_string(),
+            DivergeType::RemoteAhead(name) => SuggestedAction::PullRemotePushOthers(name.clone()),
+            DivergeType::LocalAhead => SuggestedAction::PushAll,
+            _ => SuggestedAction::HumanReview,
         },
     }
 }
@@ -101,34 +155,74 @@ mod tests {
     #[test]
     fn classify_single_behind() {
         let pos = vec![("forgejo".into(), 0, 3)];
-        assert_eq!(classify_diverge_type(&pos), "forgejo_ahead");
+        assert_eq!(
+            classify_diverge_type(&pos),
+            DivergeType::RemoteAhead("forgejo".into())
+        );
+        assert_eq!(classify_diverge_type(&pos).to_string(), "forgejo_ahead");
     }
 
     #[test]
     fn classify_local_ahead() {
         let pos = vec![("origin".into(), 2, 0)];
-        assert_eq!(classify_diverge_type(&pos), "local_ahead");
+        assert_eq!(classify_diverge_type(&pos), DivergeType::LocalAhead);
+        assert_eq!(classify_diverge_type(&pos).to_string(), "local_ahead");
     }
 
     #[test]
     fn classify_multi_diverge() {
         let pos = vec![("origin".into(), 1, 0), ("forgejo".into(), 2, 0)];
-        assert_eq!(classify_diverge_type(&pos), "multi_remote_diverge");
+        assert_eq!(classify_diverge_type(&pos), DivergeType::MultiRemoteDiverge);
+    }
+
+    #[test]
+    fn classify_no_divergence() {
+        let pos = vec![("origin".into(), 0, 0)];
+        assert_eq!(classify_diverge_type(&pos), DivergeType::Diverge);
     }
 
     #[test]
     fn suggest_merge_ff() {
         assert_eq!(
-            suggest_action("any", DivergencePolicy::MergeFf),
-            "pull_leader_push_followers"
+            suggest_action(&DivergeType::Diverge, DivergencePolicy::MergeFf),
+            SuggestedAction::PullLeaderPushFollowers
         );
     }
 
     #[test]
     fn suggest_impulse_only() {
         assert_eq!(
-            suggest_action("any", DivergencePolicy::ImpulseOnly),
-            "human_review"
+            suggest_action(&DivergeType::Diverge, DivergencePolicy::ImpulseOnly),
+            SuggestedAction::HumanReview
+        );
+    }
+
+    #[test]
+    fn suggest_flag_remote_ahead() {
+        let dt = DivergeType::RemoteAhead("forgejo".into());
+        assert_eq!(
+            suggest_action(&dt, DivergencePolicy::Flag),
+            SuggestedAction::PullRemotePushOthers("forgejo".into())
+        );
+        assert_eq!(
+            suggest_action(&dt, DivergencePolicy::Flag).to_string(),
+            "pull_forgejo_push_others"
+        );
+    }
+
+    #[test]
+    fn suggest_flag_local_ahead() {
+        assert_eq!(
+            suggest_action(&DivergeType::LocalAhead, DivergencePolicy::Flag),
+            SuggestedAction::PushAll
+        );
+    }
+
+    #[test]
+    fn suggest_agentic() {
+        assert_eq!(
+            suggest_action(&DivergeType::Diverge, DivergencePolicy::Agentic),
+            SuggestedAction::AgenticResolve
         );
     }
 
