@@ -1,8 +1,20 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-23 (Wave 126)
+**Last updated:** 2026-06-27 (Wave 127)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 127 update (env_or Rollout + Test Expansion + Topology Cutover):**
+env_or helper rolled out to 39 remaining call sites across 20 files — nearly all raw
+`std::env::var` boilerplate eliminated. Pure function extraction: `is_porcelain_dirty`,
+`is_discardable_xy` (sync_engine), `commits_match` (drift), `parse_health_count` (verify),
+`parse_cert_fields` (tls). Porcelain trim bug fix: `trim()` → `trim_end()` preserves XY
+status codes in git status parsing. Network topology cutover: sporeGate moved from `.1`
+(edge router) to `.3` (compute peer); Flint 2 H1 is now the edge router at `.1`. All
+cellMembrane transport code is topology-agnostic (reads `/proc/net/route`, uses WG overlay,
+no hardcoded gateway assumptions). LAN DNS service discovery: `LAN_DNS_DOMAIN` constant
+(`primals.local`), `lan_dns_name()` helper, `lan_ip` manifest field + `lan_ip_for()`.
+Manifest updated: sporeGate kderm_role `plasma_membrane` → `peptidoglycan`, dhcp role
+removed, `lan_ip = "192.168.4.3"` added. 835 tests, zero warnings.
 **Wave 125–126 update (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered git shell-outs routed through `git_ops.rs` (`git_clone`,
 `pull_ff_only`, `resolve_head_full`, `run_git` pub). BLAKE3 canonical path (depot delegates

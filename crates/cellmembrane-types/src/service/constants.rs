@@ -302,6 +302,24 @@ pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
 /// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
 pub const DEFAULT_SERVICE_FILTER: &str = "membrane|forgejo|caddy|knot|hbb|fail2ban";
 
+// ── LAN service discovery ────────────────────────────────────────────
+
+/// LAN DNS domain suffix served by edge router dnsmasq.
+///
+/// Gates resolve each other as `<gate-lower>.primals.local` — e.g.
+/// `sporegate.primals.local`, `eastgate.primals.local`. This replaces
+/// hardcoded LAN IPs and enables hot-plug compute (gate IP can change
+/// via DHCP without breaking resolution).
+pub const LAN_DNS_DOMAIN: &str = "primals.local";
+
+/// Build the LAN DNS hostname for a gate (lowercase + domain suffix).
+///
+/// Returns e.g. `sporegate.primals.local` for gate name `"sporeGate"`.
+#[must_use]
+pub fn lan_dns_name(gate_name: &str) -> String {
+    format!("{}.{LAN_DNS_DOMAIN}", gate_name.to_lowercase())
+}
+
 // ── Timeout constants ────────────────────────────────────────────────
 
 /// Default SSH connection timeout (seconds).
@@ -360,6 +378,13 @@ mod tests {
     fn default_push_remotes_nonempty() {
         assert!(!DEFAULT_PUSH_REMOTES.is_empty());
         assert!(DEFAULT_PUSH_REMOTES.contains(&"forgejo"));
+    }
+
+    #[test]
+    fn lan_dns_name_lowercases_gate() {
+        assert_eq!(lan_dns_name("sporeGate"), "sporegate.primals.local");
+        assert_eq!(lan_dns_name("eastGate"), "eastgate.primals.local");
+        assert_eq!(lan_dns_name("golgi"), "golgi.primals.local");
     }
 
     #[test]

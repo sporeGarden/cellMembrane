@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-06-23 (Wave 126)
+**Last updated:** 2026-06-27 (Wave 127)
 **Deployed composition:** Full NUCLEUS (Wave 61→118) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust `membrane` binary
@@ -200,7 +200,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellMembrane workspace) | 810 PASS, 0 FAIL, 0 clippy | 2026-06-23 |
+| `cargo test` (cellMembrane workspace) | 835 PASS, 0 FAIL, 0 clippy | 2026-06-27 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

@@ -228,6 +228,13 @@ pub struct GateProfile {
     /// LAN-facing interface name (e.g., `"eno1"`).
     #[serde(default)]
     pub lan_interface: Option<String>,
+    /// LAN IP address (e.g., `"192.168.4.3"`) for direct LAN resolution.
+    ///
+    /// Enables DNS-agnostic LAN discovery: manifest → `lan_ip` → direct TCP
+    /// without requiring dnsmasq entries. Used by `resolve_lan_tcp` when peer
+    /// is on the same subnet.
+    #[serde(default)]
+    pub lan_ip: Option<String>,
     /// LAN subnet this gate serves (e.g., `"192.168.4.0/22"`).
     #[serde(default)]
     pub lan_subnet: Option<String>,
@@ -351,6 +358,15 @@ impl EcosystemManifest {
     #[must_use]
     pub fn mesh_ip_for(&self, gate: &str) -> Option<String> {
         self.gates.get(gate).and_then(|p| p.wg_ip.clone())
+    }
+
+    /// Look up a gate's LAN IP from the manifest.
+    ///
+    /// Returns the `lan_ip` field if set, enabling direct TCP resolution on
+    /// the local subnet without DNS or `WireGuard` overlay.
+    #[must_use]
+    pub fn lan_ip_for(&self, gate: &str) -> Option<String> {
+        self.gates.get(gate).and_then(|p| p.lan_ip.clone())
     }
 }
 
@@ -530,6 +546,29 @@ repos = ["cellMembrane"]
         assert_eq!(flock.zone, None);
         assert_eq!(flock.hub_port, None);
         assert_eq!(flock.link_speed_mbps, None);
+    }
+
+    #[test]
+    fn gate_profile_lan_ip_parsed() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.sporeGate]
+repos = ["cellMembrane"]
+wg_ip = "10.13.37.2"
+lan_ip = "192.168.4.3"
+
+[gates.eastGate]
+repos = ["cellMembrane"]
+wg_ip = "10.13.37.5"
+"#;
+        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert_eq!(manifest.lan_ip_for("sporeGate"), Some("192.168.4.3".into()));
+        assert_eq!(manifest.lan_ip_for("eastGate"), None);
+        assert_eq!(manifest.mesh_ip_for("sporeGate"), Some("10.13.37.2".into()));
+        assert_eq!(manifest.lan_ip_for("unknown"), None);
     }
 
     #[test]
