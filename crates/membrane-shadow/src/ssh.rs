@@ -2,26 +2,74 @@
 
 //! SSH transport for shadow functions.
 //!
-//! Wraps `tokio::process::Command` around the system SSH client.
-//! Uses the `golgi` alias from `~/.ssh/config` for connection parameters.
+//! Wraps `tokio::process::Command` around the system SSH client via an
+//! `SshArgs` builder that centralises the common SSH/SCP option patterns.
 
 use crate::config::ShadowConfig;
 use crate::error::{Result, ShadowError};
 use tokio::process::Command;
 
+// ── Builder ──────────────────────────────────────────────────────────
+
+/// Centralised SSH option builder. Every SSH/SCP call routes through this
+/// to avoid duplicating `-o ConnectTimeout=… -o BatchMode=yes` boilerplate.
+fn ssh_args(timeout: u32) -> Vec<String> {
+    vec![
+        "-o".into(),
+        format!("ConnectTimeout={timeout}"),
+        "-o".into(),
+        "BatchMode=yes".into(),
+    ]
+}
+
+/// Extended builder for provisioning hosts where we accept new host keys.
+fn ssh_args_accept_new(timeout: u32) -> Vec<String> {
+    let mut args = ssh_args(timeout);
+    args.extend(["-o".into(), "StrictHostKeyChecking=accept-new".into()]);
+    args
+}
+
+/// SCP keepalive args for long transfers.
+fn scp_keepalive_args() -> Vec<String> {
+    vec![
+        "-o".into(),
+        "ServerAliveInterval=15".into(),
+        "-o".into(),
+        "ServerAliveCountMax=3".into(),
+        "-q".into(),
+    ]
+}
+
+/// Run an SSH command and return the raw `Output`.
+async fn run_ssh(host: &str, timeout: u32, command: &str) -> std::io::Result<std::process::Output> {
+    let mut args = ssh_args(timeout);
+    args.push(host.into());
+    args.push(command.into());
+    Command::new("ssh").args(&args).output().await
+}
+
+/// Run an SSH command on `user@host` with `accept-new` host key policy.
+async fn run_ssh_accept_new(
+    dest: &str,
+    timeout: u32,
+    command: &str,
+) -> std::io::Result<std::process::Output> {
+    let mut args = ssh_args_accept_new(timeout);
+    args.push(dest.into());
+    args.push(command.into());
+    Command::new("ssh").args(&args).output().await
+}
+
+/// Extract exit code from `Output`, defaulting to -1 on signal termination.
+fn exit_code(output: &std::process::Output) -> i32 {
+    output.status.code().unwrap_or(-1)
+}
+
+// ── Public API ───────────────────────────────────────────────────────
+
 /// Execute a command on the VPS via SSH, returning stdout.
 pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
-    let output = Command::new("ssh")
-        .args([
-            "-o",
-            &format!("ConnectTimeout={}", config.ssh_timeout),
-            "-o",
-            "BatchMode=yes",
-            &config.ssh_host,
-            command,
-        ])
-        .output()
-        .await?;
+    let output = run_ssh(&config.ssh_host, config.ssh_timeout, command).await?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -29,7 +77,7 @@ pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(ShadowError::Ssh(format!(
             "exit {}: {}",
-            output.status.code().unwrap_or(-1),
+            exit_code(&output),
             stderr.trim()
         )))
     }
@@ -37,16 +85,7 @@ pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
 
 /// Quick SSH connectivity check — returns true if the host is reachable.
 pub async fn check_connectivity(host: &str) -> bool {
-    Command::new("ssh")
-        .args([
-            "-o",
-            "ConnectTimeout=5",
-            "-o",
-            "BatchMode=yes",
-            host,
-            "true",
-        ])
-        .output()
+    run_ssh(host, 5, "true")
         .await
         .is_ok_and(|o| o.status.success())
 }
@@ -61,42 +100,20 @@ pub async fn exec_raw(config: &ShadowConfig, command: &str) -> Result<(String, i
 /// Use this when the target host differs from `config.ssh_host` (e.g. outer membrane)
 /// to avoid cloning the full `ShadowConfig` just to swap the host field.
 pub async fn exec_raw_on(host: &str, timeout: u32, command: &str) -> Result<(String, i32)> {
-    let output = Command::new("ssh")
-        .args([
-            "-o",
-            &format!("ConnectTimeout={timeout}"),
-            "-o",
-            "BatchMode=yes",
-            host,
-            command,
-        ])
-        .output()
-        .await?;
-
+    let output = run_ssh(host, timeout, command).await?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let code = output.status.code().unwrap_or(-1);
-    Ok((stdout, code))
+    Ok((stdout, exit_code(&output)))
 }
 
 /// Transfer a local file to the VPS via SCP.
 pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) -> Result<()> {
     let dest = format!("{}:{}", config.ssh_host, remote_path);
-    let output = Command::new("scp")
-        .args([
-            "-o",
-            &format!("ConnectTimeout={}", config.ssh_timeout),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ServerAliveInterval=15",
-            "-o",
-            "ServerAliveCountMax=3",
-            "-q",
-            local_path,
-            &dest,
-        ])
-        .output()
-        .await?;
+    let mut args = ssh_args(config.ssh_timeout);
+    args.extend(scp_keepalive_args());
+    args.push(local_path.into());
+    args.push(dest);
+
+    let output = Command::new("scp").args(&args).output().await?;
 
     if output.status.success() {
         Ok(())
@@ -104,7 +121,7 @@ pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) 
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(ShadowError::Ssh(format!(
             "scp failed (exit {}): {}",
-            output.status.code().unwrap_or(-1),
+            exit_code(&output),
             stderr.trim()
         )))
     }
@@ -120,23 +137,9 @@ pub async fn exec_on_host(
     timeout: u32,
 ) -> Result<(String, i32)> {
     let dest = format!("{user}@{host}");
-    let output = Command::new("ssh")
-        .args([
-            "-o",
-            &format!("ConnectTimeout={timeout}"),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            &dest,
-            command,
-        ])
-        .output()
-        .await?;
-
+    let output = run_ssh_accept_new(&dest, timeout, command).await?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let code = output.status.code().unwrap_or(-1);
-    Ok((stdout, code))
+    Ok((stdout, exit_code(&output)))
 }
 
 /// Transfer a local file to a host using `user@ip` form (provisioning/enrollment).
@@ -150,19 +153,11 @@ pub async fn scp_to_host(
     timeout: u32,
 ) -> Result<()> {
     let dest = format!("{user}@{host}:{remote_path}");
-    let output = Command::new("scp")
-        .args([
-            "-o",
-            &format!("ConnectTimeout={timeout}"),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            local_path,
-            &dest,
-        ])
-        .output()
-        .await?;
+    let mut args = ssh_args_accept_new(timeout);
+    args.push(local_path.into());
+    args.push(dest);
+
+    let output = Command::new("scp").args(&args).output().await?;
 
     if output.status.success() {
         Ok(())
@@ -170,7 +165,7 @@ pub async fn scp_to_host(
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(ShadowError::Ssh(format!(
             "scp to {host} failed (exit {}): {}",
-            output.status.code().unwrap_or(-1),
+            exit_code(&output),
             stderr.trim()
         )))
     }
@@ -178,17 +173,7 @@ pub async fn scp_to_host(
 
 /// Fetch a remote file's contents via SSH `cat` (depot binary download).
 pub async fn cat_remote(host: &str, remote_path: &str, timeout: u32) -> Result<Vec<u8>> {
-    let output = Command::new("ssh")
-        .args([
-            "-o",
-            &format!("ConnectTimeout={timeout}"),
-            "-o",
-            "BatchMode=yes",
-            host,
-            &format!("cat {remote_path}"),
-        ])
-        .output()
-        .await?;
+    let output = run_ssh(host, timeout, &format!("cat {remote_path}")).await?;
 
     if output.status.success() {
         Ok(output.stdout)
@@ -196,7 +181,7 @@ pub async fn cat_remote(host: &str, remote_path: &str, timeout: u32) -> Result<V
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(ShadowError::Ssh(format!(
             "ssh cat {remote_path} failed (exit {}): {}",
-            output.status.code().unwrap_or(-1),
+            exit_code(&output),
             stderr.trim()
         )))
     }
@@ -205,6 +190,26 @@ pub async fn cat_remote(host: &str, remote_path: &str, timeout: u32) -> Result<V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ssh_args_includes_timeout_and_batch() {
+        let args = ssh_args(10);
+        assert_eq!(args, ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]);
+    }
+
+    #[test]
+    fn ssh_args_accept_new_extends_base() {
+        let args = ssh_args_accept_new(5);
+        assert_eq!(args.len(), 6);
+        assert!(args.contains(&"StrictHostKeyChecking=accept-new".to_string()));
+    }
+
+    #[test]
+    fn scp_keepalive_includes_quiet() {
+        let args = scp_keepalive_args();
+        assert!(args.contains(&"-q".to_string()));
+        assert!(args.contains(&"ServerAliveInterval=15".to_string()));
+    }
 
     #[tokio::test]
     async fn check_connectivity_unreachable_returns_false() {

@@ -133,6 +133,8 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         .and_then(|p| p.mobility.as_deref())
         .unwrap_or("unknown");
     let mesh_ip = mesh_address(gate_name).unwrap_or("unpeered");
+    let lan_ip = profile.and_then(|p| p.lan_ip.as_deref());
+    let dns_name = cellmembrane_types::service::lan_dns_name(gate_name);
     let mesh_peer = profile.and_then(|p| p.mesh_peer.as_deref());
     let hub_port = profile.and_then(|p| p.hub_port.as_deref());
     let link_speed = profile.and_then(|p| p.link_speed_mbps);
@@ -155,8 +157,12 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
             envelope.boundary_count()
         ),
         format!("  mesh_ip:     {mesh_ip}"),
+        format!("  dns_name:    {dns_name}"),
     ];
 
+    if let Some(lip) = lan_ip {
+        lines.push(format!("  lan_ip:      {lip}"));
+    }
     if let Some(peer) = mesh_peer {
         lines.push(format!("  mesh_peer:   {peer}"));
     }
@@ -187,6 +193,8 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         "mobility": mobility,
         "envelope": envelope.to_string(),
         "mesh_ip": mesh_ip,
+        "lan_ip": lan_ip,
+        "dns_name": dns_name,
         "mesh_peer": mesh_peer,
         "hub_port": hub_port,
         "link_speed_mbps": link_speed,
@@ -303,17 +311,29 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
 }
 
 fn topology_mesh() -> ShadowOutcome {
-    let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
+    let manifest_gates: Option<Vec<String>> = temporal::resolve_workspace_root()
+        .ok()
+        .and_then(|root| manifest::EcosystemManifest::find_in_workspace(&root))
+        .and_then(|path| manifest::EcosystemManifest::load(&path).ok())
+        .map(|m| m.gates.keys().cloned().collect());
+
+    let fallback: Vec<String> = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"]
+        .iter()
+        .map(|&s| s.to_owned())
+        .collect();
+
+    let gate_names = manifest_gates.as_ref().unwrap_or(&fallback);
+
     let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
 
-    for gate in &known {
+    for gate in gate_names {
         if let Some(ip) = mesh_address(gate) {
             let zone = ZoneLabel::for_gate(gate);
             lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
         }
     }
 
-    let data: Vec<serde_json::Value> = known
+    let data: Vec<serde_json::Value> = gate_names
         .iter()
         .filter_map(|g| {
             mesh_address(g).map(|ip| {

@@ -24,7 +24,7 @@ use crate::impulse;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use tokio::process::Command;
+
 use tracing::{debug, error, info, warn};
 
 /// Result of a full relay run.
@@ -287,35 +287,21 @@ echo "+$ahead"
 "#
     );
 
-    let output = Command::new("ssh")
-        .args([
-            "-o",
-            "ConnectTimeout=5",
-            "-o",
-            "BatchMode=yes",
-            &config.golgi_ext_host,
-            &remote_script,
-        ])
-        .output()
-        .await;
-
-    match output {
-        Ok(o) => match o.status.code() {
-            Some(0) => {
-                let commits = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                info!(repo = repo_path, commits, "pushed to GitHub");
-                ShipResult::Pushed
-            }
-            Some(2) => {
-                debug!(repo = repo_path, "not cloned on outer membrane — skipping");
-                ShipResult::Skipped
-            }
-            Some(4) => ShipResult::Skipped,
-            _ => {
-                error!(repo = repo_path, "push to GitHub failed");
-                ShipResult::Failed
-            }
-        },
+    match crate::ssh::exec_raw_on(&config.golgi_ext_host, 5, &remote_script).await {
+        Ok((stdout, 0)) => {
+            let commits = stdout.trim().to_string();
+            info!(repo = repo_path, commits, "pushed to GitHub");
+            ShipResult::Pushed
+        }
+        Ok((_, 2)) => {
+            debug!(repo = repo_path, "not cloned on outer membrane — skipping");
+            ShipResult::Skipped
+        }
+        Ok((_, 4)) => ShipResult::Skipped,
+        Ok((_, _)) => {
+            error!(repo = repo_path, "push to GitHub failed");
+            ShipResult::Failed
+        }
         Err(e) => {
             error!(error = %e, "SSH to golgiBody-ext failed");
             ShipResult::Failed

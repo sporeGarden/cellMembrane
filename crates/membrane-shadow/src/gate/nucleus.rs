@@ -8,6 +8,14 @@
 
 use super::BootstrapPhase;
 
+/// Run a `systemctl` subcommand. Returns `true` if it exits 0.
+fn systemctl(args: &[&str]) -> bool {
+    std::process::Command::new("systemctl")
+        .args(args)
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
 /// Start all NUCLEUS primals — generate secrets, write systemd units, enable+start.
 pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let config_dir = generate_secrets_env();
@@ -76,11 +84,8 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     }
 
     if installed > 0 {
-        if let Err(e) = std::process::Command::new("systemctl")
-            .args(["daemon-reload"])
-            .output()
-        {
-            tracing::warn!(error = %e, "systemctl daemon-reload failed");
+        if !systemctl(&["daemon-reload"]) {
+            tracing::warn!("systemctl daemon-reload failed");
         }
 
         for svc in services {
@@ -88,11 +93,8 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
                 continue;
             }
             let unit = format!("{}-membrane.service", svc.binary);
-            if let Err(e) = std::process::Command::new("systemctl")
-                .args(["enable", "--now", &unit])
-                .output()
-            {
-                tracing::warn!(error = %e, unit = %unit, "systemctl enable failed");
+            if !systemctl(&["enable", "--now", &unit]) {
+                tracing::warn!(unit = %unit, "systemctl enable failed");
             }
         }
     }
@@ -204,14 +206,8 @@ pub fn install_cascade_timer(
         };
     }
 
-    let _ = std::process::Command::new("systemctl")
-        .args(["daemon-reload"])
-        .output();
-
-    let enable_ok = std::process::Command::new("systemctl")
-        .args(["enable", "--now", "membrane-cascade.timer"])
-        .output()
-        .is_ok_and(|o| o.status.success());
+    let _ = systemctl(&["daemon-reload"]);
+    let enable_ok = systemctl(&["enable", "--now", "membrane-cascade.timer"]);
 
     super::BootstrapPhase {
         name: "quorum.cascade-timer".into(),
