@@ -4,7 +4,7 @@
 **Last updated:** 2026-06-27 (Wave 127)
 **VPS_IP:** Set `VPS_IP` from `nucleus_config.sh` → `MEMBRANE_VPS_IP`.
 
-> **Note (Wave 126):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
+> **Note (Wave 127):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
 > for all operational flows. Use: `membrane gate.status` (health), `membrane gate.bootstrap`
 > (enrollment), `membrane plasmid.refresh` (binary push), `membrane temporal.cascade`
 > (sync), `membrane rootpulse.status` (sovereignty). Wave 120+:

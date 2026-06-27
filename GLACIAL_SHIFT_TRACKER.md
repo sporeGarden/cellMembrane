@@ -14,7 +14,9 @@ cellMembrane transport code is topology-agnostic (reads `/proc/net/route`, uses 
 no hardcoded gateway assumptions). LAN DNS service discovery: `LAN_DNS_DOMAIN` constant
 (`primals.local`), `lan_dns_name()` helper, `lan_ip` manifest field + `lan_ip_for()`.
 Manifest updated: sporeGate kderm_role `plasma_membrane` → `peptidoglycan`, dhcp role
-removed, `lan_ip = "192.168.4.3"` added. 835 tests, zero warnings.
+removed, `lan_ip = "192.168.4.3"` added. SSH builder abstraction, systemctl
+helper, manifest-first mesh resolution, topology.resolve lan_ip+dns_name.
+838 tests, zero warnings.
 **Wave 125–126 update (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered git shell-outs routed through `git_ops.rs` (`git_clone`,
 `pull_ff_only`, `resolve_head_full`, `run_git` pub). BLAKE3 canonical path (depot delegates
