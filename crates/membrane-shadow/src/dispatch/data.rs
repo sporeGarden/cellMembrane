@@ -8,7 +8,7 @@
 use crate::cli;
 use crate::error::ShadowError;
 use crate::{ShadowOutcome, context, identity, manifest, temporal, topology};
-use cellmembrane_types::cytoplasm::{ZoneLabel, mesh_address};
+use cellmembrane_types::cytoplasm::{KNOWN_MESH_GATES, ZoneLabel, mesh_address};
 
 // ── Manifest domain ──────────────────────────────────────────────────
 
@@ -317,10 +317,7 @@ fn topology_mesh() -> ShadowOutcome {
         .and_then(|path| manifest::EcosystemManifest::load(&path).ok())
         .map(|m| m.gates.keys().cloned().collect());
 
-    let fallback: Vec<String> = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"]
-        .iter()
-        .map(|&s| s.to_owned())
-        .collect();
+    let fallback: Vec<String> = KNOWN_MESH_GATES.iter().map(|&s| s.to_owned()).collect();
 
     let gate_names = manifest_gates.as_ref().unwrap_or(&fallback);
 
@@ -329,11 +326,22 @@ fn topology_mesh() -> ShadowOutcome {
     for gate in gate_names {
         if let Some(ip) = mesh_address(gate) {
             let zone = ZoneLabel::for_gate(gate);
-            lines.push(format!("  {gate:<14} {ip:<14} {zone}"));
+            lines.push(format_mesh_line(gate, ip, zone));
         }
     }
 
-    let data: Vec<serde_json::Value> = gate_names
+    let data = build_mesh_data(gate_names);
+    ShadowOutcome::ok_with(lines.join("\n"), serde_json::json!(data))
+}
+
+/// Format a single mesh entry line for display.
+fn format_mesh_line(gate: &str, ip: &str, zone: ZoneLabel) -> String {
+    format!("  {gate:<14} {ip:<14} {zone}")
+}
+
+/// Build the JSON data array for mesh entries.
+fn build_mesh_data(gate_names: &[String]) -> Vec<serde_json::Value> {
+    gate_names
         .iter()
         .filter_map(|g| {
             mesh_address(g).map(|ip| {
@@ -344,9 +352,7 @@ fn topology_mesh() -> ShadowOutcome {
                 })
             })
         })
-        .collect();
-
-    ShadowOutcome::ok_with(lines.join("\n"), serde_json::json!(data))
+        .collect()
 }
 
 // ── Identity domain ──────────────────────────────────────────────────
@@ -435,5 +441,53 @@ pub(super) async fn dispatch_context(cmd: &str, args: &[&str]) -> crate::Result<
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown context command: {cmd}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_mesh_line_aligned() {
+        let line = format_mesh_line("golgi", "10.13.37.1", ZoneLabel::Wan);
+        assert!(line.contains("golgi"));
+        assert!(line.contains("10.13.37.1"));
+        assert!(line.contains("wan"));
+    }
+
+    #[test]
+    fn build_mesh_data_includes_known_gates() {
+        let gates: Vec<String> = vec!["golgi".into(), "sporeGate".into(), "unknownGate".into()];
+        let data = build_mesh_data(&gates);
+        assert_eq!(data.len(), 2, "unknownGate should be filtered out");
+        assert_eq!(data[0]["gate"], "golgi");
+        assert_eq!(data[1]["gate"], "sporeGate");
+    }
+
+    #[test]
+    fn build_mesh_data_empty_input() {
+        let data = build_mesh_data(&[]);
+        assert!(data.is_empty());
+    }
+
+    #[test]
+    fn build_mesh_data_includes_zone_label() {
+        let gates = vec!["eastGate".into()];
+        let data = build_mesh_data(&gates);
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0]["zone"], "backbone");
+    }
+
+    #[test]
+    fn topology_mesh_uses_known_gates_fallback() {
+        let outcome = topology_mesh();
+        let msg = outcome.message;
+        assert!(msg.contains("WireGuard Mesh"));
+        for gate in KNOWN_MESH_GATES {
+            if mesh_address(gate).is_some() {
+                assert!(msg.contains(gate), "mesh output should include {gate}");
+            }
+        }
     }
 }

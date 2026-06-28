@@ -139,6 +139,13 @@ pub fn mesh_address_from_topology(
     mesh_address(gate_name).map(String::from)
 }
 
+/// Gates with permanent `WireGuard` mesh IP assignments.
+///
+/// Used as a fallback when the ecosystem manifest is unavailable.
+/// Once assigned, an address is permanent — add new gates here when
+/// they join the mesh.
+pub const KNOWN_MESH_GATES: &[&str] = &["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
+
 /// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
 ///
 /// Built-in fallback registry. Once assigned, an address is permanent.
@@ -243,20 +250,31 @@ mod tests {
 
     #[test]
     fn mesh_addresses_unique() {
-        let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
-        let addrs: Vec<_> = known.iter().filter_map(|g| mesh_address(g)).collect();
+        let addrs: Vec<_> = KNOWN_MESH_GATES
+            .iter()
+            .filter_map(|g| mesh_address(g))
+            .collect();
         let mut seen = std::collections::HashSet::new();
         assert!(addrs.iter().all(|a| seen.insert(a)));
     }
 
     #[test]
     fn mesh_addresses_in_subnet() {
-        let known = ["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
-        for gate in &known {
+        for gate in KNOWN_MESH_GATES {
             let ip = mesh_address(gate).unwrap();
             assert!(
                 ip.starts_with("10.13.37."),
                 "{gate} address not in 10.13.37.0/24"
+            );
+        }
+    }
+
+    #[test]
+    fn known_mesh_gates_all_have_addresses() {
+        for gate in KNOWN_MESH_GATES {
+            assert!(
+                mesh_address(gate).is_some(),
+                "KNOWN_MESH_GATES entry {gate} has no mesh address"
             );
         }
     }
