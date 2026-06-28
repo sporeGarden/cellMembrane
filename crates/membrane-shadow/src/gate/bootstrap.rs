@@ -176,18 +176,18 @@ pub async fn bootstrap(
 
 // ── Phase implementations ──────────────────────────────────────────────
 
-fn identity_phase() -> BootstrapPhase {
-    let name_set = std::process::Command::new("git")
-        .args(["config", "--global", "user.name"])
+/// Check if a git global config key is set and non-empty.
+fn git_global_config_is_set(key: &str) -> bool {
+    std::process::Command::new("git")
+        .args(["config", "--global", key])
         .output()
         .ok()
-        .is_some_and(|o| o.status.success() && !o.stdout.is_empty());
+        .is_some_and(|o| o.status.success() && !o.stdout.is_empty())
+}
 
-    let email_set = std::process::Command::new("git")
-        .args(["config", "--global", "user.email"])
-        .output()
-        .ok()
-        .is_some_and(|o| o.status.success() && !o.stdout.is_empty());
+fn identity_phase() -> BootstrapPhase {
+    let name_set = git_global_config_is_set("user.name");
+    let email_set = git_global_config_is_set("user.email");
 
     let ssh_ok = ssh_identity_ok();
 
@@ -655,5 +655,10 @@ mod tests {
             PHASE_TIMEOUT.as_secs() >= 60,
             "bootstrap phase timeout should be at least 60s"
         );
+    }
+
+    #[test]
+    fn git_global_config_nonexistent_key_returns_false() {
+        assert!(!git_global_config_is_set("nonexistent.key.xyz.test"));
     }
 }

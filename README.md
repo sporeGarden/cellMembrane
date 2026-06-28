@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 127) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 128) |
 
 ---
 
@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 838 tests — pedantic clippy clean
+cargo test                  # 842 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -70,7 +70,10 @@ Topology update: sporeGate moved from `.1` gateway to `.3` compute peer; Flint i
 router. All transport code is topology-agnostic (reads `/proc/net/route` at runtime).
 SSH builder abstraction (ssh_args/run_ssh/exit_code), relay.rs routed through
 ssh::exec_raw_on, systemctl helper. topology.mesh manifest-first resolution,
-topology.resolve emits lan_ip + dns_name. 838 tests, zero warnings.
+topology.resolve emits lan_ip + dns_name. Manifest-first SSH resolution:
+`ssh_target_for()` (host→lan_ip→wg_ip), `ssh_user_for()`, `exec_on_gate()`.
+Async `systemctl_async` helper, `git_global_config_is_set` extraction.
+28 deps updated. 842 tests, zero warnings.
 
 **Wave 125–126 (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered `Command::new("git")` calls in freshness.rs, relay.rs,
@@ -298,7 +301,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | relay.forward graduation (Wave 123): `call_endpoint()` wired into sovereignty_ledger, bridge, impulse. Cross-gate neural-api resolution via `resolve_by_role("biomeos")`. Identity capability mapping fixed (sweetgrass→Storage, biomeos→Identity). 800 tests | DONE |
 | Deep debt sweep (Wave 124): pepti decommissioned from live mesh, `Result<_,String>`→`ShadowError::Build` (11 sigs), hardcode sweep (developer paths, socket paths), `ENV_VALIDATE_SSH_HOST`, stale comment cleanup, 788 tests | DONE |
 | Consolidation + typed enums (Wave 125–126): git_ops consolidation (9 shell-outs → `git_clone`/`pull_ff_only`/`resolve_head_full`), BLAKE3 canonical path, 5 stale constants purged, `env_or` helper + rollout, `_pub` wrapper cleanup, UDS probe dedup, `DivergeType`+`SuggestedAction` typed enums, magic `:7700`→`DEFAULT_FEDERATION_PORT`, dispatch/gate + sovereignty tests, 810 tests | DONE |
-| env_or rollout + topology cutover + deep debt (Wave 127): 39 `env_or` migrations, 5 pure function extractions, porcelain `trim()`→`trim_end()` bug fix, 23 new tests. Topology: sporeGate .1→.3 (Flint edge router), `lan_ip` manifest field, `lan_dns_name()` helper, `LAN_DNS_DOMAIN` constant. SSH builder abstraction (ssh_args/run_ssh/exit_code), systemctl helper, manifest-first mesh resolution, topology.resolve emits lan_ip+dns_name. 838 tests | DONE |
+| env_or rollout + topology cutover + deep debt (Wave 127–128): 39 `env_or` migrations, 5 pure function extractions, porcelain bug fix. Topology: sporeGate .1→.3, LAN DNS. SSH builder abstraction, systemctl helpers (sync+async), manifest-first mesh + SSH resolution (`ssh_target_for`/`ssh_user_for`/`exec_on_gate`), `git_global_config_is_set`. 28 deps updated. 842 tests | DONE |
 
 ---
 

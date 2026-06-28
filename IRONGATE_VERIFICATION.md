@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 127 (env_or rollout, test expansion, topology cutover, 2026-06-27)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate), capability-based registry, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), typed build/plasmid errors, git_ops consolidation, env_or helper (39 sites), typed divergence enums, pure function extraction (5 fns), topology-agnostic transport, SSH builder abstraction, systemctl helper, manifest-first mesh, LAN DNS discovery
+**Last validated:** Wave 128 (manifest-first SSH, async systemctl, dep update, 2026-06-28)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 5-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate), capability-based registry, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), typed build/plasmid errors, git_ops consolidation, env_or helper (39 sites), typed divergence enums, pure function extraction (5 fns), topology-agnostic transport, SSH builder abstraction, systemctl helpers (sync+async), manifest-first mesh + SSH resolution, LAN DNS discovery, `exec_on_gate`
 
 ---
 

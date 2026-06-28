@@ -1,7 +1,7 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-27 (Wave 127)
+**Last updated:** 2026-06-28 (Wave 128)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
 **Wave 127 update (env_or Rollout + Test Expansion + Topology Cutover):**
 env_or helper rolled out to 39 remaining call sites across 20 files — nearly all raw
@@ -16,7 +16,9 @@ no hardcoded gateway assumptions). LAN DNS service discovery: `LAN_DNS_DOMAIN` c
 Manifest updated: sporeGate kderm_role `plasma_membrane` → `peptidoglycan`, dhcp role
 removed, `lan_ip = "192.168.4.3"` added. SSH builder abstraction, systemctl
 helper, manifest-first mesh resolution, topology.resolve lan_ip+dns_name.
-838 tests, zero warnings.
+Manifest-first SSH resolution: `ssh_target_for()`, `ssh_user_for()`, `exec_on_gate()`.
+Async `systemctl_async`, `git_global_config_is_set`. 28 deps updated.
+842 tests, zero warnings.
 **Wave 125–126 update (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered git shell-outs routed through `git_ops.rs` (`git_clone`,
 `pull_ff_only`, `resolve_head_full`, `run_git` pub). BLAKE3 canonical path (depot delegates

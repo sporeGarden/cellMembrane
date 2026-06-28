@@ -235,6 +235,9 @@ pub struct GateProfile {
     /// is on the same subnet.
     #[serde(default)]
     pub lan_ip: Option<String>,
+    /// SSH user for this gate (defaults to `"root"`).
+    #[serde(default)]
+    pub ssh_user: Option<String>,
     /// LAN subnet this gate serves (e.g., `"192.168.4.0/22"`).
     #[serde(default)]
     pub lan_subnet: Option<String>,
@@ -367,6 +370,29 @@ impl EcosystemManifest {
     #[must_use]
     pub fn lan_ip_for(&self, gate: &str) -> Option<String> {
         self.gates.get(gate).and_then(|p| p.lan_ip.clone())
+    }
+
+    /// Resolve the best SSH target for a gate from the manifest.
+    ///
+    /// Priority chain: `host` (explicit VPS hostname) → `lan_ip` (direct LAN
+    /// peer) → `wg_ip` (mesh overlay). Returns `None` if the gate is not in
+    /// the manifest or has no routable address.
+    #[must_use]
+    pub fn ssh_target_for(&self, gate: &str) -> Option<String> {
+        let p = self.gates.get(gate)?;
+        p.host
+            .clone()
+            .or_else(|| p.lan_ip.clone())
+            .or_else(|| p.wg_ip.clone())
+    }
+
+    /// Resolve the SSH user for a gate (defaults to `"root"`).
+    #[must_use]
+    pub fn ssh_user_for(&self, gate: &str) -> &str {
+        self.gates
+            .get(gate)
+            .and_then(|p| p.ssh_user.as_deref())
+            .unwrap_or("root")
     }
 }
 
@@ -584,5 +610,54 @@ version = "1.0.0"
         assert_eq!(manifest.sync.default_branch, "main");
         assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::Flag);
         assert_eq!(manifest.sync.push_target, PushTarget::All);
+    }
+
+    #[test]
+    fn ssh_target_prefers_host_over_lan_over_wg() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.golgiBody]
+host = "157.230.3.183"
+lan_ip = "10.116.0.2"
+wg_ip = "10.13.37.1"
+
+[gates.sporeGate]
+lan_ip = "192.168.4.3"
+wg_ip = "10.13.37.2"
+
+[gates.flockGate]
+wg_ip = "10.13.37.6"
+
+[gates.southGate]
+repos = []
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert_eq!(m.ssh_target_for("golgiBody"), Some("157.230.3.183".into()));
+        assert_eq!(m.ssh_target_for("sporeGate"), Some("192.168.4.3".into()));
+        assert_eq!(m.ssh_target_for("flockGate"), Some("10.13.37.6".into()));
+        assert_eq!(m.ssh_target_for("southGate"), None);
+        assert_eq!(m.ssh_target_for("unknown"), None);
+    }
+
+    #[test]
+    fn ssh_user_defaults_to_root() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.golgiBody]
+ssh_user = "deploy"
+
+[gates.sporeGate]
+repos = []
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert_eq!(m.ssh_user_for("golgiBody"), "deploy");
+        assert_eq!(m.ssh_user_for("sporeGate"), "root");
+        assert_eq!(m.ssh_user_for("unknown"), "root");
     }
 }

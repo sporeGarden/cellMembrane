@@ -16,6 +16,15 @@ fn systemctl(args: &[&str]) -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
+/// Async variant for use in tokio contexts (e.g. cascade-restart).
+pub async fn systemctl_async(args: &[&str]) -> bool {
+    tokio::process::Command::new("systemctl")
+        .args(args)
+        .output()
+        .await
+        .is_ok_and(|o| o.status.success())
+}
+
 /// Start all NUCLEUS primals — generate secrets, write systemd units, enable+start.
 pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let config_dir = generate_secrets_env();

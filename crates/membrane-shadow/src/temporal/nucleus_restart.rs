@@ -22,8 +22,10 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
     );
     let bin_dir = depot_dir.join("primals").join(&arch);
 
-    let install_base = std::env::var(cellmembrane_types::service::ENV_INSTALL_BASE)
-        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_INSTALL_BASE.into());
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
     let install_dir = std::path::Path::new(&install_base);
 
     let primals = crate::plasmid::nucleus_primals();
@@ -90,14 +92,10 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
         }
 
         let unit = format!("membrane-nucleus@{primal}.service");
-        let restart = tokio::process::Command::new("systemctl")
-            .args(["--user", "restart", &unit])
-            .output()
-            .await;
-
-        match restart {
-            Ok(o) if o.status.success() => restarted += 1,
-            _ => failed += 1,
+        if crate::gate::nucleus::systemctl_async(&["--user", "restart", &unit]).await {
+            restarted += 1;
+        } else {
+            failed += 1;
         }
     }
 
