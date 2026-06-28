@@ -18,7 +18,9 @@ removed, `lan_ip = "192.168.4.3"` added. SSH builder abstraction, systemctl
 helper, manifest-first mesh resolution, topology.resolve lan_ip+dns_name.
 Manifest-first SSH resolution: `ssh_target_for()`, `ssh_user_for()`, `exec_on_gate()`.
 Async `systemctl_async`, `git_global_config_is_set`. 28 deps updated.
-842 tests, zero warnings.
+`KNOWN_MESH_GATES` constant, `dispatch/data.rs` first test coverage,
+pure function extraction (`format_mesh_line`, `build_mesh_data`).
+848 tests, zero warnings.
 **Wave 125–126 update (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered git shell-outs routed through `git_ops.rs` (`git_clone`,
 `pull_ff_only`, `resolve_head_full`, `run_git` pub). BLAKE3 canonical path (depot delegates
