@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 128) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 132c) |
 
 ---
 
@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 848 tests — pedantic clippy clean
+cargo test                  # 886 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -76,6 +76,13 @@ Async `systemctl_async` helper, `git_global_config_is_set` extraction.
 `KNOWN_MESH_GATES` constant, `format_mesh_line`/`build_mesh_data` pure
 extractors, `dispatch/data.rs` first test coverage. 28 deps updated.
 848 tests, zero warnings.
+- **Gateway types + shadow validation (Wave 132c)**: `cellmembrane-types::gateway` module — typed Tower HTTP gateway config
+(`GatewayRoute`, `GatewayConfig`, `TlsGatewayConfig`), shadow validation types (`ShadowComparison`, `ShadowReport`,
+`ProbeResult`), gateway health (`GatewayHealth`, `CertExpiry`, `BackendStatus`). `membrane-shadow::gateway` dispatch —
+`gateway.health`, `gateway.routes`, `gateway.shadow`, `gateway.config.validate`, `gateway.config.generate`.
+Gateway constants (`DEFAULT_GATEWAY_BIND`, `ENV_GATEWAY_BIND`, `DEFAULT_SONGBIRD_SOCKET`, etc.).
+Cloudflare test expansion (`format_cf_errors`, `into_result`, `into_result_or_default`).
+886 tests, zero warnings.
 
 **Wave 125–126 (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered `Command::new("git")` calls in freshness.rs, relay.rs,
@@ -304,6 +311,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Deep debt sweep (Wave 124): pepti decommissioned from live mesh, `Result<_,String>`→`ShadowError::Build` (11 sigs), hardcode sweep (developer paths, socket paths), `ENV_VALIDATE_SSH_HOST`, stale comment cleanup, 788 tests | DONE |
 | Consolidation + typed enums (Wave 125–126): git_ops consolidation (9 shell-outs → `git_clone`/`pull_ff_only`/`resolve_head_full`), BLAKE3 canonical path, 5 stale constants purged, `env_or` helper + rollout, `_pub` wrapper cleanup, UDS probe dedup, `DivergeType`+`SuggestedAction` typed enums, magic `:7700`→`DEFAULT_FEDERATION_PORT`, dispatch/gate + sovereignty tests, 810 tests | DONE |
 | env_or rollout + topology cutover + deep debt (Wave 127–128): 39 `env_or` migrations, pure function extraction, porcelain bug fix. Topology: sporeGate .1→.3, LAN DNS. SSH builder + manifest-first resolution (`ssh_target_for`/`exec_on_gate`), systemctl helpers (sync+async), `KNOWN_MESH_GATES` constant, `dispatch/data.rs` first coverage (5 tests). 28 deps updated. 848 tests | DONE |
+| Gateway types + shadow validation (Wave 132c): `cellmembrane-types::gateway` module (typed Tower HTTP gateway config, shadow comparison, health probes). `membrane-shadow::gateway` dispatch (`gateway.health/routes/shadow/config.*`). Gateway constants. Cloudflare test coverage (`format_cf_errors`, `into_result`). 886 tests | DONE |
 
 ---
 

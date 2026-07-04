@@ -320,6 +320,33 @@ pub fn lan_dns_name(gate_name: &str) -> String {
     format!("{}.{LAN_DNS_DOMAIN}", gate_name.to_lowercase())
 }
 
+// ── Gateway constants (Tower HTTP gateway) ───────────────────────────
+
+/// Default bearDog TLS gateway bind address (production).
+pub const DEFAULT_GATEWAY_BIND: &str = "0.0.0.0:443";
+/// Default bearDog TLS gateway bind for shadow validation period.
+pub const DEFAULT_GATEWAY_SHADOW_BIND: &str = "0.0.0.0:8443";
+/// Default ACME HTTP-01 challenge port.
+pub const DEFAULT_ACME_CHALLENGE_PORT: u16 = 80;
+/// Default upstream timeout for reverse proxy routes (seconds).
+pub const DEFAULT_GATEWAY_TIMEOUT_SECS: u32 = 30;
+/// Default max upstream connections for gateway.
+pub const DEFAULT_GATEWAY_MAX_CONNECTIONS: u32 = 100;
+/// Default songBird socket path (for gateway → mesh routing).
+pub const DEFAULT_SONGBIRD_SOCKET: &str = "/run/songbird/songbird.sock";
+/// Default bearDog data directory (cert storage, state).
+pub const DEFAULT_BEARDOG_DATA_DIR: &str = "/var/lib/beardog";
+/// Default ACME directory URL (Let's Encrypt production).
+pub const DEFAULT_ACME_DIRECTORY: &str = "https://acme-v02.api.letsencrypt.org/directory";
+/// Environment variable for the gateway bind address.
+pub const ENV_GATEWAY_BIND: &str = "BEARDOG_GATEWAY_BIND";
+/// Environment variable for gateway domains (comma-separated).
+pub const ENV_GATEWAY_DOMAINS: &str = "BEARDOG_GATEWAY_DOMAINS";
+/// Environment variable for the ACME directory URL.
+pub const ENV_ACME_DIRECTORY: &str = "BEARDOG_ACME_DIRECTORY";
+/// Environment variable for the songBird socket path.
+pub const ENV_SONGBIRD_SOCKET: &str = "BEARDOG_SONGBIRD_SOCKET";
+
 // ── Timeout constants ────────────────────────────────────────────────
 
 /// Default SSH connection timeout (seconds).

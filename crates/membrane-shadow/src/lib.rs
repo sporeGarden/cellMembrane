@@ -65,7 +65,7 @@ pub mod error;
 pub mod forgejo;
 pub mod freshness;
 pub mod gate;
-
+pub mod gateway;
 pub mod git_ops;
 pub mod identity;
 pub mod impulse;

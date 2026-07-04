@@ -1,8 +1,18 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-06-28 (Wave 128)
+**Last updated:** 2026-07-04 (Wave 132c)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 132c update (Gateway Types + Shadow Validation):**
+Tower HTTP gateway types added to `cellmembrane-types::gateway` module — typed reverse proxy
+config (`GatewayRoute`, `GatewayConfig`, `TlsGatewayConfig`), shadow validation types
+(`ShadowComparison`, `ShadowReport`, `ProbeResult`), gateway health probes (`GatewayHealth`,
+`CertExpiry`, `BackendStatus`). Dispatch module `membrane-shadow::gateway` wired with 5
+commands: `gateway.health`, `gateway.routes`, `gateway.shadow`, `gateway.config.validate`,
+`gateway.config.generate`. Gateway constants added (`DEFAULT_GATEWAY_BIND`, `ENV_GATEWAY_BIND`,
+`DEFAULT_SONGBIRD_SOCKET`, `DEFAULT_ACME_DIRECTORY`, etc.). Cloudflare test coverage expanded:
+`format_cf_errors` (3 tests), `CfResponse::into_result` (3 tests), `into_result_or_default`
+(2 tests). All pure functions `const fn` where possible. 886 tests, zero warnings.
 **Wave 127 update (env_or Rollout + Test Expansion + Topology Cutover):**
 env_or helper rolled out to 39 remaining call sites across 20 files — nearly all raw
 `std::env::var` boilerplate eliminated. Pure function extraction: `is_porcelain_dirty`,

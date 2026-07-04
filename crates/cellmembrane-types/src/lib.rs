@@ -42,6 +42,7 @@ pub mod cytoplasm;
 pub mod envelope;
 pub mod error;
 pub mod firewall;
+pub mod gateway;
 pub mod identity;
 pub mod provider;
 pub mod service;
@@ -63,6 +64,10 @@ pub use envelope::{
 };
 pub use error::ConfigError;
 pub use firewall::{FirewallRule, FirewallRuleset, NftablesConfig};
+pub use gateway::{
+    BackendStatus, CertExpiry, GatewayConfig, GatewayHealth, GatewayRoute, ProbeResult,
+    ShadowComparison, ShadowReport, TlsGatewayConfig,
+};
 pub use identity::{GateMobility, MembraneIdentity};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{

@@ -485,4 +485,93 @@ mod tests {
         assert_eq!(resp.errors[0].code, 9103);
         assert!(resp.result.is_none());
     }
+
+    #[test]
+    fn format_cf_errors_empty_returns_unknown() {
+        assert_eq!(format_cf_errors(&[]), "unknown error");
+    }
+
+    #[test]
+    fn format_cf_errors_single() {
+        let errors = vec![CfError {
+            code: 1001,
+            message: "method not allowed".into(),
+        }];
+        assert_eq!(format_cf_errors(&errors), "[1001] method not allowed");
+    }
+
+    #[test]
+    fn format_cf_errors_multiple_joined() {
+        let errors = vec![
+            CfError {
+                code: 6003,
+                message: "Invalid request".into(),
+            },
+            CfError {
+                code: 6006,
+                message: "Missing field".into(),
+            },
+        ];
+        let result = format_cf_errors(&errors);
+        assert_eq!(result, "[6003] Invalid request; [6006] Missing field");
+    }
+
+    #[test]
+    fn cf_response_into_result_success() {
+        let resp = CfResponse::<String> {
+            success: true,
+            errors: vec![],
+            result: Some("data".into()),
+        };
+        assert_eq!(resp.into_result().unwrap(), "data");
+    }
+
+    #[test]
+    fn cf_response_into_result_success_none() {
+        let resp = CfResponse::<String> {
+            success: true,
+            errors: vec![],
+            result: None,
+        };
+        assert!(resp.into_result().is_err());
+    }
+
+    #[test]
+    fn cf_response_into_result_failure() {
+        let resp = CfResponse::<String> {
+            success: false,
+            errors: vec![CfError {
+                code: 403,
+                message: "forbidden".into(),
+            }],
+            result: None,
+        };
+        let err = resp.into_result().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("403"), "expected error code in: {msg}");
+        assert!(msg.contains("forbidden"), "expected message in: {msg}");
+    }
+
+    #[test]
+    fn cf_response_into_result_or_default_success_none() {
+        let resp = CfResponse::<Vec<DnsRecord>> {
+            success: true,
+            errors: vec![],
+            result: None,
+        };
+        assert!(resp.into_result_or_default().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cf_response_into_result_or_default_failure() {
+        let resp = CfResponse::<Vec<DnsRecord>> {
+            success: false,
+            errors: vec![CfError {
+                code: 500,
+                message: "internal".into(),
+            }],
+            result: None,
+        };
+        assert!(resp.into_result_or_default().is_err());
+    }
 }
