@@ -496,6 +496,37 @@ mod tests {
     }
 
     #[test]
+    fn gateway_config_toml_roundtrip() {
+        let cfg = sample_config();
+        let toml_str = toml::to_string_pretty(&cfg).unwrap();
+        let parsed: GatewayConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.gate_name, "sporeGate");
+        assert_eq!(parsed.routes.len(), 3);
+        assert_eq!(parsed.routes[0].host, "lab.primals.eco");
+        assert_eq!(parsed.routes[0].capability, "jupyter");
+        assert_eq!(parsed.max_connections, 100);
+        assert_eq!(parsed.default_timeout_secs, 30);
+    }
+
+    #[test]
+    fn tls_config_toml_roundtrip() {
+        let cfg = TlsGatewayConfig {
+            bind: "0.0.0.0:443".into(),
+            domains: vec!["lab.primals.eco".into()],
+            acme_directory: "https://acme-v02.api.letsencrypt.org/directory".into(),
+            acme_contacts: vec!["mailto:ops@primals.eco".into()],
+            challenge_port: 80,
+            songbird_socket: "/run/songbird/songbird.sock".into(),
+            data_dir: "/var/lib/beardog".into(),
+        };
+        let toml_str = toml::to_string_pretty(&cfg).unwrap();
+        let parsed: TlsGatewayConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.bind, "0.0.0.0:443");
+        assert_eq!(parsed.domains, vec!["lab.primals.eco"]);
+        assert_eq!(parsed.challenge_port, 80);
+    }
+
+    #[test]
     fn tls_config_serde_roundtrip() {
         let cfg = TlsGatewayConfig {
             bind: "0.0.0.0:443".into(),

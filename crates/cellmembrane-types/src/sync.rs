@@ -121,6 +121,18 @@ impl GateTransport {
     pub const fn requires_depot(&self) -> bool {
         matches!(self, Self::Wan)
     }
+
+    /// Whether this transport requires physical tethering (USB/ADB).
+    #[must_use]
+    pub const fn is_tethered(&self) -> bool {
+        matches!(self, Self::Adb)
+    }
+
+    /// Whether this transport is the local machine (no remote hop needed).
+    #[must_use]
+    pub const fn is_local(&self) -> bool {
+        matches!(self, Self::Local)
+    }
 }
 
 impl fmt::Display for GateTransport {
@@ -316,5 +328,21 @@ mod tests {
         assert!(!GateTransport::Lan.requires_depot());
         assert!(!GateTransport::Adb.requires_depot());
         assert!(!GateTransport::Local.requires_depot());
+    }
+
+    #[test]
+    fn gate_transport_is_tethered() {
+        assert!(GateTransport::Adb.is_tethered());
+        assert!(!GateTransport::Wan.is_tethered());
+        assert!(!GateTransport::Lan.is_tethered());
+        assert!(!GateTransport::Local.is_tethered());
+    }
+
+    #[test]
+    fn gate_transport_is_local() {
+        assert!(GateTransport::Local.is_local());
+        assert!(!GateTransport::Wan.is_local());
+        assert!(!GateTransport::Lan.is_local());
+        assert!(!GateTransport::Adb.is_local());
     }
 }
