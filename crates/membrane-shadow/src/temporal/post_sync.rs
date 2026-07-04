@@ -64,20 +64,27 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.publish_freshness && opts.mode == CascadeMode::Sync {
+        // Every gate writes its own heads file (zero conflict).
+        match crate::freshness::publish_gate_heads(root, repos).await {
+            Ok(()) => {
+                lines.push("  [freshness] PUBLISHED heads/<gate>.toml".to_string());
+                match crate::freshness::auto_commit_gate_heads(root, repos).await {
+                    Ok(()) => {}
+                    Err(e) => lines.push(format!("  [freshness] auto-push heads: {e}")),
+                }
+            }
+            Err(e) => lines.push(format!("  [freshness] gate heads FAIL: {e}")),
+        }
+
+        // Only the designated publisher also writes unified freshness.toml (backward compat).
         let is_designated_publisher = is_freshness_publisher();
         if is_designated_publisher {
-            match crate::freshness::publish_freshness_toml(root, m, repos).await {
+            match crate::freshness::unify_freshness(root).await {
                 Ok(()) => {
-                    lines.push("  [freshness] PUBLISHED freshness.toml".to_string());
-                    match crate::freshness::auto_commit_freshness(root, m, repos).await {
-                        Ok(()) => {}
-                        Err(e) => lines.push(format!("  [freshness] auto-push: {e}")),
-                    }
+                    lines.push("  [freshness] UNIFIED freshness.toml (compat)".to_string());
                 }
-                Err(e) => lines.push(format!("  [freshness] FAIL: {e}")),
+                Err(e) => lines.push(format!("  [freshness] unify FAIL: {e}")),
             }
-        } else {
-            lines.push("  [freshness] SKIP — not designated publisher (set FRESHNESS_PUBLISHER=1 to enable)".to_string());
         }
     }
 

@@ -70,6 +70,7 @@ pub(super) async fn dispatch_temporal(
         }
         "temporal.cascade" => dispatch_cascade(config, args).await,
         "temporal.cascade.stress" => dispatch_cascade_stress(config, args).await,
+        "temporal.unify-freshness" => dispatch_unify_freshness(config, args).await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown temporal command: {cmd}"
         ))),
@@ -213,5 +214,20 @@ async fn dispatch_cascade_stress(
             "cycles_completed": reports.len(),
             "all_green": all_green,
         }),
+    ))
+}
+
+/// `temporal.unify-freshness` — merge wave.toml + heads/*.toml into freshness.toml.
+///
+/// Intended for golgi quorum timer (backward compat). Once all consumers read
+/// the new per-gate files directly, this command and freshness.toml can be removed.
+async fn dispatch_unify_freshness(
+    _config: &ShadowConfig,
+    _args: &[&str],
+) -> crate::Result<ShadowOutcome> {
+    let root = temporal::resolve_workspace_root()?;
+    crate::freshness::unify_freshness(&root).await?;
+    Ok(ShadowOutcome::ok(
+        "freshness.toml regenerated from wave.toml + heads/*.toml".to_string(),
     ))
 }
