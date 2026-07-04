@@ -334,7 +334,7 @@ pub const DEFAULT_GATEWAY_TIMEOUT_SECS: u32 = 30;
 /// Default max upstream connections for gateway.
 pub const DEFAULT_GATEWAY_MAX_CONNECTIONS: u32 = 100;
 /// Default songBird socket path (for gateway → mesh routing).
-pub const DEFAULT_SONGBIRD_SOCKET: &str = "/run/songbird/songbird.sock";
+pub const DEFAULT_SONGBIRD_SOCKET: &str = "/run/membrane/songbird.sock";
 /// Default bearDog data directory (cert storage, state).
 pub const DEFAULT_BEARDOG_DATA_DIR: &str = "/var/lib/beardog";
 /// Default ACME directory URL (Let's Encrypt production).
