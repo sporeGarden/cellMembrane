@@ -146,6 +146,19 @@ pub fn mesh_address_from_topology(
 /// they join the mesh.
 pub const KNOWN_MESH_GATES: &[&str] = &["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
 
+/// All known active gates in the ecosystem (superset of [`KNOWN_MESH_GATES`]).
+///
+/// Includes gates using any transport (`WireGuard`, ADB, LAN-only).
+/// Gates join this list when they first successfully bootstrap NUCLEUS.
+pub const KNOWN_GATES: &[&str] = &[
+    "golgi",
+    "sporeGate",
+    "eastGate",
+    "flockGate",
+    "ironGate",
+    "grapheneGate",
+];
+
 /// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
 ///
 /// Built-in fallback registry. Once assigned, an address is permanent.
@@ -276,6 +289,30 @@ mod tests {
                 mesh_address(gate).is_some(),
                 "KNOWN_MESH_GATES entry {gate} has no mesh address"
             );
+        }
+    }
+
+    #[test]
+    fn known_gates_superset_of_mesh_gates() {
+        for gate in KNOWN_MESH_GATES {
+            assert!(
+                KNOWN_GATES.contains(gate),
+                "KNOWN_MESH_GATES entry {gate} missing from KNOWN_GATES"
+            );
+        }
+    }
+
+    #[test]
+    fn known_gates_includes_non_wg_gates() {
+        assert!(KNOWN_GATES.contains(&"grapheneGate"));
+        assert!(mesh_address("grapheneGate").is_none());
+    }
+
+    #[test]
+    fn known_gates_no_duplicates() {
+        let mut seen = std::collections::HashSet::new();
+        for gate in KNOWN_GATES {
+            assert!(seen.insert(gate), "duplicate in KNOWN_GATES: {gate}");
         }
     }
 

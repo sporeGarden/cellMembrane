@@ -244,6 +244,21 @@ pub struct GateProfile {
     /// WAN endpoint for `WireGuard` peers to reach this gate.
     #[serde(default)]
     pub wan_endpoint: Option<String>,
+    /// Gate class (e.g., `"portable_anchor"`, `"compute"`, `"relay"`).
+    #[serde(default)]
+    pub gate_class: Option<String>,
+    /// USB/network tether role (e.g., `"usb_rndis"` — provides connectivity to another gate).
+    #[serde(default)]
+    pub tether_role: Option<String>,
+    /// ADB port-forward ports for mobile gates (e.g., `[9100, 9200, 9140]`).
+    #[serde(default)]
+    pub adb_ports: Vec<u16>,
+    /// NUCLEUS status annotation (free-text, e.g., `"Tower LIVE (bearDog+songBird+skunkBat)"`).
+    #[serde(default)]
+    pub nucleus_status: Option<String>,
+    /// Bond types for topology affinity (e.g., `["covalent"]`).
+    #[serde(default)]
+    pub bond_types: Vec<String>,
 }
 
 impl EcosystemManifest {
@@ -659,5 +674,56 @@ repos = []
         assert_eq!(m.ssh_user_for("golgiBody"), "deploy");
         assert_eq!(m.ssh_user_for("sporeGate"), "root");
         assert_eq!(m.ssh_user_for("unknown"), "root");
+    }
+
+    #[test]
+    fn gate_profile_parses_portable_fields() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.grapheneGate]
+gate_class = "portable_anchor"
+bond_types = ["covalent"]
+target = "aarch64-unknown-linux-musl"
+mobility = "mobile"
+bind_mode = "tcp_only"
+composition = "tower"
+transport = "adb"
+tether_role = "usb_rndis"
+nucleus_status = "Tower LIVE"
+adb_ports = [9100, 9200, 9140]
+notes = "Pixel 8a"
+repos = ["wateringHole", "bearDog"]
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let g = &m.gates["grapheneGate"];
+        assert_eq!(g.gate_class.as_deref(), Some("portable_anchor"));
+        assert_eq!(g.tether_role.as_deref(), Some("usb_rndis"));
+        assert_eq!(g.adb_ports, vec![9100, 9200, 9140]);
+        assert_eq!(g.nucleus_status.as_deref(), Some("Tower LIVE"));
+        assert_eq!(g.bond_types, vec!["covalent"]);
+        assert_eq!(g.mobility.as_deref(), Some("mobile"));
+        assert_eq!(g.repos.len(), 2);
+    }
+
+    #[test]
+    fn gate_profile_defaults_new_fields_when_absent() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[gates.sporeGate]
+repos = ["cellMembrane"]
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let g = &m.gates["sporeGate"];
+        assert!(g.gate_class.is_none());
+        assert!(g.tether_role.is_none());
+        assert!(g.adb_ports.is_empty());
+        assert!(g.nucleus_status.is_none());
+        assert!(g.bond_types.is_empty());
     }
 }

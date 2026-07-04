@@ -89,11 +89,7 @@ async fn probe_endpoint(url: &str) -> ProbeResult {
     match client.get(url).send().await {
         Ok(resp) => {
             let status = resp.status().as_u16();
-            let body_size = resp.content_length().unwrap_or_else(|| {
-                resp.bytes()
-                    .now_or_never()
-                    .map_or(0, |b| b.map_or(0, |b| b.len() as u64))
-            });
+            let body_size = resp.content_length().unwrap_or(0);
             let elapsed = start.elapsed().as_millis();
             let latency_ms = u32::try_from(elapsed).unwrap_or(u32::MAX);
             ProbeResult::ok(status, latency_ms, body_size)
@@ -135,19 +131,6 @@ fn extract_paths<'a>(args: &[&'a str]) -> Vec<&'a str> {
         DEFAULT_SHADOW_PATHS.to_vec()
     } else {
         paths
-    }
-}
-
-/// Trait for futures — if we can poll once without blocking.
-trait NowOrNever {
-    type Output;
-    fn now_or_never(self) -> Option<Self::Output>;
-}
-
-impl<F: std::future::Future> NowOrNever for F {
-    type Output = F::Output;
-    fn now_or_never(self) -> Option<Self::Output> {
-        None
     }
 }
 

@@ -7,7 +7,8 @@
 //! produce a `ResolvedTopology` for any named gate.
 
 use cellmembrane_types::topology::{
-    BackboneLink, LatencyEstimate, NetworkSegment, PhysicalZone, TopologyMap, TopologyMeta,
+    AffinityTable, BackboneLink, LatencyEstimate, NetworkSegment, PhysicalZone, TopologyMap,
+    TopologyMeta,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -47,7 +48,7 @@ pub(crate) fn parse_topology_map(contents: &str) -> Result<TopologyMap> {
     let latency = extract_latency(&table);
     let affinity = table
         .get("affinity")
-        .and_then(|v| toml::from_str(&v.to_string()).ok())
+        .and_then(try_deserialize::<AffinityTable>)
         .unwrap_or_default();
 
     Ok(TopologyMap {
@@ -338,5 +339,29 @@ wan_turn = 0.3
         assert!(output.contains("eastGate"));
         assert!(output.contains("backbone"));
         assert!(output.contains("192.168.4.0/22"));
+    }
+
+    #[test]
+    fn parse_affinity_table() {
+        let map = parse_topology_map(SAMPLE_TOML).unwrap();
+        assert!((map.affinity.same_gate - 1.0).abs() < f64::EPSILON);
+        assert!((map.affinity.same_segment - 0.9).abs() < f64::EPSILON);
+        assert!((map.affinity.vps_relay - 0.4).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn parse_affinity_with_portable_adb() {
+        let toml_str = r#"
+[meta]
+version = "5.0.0"
+wave = 132
+
+[affinity]
+same_gate = 1.0
+portable_adb = 0.95
+"#;
+        let map = parse_topology_map(toml_str).unwrap();
+        assert!((map.affinity.portable_adb - 0.95).abs() < f64::EPSILON);
+        assert!((map.affinity.same_gate - 1.0).abs() < f64::EPSILON);
     }
 }

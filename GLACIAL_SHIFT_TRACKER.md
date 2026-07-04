@@ -1,8 +1,15 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-04 (Wave 132c)
+**Last updated:** 2026-07-04 (Wave 132d)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 132d update (Manifest + Topology Evolution):**
+`GateProfile` absorbs upstream manifest fields: `gate_class`, `tether_role`, `adb_ports`,
+`nucleus_status`, `bond_types`. `KNOWN_GATES` constant introduced as superset of
+`KNOWN_MESH_GATES` — includes non-WG gates (grapheneGate). `AffinityTable` expanded with
+`portable_adb` (0.95), `portable_wifi`, `portable_cellular`, `remote_contract`. Service filter
+includes `songbird`/`beardog` (both running as systemd units on production gates). Affinity
+parsing bug fixed: replaced broken `from_str(&v.to_string())` with `try_deserialize`. 893 tests.
 **Wave 132c update (Gateway Types + Shadow Validation):**
 Tower HTTP gateway types added to `cellmembrane-types::gateway` module — typed reverse proxy
 config (`GatewayRoute`, `GatewayConfig`, `TlsGatewayConfig`), shadow validation types

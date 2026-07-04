@@ -297,5 +297,7 @@ forgejo_base_url = "https://git.primals.eco"
         assert!(DEFAULT_SERVICE_FILTER.contains("membrane"));
         assert!(DEFAULT_SERVICE_FILTER.contains("forgejo"));
         assert!(DEFAULT_SERVICE_FILTER.contains("caddy"));
+        assert!(DEFAULT_SERVICE_FILTER.contains("songbird"));
+        assert!(DEFAULT_SERVICE_FILTER.contains("beardog"));
     }
 }

@@ -170,6 +170,18 @@ pub struct AffinityTable {
     /// WAN TURN relay.
     #[serde(default)]
     pub wan_turn: f64,
+    /// Remote contract (external compute).
+    #[serde(default)]
+    pub remote_contract: f64,
+    /// Portable via `WiFi`.
+    #[serde(default)]
+    pub portable_wifi: f64,
+    /// Portable via cellular.
+    #[serde(default)]
+    pub portable_cellular: f64,
+    /// Portable via ADB USB (sub-1ms, high reliability).
+    #[serde(default)]
+    pub portable_adb: f64,
 }
 
 /// Full topology map parsed from `TOPOLOGY_MAP.toml`.

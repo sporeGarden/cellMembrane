@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 886 tests — pedantic clippy clean
+cargo test                  # 893 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -83,6 +83,11 @@ extractors, `dispatch/data.rs` first test coverage. 28 deps updated.
 Gateway constants (`DEFAULT_GATEWAY_BIND`, `ENV_GATEWAY_BIND`, `DEFAULT_SONGBIRD_SOCKET`, etc.).
 Cloudflare test expansion (`format_cf_errors`, `into_result`, `into_result_or_default`).
 886 tests, zero warnings.
+- **Manifest + topology evolution (Wave 132d)**: `GateProfile` absorbs upstream fields (`gate_class`, `tether_role`,
+`adb_ports`, `nucleus_status`, `bond_types`). `KNOWN_GATES` constant (superset of `KNOWN_MESH_GATES`, includes non-WG
+gates like grapheneGate). `AffinityTable` expanded (`portable_adb`, `portable_wifi`, `portable_cellular`,
+`remote_contract`). Service filter includes `songbird`/`beardog`. Affinity parsing fix (`try_deserialize` replaces
+broken `from_str`). 893 tests, zero warnings.
 
 **Wave 125–126 (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered `Command::new("git")` calls in freshness.rs, relay.rs,
@@ -312,6 +317,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Consolidation + typed enums (Wave 125–126): git_ops consolidation (9 shell-outs → `git_clone`/`pull_ff_only`/`resolve_head_full`), BLAKE3 canonical path, 5 stale constants purged, `env_or` helper + rollout, `_pub` wrapper cleanup, UDS probe dedup, `DivergeType`+`SuggestedAction` typed enums, magic `:7700`→`DEFAULT_FEDERATION_PORT`, dispatch/gate + sovereignty tests, 810 tests | DONE |
 | env_or rollout + topology cutover + deep debt (Wave 127–128): 39 `env_or` migrations, pure function extraction, porcelain bug fix. Topology: sporeGate .1→.3, LAN DNS. SSH builder + manifest-first resolution (`ssh_target_for`/`exec_on_gate`), systemctl helpers (sync+async), `KNOWN_MESH_GATES` constant, `dispatch/data.rs` first coverage (5 tests). 28 deps updated. 848 tests | DONE |
 | Gateway types + shadow validation (Wave 132c): `cellmembrane-types::gateway` module (typed Tower HTTP gateway config, shadow comparison, health probes). `membrane-shadow::gateway` dispatch (`gateway.health/routes/shadow/config.*`). Gateway constants. Cloudflare test coverage (`format_cf_errors`, `into_result`). 886 tests | DONE |
+| Manifest + topology evolution (Wave 132d): `GateProfile` new fields (gate_class, tether_role, adb_ports, nucleus_status, bond_types). `KNOWN_GATES` constant (all active gates). `AffinityTable` expanded (portable_adb, portable_wifi, portable_cellular, remote_contract). Service filter evolved (songbird/beardog). Affinity parsing fix. 893 tests | DONE |
 
 ---
 
