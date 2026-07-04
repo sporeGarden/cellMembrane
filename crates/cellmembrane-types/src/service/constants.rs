@@ -347,6 +347,8 @@ pub const ENV_GATEWAY_DOMAINS: &str = "BEARDOG_GATEWAY_DOMAINS";
 pub const ENV_ACME_DIRECTORY: &str = "BEARDOG_ACME_DIRECTORY";
 /// Environment variable for the songBird socket path.
 pub const ENV_SONGBIRD_SOCKET: &str = "BEARDOG_SONGBIRD_SOCKET";
+/// Environment variable for songBird proxy route table (comma-separated `host/path=capability`).
+pub const ENV_SONGBIRD_PROXY_ROUTES: &str = "SONGBIRD_PROXY_ROUTES";
 
 // ── Timeout constants ────────────────────────────────────────────────
 

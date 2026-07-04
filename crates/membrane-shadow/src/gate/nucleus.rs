@@ -227,6 +227,110 @@ pub fn install_cascade_timer(
     }
 }
 
+// ── Tower gateway systemd units ──────────────────────────────────
+
+/// Parameters for Tower HTTP gateway systemd unit generation.
+pub struct GatewayUnitParams<'a> {
+    pub gate_name: &'a str,
+    pub install_base: &'a str,
+    pub songbird_socket: &'a str,
+    pub gateway_bind: &'a str,
+    pub proxy_routes: &'a str,
+}
+
+impl<'a> GatewayUnitParams<'a> {
+    /// Create params with defaults from constants, requiring only the gate name.
+    #[must_use]
+    pub const fn for_gate(gate_name: &'a str) -> Self {
+        Self {
+            gate_name,
+            install_base: cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+            songbird_socket: cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET,
+            gateway_bind: cellmembrane_types::service::DEFAULT_GATEWAY_BIND,
+            proxy_routes: "",
+        }
+    }
+}
+
+/// Generate the songBird gateway systemd unit.
+///
+/// songBird acts as the mesh router — it listens for `capability.call` IPC
+/// and routes to the correct backend. The `http.proxy` method enables it to
+/// also serve as a reverse proxy (replacing Caddy's routing role).
+#[must_use]
+pub fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
+    use std::fmt::Write as _;
+
+    let mut env_lines = format!("Environment=MEMBRANE_GATE_NAME={}\n", params.gate_name);
+    if !params.proxy_routes.is_empty() {
+        let _ = writeln!(
+            env_lines,
+            "Environment={}={}",
+            cellmembrane_types::service::ENV_SONGBIRD_PROXY_ROUTES,
+            params.proxy_routes,
+        );
+    }
+
+    format!(
+        "[Unit]\n\
+         Description=songBird mesh hub ({gate})\n\
+         After=network-online.target\n\
+         Wants=network-online.target\n\n\
+         [Service]\n\
+         Type=simple\n\
+         ExecStart={base}/songbird server --socket {socket} --bind 0.0.0.0 --port 7700\n\
+         {env_lines}\
+         Restart=always\n\
+         RestartSec=3\n\
+         RuntimeDirectory=membrane\n\
+         RuntimeDirectoryPreserve=yes\n\n\
+         [Install]\n\
+         WantedBy=multi-user.target\n",
+        gate = params.gate_name,
+        base = params.install_base,
+        socket = params.songbird_socket,
+    )
+}
+
+/// Generate the bearDog ACME gateway systemd unit.
+///
+/// bearDog handles TLS termination on :443 and proxies to songBird's
+/// `http.proxy` method. It manages ACME certificate renewal via HTTP-01.
+#[must_use]
+pub fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
+    format!(
+        "[Unit]\n\
+         Description=bearDog ACME gateway ({gate})\n\
+         After=network-online.target songbird-gateway.service\n\
+         Wants=network-online.target\n\
+         Requires=songbird-gateway.service\n\n\
+         [Service]\n\
+         Type=simple\n\
+         ExecStart={base}/beardog serve-https \
+         --upstream {socket} \
+         --bind {bind}\n\
+         Environment=MEMBRANE_GATE_NAME={gate}\n\
+         Restart=always\n\
+         RestartSec=5\n\
+         AmbientCapabilities=CAP_NET_BIND_SERVICE\n\n\
+         [Install]\n\
+         WantedBy=multi-user.target\n",
+        gate = params.gate_name,
+        base = params.install_base,
+        socket = params.songbird_socket,
+        bind = params.gateway_bind,
+    )
+}
+
+/// Generate both gateway units (songBird + bearDog) as a tuple.
+#[must_use]
+pub fn generate_gateway_units(params: &GatewayUnitParams<'_>) -> (String, String) {
+    (
+        generate_songbird_unit(params),
+        generate_beardog_unit(params),
+    )
+}
+
 // ── Secrets generation ──────────────────────────────────────────────
 
 fn generate_secrets_env() -> String {
@@ -541,5 +645,93 @@ mod tests {
         assert_eq!(phase.name, "quorum.cascade-timer");
         assert!(phase.detail.contains("dry-run"));
         assert!(phase.detail.contains("15m"));
+    }
+
+    #[test]
+    fn songbird_unit_has_systemd_sections() {
+        let params = GatewayUnitParams::for_gate("sporeGate");
+        let unit = generate_songbird_unit(&params);
+        assert!(unit.contains("[Unit]"));
+        assert!(unit.contains("[Service]"));
+        assert!(unit.contains("[Install]"));
+        assert!(unit.contains("sporeGate"));
+        assert!(unit.contains("songbird server"));
+        assert!(unit.contains("--port 7700"));
+        assert!(unit.contains("Restart=always"));
+    }
+
+    #[test]
+    fn songbird_unit_includes_proxy_routes() {
+        let mut params = GatewayUnitParams::for_gate("sporeGate");
+        params.proxy_routes = "lab.primals.eco/hub=jupyter,lab.primals.eco/api=jupyter";
+        let unit = generate_songbird_unit(&params);
+        assert!(
+            unit.contains("SONGBIRD_PROXY_ROUTES=lab.primals.eco/hub=jupyter"),
+            "should embed proxy routes env, got: {unit}"
+        );
+    }
+
+    #[test]
+    fn songbird_unit_omits_routes_when_empty() {
+        let params = GatewayUnitParams::for_gate("test");
+        let unit = generate_songbird_unit(&params);
+        assert!(
+            !unit.contains("SONGBIRD_PROXY_ROUTES"),
+            "empty routes should not emit env var"
+        );
+    }
+
+    #[test]
+    fn beardog_unit_has_systemd_sections() {
+        let params = GatewayUnitParams::for_gate("sporeGate");
+        let unit = generate_beardog_unit(&params);
+        assert!(unit.contains("[Unit]"));
+        assert!(unit.contains("[Service]"));
+        assert!(unit.contains("[Install]"));
+        assert!(unit.contains("sporeGate"));
+        assert!(unit.contains("beardog serve-https"));
+        assert!(unit.contains("--upstream"));
+        assert!(unit.contains("CAP_NET_BIND_SERVICE"));
+    }
+
+    #[test]
+    fn beardog_unit_requires_songbird() {
+        let params = GatewayUnitParams::for_gate("sporeGate");
+        let unit = generate_beardog_unit(&params);
+        assert!(
+            unit.contains("Requires=songbird-gateway.service"),
+            "bearDog should depend on songBird"
+        );
+        assert!(
+            unit.contains("After=network-online.target songbird-gateway.service"),
+            "bearDog should start after songBird"
+        );
+    }
+
+    #[test]
+    fn generate_gateway_units_returns_both() {
+        let params = GatewayUnitParams::for_gate("sporeGate");
+        let (songbird, beardog) = generate_gateway_units(&params);
+        assert!(songbird.contains("songbird server"));
+        assert!(beardog.contains("beardog serve-https"));
+    }
+
+    #[test]
+    fn gateway_unit_params_defaults() {
+        let params = GatewayUnitParams::for_gate("eastGate");
+        assert_eq!(params.gate_name, "eastGate");
+        assert_eq!(
+            params.install_base,
+            cellmembrane_types::service::DEFAULT_INSTALL_BASE
+        );
+        assert_eq!(
+            params.songbird_socket,
+            cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET
+        );
+        assert_eq!(
+            params.gateway_bind,
+            cellmembrane_types::service::DEFAULT_GATEWAY_BIND
+        );
+        assert!(params.proxy_routes.is_empty());
     }
 }

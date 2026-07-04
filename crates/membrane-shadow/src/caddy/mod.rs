@@ -2,6 +2,11 @@
 
 //! Caddy reverse proxy management — agentic TLS and vhost operations.
 //!
+//! **DEPRECATED (Wave 132):** This module is being superseded by the Tower HTTP
+//! gateway (`gateway` module). During the shadow validation period, both paths
+//! run in parallel. Once shadow validation passes, Caddy will be retired and
+//! this module archived.
+//!
 //! Wraps Caddy's admin API (localhost:2019) via SSH to golgiBody-ext.
 //! Supports TLS certificate inspection, vhost listing, config validation,
 //! and graceful reloads.

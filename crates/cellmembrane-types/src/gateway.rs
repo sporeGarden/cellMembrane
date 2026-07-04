@@ -97,6 +97,35 @@ pub struct TlsGatewayConfig {
     pub data_dir: String,
 }
 
+impl TlsGatewayConfig {
+    /// Validate the TLS gateway config for correctness.
+    #[must_use]
+    pub fn validate(&self) -> Vec<String> {
+        let mut errors = Vec::new();
+
+        if self.bind.is_empty() {
+            errors.push("bind address is empty".into());
+        }
+        if self.domains.is_empty() {
+            errors.push("no domains configured".into());
+        }
+        if self.acme_directory.is_empty() {
+            errors.push("acme_directory is empty".into());
+        }
+        if self.acme_contacts.is_empty() {
+            errors.push("acme_contacts is empty (ACME requires at least one contact)".into());
+        }
+        if self.songbird_socket.is_empty() {
+            errors.push("songbird_socket path is empty".into());
+        }
+        if self.data_dir.is_empty() {
+            errors.push("data_dir is empty".into());
+        }
+
+        errors
+    }
+}
+
 /// Health status of the gateway components.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayHealth {
@@ -505,5 +534,59 @@ mod tests {
         let parsed: GatewayHealth = serde_json::from_str(&json).unwrap();
         assert!(parsed.tls_listening);
         assert_eq!(parsed.active_routes, 3);
+    }
+
+    #[test]
+    fn tls_config_validate_valid() {
+        let cfg = TlsGatewayConfig {
+            bind: "0.0.0.0:443".into(),
+            domains: vec!["lab.primals.eco".into()],
+            acme_directory: "https://acme-v02.api.letsencrypt.org/directory".into(),
+            acme_contacts: vec!["mailto:ops@primals.eco".into()],
+            challenge_port: 80,
+            songbird_socket: "/run/songbird/songbird.sock".into(),
+            data_dir: "/var/lib/beardog".into(),
+        };
+        assert!(cfg.validate().is_empty());
+    }
+
+    #[test]
+    fn tls_config_validate_empty_fields() {
+        let cfg = TlsGatewayConfig {
+            bind: String::new(),
+            domains: vec![],
+            acme_directory: String::new(),
+            acme_contacts: vec![],
+            challenge_port: 80,
+            songbird_socket: String::new(),
+            data_dir: String::new(),
+        };
+        let errors = cfg.validate();
+        assert!(
+            errors.len() >= 5,
+            "expected at least 5 errors, got: {errors:?}"
+        );
+        assert!(errors.iter().any(|e| e.contains("bind")));
+        assert!(errors.iter().any(|e| e.contains("domains")));
+        assert!(errors.iter().any(|e| e.contains("acme_directory")));
+        assert!(errors.iter().any(|e| e.contains("acme_contacts")));
+        assert!(errors.iter().any(|e| e.contains("songbird_socket")));
+        assert!(errors.iter().any(|e| e.contains("data_dir")));
+    }
+
+    #[test]
+    fn tls_config_validate_partial() {
+        let cfg = TlsGatewayConfig {
+            bind: "0.0.0.0:443".into(),
+            domains: vec!["lab.primals.eco".into()],
+            acme_directory: String::new(),
+            acme_contacts: vec!["mailto:ops@primals.eco".into()],
+            challenge_port: 80,
+            songbird_socket: "/run/songbird/songbird.sock".into(),
+            data_dir: "/var/lib/beardog".into(),
+        };
+        let errors = cfg.validate();
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("acme_directory"));
     }
 }
