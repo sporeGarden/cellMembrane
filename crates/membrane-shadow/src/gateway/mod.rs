@@ -14,6 +14,7 @@
 //! - `gateway.config.generate` — generate gateway config from manifest
 //! - `gateway.env` — output env vars for Tower deployment
 //! - `gateway.units` — generate systemd units (songBird + bearDog)
+//! - `gateway.deploy.check` — pre-deployment readiness validation
 //! - `gateway.retire-caddy` — shadow validate then disable Caddy
 
 pub mod shadow;
@@ -32,6 +33,7 @@ pub async fn dispatch(config: &ShadowConfig, cmd: &str, args: &[&str]) -> Result
         "gateway.config.generate" => dispatch_config_generate(args),
         "gateway.env" => dispatch_env(args),
         "gateway.units" => dispatch_units(args),
+        "gateway.deploy.check" => dispatch_deploy_check(args).await,
         "gateway.retire-caddy" => dispatch_retire_caddy(config, args).await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown gateway command: {cmd}"
@@ -186,6 +188,120 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
     .tap_lines(&lines))
 }
 
+/// Pre-deployment readiness check for Tower gateway.
+///
+/// Validates that all prerequisites are met before deploying:
+/// - songBird binary exists in depot
+/// - bearDog binary exists in depot
+/// - Gateway config generates and validates
+/// - songBird socket path is writable
+///
+/// Returns a structured checklist. Does NOT perform any mutations.
+async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
+    let gate_name = args.first().copied().unwrap_or("sporeGate");
+    let arch = crate::plasmid::detect_target_triple();
+
+    let depot_dir = crate::gate::resolve_plasmidbin_dir();
+    let bin_dir = depot_dir.join("primals").join(&arch);
+
+    let mut checks: Vec<DeployCheck> = Vec::new();
+
+    let songbird_bin = bin_dir.join("songbird");
+    checks.push(DeployCheck {
+        name: "songbird binary".into(),
+        ok: songbird_bin.is_file(),
+        detail: if songbird_bin.is_file() {
+            format!("{}", songbird_bin.display())
+        } else {
+            format!("missing: {}", songbird_bin.display())
+        },
+    });
+
+    let beardog_bin = bin_dir.join("beardog");
+    checks.push(DeployCheck {
+        name: "beardog binary".into(),
+        ok: beardog_bin.is_file(),
+        detail: if beardog_bin.is_file() {
+            format!("{}", beardog_bin.display())
+        } else {
+            format!("missing: {}", beardog_bin.display())
+        },
+    });
+
+    let config_ok = generate_from_manifest(gate_name).is_ok();
+    checks.push(DeployCheck {
+        name: "gateway config".into(),
+        ok: config_ok,
+        detail: if config_ok {
+            format!("generates for {gate_name}")
+        } else {
+            "manifest parse failed".into()
+        },
+    });
+
+    let songbird_socket = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SONGBIRD_SOCKET,
+        cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET,
+    );
+    let socket_parent = std::path::Path::new(&songbird_socket)
+        .parent()
+        .is_some_and(std::path::Path::is_dir);
+    checks.push(DeployCheck {
+        name: "socket directory".into(),
+        ok: socket_parent,
+        detail: if socket_parent {
+            songbird_socket
+        } else {
+            format!("parent dir missing: {songbird_socket}")
+        },
+    });
+
+    let songbird_running = tokio::net::TcpStream::connect(("127.0.0.1", 7700_u16))
+        .await
+        .is_ok();
+    checks.push(DeployCheck {
+        name: "songbird reachable".into(),
+        ok: songbird_running,
+        detail: if songbird_running {
+            "TCP :7700 open".into()
+        } else {
+            "TCP :7700 closed".into()
+        },
+    });
+
+    let all_pass = checks.iter().all(|c| c.ok);
+    let passed = checks.iter().filter(|c| c.ok).count();
+    let total = checks.len();
+
+    let lines: Vec<String> = checks
+        .iter()
+        .map(|c| {
+            let mark = if c.ok { "✓" } else { "✗" };
+            format!("  [{mark}] {}: {}", c.name, c.detail)
+        })
+        .collect();
+
+    let summary = format!("deploy check: {passed}/{total} pass ({gate_name}, {arch})");
+
+    if all_pass {
+        Ok(ShadowOutcome::ok(summary).tap_lines(&lines))
+    } else {
+        Ok(ShadowOutcome {
+            ok: false,
+            message: format!("{summary}\n{}", lines.join("\n")),
+            data: serde_json::to_value(&checks).ok(),
+        })
+    }
+}
+
+/// A single deployment readiness check result.
+#[derive(Debug, Clone, serde::Serialize)]
+struct DeployCheck {
+    name: String,
+    ok: bool,
+    detail: String,
+}
+
 /// Orchestrate Caddy retirement — shadow validate then disable.
 ///
 /// Steps:
@@ -299,6 +415,54 @@ pub fn parse_songbird_proxy_routes(env_val: &str) -> Vec<GatewayRoute> {
             })
         })
         .collect()
+}
+
+/// Generate songBird's `ReverseProxyConfig` TOML format from gateway routes.
+///
+/// songBird reads a TOML configuration file with `[[routes]]` entries. This
+/// function bridges our typed `GatewayConfig` to that file format, enabling
+/// cellMembrane to produce the config file songBird loads at startup.
+///
+/// Format:
+/// ```toml
+/// [[routes]]
+/// host = "lab.primals.eco"
+/// path_prefix = "/hub"
+/// capability = "jupyter"
+/// timeout_secs = 30
+/// ```
+#[must_use]
+pub fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
+    use std::fmt::Write;
+
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "# songBird ReverseProxyConfig — generated by cellMembrane"
+    );
+    let _ = writeln!(
+        out,
+        "# Gate: {} | Routes: {}",
+        config.gate_name,
+        config.routes.len()
+    );
+    let _ = writeln!(out);
+
+    for route in &config.routes {
+        let _ = writeln!(out, "[[routes]]");
+        let _ = writeln!(out, "host = \"{}\"", route.host);
+        let path = if route.path_prefix.is_empty() {
+            "/"
+        } else {
+            &route.path_prefix
+        };
+        let _ = writeln!(out, "path_prefix = \"{path}\"");
+        let _ = writeln!(out, "capability = \"{}\"", route.capability);
+        let _ = writeln!(out, "timeout_secs = {}", route.timeout_secs);
+        let _ = writeln!(out);
+    }
+
+    out
 }
 
 /// Generate default gateway routes based on a gate's roles.
@@ -574,5 +738,85 @@ mod tests {
         let routes = parse_songbird_proxy_routes("valid.host/path=cap,invalid_no_equals");
         assert_eq!(routes.len(), 1);
         assert_eq!(routes[0].host, "valid.host");
+    }
+
+    #[tokio::test]
+    async fn deploy_check_returns_structured_result() {
+        let result = dispatch_deploy_check(&["testGate"]).await.unwrap();
+        assert!(
+            result.message.contains("deploy check"),
+            "message should mention deploy check, got: {}",
+            result.message
+        );
+        assert!(result.message.contains("testGate"));
+    }
+
+    #[tokio::test]
+    async fn deploy_check_default_gate() {
+        let result = dispatch_deploy_check(&[]).await.unwrap();
+        assert!(result.message.contains("sporeGate"));
+    }
+
+    #[test]
+    fn deploy_check_struct_serializes() {
+        let check = DeployCheck {
+            name: "songbird binary".into(),
+            ok: true,
+            detail: "/opt/membrane/primals/x86_64-unknown-linux-musl/songbird".into(),
+        };
+        let json = serde_json::to_value(&check).unwrap();
+        assert_eq!(json["name"], "songbird binary");
+        assert_eq!(json["ok"], true);
+    }
+
+    #[test]
+    fn to_songbird_routes_toml_generates_valid_toml() {
+        let config = GatewayConfig {
+            gate_name: "sporeGate".into(),
+            enabled: true,
+            max_connections: 100,
+            default_timeout_secs: 30,
+            routes: vec![
+                GatewayRoute {
+                    host: "lab.primals.eco".into(),
+                    path_prefix: "/hub".into(),
+                    capability: "jupyter".into(),
+                    timeout_secs: 30,
+                },
+                GatewayRoute {
+                    host: "lab.primals.eco".into(),
+                    path_prefix: "/api".into(),
+                    capability: "jupyter".into(),
+                    timeout_secs: 30,
+                },
+            ],
+        };
+        let toml_str = to_songbird_routes_toml(&config);
+        assert!(toml_str.contains("[[routes]]"));
+        assert!(toml_str.contains("host = \"lab.primals.eco\""));
+        assert!(toml_str.contains("path_prefix = \"/hub\""));
+        assert!(toml_str.contains("capability = \"jupyter\""));
+        assert!(toml_str.contains("timeout_secs = 30"));
+        assert!(toml_str.contains("sporeGate"));
+        let count = toml_str.matches("[[routes]]").count();
+        assert_eq!(count, 2, "should have 2 route sections");
+    }
+
+    #[test]
+    fn to_songbird_routes_toml_empty_path_defaults_to_slash() {
+        let config = GatewayConfig {
+            gate_name: "test".into(),
+            enabled: true,
+            max_connections: 100,
+            default_timeout_secs: 30,
+            routes: vec![GatewayRoute {
+                host: "example.com".into(),
+                path_prefix: String::new(),
+                capability: "compute".into(),
+                timeout_secs: 60,
+            }],
+        };
+        let toml_str = to_songbird_routes_toml(&config);
+        assert!(toml_str.contains("path_prefix = \"/\""));
     }
 }

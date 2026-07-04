@@ -50,7 +50,7 @@ fn dirs_home() -> PathBuf {
 /// 4. `{eco_root}/plasmidBin` (backwards compat)
 /// 5. workspace-relative `plasmidBin/`
 /// 6. XDG data home fallback
-pub(super) fn resolve_plasmidbin_dir() -> PathBuf {
+pub fn resolve_plasmidbin_dir() -> PathBuf {
     if let Ok(val) = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT) {
         return PathBuf::from(val);
     }

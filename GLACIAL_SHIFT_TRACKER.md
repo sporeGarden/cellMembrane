@@ -16,7 +16,9 @@ disable Caddy). `SONGBIRD_PROXY_ROUTES` bridge functions (`to_songbird_proxy_rou
 `parse_songbird_proxy_routes`). `TlsGatewayConfig::validate()`. `GatewayUnitParams` +
 `generate_songbird_unit` / `generate_beardog_unit`. `default_routes_for_roles` pure extraction.
 Caddy module deprecated (Wave 132). 3 dep updates (arrayvec, rustc-hash, rustls-pki-types).
-`GateTransport::is_tethered()`/`is_local()` methods. TOML roundtrip tests for gateway configs. 917 tests.
+`GateTransport::is_tethered()`/`is_local()` methods. TOML roundtrip tests for gateway configs.
+`gateway.deploy.check` pre-deployment readiness. `to_songbird_routes_toml` config file gen.
+Dep updates (rand 0.10, getrandom 0.4, quinn-proto). 922 tests.
 **Wave 132c update (Gateway Types + Shadow Validation):**
 Tower HTTP gateway types added to `cellmembrane-types::gateway` module — typed reverse proxy
 config (`GatewayRoute`, `GatewayConfig`, `TlsGatewayConfig`), shadow validation types
