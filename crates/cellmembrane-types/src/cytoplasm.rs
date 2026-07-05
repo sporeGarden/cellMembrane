@@ -166,7 +166,7 @@ pub const KNOWN_GATES: &[&str] = &[
 #[must_use]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
     match gate_name {
-        "golgi" => Some("10.13.37.1"),
+        "golgi" | "golgiBody" => Some("10.13.37.1"),
         "sporeGate" => Some("10.13.37.2"),
         "eastGate" => Some("10.13.37.5"),
         "flockGate" => Some("10.13.37.6"),
@@ -249,6 +249,7 @@ mod tests {
     #[test]
     fn mesh_address_known_gates() {
         assert_eq!(mesh_address("golgi"), Some("10.13.37.1"));
+        assert_eq!(mesh_address("golgiBody"), Some("10.13.37.1"));
         assert_eq!(mesh_address("sporeGate"), Some("10.13.37.2"));
         assert_eq!(mesh_address("eastGate"), Some("10.13.37.5"));
         assert_eq!(mesh_address("flockGate"), Some("10.13.37.6"));

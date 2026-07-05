@@ -4,13 +4,36 @@
 
 use crate::{ShadowOutcome, manifest, relay, temporal};
 
+/// Resolve all repo `local_path` values from the ecosystem manifest.
+///
+/// Falls back to just wateringHole if the manifest can't be loaded.
+fn resolve_all_repo_paths() -> Vec<&'static str> {
+    let Ok(root) = temporal::resolve_workspace_root() else {
+        return vec![cellmembrane_types::service::INFRA_WATERING_HOLE];
+    };
+    let Ok(m) = manifest::load_from_workspace(&root) else {
+        return vec![cellmembrane_types::service::INFRA_WATERING_HOLE];
+    };
+    let paths: Vec<&'static str> = m
+        .repos
+        .values()
+        .map(|e| &*Box::leak(e.local_path.clone().into_boxed_str()))
+        .collect();
+    if paths.is_empty() {
+        vec![cellmembrane_types::service::INFRA_WATERING_HOLE]
+    } else {
+        paths
+    }
+}
+
 pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
         "relay.run" => {
             let config = relay::RelayConfig::from_env();
             let result = relay::run(&config, args).await?;
             let summary = format!(
-                "relay complete: pulled={} pushed={} impulses={} failures={}",
+                "relay complete: absorbed={} pulled={} pushed={} impulses={} failures={}",
+                result.absorbed.len(),
                 result.pulled.len(),
                 result.pushed.len(),
                 result.impulses_sensed,
@@ -19,6 +42,23 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
             Ok(ShadowOutcome::ok_with(
                 summary,
                 serde_json::to_value(&result)?,
+            ))
+        }
+        "relay.absorb" => {
+            let config = relay::RelayConfig::from_env();
+            let paths: Vec<&str> = if args.is_empty() {
+                resolve_all_repo_paths()
+            } else {
+                args.to_vec()
+            };
+            let absorbed = relay::absorb_extracellular(&config, &paths).await;
+            let summary = format!(
+                "absorb: {} repos synced from GitHub → Forgejo",
+                absorbed.len()
+            );
+            Ok(ShadowOutcome::ok_with(
+                summary,
+                serde_json::json!({ "absorbed": absorbed }),
             ))
         }
         "relay.mediate" => {
@@ -66,8 +106,46 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
             ))
         }
         "relay.status" => relay_status().await,
+        "relay.parity" => dispatch_parity(args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown relay command: {cmd}"))),
     }
+}
+
+async fn dispatch_parity(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let config = relay::RelayConfig::from_env();
+    let paths = if args.is_empty() {
+        resolve_all_repo_paths()
+    } else {
+        args.to_vec()
+    };
+    let report = relay::check_parity(&config, &paths).await;
+    let divergent_count = report.iter().filter(|r| !r.at_parity).count();
+    let summary = if divergent_count == 0 {
+        format!("parity: all {} repos at parity", report.len())
+    } else {
+        format!("parity: {divergent_count}/{} repos DIVERGED", report.len())
+    };
+    let ok = divergent_count == 0;
+    let mut outcome = if ok {
+        ShadowOutcome::ok_with(summary, serde_json::to_value(&report)?)
+    } else {
+        ShadowOutcome {
+            ok: false,
+            message: summary,
+            data: serde_json::to_value(&report).ok(),
+        }
+    };
+    let lines: Vec<String> = report
+        .iter()
+        .map(|r| {
+            let mark = if r.at_parity { "✓" } else { "✗" };
+            format!("  [{mark}] {}: {}", r.repo, r.detail)
+        })
+        .collect();
+    if !lines.is_empty() {
+        outcome.message = format!("{}\n{}", outcome.message, lines.join("\n"));
+    }
+    Ok(outcome)
 }
 
 async fn relay_status() -> crate::Result<ShadowOutcome> {

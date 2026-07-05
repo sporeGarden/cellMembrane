@@ -90,6 +90,8 @@ pub const ENV_CLOUDFLARE_TOKEN: &str = "CLOUDFLARE_API_TOKEN";
 pub const ENV_CLOUDFLARE_ZONE: &str = "CLOUDFLARE_ZONE_ID";
 /// Environment variable for the relay Forgejo remote name.
 pub const ENV_RELAY_FORGEJO_REMOTE: &str = "RELAY_FORGEJO_REMOTE";
+/// Environment variable for the relay GitHub/origin remote name.
+pub const ENV_RELAY_GITHUB_REMOTE: &str = "RELAY_GITHUB_REMOTE";
 /// Environment variable for the `nestGate` content path.
 pub const ENV_NESTGATE_CONTENT_PATH: &str = "NESTGATE_CONTENT_PATH";
 /// Environment variable for the `nestGate` HTTP port.

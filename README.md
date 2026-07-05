@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 922 tests — pedantic clippy clean
+cargo test                  # 926 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -93,7 +93,9 @@ Systemd unit generators (`generate_songbird_unit`/`generate_beardog_unit` with `
 `default_routes_for_roles` pure extraction. Caddy module deprecated. 3 dep updates.
 `GateTransport` methods (`is_tethered`, `is_local`). TOML roundtrip tests (gateway + TLS config).
 `gateway.deploy.check` pre-deployment readiness validation. `to_songbird_routes_toml` config file generation.
-Dep updates (rand 0.10, getrandom 0.4, quinn-proto, windows cleanup). 922 tests, zero warnings.
+Dep updates (rand 0.10, getrandom 0.4, quinn-proto, windows cleanup).
+Bidirectional relay: `relay.absorb` (GitHub→Forgejo reverse sync), `relay.parity` (divergence detection).
+`mesh_address` golgiBody alias fix. 926 tests, zero warnings.
 
 **Wave 125–126 (Consolidation + Typed Enums + Test Expansion):**
 git_ops consolidation — 9 scattered `Command::new("git")` calls in freshness.rs, relay.rs,
@@ -323,7 +325,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 | Consolidation + typed enums (Wave 125–126): git_ops consolidation (9 shell-outs → `git_clone`/`pull_ff_only`/`resolve_head_full`), BLAKE3 canonical path, 5 stale constants purged, `env_or` helper + rollout, `_pub` wrapper cleanup, UDS probe dedup, `DivergeType`+`SuggestedAction` typed enums, magic `:7700`→`DEFAULT_FEDERATION_PORT`, dispatch/gate + sovereignty tests, 810 tests | DONE |
 | env_or rollout + topology cutover + deep debt (Wave 127–128): 39 `env_or` migrations, pure function extraction, porcelain bug fix. Topology: sporeGate .1→.3, LAN DNS. SSH builder + manifest-first resolution (`ssh_target_for`/`exec_on_gate`), systemctl helpers (sync+async), `KNOWN_MESH_GATES` constant, `dispatch/data.rs` first coverage (5 tests). 28 deps updated. 848 tests | DONE |
 | Gateway types + shadow validation (Wave 132c): `cellmembrane-types::gateway` module (typed Tower HTTP gateway config, shadow comparison, health probes). `membrane-shadow::gateway` dispatch (`gateway.health/routes/shadow/config.*`). Gateway constants. Cloudflare test coverage (`format_cf_errors`, `into_result`). 886 tests | DONE |
-| Manifest + topology evolution (Wave 132d-e): `GateProfile` new fields (gate_class, tether_role, adb_ports, nucleus_status, bond_types). `KNOWN_GATES` constant (all active gates). `AffinityTable` expanded (portable_adb, portable_wifi, portable_cellular, remote_contract). Service filter evolved (songbird/beardog). Affinity parsing fix. Gateway deployment commands (gateway.env, gateway.units, gateway.deploy.check, gateway.retire-caddy). `SONGBIRD_PROXY_ROUTES` bridge + `to_songbird_routes_toml`. `TlsGatewayConfig::validate()`. Systemd unit generators. `default_routes_for_roles` pure extraction. Caddy deprecated. `GateTransport` methods. TOML roundtrip coverage. 922 tests | DONE |
+| Manifest + topology evolution (Wave 132d-e): `GateProfile` new fields (gate_class, tether_role, adb_ports, nucleus_status, bond_types). `KNOWN_GATES` constant (all active gates). `AffinityTable` expanded (portable_adb, portable_wifi, portable_cellular, remote_contract). Service filter evolved (songbird/beardog). Affinity parsing fix. Gateway deployment commands (gateway.env, gateway.units, gateway.deploy.check, gateway.retire-caddy). `SONGBIRD_PROXY_ROUTES` bridge + `to_songbird_routes_toml`. `TlsGatewayConfig::validate()`. Systemd unit generators. `default_routes_for_roles` pure extraction. Caddy deprecated. `GateTransport` methods. TOML roundtrip coverage. Bidirectional relay (`relay.absorb` + `relay.parity`). `mesh_address` golgiBody alias. 926 tests | DONE |
 
 ---
 
