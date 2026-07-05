@@ -149,6 +149,9 @@ pub const DEFAULT_WAN_DEPOT_URL: &str = "https://membrane.primals.eco/depot";
 pub const ENV_SANDBOX_SOCKET_DIR: &str = "MEMBRANE_SANDBOX_SOCKET_DIR";
 /// Default sandbox socket directory (ephemeral UDS probes during validation).
 pub const DEFAULT_SANDBOX_SOCKET_DIR: &str = "/run/membrane/sandbox";
+
+/// Default cascade timer interval in minutes (golgi relay loop).
+pub const DEFAULT_CASCADE_INTERVAL_MINUTES: u32 = 15;
 /// Environment variable to override the sandbox binary directory.
 pub const ENV_SANDBOX_BIN_DIR: &str = "MEMBRANE_SANDBOX_BIN_DIR";
 /// Default sandbox binary directory (isolated copies for validation).

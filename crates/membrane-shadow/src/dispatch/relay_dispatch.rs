@@ -106,6 +106,7 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
             ))
         }
         "relay.status" => relay_status().await,
+        "relay.config" => relay_config(),
         "relay.parity" => dispatch_parity(args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown relay command: {cmd}"))),
     }
@@ -148,6 +149,39 @@ async fn dispatch_parity(args: &[&str]) -> crate::Result<ShadowOutcome> {
     Ok(outcome)
 }
 
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "dispatch adapter — must match arm signature"
+)]
+fn relay_config() -> crate::Result<ShadowOutcome> {
+    let cfg = relay::RelayConfig::from_env();
+    let paths = resolve_all_repo_paths();
+    let msg = format!(
+        "relay config (resolved)\n\
+         ─────────────────────────\n\
+         workspace:      {}\n\
+         forgejo_remote: {}\n\
+         github_remote:  {}\n\
+         golgi_ext_host: {}\n\
+         repos:          {}",
+        cfg.ecoprimals_root.display(),
+        cfg.forgejo_remote,
+        cfg.github_remote,
+        cfg.golgi_ext_host,
+        paths.len(),
+    );
+    Ok(ShadowOutcome::ok_with(
+        msg,
+        serde_json::json!({
+            "ecoprimals_root": cfg.ecoprimals_root.to_string_lossy(),
+            "forgejo_remote": cfg.forgejo_remote.as_ref(),
+            "github_remote": cfg.github_remote.as_ref(),
+            "golgi_ext_host": cfg.golgi_ext_host.as_ref(),
+            "repos": paths,
+        }),
+    ))
+}
+
 async fn relay_status() -> crate::Result<ShadowOutcome> {
     let relay_cfg = relay::RelayConfig::from_env();
     let root = temporal::resolve_workspace_root()?;
@@ -161,14 +195,16 @@ async fn relay_status() -> crate::Result<ShadowOutcome> {
 
     let msg = format!(
         "=== Relay Chain Status ===\n\
-         Topology:      {topology}\n\
-         Ext host:      {ext_host} (SSH: {})\n\
+         Topology:       {topology}\n\
+         Ext host:       {ext_host} (SSH: {})\n\
          Forgejo remote: {}\n\
-         Workspace:     {}\n\
-         Repos:         {repo_count}\n\
-         Relay mode:    Rust-native (membrane relay.run)",
+         GitHub remote:  {}\n\
+         Workspace:      {}\n\
+         Repos:          {repo_count}\n\
+         Relay mode:     bidirectional (absorb → mediate → ship)",
         if ssh_ok_ext { "OK" } else { "FAIL" },
         relay_cfg.forgejo_remote,
+        relay_cfg.github_remote,
         relay_cfg.ecoprimals_root.display(),
     );
 
@@ -179,9 +215,11 @@ async fn relay_status() -> crate::Result<ShadowOutcome> {
                 "ext_host": ext_host,
                 "ext_ssh": ssh_ok_ext,
                 "forgejo_remote": relay_cfg.forgejo_remote,
+                "github_remote": relay_cfg.github_remote.as_ref(),
                 "workspace": relay_cfg.ecoprimals_root.to_string_lossy(),
                 "repo_count": repo_count,
                 "topology": topology,
+                "mode": "bidirectional",
             }),
         )
     } else {
@@ -194,4 +232,43 @@ async fn relay_status() -> crate::Result<ShadowOutcome> {
             })),
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relay_config_returns_ok_outcome() {
+        let result = relay_config();
+        assert!(result.is_ok());
+        let outcome = result.unwrap();
+        assert!(outcome.ok);
+        assert!(outcome.message.contains("relay config (resolved)"));
+        assert!(outcome.message.contains("forgejo_remote"));
+        assert!(outcome.message.contains("github_remote"));
+    }
+
+    #[test]
+    fn relay_config_data_has_expected_fields() {
+        let outcome = relay_config().unwrap();
+        let data = outcome.data.unwrap();
+        assert!(data["forgejo_remote"].is_string());
+        assert!(data["github_remote"].is_string());
+        assert!(data["golgi_ext_host"].is_string());
+        assert!(data["repos"].is_array());
+    }
+
+    #[test]
+    fn resolve_all_repo_paths_non_empty() {
+        let paths = resolve_all_repo_paths();
+        assert!(!paths.is_empty());
+    }
+
+    #[tokio::test]
+    async fn dispatch_relay_unknown_command() {
+        let result = dispatch_relay("relay.nonexistent", &[]).await.unwrap();
+        assert!(!result.ok);
+        assert!(result.message.contains("unknown relay command"));
+    }
 }

@@ -617,7 +617,8 @@ mod tests {
 
     #[test]
     fn cascade_timer_generates_valid_units() {
-        let (service, timer) = generate_cascade_timer(15, "golgi");
+        let interval = cellmembrane_types::service::DEFAULT_CASCADE_INTERVAL_MINUTES;
+        let (service, timer) = generate_cascade_timer(interval, "golgi");
         assert!(service.contains("[Unit]"));
         assert!(service.contains("[Service]"));
         assert!(service.contains("temporal.cascade"));
