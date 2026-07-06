@@ -156,7 +156,7 @@ fn dispatch_env(args: &[&str]) -> Result<ShadowOutcome> {
             "{}={routes_env}",
             cellmembrane_types::service::ENV_SONGBIRD_PROXY_ROUTES
         ),
-        format!("MEMBRANE_GATE_NAME={gate_name}"),
+        format!("GATE_NAME={gate_name}"),
     ];
 
     Ok(ShadowOutcome::ok(format!(

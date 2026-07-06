@@ -140,10 +140,13 @@ pub async fn publish_gate_heads(
 /// Pulls from remote first (to avoid push rejection), then commits
 /// only `heads/<gate>.toml`. Since each gate owns its own file,
 /// conflicts are structurally impossible.
+///
+/// Returns `Ok(true)` if a commit was made and pushed, `Ok(false)` if
+/// no changes were detected (heads already current).
 pub async fn auto_commit_gate_heads(
     root: &Path,
     repos: &[(&str, &crate::manifest::RepoEntry)],
-) -> Result<()> {
+) -> Result<bool> {
     let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     if !wh_dir.join(".git").exists() {
         return Err(ShadowError::Config(
@@ -153,32 +156,35 @@ pub async fn auto_commit_gate_heads(
 
     let gate = resolve_gate_name(root).await;
 
-    // Pull to avoid push rejection (simple FF — no conflict resolution needed).
     pull_ff_only(&wh_dir).await;
 
     publish_gate_heads(root, repos).await?;
 
     let heads_file = format!("heads/{gate}.toml");
     if !crate::git_ops::git_success(&wh_dir, &["add", &heads_file]).await {
-        return Ok(());
+        tracing::warn!(%heads_file, "git add failed for heads file — check path and permissions");
+        return Ok(false);
     }
 
     if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
-        return Ok(());
+        tracing::debug!(%gate, "heads already current — nothing to commit");
+        return Ok(false);
     }
 
-    let msg = format!("heads/{gate}: auto-publish by {gate}");
+    let msg = format!("heads({gate}): auto-publish freshness");
     crate::git_ops::run_git(&wh_dir, &["commit", "-m", &msg]).await?;
 
     let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
-    if !push_result.failed.is_empty() {
+    if push_result.failed.is_empty() {
+        tracing::info!(%gate, "heads committed and pushed");
+    } else {
         warn!(
             failed_remotes = %push_result.failed.join(", "),
             "gate heads push failed — will retry next cycle"
         );
     }
 
-    Ok(())
+    Ok(true)
 }
 
 // ── Unified Freshness (golgi only, backward compat) ─────────────────
@@ -239,6 +245,46 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
         .map_err(ShadowError::Io)?;
 
     Ok(())
+}
+
+/// Commit and push unified `freshness.toml` after [`unify_freshness`].
+///
+/// Should only be called on the designated publisher (golgi). Commits
+/// `freshness.toml` alongside any staged heads changes.
+///
+/// Returns `Ok(true)` if a commit was made, `Ok(false)` if no changes.
+pub async fn auto_commit_unified_freshness(root: &Path) -> Result<bool> {
+    let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
+    if !wh_dir.join(".git").exists() {
+        return Err(ShadowError::Config(
+            "wateringHole not a git repo — cannot auto-commit freshness".into(),
+        ));
+    }
+
+    unify_freshness(root).await?;
+
+    if !crate::git_ops::git_success(&wh_dir, &["add", "freshness.toml"]).await {
+        return Ok(false);
+    }
+
+    if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
+        return Ok(false);
+    }
+
+    let msg = "freshness: unified auto-publish";
+    crate::git_ops::run_git(&wh_dir, &["commit", "-m", msg]).await?;
+
+    let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
+    if push_result.failed.is_empty() {
+        tracing::info!("unified freshness.toml committed and pushed");
+    } else {
+        warn!(
+            failed_remotes = %push_result.failed.join(", "),
+            "unified freshness push failed — will retry next cycle"
+        );
+    }
+
+    Ok(true)
 }
 
 // ── Legacy Compatibility ─────────────────────────────────────────────
@@ -319,10 +365,12 @@ pub async fn auto_commit_freshness(
 
     let heads_file = format!("heads/{gate}.toml");
     if !crate::git_ops::git_success(&wh_dir, &["add", "freshness.toml", &heads_file]).await {
+        tracing::warn!("git add failed for freshness.toml + {heads_file}");
         return Ok(());
     }
 
     if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
+        tracing::debug!(%gate, "freshness unchanged — skip commit");
         return Ok(());
     }
 
@@ -357,30 +405,32 @@ async fn pull_ff_only(wh_dir: &Path) {
 }
 
 /// Resolve the local gate name from env or `.gate` file.
+///
+/// Checks `GATE_NAME` first (canonical), then `MEMBRANE_GATE_NAME` (set by
+/// generated systemd units), then `.gate` file, then hostname fallback.
 async fn resolve_gate_name(root: &Path) -> String {
-    match std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        Ok(g) => g,
-        Err(_) => tokio::fs::read_to_string(root.join(".gate"))
-            .await
-            .map_or_else(
-                |_| crate::gate::resolve_local_gate_identity(),
-                |s| s.trim().to_string(),
-            ),
+    if let Ok(g) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
+        if !g.is_empty() {
+            return g;
+        }
     }
+    if let Ok(g) = std::env::var("MEMBRANE_GATE_NAME") {
+        if !g.is_empty() {
+            return g;
+        }
+    }
+    tokio::fs::read_to_string(root.join(".gate"))
+        .await
+        .map_or_else(
+            |_| crate::gate::resolve_local_gate_identity(),
+            |s| s.trim().to_string(),
+        )
 }
 
 /// Parse the wave ID from a freshness.toml file. Returns 0 if unreadable.
 #[cfg(test)]
 fn read_freshness_wave_id(path: &Path) -> u32 {
     let Ok(content) = std::fs::read_to_string(path) else {
-        return 0;
-    };
-    toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
-}
-
-/// Async variant — reads the file without blocking the runtime.
-async fn read_freshness_wave_id_async(path: &Path) -> u32 {
-    let Ok(content) = tokio::fs::read_to_string(path).await else {
         return 0;
     };
     toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
@@ -602,5 +652,57 @@ source_path = "primals/bearDog"
             read_freshness_wave_id(Path::new("/tmp/nonexistent-freshness-xyz.toml")),
             0
         );
+    }
+
+    #[test]
+    fn chrono_now_utc_format() {
+        let ts = chrono_now_utc();
+        assert!(ts.ends_with('Z'));
+        assert!(ts.contains('T'));
+        assert!(ts.len() >= 20);
+    }
+
+    #[test]
+    fn gate_heads_file_roundtrip() {
+        let file = GateHeadsFile {
+            meta: GateHeadsMeta {
+                gate: "testGate".into(),
+                updated: "2026-07-06T12:00:00Z".into(),
+            },
+            heads: {
+                let mut m = BTreeMap::new();
+                m.insert("cellMembrane".into(), "abc123".into());
+                m.insert("songBird".into(), "def456".into());
+                m
+            },
+        };
+        let toml_str = toml::to_string_pretty(&file).unwrap();
+        let parsed: GateHeadsFile = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.meta.gate, "testGate");
+        assert_eq!(parsed.heads.len(), 2);
+        assert_eq!(parsed.heads["cellMembrane"], "abc123");
+    }
+
+    #[test]
+    fn freshness_file_roundtrip() {
+        let file = FreshnessFile {
+            wave: WaveSection {
+                id: 133,
+                date: "2026-07-06".into(),
+                ssot: "wave.toml".into(),
+                notes: String::new(),
+                publisher: "membrane".into(),
+                posture: String::new(),
+            },
+            heads: {
+                let mut m = BTreeMap::new();
+                m.insert("repo1".into(), "sha1".into());
+                m
+            },
+        };
+        let toml_str = toml::to_string_pretty(&file).unwrap();
+        let parsed: FreshnessFile = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.wave.id, 133);
+        assert_eq!(parsed.heads.len(), 1);
     }
 }

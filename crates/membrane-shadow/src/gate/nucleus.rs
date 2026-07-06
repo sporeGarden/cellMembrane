@@ -158,7 +158,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart={install_base}/membrane temporal.cascade --source forgejo
-Environment=MEMBRANE_GATE_NAME={gate_name}
+Environment=GATE_NAME={gate_name}
 TimeoutStartSec=300
 StandardOutput=journal
 StandardError=journal
@@ -261,7 +261,7 @@ impl<'a> GatewayUnitParams<'a> {
 pub fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
     use std::fmt::Write as _;
 
-    let mut env_lines = format!("Environment=MEMBRANE_GATE_NAME={}\n", params.gate_name);
+    let mut env_lines = format!("Environment=GATE_NAME={}\n", params.gate_name);
     if !params.proxy_routes.is_empty() {
         let _ = writeln!(
             env_lines,
@@ -309,7 +309,7 @@ pub fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
          ExecStart={base}/beardog serve-https \
          --upstream {socket} \
          --bind {bind}\n\
-         Environment=MEMBRANE_GATE_NAME={gate}\n\
+         Environment=GATE_NAME={gate}\n\
          Restart=always\n\
          RestartSec=5\n\
          AmbientCapabilities=CAP_NET_BIND_SERVICE\n\n\
