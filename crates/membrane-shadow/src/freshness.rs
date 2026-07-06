@@ -108,12 +108,10 @@ pub async fn publish_gate_heads(
         .map_err(ShadowError::Io)?;
 
     let mut heads = BTreeMap::new();
+    let forgejo_root = resolve_forgejo_repo_root();
     for (name, entry) in repos {
-        let repo_dir = root.join(&entry.local_path);
-        if repo_dir.join(".git").exists() {
-            if let Ok(sha) = git_rev_parse_head(&repo_dir).await {
-                heads.insert((*name).to_string(), sha);
-            }
+        if let Some(sha) = resolve_repo_head(root, entry, forgejo_root.as_deref()).await {
+            heads.insert((*name).to_string(), sha);
         }
     }
 
@@ -556,6 +554,44 @@ fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<Strin
 /// Async git rev-parse HEAD.
 async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
     crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
+}
+
+/// Resolve the HEAD SHA of a repo, checking working copy first, then
+/// Forgejo bare repo as fallback (for thin relay gates without source clones).
+async fn resolve_repo_head(
+    root: &Path,
+    entry: &crate::manifest::RepoEntry,
+    forgejo_root: Option<&Path>,
+) -> Option<String> {
+    let repo_dir = root.join(&entry.local_path);
+    if repo_dir.join(".git").exists() {
+        return git_rev_parse_head(&repo_dir).await.ok();
+    }
+    if is_bare_repo(&repo_dir) {
+        return git_rev_parse_head(&repo_dir).await.ok();
+    }
+    if let Some(froot) = forgejo_root {
+        let bare_path = froot
+            .join(entry.org.to_lowercase())
+            .join(format!(
+                "{}.git",
+                entry.local_path.rsplit('/').next().unwrap_or(&entry.local_path).to_lowercase()
+            ));
+        if is_bare_repo(&bare_path) {
+            return git_rev_parse_head(&bare_path).await.ok();
+        }
+    }
+    None
+}
+
+/// Check if a directory is a bare git repo (has HEAD file at root).
+fn is_bare_repo(dir: &Path) -> bool {
+    dir.join("HEAD").exists() && dir.join("objects").exists()
+}
+
+/// Read `FORGEJO_REPO_ROOT` env var for bare repo fallback path.
+fn resolve_forgejo_repo_root() -> Option<PathBuf> {
+    std::env::var("FORGEJO_REPO_ROOT").ok().map(PathBuf::from)
 }
 
 /// Read the current wave ID from `freshness.toml` in the workspace.
