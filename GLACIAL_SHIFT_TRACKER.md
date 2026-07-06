@@ -1,17 +1,15 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-05 (Wave 132f)
+**Last updated:** 2026-07-06 (Wave 133a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
-**Wave 132f update (Debt Resolution + Gateway Refactor):**
-Gateway module refactored: `gateway/config.rs` extracted with all pure config helpers
-(`format_route_line`, `parse_port`, `to_songbird_proxy_routes`, `parse_songbird_proxy_routes`,
-`to_songbird_routes_toml`, `default_routes_for_roles`, `generate_from_manifest`,
-`load_gateway_config`). `gateway/mod.rs` 822L → 428L — dispatch-only focus.
-`relay.config` command added (resolved config display for deployment verification on golgi).
-`relay.status` evolved to show bidirectional mode + `github_remote` field.
-`DEFAULT_CASCADE_INTERVAL_MINUTES` constant introduced. Relay dispatch tests (+4).
-930 tests, zero warnings.
+**Wave 133a update (CI-DIV-07 fix — freshness commit cycle):**
+`auto_commit_unified_freshness()` closes the gap where `unify_freshness()` wrote
+`freshness.toml` locally but never committed or pushed it. The designated publisher
+(golgi quorum timer) now runs unify → git add → commit → push_all_remotes in one
+atomic cycle. `temporal.unify-freshness` dispatch gains `--no-commit` flag for
+local-only regeneration. Dead `read_freshness_wave_id_async` removed. `GateHeadsFile`
+and `FreshnessFile` roundtrip tests added. 933 tests.
 **Wave 132d update (Manifest + Topology + Gateway Deployment):**
 `GateProfile` absorbs upstream manifest fields: `gate_class`, `tether_role`, `adb_ports`,
 `nucleus_status`, `bond_types`. `KNOWN_GATES` constant introduced as superset of
