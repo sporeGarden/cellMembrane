@@ -150,11 +150,17 @@ pub async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
 
 /// Build a primal binary from source using `cargo build`.
 ///
-/// Handles both native (musl static) and Android (NDK cross-compile) targets.
+/// Handles native (musl static), Android (NDK cross-compile), and
+/// manifest-driven linker overrides (CI-DIV-03 absorption).
+///
+/// `manifest_linker` is the `linker` field from `ecosystem_manifest.toml`
+/// for this primal, if present. It takes precedence over the default
+/// linker selection for non-Android targets.
 pub async fn build_binary(
     source: &SourceEntry,
     target: &str,
     clone_dir: &Path,
+    manifest_linker: Option<&str>,
 ) -> crate::Result<()> {
     let target_dir = clone_dir.join("target");
     let mut cmd = tokio::process::Command::new("cargo");
@@ -195,6 +201,9 @@ pub async fn build_binary(
                  to the NDK root (e.g. /opt/android-ndk-r26d)"
             )));
         }
+    } else if let Some(linker) = manifest_linker {
+        let target_upper = target.to_uppercase().replace('-', "_");
+        cmd.env(format!("CARGO_TARGET_{target_upper}_LINKER"), linker);
     } else if target == "aarch64-unknown-linux-musl" {
         let target_upper = target.to_uppercase().replace('-', "_");
         let linker_env = format!("CARGO_TARGET_{target_upper}_LINKER");

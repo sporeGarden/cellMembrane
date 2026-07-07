@@ -68,6 +68,25 @@ impl EcosystemManifest {
             }
         }
 
+        for (name, entry) in &self.repos {
+            if let Some(pkg) = &entry.package {
+                if pkg.is_empty() {
+                    issues.push(format!("repos.{name}: package is empty (omit or set a value)"));
+                }
+            }
+            if let Some(linker) = &entry.linker {
+                if linker.is_empty() {
+                    issues.push(format!("repos.{name}: linker is empty (omit or set a value)"));
+                }
+            }
+            if entry.gpu && entry.category != "primal" {
+                issues.push(format!(
+                    "repos.{name}: gpu=true but category is \"{}\", expected \"primal\"",
+                    entry.category,
+                ));
+            }
+        }
+
         issues
     }
 }
@@ -191,6 +210,95 @@ local_path = "primals/same"
         let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
         let issues = m.validate();
         assert!(issues.iter().any(|i| i.contains("duplicate local_path")));
+    }
+
+    #[test]
+    fn validate_catches_empty_package() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[repos.biomeOS]
+org = "ecoPrimals"
+local_path = "primals/biomeOS"
+package = ""
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let issues = m.validate();
+        assert!(issues
+            .iter()
+            .any(|i| i.contains("repos.biomeOS: package is empty")));
+    }
+
+    #[test]
+    fn validate_catches_empty_linker() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[repos.nestGate]
+org = "ecoPrimals"
+local_path = "primals/nestGate"
+linker = ""
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let issues = m.validate();
+        assert!(issues
+            .iter()
+            .any(|i| i.contains("repos.nestGate: linker is empty")));
+    }
+
+    #[test]
+    fn validate_catches_gpu_on_non_primal() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[repos.cellMembrane]
+org = "sporeGarden"
+local_path = "gardens/cellMembrane"
+category = "garden"
+gpu = true
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let issues = m.validate();
+        assert!(issues
+            .iter()
+            .any(|i| i.contains("gpu=true but category")));
+    }
+
+    #[test]
+    fn validate_accepts_valid_build_config() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+total_repos = 3
+[sync]
+
+[repos.biomeOS]
+org = "ecoPrimals"
+local_path = "primals/biomeOS"
+category = "primal"
+package = "biomeos-unibin"
+
+[repos.nestGate]
+org = "ecoPrimals"
+local_path = "primals/nestGate"
+category = "primal"
+linker = "ld.lld"
+
+[repos.barraCuda]
+org = "ecoPrimals"
+local_path = "primals/barraCuda"
+category = "primal"
+gpu = true
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let issues = m.validate();
+        assert!(issues.is_empty(), "expected no issues, got: {issues:?}");
     }
 
     #[test]

@@ -160,6 +160,32 @@ pub struct RepoEntry {
     /// Remotes to exclude from temporal matrix (e.g. `["upstream"]` for vendor forks).
     #[serde(default)]
     pub exclude_remotes: Vec<String>,
+
+    // ── Build configuration (CI-DIV-01/02/03 absorption) ──────────
+
+    /// Cargo package name when the workspace binary differs from the repo name.
+    /// Passed as `cargo build -p <package>`. E.g. biomeOS → `"biomeos-unibin"`.
+    #[serde(default)]
+    pub package: Option<String>,
+    /// Custom linker binary for this primal's build target.
+    /// Injected as `CARGO_TARGET_{TARGET}_LINKER`. E.g. nestGate → `"ld.lld"`.
+    #[serde(default)]
+    pub linker: Option<String>,
+    /// Whether this primal requires a glibc (gnu) build for GPU/dlopen access.
+    /// When true, `plasmid.harvest` builds both musl and gnu targets.
+    #[serde(default)]
+    pub gpu: bool,
+}
+
+/// Resolved build configuration for a primal, extracted from the manifest.
+#[derive(Debug, Clone, Default)]
+pub struct ManifestBuildConfig {
+    /// Cargo `-p` package override.
+    pub package: Option<String>,
+    /// Custom linker binary.
+    pub linker: Option<String>,
+    /// Whether this primal needs a glibc build for GPU workloads.
+    pub gpu: bool,
 }
 
 /// Gate profile — topology-aware configuration for deterministic deployment.
@@ -347,6 +373,34 @@ impl EcosystemManifest {
         entry
             .divergence_policy
             .unwrap_or(self.sync.divergence_policy)
+    }
+
+    /// Resolve build configuration for a primal by name.
+    ///
+    /// Performs case-insensitive matching against manifest repo keys
+    /// (manifest uses `biomeOS`, harvest uses `biomeos`). Returns `None`
+    /// if no matching repo entry exists or the entry has no build fields set.
+    #[must_use]
+    pub fn build_config_for(&self, primal: &str) -> Option<ManifestBuildConfig> {
+        let lower = primal.to_lowercase();
+        let entry = self.repos.values().find(|e| {
+            let repo_key_lower = e
+                .local_path
+                .rsplit('/')
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+            repo_key_lower == lower
+        })?;
+        let cfg = ManifestBuildConfig {
+            package: entry.package.clone(),
+            linker: entry.linker.clone(),
+            gpu: entry.gpu,
+        };
+        if cfg.package.is_none() && cfg.linker.is_none() && !cfg.gpu {
+            return None;
+        }
+        Some(cfg)
     }
 
     /// Build a GitHub clone URL for a repo.
@@ -708,6 +762,125 @@ repos = ["wateringHole", "bearDog"]
         assert_eq!(g.bond_types, vec!["covalent"]);
         assert_eq!(g.mobility.as_deref(), Some("mobile"));
         assert_eq!(g.repos.len(), 2);
+    }
+
+    #[test]
+    fn build_config_fields_parsed() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[repos.biomeOS]
+org = "ecoPrimals"
+local_path = "primals/biomeOS"
+package = "biomeos-unibin"
+category = "primal"
+
+[repos.nestGate]
+org = "ecoPrimals"
+local_path = "primals/nestGate"
+linker = "ld.lld"
+category = "primal"
+
+[repos.barraCuda]
+org = "ecoPrimals"
+local_path = "primals/barraCuda"
+gpu = true
+category = "primal"
+
+[repos.songBird]
+org = "ecoPrimals"
+local_path = "primals/songBird"
+category = "primal"
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+
+        let bio = &m.repos["biomeOS"];
+        assert_eq!(bio.package.as_deref(), Some("biomeos-unibin"));
+        assert!(bio.linker.is_none());
+        assert!(!bio.gpu);
+
+        let nest = &m.repos["nestGate"];
+        assert!(nest.package.is_none());
+        assert_eq!(nest.linker.as_deref(), Some("ld.lld"));
+
+        let barra = &m.repos["barraCuda"];
+        assert!(barra.gpu);
+
+        let song = &m.repos["songBird"];
+        assert!(song.package.is_none());
+        assert!(song.linker.is_none());
+        assert!(!song.gpu);
+    }
+
+    #[test]
+    fn build_config_for_case_insensitive_lookup() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[repos.biomeOS]
+org = "ecoPrimals"
+local_path = "primals/biomeOS"
+package = "biomeos-unibin"
+category = "primal"
+
+[repos.skunkBat]
+org = "ecoPrimals"
+local_path = "primals/skunkBat"
+package = "skunk-bat-server"
+category = "primal"
+
+[repos.nestGate]
+org = "ecoPrimals"
+local_path = "primals/nestGate"
+linker = "ld.lld"
+category = "primal"
+
+[repos.songBird]
+org = "ecoPrimals"
+local_path = "primals/songBird"
+category = "primal"
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+
+        let bio_cfg = m.build_config_for("biomeos").unwrap();
+        assert_eq!(bio_cfg.package.as_deref(), Some("biomeos-unibin"));
+        assert!(bio_cfg.linker.is_none());
+
+        let skunk_cfg = m.build_config_for("skunkbat").unwrap();
+        assert_eq!(skunk_cfg.package.as_deref(), Some("skunk-bat-server"));
+
+        let nest_cfg = m.build_config_for("nestgate").unwrap();
+        assert_eq!(nest_cfg.linker.as_deref(), Some("ld.lld"));
+
+        assert!(
+            m.build_config_for("songbird").is_none(),
+            "no build fields set"
+        );
+        assert!(m.build_config_for("nonexistent").is_none());
+    }
+
+    #[test]
+    fn build_config_defaults_when_absent() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[repos.bearDog]
+org = "ecoPrimals"
+local_path = "primals/bearDog"
+category = "primal"
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let bear = &m.repos["bearDog"];
+        assert!(bear.package.is_none());
+        assert!(bear.linker.is_none());
+        assert!(!bear.gpu);
+        assert!(m.build_config_for("beardog").is_none());
     }
 
     #[test]

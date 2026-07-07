@@ -13,10 +13,11 @@
 
 use crate::ShadowOutcome;
 use crate::error::{Result, ShadowError};
+use crate::manifest::ManifestBuildConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
-use tracing::warn;
+use tracing::{info, warn};
 
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
@@ -146,6 +147,8 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     let sources = load_sources(&depot_dir)?;
     let provenance = load_provenance(&depot_dir);
 
+    let manifest_configs = load_manifest_build_configs();
+
     let primals_to_harvest = determine_primals(args, &sources)?;
 
     let mut results: Vec<HarvestResult> = Vec::new();
@@ -161,8 +164,13 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             continue;
         };
 
+        let mut source = source.clone();
+        if let Some(mcfg) = manifest_configs.get(primal.as_str()) {
+            apply_manifest_overrides(&mut source, mcfg);
+        }
+
         let needs_rebuild = args.force
-            || drift::has_upstream_changes(primal, source, provenance.as_ref(), &depot_dir).await;
+            || drift::has_upstream_changes(primal, &source, provenance.as_ref(), &depot_dir).await;
 
         if !needs_rebuild {
             results.push(HarvestResult {
@@ -173,7 +181,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             continue;
         }
 
-        let targets = targets_for_primal(args.target.as_deref(), source);
+        let manifest_linker = manifest_configs
+            .get(primal.as_str())
+            .and_then(|c| c.linker.as_deref());
+
+        let targets = targets_for_primal(args.target.as_deref(), &source);
         for target in &targets {
             if args.dry_run {
                 results.push(HarvestResult {
@@ -187,7 +199,8 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
                 continue;
             }
 
-            let result = harvest_one(primal, source, target, &depot_dir).await;
+            let result =
+                harvest_one(primal, &source, target, &depot_dir, manifest_linker).await;
             if matches!(result.status, HarvestStatus::Built) && !targets_built.contains(target) {
                 targets_built.push(target.clone());
             }
@@ -248,6 +261,7 @@ async fn harvest_one(
     source: &SourceEntry,
     target: &str,
     depot_dir: &Path,
+    manifest_linker: Option<&str>,
 ) -> HarvestResult {
     let build_root = std::env::temp_dir().join("membrane-harvest");
     let clone_dir = build_root.join(primal);
@@ -275,7 +289,7 @@ async fn harvest_one(
         warn!(primal, warning, "freshness warning");
     }
 
-    if let Err(e) = toolchain::build_binary(source, target, &clone_dir).await {
+    if let Err(e) = toolchain::build_binary(source, target, &clone_dir, manifest_linker).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
@@ -365,6 +379,52 @@ pub(super) async fn stage_to_depot_async(
 pub(super) use super::depot::{
     load_provenance, load_sources, resolve_depot, update_depot_metadata,
 };
+
+/// Load build configs from the ecosystem manifest for all primals.
+///
+/// Returns a map keyed by lowercase primal name. If the manifest is unavailable,
+/// returns an empty map (graceful fallback to `sources.toml` only).
+fn load_manifest_build_configs() -> BTreeMap<String, ManifestBuildConfig> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+    let workspace_path = std::path::Path::new(&workspace);
+    let manifest = match crate::manifest::load_from_workspace(workspace_path) {
+        Ok(m) => m,
+        Err(e) => {
+            info!(error = %e, "manifest unavailable — using sources.toml only");
+            return BTreeMap::new();
+        }
+    };
+
+    let mut configs = BTreeMap::new();
+    for (name, entry) in &manifest.repos {
+        let cfg = ManifestBuildConfig {
+            package: entry.package.clone(),
+            linker: entry.linker.clone(),
+            gpu: entry.gpu,
+        };
+        if cfg.package.is_some() || cfg.linker.is_some() || cfg.gpu {
+            let lower = name.to_lowercase();
+            configs.insert(lower, cfg);
+        }
+    }
+    configs
+}
+
+/// Apply manifest build config overrides onto a `SourceEntry`.
+///
+/// Manifest `package` becomes `build_args = "-p <package>"` (overrides existing).
+/// Manifest `gpu` overlays onto `source.gpu`.
+fn apply_manifest_overrides(source: &mut SourceEntry, cfg: &ManifestBuildConfig) {
+    if let Some(pkg) = &cfg.package {
+        source.build_args = Some(format!("-p {pkg}"));
+    }
+    if cfg.gpu {
+        source.gpu = true;
+    }
+}
 
 fn format_harvest_outcome(results: &[HarvestResult]) -> ShadowOutcome {
     let built = results
@@ -639,6 +699,41 @@ private = true
         let targets = targets_for_primal(Some("aarch64-unknown-linux-musl"), &source);
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0], "aarch64-unknown-linux-musl");
+    }
+
+    #[test]
+    fn apply_manifest_package_override() {
+        let mut source = test_source_entry("ecoPrimals/biomeOS");
+        let cfg = ManifestBuildConfig {
+            package: Some("biomeos-unibin".into()),
+            linker: None,
+            gpu: false,
+        };
+        apply_manifest_overrides(&mut source, &cfg);
+        assert_eq!(source.build_args.as_deref(), Some("-p biomeos-unibin"));
+        assert!(!source.gpu);
+    }
+
+    #[test]
+    fn apply_manifest_gpu_override() {
+        let mut source = test_source_entry("ecoPrimals/barraCuda");
+        assert!(!source.gpu);
+        let cfg = ManifestBuildConfig {
+            package: None,
+            linker: None,
+            gpu: true,
+        };
+        apply_manifest_overrides(&mut source, &cfg);
+        assert!(source.gpu);
+    }
+
+    #[test]
+    fn apply_manifest_no_override_preserves_source() {
+        let mut source = test_source_entry("ecoPrimals/bearDog");
+        source.build_args = Some("--features server".into());
+        let cfg = ManifestBuildConfig::default();
+        apply_manifest_overrides(&mut source, &cfg);
+        assert_eq!(source.build_args.as_deref(), Some("--features server"));
     }
 
     #[test]

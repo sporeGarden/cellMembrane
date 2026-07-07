@@ -1,8 +1,19 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-07 (Wave 133c)
+**Last updated:** 2026-07-07 (Wave 133e/134a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 134a update (CI-DIV-01/02/03 — manifest build config absorption):**
+CI-DIV-01/02/03 absorbed: `RepoEntry` gains `package`, `linker`, `gpu` fields.
+`ecosystem_manifest.toml` is now the single source of truth for per-primal build config:
+biomeOS `package = "biomeos-unibin"` (CI-DIV-01), skunkBat `package = "skunk-bat-server"`
+(CI-DIV-02), nestGate `linker = "ld.lld"` (CI-DIV-03), squirrel `package = "squirrel"`,
+barraCuda/coralReef `gpu = true`. `ManifestBuildConfig` struct + `build_config_for()` method
+for case-insensitive primal lookup. `plasmid.harvest` loads manifest configs, overlays onto
+`SourceEntry` via `apply_manifest_overrides()`, and passes `manifest_linker` to
+`toolchain::build_binary()`. Manifest linker injected as `CARGO_TARGET_{TARGET}_LINKER` env
+var, taking precedence over default linker selection. `manifest.validate` extended with
+empty-package, empty-linker, and gpu-on-non-primal checks. 966 tests.
 **Wave 133c update (VPS-NUCLEUS — sporePrint deployment tooling):**
 sporePrint NUCLEUS deployment: `gate/sporeprint.rs` (295L) with `SporePrintDeployParams`,
 `generate_petaltongue_unit`, `generate_nestgate_unit`, `generate_beardog_acme_unit`,

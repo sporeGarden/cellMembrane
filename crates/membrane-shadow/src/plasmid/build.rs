@@ -110,7 +110,7 @@ async fn build_one(
         .await
         .unwrap_or_default();
 
-    if let Err(e) = super::toolchain::build_binary(source, target, &clone_dir).await {
+    if let Err(e) = super::toolchain::build_binary(source, target, &clone_dir, None).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
