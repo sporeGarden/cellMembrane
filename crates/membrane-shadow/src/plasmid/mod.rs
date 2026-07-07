@@ -333,10 +333,12 @@ pub async fn depot_sync(
     let primals = nucleus_primals();
     let primal_list = primals.join(" ");
 
-    // Phase 1: Compare + sync only divergent binaries (atomic copy via .new + mv)
+    // Phase 1: Compare + sync divergent binaries with post-copy BLAKE3 verification.
+    // For each primal: hash source, compare with depot, copy .new, verify .new hash,
+    // then atomic mv. If post-copy hash mismatches source, remove .new and report failure.
     let sync_cmd = format!(
         "mkdir -p {depot_dir}; \
-         synced=0; current=0; failed=0; missing=0; \
+         synced=0; current=0; failed=0; missing=0; verified=0; \
          for p in {primal_list}; do \
            src=\"{install_dir}/$p\"; \
            dst=\"{depot_dir}/$p\"; \
@@ -349,10 +351,21 @@ pub async fn depot_sync(
            if [ \"$src_hash\" = \"$dst_hash\" ] && [ -n \"$dst_hash\" ]; then \
              current=$((current+1)); \
            else \
-             cp -f \"$src\" \"$dst.new\" && mv -f \"$dst.new\" \"$dst\" && synced=$((synced+1)) || failed=$((failed+1)); \
+             if cp -f \"$src\" \"$dst.new\"; then \
+               new_hash=$(b3sum \"$dst.new\" 2>/dev/null | cut -d' ' -f1); \
+               if [ \"$src_hash\" = \"$new_hash\" ]; then \
+                 mv -f \"$dst.new\" \"$dst\" && synced=$((synced+1)) && verified=$((verified+1)) || failed=$((failed+1)); \
+               else \
+                 rm -f \"$dst.new\"; \
+                 failed=$((failed+1)); \
+                 echo \"INTEGRITY_FAIL: $p src=$src_hash copy=$new_hash\" >&2; \
+               fi; \
+             else \
+               failed=$((failed+1)); \
+             fi; \
            fi; \
          done; \
-         echo \"synced=$synced current=$current failed=$failed missing=$missing\""
+         echo \"synced=$synced current=$current failed=$failed missing=$missing verified=$verified\""
     );
 
     let (output, code) = crate::ssh::exec_raw(config, &sync_cmd).await?;
@@ -378,6 +391,14 @@ pub async fn depot_sync(
     let current = parse_field("current");
     let failed = parse_field("failed");
     let missing = parse_field("missing");
+    let verified = parse_field("verified");
+
+    if output.contains("INTEGRITY_FAIL") {
+        tracing::error!(
+            output = %output.trim(),
+            "depot_sync: post-copy BLAKE3 integrity failure detected"
+        );
+    }
 
     // Phase 2: Sync checksums.toml to the WAN depot root
     let checksums_src = format!(
@@ -397,11 +418,12 @@ pub async fn depot_sync(
     Ok(crate::ShadowOutcome {
         ok,
         message: format!(
-            "depot_sync: {synced} synced, {current} current, {missing} missing, \
+            "depot_sync: {synced} synced ({verified} verified), {current} current, {missing} missing, \
              {failed} failed (of {total}) — {checksums_note}"
         ),
         data: Some(serde_json::json!({
             "synced": synced,
+            "verified": verified,
             "current": current,
             "failed": failed,
             "missing": missing,

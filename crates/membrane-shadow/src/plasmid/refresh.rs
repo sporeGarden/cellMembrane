@@ -117,8 +117,9 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
 /// Sync install-dir binaries to the WAN depot directory on the VPS.
 ///
 /// Runs as a post-refresh step so the WAN depot always serves the same binaries
-/// that are running on the inner membrane. Failures here are non-fatal — the
-/// refresh itself already succeeded.
+/// that are running on the inner membrane. Uses atomic copy (.new + mv) and
+/// post-copy BLAKE3 verification to catch rsync/copy corruption.
+/// Failures here are non-fatal — the refresh itself already succeeded.
 async fn sync_depot_binaries(config: &crate::ShadowConfig) {
     let install_dir = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_INSTALL_BASE,
@@ -134,17 +135,47 @@ async fn sync_depot_binaries(config: &crate::ShadowConfig) {
     let primals = super::nucleus_primals();
     let primal_list = primals.join(" ");
 
+    // Atomic copy with post-copy BLAKE3 verification:
+    // 1. cp to .new (non-atomic on different fs, but safe staging)
+    // 2. b3sum verify source == .new
+    // 3. mv .new → final (atomic on same fs)
+    // 4. Report synced/verified/failed counts
     let cmd = format!(
-        "mkdir -p {depot_dir} && \
+        "mkdir -p {depot_dir}; \
+         synced=0; verified=0; failed=0; skipped=0; \
          for p in {primal_list}; do \
            src=\"{install_dir}/$p\"; \
            dst=\"{depot_dir}/$p\"; \
-           [ -f \"$src\" ] && cp -f \"$src\" \"$dst\"; \
-         done"
+           if [ ! -f \"$src\" ]; then skipped=$((skipped+1)); continue; fi; \
+           cp -f \"$src\" \"$dst.new\" || {{ failed=$((failed+1)); continue; }}; \
+           src_hash=$(b3sum \"$src\" 2>/dev/null | cut -d' ' -f1); \
+           new_hash=$(b3sum \"$dst.new\" 2>/dev/null | cut -d' ' -f1); \
+           if [ -n \"$src_hash\" ] && [ \"$src_hash\" = \"$new_hash\" ]; then \
+             mv -f \"$dst.new\" \"$dst\" && synced=$((synced+1)) && verified=$((verified+1)) || failed=$((failed+1)); \
+           else \
+             rm -f \"$dst.new\"; \
+             failed=$((failed+1)); \
+             echo \"INTEGRITY_FAIL: $p src=$src_hash new=$new_hash\" >&2; \
+           fi; \
+         done; \
+         echo \"synced=$synced verified=$verified failed=$failed skipped=$skipped\""
     );
 
-    if let Err(e) = crate::ssh::exec_raw(config, &cmd).await {
-        tracing::warn!(error = %e, "WAN depot binary sync failed");
+    match crate::ssh::exec_raw(config, &cmd).await {
+        Ok((output, code)) => {
+            if code != 0 || output.contains("INTEGRITY_FAIL") {
+                tracing::error!(
+                    output = %output.trim(),
+                    exit_code = code,
+                    "WAN depot sync: integrity verification failure"
+                );
+            } else {
+                tracing::info!(output = %output.trim(), "WAN depot sync complete");
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "WAN depot binary sync failed");
+        }
     }
 }
 

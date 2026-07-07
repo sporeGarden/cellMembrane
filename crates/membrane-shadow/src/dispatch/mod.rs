@@ -22,6 +22,7 @@ mod infra;
 mod plasmid_dispatch;
 mod provision_dispatch;
 mod relay_dispatch;
+mod sovereign;
 mod temporal;
 
 use crate::cli;
@@ -114,6 +115,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))
         }
+        c if c.starts_with("sovereign.") => sovereign::dispatch_sovereign(config, cmd, args).await,
         c if c.starts_with("rootpulse.") => dispatch_rootpulse(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
         c if c.starts_with("gateway.") => crate::gateway::dispatch(config, cmd, args).await,
