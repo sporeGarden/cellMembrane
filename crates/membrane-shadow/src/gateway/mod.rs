@@ -214,27 +214,18 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
 
     let mut checks: Vec<DeployCheck> = Vec::new();
 
-    let songbird_bin = bin_dir.join("songbird");
-    checks.push(DeployCheck {
-        name: "songbird binary".into(),
-        ok: songbird_bin.is_file(),
-        detail: if songbird_bin.is_file() {
-            format!("{}", songbird_bin.display())
-        } else {
-            format!("missing: {}", songbird_bin.display())
-        },
-    });
-
-    let beardog_bin = bin_dir.join("beardog");
-    checks.push(DeployCheck {
-        name: "beardog binary".into(),
-        ok: beardog_bin.is_file(),
-        detail: if beardog_bin.is_file() {
-            format!("{}", beardog_bin.display())
-        } else {
-            format!("missing: {}", beardog_bin.display())
-        },
-    });
+    for svc in cellmembrane_types::service::MembraneService::gateway_primals() {
+        let bin_path = bin_dir.join(svc.binary);
+        checks.push(DeployCheck {
+            name: format!("{} binary", svc.binary),
+            ok: bin_path.is_file(),
+            detail: if bin_path.is_file() {
+                format!("{}", bin_path.display())
+            } else {
+                format!("missing: {}", bin_path.display())
+            },
+        });
+    }
 
     let config_ok = generate_from_manifest(gate_name).is_ok();
     checks.push(DeployCheck {

@@ -213,7 +213,7 @@ fn dispatch_profile(gate_name: &str) -> crate::Result<ShadowOutcome> {
     let manifest = crate::manifest::load_from_workspace(&workspace_root)?;
 
     let Some(profile) = manifest.gates.get(gate_name) else {
-        let available: Vec<&String> = manifest.gates.keys().collect();
+        let available: Vec<&str> = manifest.gates.keys().map(String::as_str).collect();
         return Ok(ShadowOutcome::fail(format!(
             "gate '{gate_name}' not in ecosystem_manifest.toml. Available: {available:?}"
         )));

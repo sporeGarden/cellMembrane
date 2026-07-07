@@ -51,10 +51,20 @@ pub async fn load_remote_canaries() -> RemoteCanaryRegistry {
 pub async fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
     let path = remote_canaries_path();
     if let Some(parent) = path.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            tracing::warn!(path = %parent.display(), error = %e, "canary registry dir create failed");
+            return;
+        }
     }
-    if let Ok(content) = toml::to_string_pretty(registry) {
-        let _ = tokio::fs::write(&path, content).await;
+    match toml::to_string_pretty(registry) {
+        Ok(content) => {
+            if let Err(e) = tokio::fs::write(&path, content).await {
+                tracing::error!(path = %path.display(), error = %e, "canary registry write failed");
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "canary registry serialization failed");
+        }
     }
 }
 

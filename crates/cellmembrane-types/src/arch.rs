@@ -70,23 +70,34 @@ impl fmt::Display for TargetArch {
     }
 }
 
+/// Error returned when parsing an unknown target architecture string.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("unknown target arch: {0}")]
+pub struct ArchParseError(pub String);
+
 impl FromStr for TargetArch {
-    type Err = String;
+    type Err = ArchParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "x86_64-unknown-linux-musl" | "x86_64_musl" | "musl" => Ok(Self::X86_64Musl),
             "x86_64-unknown-linux-gnu" | "x86_64_gnu" | "gnu" => Ok(Self::X86_64Gnu),
             "aarch64-unknown-linux-musl" | "aarch64_musl" | "aarch64" => Ok(Self::Aarch64Musl),
-            _ => Err(format!("unknown target arch: {s}")),
+            _ => Err(ArchParseError(s.to_string())),
         }
     }
 }
 
-/// Primals that require glibc (gpu/dlopen) builds alongside musl.
+/// Compile-time fallback for primals that require glibc (gpu/dlopen) builds.
+///
+/// Prefer `EcosystemManifest::gpu_primals()` at runtime, which reads the
+/// `gpu = true` field from `ecosystem_manifest.toml`. This constant serves
+/// as the last-resort fallback when the manifest is unavailable.
 pub const GPU_PRIMALS: &[&str] = &["barracuda", "coralreef"];
 
-/// Check whether a primal needs a glibc build for GPU access.
+/// Check whether a primal needs a glibc build for GPU access (compile-time fallback).
+///
+/// For manifest-driven GPU detection, use `EcosystemManifest::gpu_primals()`.
 #[must_use]
 pub fn is_gpu_primal(name: &str) -> bool {
     GPU_PRIMALS.contains(&name)

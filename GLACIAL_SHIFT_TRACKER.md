@@ -3,6 +3,21 @@
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
 **Last updated:** 2026-07-07 (Wave 133e/134a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 134a update (deep debt sweep — refactor + idiom + manifest-driven evolution):**
+Deep debt sweep across cellMembrane codebase:
+1. `manifest/mod.rs` refactored 905L→693L: serde types extracted to `manifest/types.rs` (286L).
+2. `Box::leak` memory-leak anti-pattern eliminated in `dispatch/relay_dispatch.rs` —
+   `resolve_all_repo_paths()` returns `Vec<String>` instead of leaking `&'static str`.
+3. `type Err = String` replaced with typed parse errors: `ArchParseError` (arch.rs),
+   `ProviderParseError` (provision/mod.rs). Idiomatic `thiserror` derives.
+4. `Vec<&String>` in `dispatch/gate.rs` → `Vec<&str>` via `.map(String::as_str)`.
+5. Gateway deploy check: hardcoded "songbird"/"beardog" binary names replaced with
+   `MembraneService::gateway_primals()` — registry-driven, capability-based.
+6. `save_remote_canaries`: silent `let _ =` on write failures replaced with `tracing::error`.
+7. `GPU_PRIMALS` const documented as compile-time fallback; new `gpu_primals()` method on
+   `EcosystemManifest` reads manifest `gpu = true` field for runtime discovery.
+8. `cytoplasm.rs` `KNOWN_MESH_GATES`, `KNOWN_GATES`, `mesh_address()` documented as
+   compile-time bootstrap fallbacks; manifest-driven discovery is the preferred path.
 **Wave 134a update (CI-DIV-01/02/03 — manifest build config absorption):**
 CI-DIV-01/02/03 absorbed: `RepoEntry` gains `package`, `linker`, `gpu` fields.
 `ecosystem_manifest.toml` is now the single source of truth for per-primal build config:
@@ -13,7 +28,7 @@ for case-insensitive primal lookup. `plasmid.harvest` loads manifest configs, ov
 `SourceEntry` via `apply_manifest_overrides()`, and passes `manifest_linker` to
 `toolchain::build_binary()`. Manifest linker injected as `CARGO_TARGET_{TARGET}_LINKER` env
 var, taking precedence over default linker selection. `manifest.validate` extended with
-empty-package, empty-linker, and gpu-on-non-primal checks. 966 tests.
+empty-package, empty-linker, and gpu-on-non-primal checks.
 **Wave 133c update (VPS-NUCLEUS — sporePrint deployment tooling):**
 sporePrint NUCLEUS deployment: `gate/sporeprint.rs` (295L) with `SporePrintDeployParams`,
 `generate_petaltongue_unit`, `generate_nestgate_unit`, `generate_beardog_acme_unit`,

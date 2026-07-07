@@ -7,20 +7,16 @@ use crate::{ShadowOutcome, manifest, relay, temporal};
 /// Resolve all repo `local_path` values from the ecosystem manifest.
 ///
 /// Falls back to just wateringHole if the manifest can't be loaded.
-fn resolve_all_repo_paths() -> Vec<&'static str> {
+fn resolve_all_repo_paths() -> Vec<String> {
     let Ok(root) = temporal::resolve_workspace_root() else {
-        return vec![cellmembrane_types::service::INFRA_WATERING_HOLE];
+        return vec![cellmembrane_types::service::INFRA_WATERING_HOLE.to_string()];
     };
     let Ok(m) = manifest::load_from_workspace(&root) else {
-        return vec![cellmembrane_types::service::INFRA_WATERING_HOLE];
+        return vec![cellmembrane_types::service::INFRA_WATERING_HOLE.to_string()];
     };
-    let paths: Vec<&'static str> = m
-        .repos
-        .values()
-        .map(|e| &*Box::leak(e.local_path.clone().into_boxed_str()))
-        .collect();
+    let paths: Vec<String> = m.repos.values().map(|e| e.local_path.clone()).collect();
     if paths.is_empty() {
-        vec![cellmembrane_types::service::INFRA_WATERING_HOLE]
+        vec![cellmembrane_types::service::INFRA_WATERING_HOLE.to_string()]
     } else {
         paths
     }
@@ -46,8 +42,9 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
         }
         "relay.absorb" => {
             let config = relay::RelayConfig::from_env();
+            let owned_paths = resolve_all_repo_paths();
             let paths: Vec<&str> = if args.is_empty() {
-                resolve_all_repo_paths()
+                owned_paths.iter().map(String::as_str).collect()
             } else {
                 args.to_vec()
             };
@@ -114,8 +111,9 @@ pub(super) async fn dispatch_relay(cmd: &str, args: &[&str]) -> crate::Result<Sh
 
 async fn dispatch_parity(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let config = relay::RelayConfig::from_env();
-    let paths = if args.is_empty() {
-        resolve_all_repo_paths()
+    let owned_paths = resolve_all_repo_paths();
+    let paths: Vec<&str> = if args.is_empty() {
+        owned_paths.iter().map(String::as_str).collect()
     } else {
         args.to_vec()
     };
@@ -155,7 +153,7 @@ async fn dispatch_parity(args: &[&str]) -> crate::Result<ShadowOutcome> {
 )]
 fn relay_config() -> crate::Result<ShadowOutcome> {
     let cfg = relay::RelayConfig::from_env();
-    let paths = resolve_all_repo_paths();
+    let paths: Vec<String> = resolve_all_repo_paths();
     let msg = format!(
         "relay config (resolved)\n\
          ─────────────────────────\n\

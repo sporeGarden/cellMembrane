@@ -35,13 +35,18 @@ impl std::fmt::Display for Provider {
     }
 }
 
+/// Error returned when parsing an unknown cloud provider string.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("unknown provider: {0}")]
+pub struct ProviderParseError(pub String);
+
 impl std::str::FromStr for Provider {
-    type Err = String;
+    type Err = ProviderParseError;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "digitalocean" | "do" => Ok(Self::DigitalOcean),
             "hetzner" => Ok(Self::Hetzner),
-            _ => Err(format!("unknown provider: {s}")),
+            _ => Err(ProviderParseError(s.to_string())),
         }
     }
 }

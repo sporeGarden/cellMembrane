@@ -449,4 +449,17 @@ impl MembraneService {
         self.has_capability(ServiceCapability::MeshRelay)
             || self.has_capability(ServiceCapability::TurnServer)
     }
+
+    /// Core primals required for a gateway deployment (Tower composition).
+    ///
+    /// Returns registry entries for the security + mesh relay primals that
+    /// every gateway needs. Replaces hardcoded binary name checks in
+    /// deploy validation.
+    #[must_use]
+    pub fn gateway_primals() -> Vec<&'static Self> {
+        Self::for_composition(MembraneComposition::Tower)
+            .into_iter()
+            .filter(|s| s.is_primal)
+            .collect()
+    }
 }

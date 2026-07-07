@@ -139,17 +139,17 @@ pub fn mesh_address_from_topology(
     mesh_address(gate_name).map(String::from)
 }
 
-/// Gates with permanent `WireGuard` mesh IP assignments.
+/// Compile-time fallback: gates with permanent `WireGuard` mesh IP assignments.
 ///
-/// Used as a fallback when the ecosystem manifest is unavailable.
-/// Once assigned, an address is permanent — add new gates here when
-/// they join the mesh.
+/// Prefer manifest-driven discovery via `EcosystemManifest::gates` at runtime.
+/// This constant exists only for bootstrap scenarios where the manifest is
+/// unavailable. Once assigned, an address is permanent.
 pub const KNOWN_MESH_GATES: &[&str] = &["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
 
-/// All known active gates in the ecosystem (superset of [`KNOWN_MESH_GATES`]).
+/// Compile-time fallback: all known active gates (superset of [`KNOWN_MESH_GATES`]).
 ///
+/// Prefer manifest-driven discovery via `EcosystemManifest::gates` at runtime.
 /// Includes gates using any transport (`WireGuard`, ADB, LAN-only).
-/// Gates join this list when they first successfully bootstrap NUCLEUS.
 pub const KNOWN_GATES: &[&str] = &[
     "golgi",
     "sporeGate",
@@ -159,10 +159,10 @@ pub const KNOWN_GATES: &[&str] = &[
     "grapheneGate",
 ];
 
-/// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
+/// Compile-time fallback: `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
 ///
-/// Built-in fallback registry. Once assigned, an address is permanent.
-/// Once topology data is loaded, prefer [`mesh_address_from_topology`].
+/// Prefer `EcosystemManifest::mesh_ip_for()` at runtime, which reads `wg_ip`
+/// from the gate profile. This function exists only for bootstrap scenarios.
 #[must_use]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
     match gate_name {

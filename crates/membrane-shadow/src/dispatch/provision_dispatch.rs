@@ -13,7 +13,7 @@ pub(super) async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOut
     let provider_str = cli::extract_flag_value(args, "--provider").unwrap_or("digitalocean");
     let provider: provision::Provider = provider_str
         .parse()
-        .map_err(|e: String| crate::ShadowError::Config(e))?;
+        .map_err(|e: provision::ProviderParseError| crate::ShadowError::Config(e.to_string()))?;
 
     if matches!(provider, provision::Provider::Hetzner) {
         return Ok(ShadowOutcome::fail(
