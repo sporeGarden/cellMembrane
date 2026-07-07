@@ -1,8 +1,18 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-07 (Wave 133a)
+**Last updated:** 2026-07-07 (Wave 133c)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 133c update (VPS-NUCLEUS — sporePrint deployment tooling):**
+sporePrint NUCLEUS deployment: `gate/sporeprint.rs` (295L) with `SporePrintDeployParams`,
+`generate_petaltongue_unit`, `generate_nestgate_unit`, `generate_beardog_acme_unit`,
+`generate_sporeprint_units` (all 4), `SporePrintUnits` with `.iter()` and `.filenames()`.
+New dispatch: `gateway.sporeprint.units` generates all 4 systemd units for a target gate
+with configurable `--domain`. `gateway.sporeprint.check` validates 4-binary depot presence,
+manifest/gate profile, sporePrint site/public dir, and SSH target reachability.
+Constants: `DEFAULT_PETALTONGUE_BIND`, `SPOREPRINT_CONTENT_DIR`, `ENV_ACME_DOMAIN`,
+`DEFAULT_ACME_EMAIL`, `SPOREPRINT_NUCLEUS_BINARIES`. `nucleus.rs` refactored 1019L → 738L.
+956 tests.
 **Wave 133a update (CI-DIV-08 + SP-DIV-04 — manifest validation + Zola rebuild):**
 CI-DIV-08: `EcosystemManifest::validate()` adds post-parse schema validation — checks
 version non-empty, `total_repos` count match, repo `org`/`local_path` non-empty,

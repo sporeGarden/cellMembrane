@@ -391,6 +391,27 @@ pub const SPOREPRINT_REPO: &str = "sporePrint";
 /// sporePrint is pulled during cascade.
 pub const ENV_ZOLA_AUTO_BUILD: &str = "MEMBRANE_ZOLA_AUTO_BUILD";
 
+// ── sporePrint NUCLEUS deployment ────────────────────────────────────
+
+/// Default petalTongue content-serving bind address (loopback only, behind bearDog).
+pub const DEFAULT_PETALTONGUE_BIND: &str = "127.0.0.1:8080";
+
+/// Environment variable to override petalTongue bind address.
+pub const ENV_PETALTONGUE_BIND: &str = "PETALTONGUE_BIND";
+
+/// Default sporePrint content root relative to `ECOPRIMALS_ROOT`.
+pub const SPOREPRINT_CONTENT_DIR: &str = "infra/sporePrint";
+
+/// Environment variable for the ACME domain (bearDog TLS).
+pub const ENV_ACME_DOMAIN: &str = "BEARDOG_ACME_DOMAIN";
+
+/// Default ACME email for certificate issuance.
+pub const DEFAULT_ACME_EMAIL: &str = "acme@primals.eco";
+
+/// The 4 binaries in a sporePrint NUCLEUS composition.
+pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
+    &["petaltongue", "nestgate", "songbird", "beardog"];
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 /// Read an environment variable, falling back to a compile-time default.

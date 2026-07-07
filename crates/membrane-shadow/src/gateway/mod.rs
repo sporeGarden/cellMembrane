@@ -41,6 +41,8 @@ pub async fn dispatch(config: &ShadowConfig, cmd: &str, args: &[&str]) -> Result
         "gateway.units" => dispatch_units(args),
         "gateway.deploy.check" => dispatch_deploy_check(args).await,
         "gateway.retire-caddy" => dispatch_retire_caddy(config, args).await,
+        "gateway.sporeprint.units" => Ok(dispatch_sporeprint_units(args)),
+        "gateway.sporeprint.check" => Ok(dispatch_sporeprint_check(args)),
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown gateway command: {cmd}"
         ))),
@@ -356,6 +358,151 @@ async fn dispatch_retire_caddy(config: &ShadowConfig, args: &[&str]) -> Result<S
     )))
 }
 
+/// Generate all 4 sporePrint NUCLEUS systemd units (petalTongue + nestGate + songBird + bearDog).
+fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
+    let gate_name = args.first().copied().unwrap_or("golgiBody");
+    let domain = crate::cli::extract_flag_value(args, "--domain").unwrap_or("primals.eco");
+
+    let params = crate::gate::sporeprint::SporePrintDeployParams::new(gate_name, domain);
+    let units = crate::gate::sporeprint::generate_sporeprint_units(&params);
+
+    let filenames = crate::gate::sporeprint::SporePrintUnits::filenames();
+    let mut lines = Vec::new();
+    for (filename, content) in units.iter() {
+        lines.push(format!("--- {filename} ---"));
+        lines.extend(content.lines().map(String::from));
+        lines.push(String::new());
+    }
+
+    ShadowOutcome::ok_with(
+        format!(
+            "sporePrint NUCLEUS units for {gate_name} (domain={domain}, {} units)",
+            filenames.len()
+        ),
+        serde_json::json!({
+            "gate": gate_name,
+            "domain": domain,
+            "units": filenames,
+            "composition": "sporePrint",
+        }),
+    )
+    .tap_lines(&lines)
+}
+
+/// Pre-deployment readiness check for sporePrint NUCLEUS on a target gate.
+fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
+    let gate_name = args.first().copied().unwrap_or("golgiBody");
+    let arch = crate::plasmid::detect_target_triple();
+
+    let depot_dir = crate::gate::resolve_plasmidbin_dir();
+    let bin_dir = depot_dir.join("primals").join(&arch);
+
+    let mut checks: Vec<DeployCheck> = Vec::new();
+
+    for &binary in cellmembrane_types::service::SPOREPRINT_NUCLEUS_BINARIES {
+        let bin_path = bin_dir.join(binary);
+        checks.push(DeployCheck {
+            name: format!("{binary} binary"),
+            ok: bin_path.is_file(),
+            detail: if bin_path.is_file() {
+                format!("{}", bin_path.display())
+            } else {
+                format!("missing: {}", bin_path.display())
+            },
+        });
+    }
+
+    let root = crate::temporal::resolve_workspace_root().ok();
+    let manifest_ok = root.as_ref().is_some_and(|r| {
+        crate::manifest::EcosystemManifest::find_in_workspace(r).is_some()
+    });
+    checks.push(DeployCheck {
+        name: "ecosystem manifest".into(),
+        ok: manifest_ok,
+        detail: if manifest_ok {
+            "found".into()
+        } else {
+            "not found".into()
+        },
+    });
+
+    if let Some(ref r) = root {
+        let sporeprint_dir = r.join(cellmembrane_types::service::SPOREPRINT_CONTENT_DIR);
+        let has_config = sporeprint_dir.join("config.toml").is_file();
+        checks.push(DeployCheck {
+            name: "sporePrint site".into(),
+            ok: has_config,
+            detail: if has_config {
+                format!("{}", sporeprint_dir.display())
+            } else {
+                format!("no config.toml in {}", sporeprint_dir.display())
+            },
+        });
+
+        let has_public = sporeprint_dir.join("public").is_dir();
+        checks.push(DeployCheck {
+            name: "sporePrint public/".into(),
+            ok: has_public,
+            detail: if has_public {
+                "built (zola build output exists)".into()
+            } else {
+                "missing — run `zola build` in sporePrint dir".into()
+            },
+        });
+    }
+
+    if let Some(ref r) = root {
+        let manifest = crate::manifest::load_from_workspace(r).ok();
+        let gate_in_manifest = manifest
+            .as_ref()
+            .is_some_and(|m| m.gates.contains_key(gate_name));
+        checks.push(DeployCheck {
+            name: format!("{gate_name} gate profile"),
+            ok: gate_in_manifest,
+            detail: if gate_in_manifest {
+                "in manifest".into()
+            } else {
+                "gate not in ecosystem_manifest.toml".into()
+            },
+        });
+
+        let ssh_target = manifest
+            .as_ref()
+            .and_then(|m| m.ssh_target_for(gate_name));
+        checks.push(DeployCheck {
+            name: format!("{gate_name} SSH target"),
+            ok: ssh_target.is_some(),
+            detail: ssh_target.unwrap_or_else(|| "no routable address".into()),
+        });
+    }
+
+    let all_pass = checks.iter().all(|c| c.ok);
+    let passed = checks.iter().filter(|c| c.ok).count();
+    let total = checks.len();
+
+    let lines: Vec<String> = checks
+        .iter()
+        .map(|c| {
+            let mark = if c.ok { "\u{2713}" } else { "\u{2717}" };
+            format!("  [{mark}] {}: {}", c.name, c.detail)
+        })
+        .collect();
+
+    let summary = format!(
+        "sporePrint NUCLEUS deploy check: {passed}/{total} pass ({gate_name}, {arch})"
+    );
+
+    if all_pass {
+        ShadowOutcome::ok(summary).tap_lines(&lines)
+    } else {
+        ShadowOutcome {
+            ok: false,
+            message: format!("{summary}\n{}", lines.join("\n")),
+            data: serde_json::to_value(&checks).ok(),
+        }
+    }
+}
+
 /// Check if a port has a listener (best-effort via TCP connect to loopback).
 async fn port_is_listening(port: u16) -> bool {
     tokio::net::TcpStream::connect(("127.0.0.1", port))
@@ -411,6 +558,35 @@ mod tests {
     async fn deploy_check_default_gate() {
         let result = dispatch_deploy_check(&[]).await.unwrap();
         assert!(result.message.contains("sporeGate"));
+    }
+
+    #[test]
+    fn sporeprint_units_generates_output() {
+        let result = dispatch_sporeprint_units(&["golgiBody", "--domain", "primals.eco"]);
+        assert!(result.ok);
+        assert!(result.message.contains("golgiBody"));
+        assert!(result.message.contains("primals.eco"));
+        assert!(result.message.contains("sporePrint NUCLEUS"));
+    }
+
+    #[test]
+    fn sporeprint_units_default_gate() {
+        let result = dispatch_sporeprint_units(&[]);
+        assert!(result.ok);
+        assert!(result.message.contains("golgiBody"));
+    }
+
+    #[test]
+    fn sporeprint_check_returns_structured_result() {
+        let result = dispatch_sporeprint_check(&["golgiBody"]);
+        assert!(result.message.contains("sporePrint NUCLEUS deploy check"));
+        assert!(result.message.contains("golgiBody"));
+    }
+
+    #[test]
+    fn sporeprint_check_default_gate() {
+        let result = dispatch_sporeprint_check(&[]);
+        assert!(result.message.contains("golgiBody"));
     }
 
     #[test]

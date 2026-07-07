@@ -17,6 +17,7 @@ mod local;
 mod mesh;
 pub(crate) mod nucleus;
 pub mod preflight;
+pub(crate) mod sporeprint;
 pub(crate) mod sovereignty;
 pub mod verify;
 
