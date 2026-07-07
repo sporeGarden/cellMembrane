@@ -383,6 +383,14 @@ pub const DEFAULT_API_PAGE_SIZE: u32 = 50;
 /// Default push mirror sync interval (Forgejo -> GitHub).
 pub const DEFAULT_PUSH_MIRROR_INTERVAL: &str = "8h0m0s";
 
+/// Repo name for the sporePrint Zola site.
+pub const SPOREPRINT_REPO: &str = "sporePrint";
+
+/// Environment variable controlling post-cascade Zola rebuild.
+/// Set to `1`/`true`/`yes` to enable automatic `zola build` after
+/// sporePrint is pulled during cascade.
+pub const ENV_ZOLA_AUTO_BUILD: &str = "MEMBRANE_ZOLA_AUTO_BUILD";
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 /// Read an environment variable, falling back to a compile-time default.

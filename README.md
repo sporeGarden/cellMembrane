@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 933 tests — pedantic clippy clean
+cargo test                  # 943 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -233,6 +233,7 @@ membrane depot.integrity --verify         # Verify existing checksums against de
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
+membrane manifest.validate                # Schema validation (cross-refs, counts, duplicates)
 membrane topology.service <role>          # Find gate providing a service role
 membrane topology.endpoint <gate> <cap>   # Resolve transport endpoint (UDS/TCP/relay)
 membrane topology.roles                   # Map all service→gate assignments from manifest

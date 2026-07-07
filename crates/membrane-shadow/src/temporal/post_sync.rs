@@ -99,6 +99,10 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.mode == CascadeMode::Sync {
+        if should_rebuild_zola(lines) {
+            run_zola_rebuild(root, m, lines).await;
+        }
+
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
     }
 
@@ -401,6 +405,66 @@ async fn run_auto_fetch(lines: &mut Vec<String>) {
     }
 }
 
+/// Check if sporePrint was pulled during this cascade and Zola auto-build is enabled.
+fn should_rebuild_zola(lines: &[String]) -> bool {
+    let auto_build = std::env::var(cellmembrane_types::service::ENV_ZOLA_AUTO_BUILD)
+        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+    if !auto_build {
+        return false;
+    }
+    let repo = cellmembrane_types::service::SPOREPRINT_REPO;
+    lines.iter().any(|l| l.contains(repo) && l.contains("OK"))
+}
+
+/// Run `zola build` in the sporePrint directory after cascade detected changes.
+async fn run_zola_rebuild(
+    root: &std::path::Path,
+    m: &crate::manifest::EcosystemManifest,
+    lines: &mut Vec<String>,
+) {
+    let repo_name = cellmembrane_types::service::SPOREPRINT_REPO;
+    let Some(entry) = m.repos.get(repo_name) else {
+        lines.push(format!("  [zola] SKIP — {repo_name} not in manifest"));
+        return;
+    };
+    let site_dir = root.join(&entry.local_path);
+    if !site_dir.join("config.toml").exists() {
+        lines.push(format!(
+            "  [zola] SKIP — no config.toml in {}",
+            entry.local_path
+        ));
+        return;
+    }
+
+    let result = tokio::process::Command::new("zola")
+        .arg("build")
+        .current_dir(&site_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await;
+
+    match result {
+        Ok(output) if output.status.success() => {
+            lines.push(format!(
+                "  [zola] REBUILT {repo_name} ({})",
+                entry.local_path
+            ));
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let first_line = stderr.lines().next().unwrap_or("unknown error");
+            lines.push(format!("  [zola] FAIL — {first_line}"));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            lines.push("  [zola] SKIP — zola binary not installed".into());
+        }
+        Err(e) => {
+            lines.push(format!("  [zola] FAIL — {e}"));
+        }
+    }
+}
+
 pub(super) use super::nucleus_restart::run_cascade_restart;
 
 /// Commit cascade state to rootPulse and verify sovereignty.
@@ -603,6 +667,35 @@ timestamp = "2026-06-19T12:00:00Z"
 
         let gate = table.get("gate").and_then(toml::Value::as_str).unwrap();
         assert_eq!(gate, "sporeGate");
+    }
+
+    #[test]
+    fn sporeprint_detected_in_cascade_lines() {
+        let lines_with: Vec<String> = vec![
+            "  bearDog                           OK pull".into(),
+            "  sporePrint                        OK pull".into(),
+        ];
+        let repo = cellmembrane_types::service::SPOREPRINT_REPO;
+        assert!(lines_with.iter().any(|l: &String| l.contains(repo) && l.contains("OK")));
+
+        let lines_without: Vec<String> = vec!["  bearDog                           OK pull".into()];
+        assert!(!lines_without.iter().any(|l: &String| l.contains(repo) && l.contains("OK")));
+    }
+
+    #[test]
+    fn zola_env_var_parsing() {
+        for val in ["1", "true", "yes"] {
+            assert!(
+                matches!(val, "1" | "true" | "yes"),
+                "{val} should trigger zola auto-build"
+            );
+        }
+        for val in ["0", "false", "no", ""] {
+            assert!(
+                !matches!(val, "1" | "true" | "yes"),
+                "{val} should NOT trigger zola auto-build"
+            );
+        }
     }
 
     #[test]

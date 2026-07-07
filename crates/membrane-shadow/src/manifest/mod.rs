@@ -409,8 +409,10 @@ impl EcosystemManifest {
             .and_then(|p| p.ssh_user.as_deref())
             .unwrap_or("root")
     }
+
 }
 
+mod validate;
 mod wave;
 pub use wave::{ExitCriterion, WaveState};
 
@@ -726,4 +728,5 @@ repos = ["cellMembrane"]
         assert!(g.nucleus_status.is_none());
         assert!(g.bond_types.is_empty());
     }
+
 }

@@ -1,8 +1,17 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-06 (Wave 133a)
+**Last updated:** 2026-07-07 (Wave 133a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Wave 133a update (CI-DIV-08 + SP-DIV-04 — manifest validation + Zola rebuild):**
+CI-DIV-08: `EcosystemManifest::validate()` adds post-parse schema validation — checks
+version non-empty, `total_repos` count match, repo `org`/`local_path` non-empty,
+duplicate `local_path` detection, gate→repo cross-reference integrity. New `manifest.validate`
+dispatch command with structured JSON output. Extracted to `manifest/validate.rs` (212L).
+SP-DIV-04: Post-cascade Zola rebuild hook — when `MEMBRANE_ZOLA_AUTO_BUILD=1` and sporePrint
+is pulled during cascade, automatically runs `zola build` in the sporePrint directory.
+Graceful degradation: skips if zola binary not installed, no config.toml, or repo not in
+manifest. Constants: `SPOREPRINT_REPO`, `ENV_ZOLA_AUTO_BUILD`. 943 tests.
 **Wave 133a update (CI-DIV-07 fix — freshness commit cycle):**
 `auto_commit_unified_freshness()` closes the gap where `unify_freshness()` wrote
 `freshness.toml` locally but never committed or pushed it. The designated publisher

@@ -81,9 +81,48 @@ pub(super) async fn dispatch_manifest(cmd: &str, args: &[&str]) -> crate::Result
                 orgs.join(", ")
             )))
         }
+        "manifest.validate" => manifest_validate(&root).await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown manifest command: {cmd}"
         ))),
+    }
+}
+
+async fn manifest_validate(root: &std::path::Path) -> crate::Result<ShadowOutcome> {
+    let m = manifest::load_from_workspace_async(root).await?;
+    let issues = m.validate();
+    if issues.is_empty() {
+        Ok(ShadowOutcome::ok_with(
+            format!(
+                "manifest v{} VALID ({} repos, {} gates)",
+                m.meta.version,
+                m.repos.len(),
+                m.gates.len(),
+            ),
+            serde_json::json!({
+                "valid": true,
+                "repos": m.repos.len(),
+                "gates": m.gates.len(),
+                "version": m.meta.version,
+            }),
+        ))
+    } else {
+        let lines: Vec<String> = issues.iter().map(|i| format!("  \u{26a0} {i}")).collect();
+        Ok(ShadowOutcome::ok_with(
+            format!(
+                "manifest v{} — {} issue(s)\n{}",
+                m.meta.version,
+                issues.len(),
+                lines.join("\n"),
+            ),
+            serde_json::json!({
+                "valid": false,
+                "issues": issues,
+                "repos": m.repos.len(),
+                "gates": m.gates.len(),
+                "version": m.meta.version,
+            }),
+        ))
     }
 }
 
@@ -489,5 +528,12 @@ mod tests {
                 assert!(msg.contains(gate), "mesh output should include {gate}");
             }
         }
+    }
+
+    #[tokio::test]
+    async fn dispatch_manifest_unknown_command() {
+        let result = dispatch_manifest("manifest.bogus", &[]).await.unwrap();
+        assert!(!result.ok);
+        assert!(result.message.contains("unknown manifest command"));
     }
 }
