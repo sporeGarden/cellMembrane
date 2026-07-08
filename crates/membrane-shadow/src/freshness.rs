@@ -371,7 +371,7 @@ pub async fn auto_commit_unified_freshness(root: &Path) -> Result<bool> {
     )
     .await;
 
-    Ok(!had_changes_before && !had_changes_after || had_changes_before)
+    Ok(had_changes_before || !had_changes_after)
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -413,6 +413,7 @@ fn read_freshness_wave_id(path: &Path) -> u32 {
 }
 
 /// Async variant — reads the file without blocking the runtime.
+#[allow(dead_code)]
 async fn read_freshness_wave_id_async(path: &Path) -> u32 {
     let Ok(content) = tokio::fs::read_to_string(path).await else {
         return 0;

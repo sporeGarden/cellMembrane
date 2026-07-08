@@ -361,10 +361,17 @@ async fn load_pool() -> CanaryPool {
 async fn save_pool(pool: &CanaryPool) {
     let path = pool_state_path();
     if let Some(parent) = path.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            tracing::warn!(path = %parent.display(), error = %e, "canary pool: cannot create state dir");
+            return;
+        }
     }
-    if let Ok(content) = toml::to_string_pretty(pool) {
-        let _ = tokio::fs::write(&path, content).await;
+    let Ok(content) = toml::to_string_pretty(pool) else {
+        tracing::warn!("canary pool: failed to serialize state");
+        return;
+    };
+    if let Err(e) = tokio::fs::write(&path, &content).await {
+        tracing::warn!(path = %path.display(), error = %e, "canary pool: failed to persist state");
     }
 }
 

@@ -73,32 +73,13 @@ pub(super) async fn dispatch_plasmid(
         "plasmid.trigger" => plasmid::trigger(config).await,
         "plasmid.depot_sync" => plasmid::depot_sync(config).await,
         "plasmid.status" => plasmid::status().await,
-        "plasmid.staleness" => match plasmid::detect_depot_staleness() {
-            Ok(report) => {
-                let stale_names: Vec<&str> = report
-                    .entries
-                    .iter()
-                    .filter(|e| e.stale)
-                    .map(|e| e.name.as_str())
-                    .collect();
-                Ok(ShadowOutcome::ok_with(
-                    report.to_string(),
-                    serde_json::json!({
-                        "total": report.total,
-                        "current": report.current_count,
-                        "stale": report.stale_count,
-                        "stale_primals": stale_names,
-                    }),
-                ))
-            }
-            Err(e) => Err(e),
-        },
+        "plasmid.staleness" => dispatch_staleness(),
         "plasmid.auto_fetch" => {
             let payload_str = args.first().copied().unwrap_or("{}");
-            let payload: serde_json::Value =
-                serde_json::from_str(payload_str).unwrap_or(serde_json::Value::Object(Default::default()));
+            let payload: serde_json::Value = serde_json::from_str(payload_str)
+                .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::default()));
             let notif = plasmid::auto_fetch::DepotUpdatedNotification::from_json(&payload)
-                .unwrap_or(plasmid::auto_fetch::DepotUpdatedNotification {
+                .unwrap_or_else(|| plasmid::auto_fetch::DepotUpdatedNotification {
                     primals_updated: Vec::new(),
                     manifest_hash: None,
                     builder: "manual".into(),
@@ -112,6 +93,25 @@ pub(super) async fn dispatch_plasmid(
             "unknown plasmid command: {cmd}"
         ))),
     }
+}
+
+fn dispatch_staleness() -> crate::Result<ShadowOutcome> {
+    let report = plasmid::detect_depot_staleness()?;
+    let stale_names: Vec<&str> = report
+        .entries
+        .iter()
+        .filter(|e| e.stale)
+        .map(|e| e.name.as_str())
+        .collect();
+    Ok(ShadowOutcome::ok_with(
+        report.to_string(),
+        serde_json::json!({
+            "total": report.total,
+            "current": report.current_count,
+            "stale": report.stale_count,
+            "stale_primals": stale_names,
+        }),
+    ))
 }
 
 async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {

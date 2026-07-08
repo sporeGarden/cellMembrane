@@ -197,11 +197,25 @@ fn uds_send(socket_path: &Path, request: &str) {
     use std::os::unix::net::UnixStream;
 
     let Ok(mut stream) = UnixStream::connect(socket_path) else {
+        tracing::debug!(socket = %socket_path.display(), "impulse relay: UDS not reachable");
         return;
     };
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
-    let _ = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL);
-    let _ = writeln!(stream, "{request}");
+    if stream
+        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .is_err()
+    {
+        tracing::debug!(socket = %socket_path.display(), "impulse relay: cannot set write timeout");
+    }
+    if stream
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .is_err()
+    {
+        tracing::debug!(socket = %socket_path.display(), "impulse relay: signal write failed");
+        return;
+    }
+    if writeln!(stream, "{request}").is_err() {
+        tracing::debug!(socket = %socket_path.display(), "impulse relay: request write failed");
+    }
 }
 
 #[cfg(unix)]

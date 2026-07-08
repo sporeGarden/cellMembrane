@@ -227,9 +227,8 @@ pub(super) fn enrich_sources_from_manifest(
             PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
         });
 
-    let manifest = match crate::manifest::load_from_workspace(&workspace) {
-        Ok(m) => m,
-        Err(_) => return,
+    let Ok(manifest) = crate::manifest::load_from_workspace(&workspace) else {
+        return;
     };
 
     for (slug, build) in &manifest.build {

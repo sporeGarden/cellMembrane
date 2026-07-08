@@ -111,7 +111,7 @@ pub async fn handle_depot_updated(notification: &DepotUpdatedNotification) -> Re
 
     LAST_FETCH_EPOCH.store(now, Ordering::Relaxed);
 
-    let (downloaded, failed) = if let Some(data) = &outcome.data {
+    let (downloaded, failed) = outcome.data.as_ref().map_or((0, 0), |data| {
         let dl = data
             .get("downloaded")
             .and_then(serde_json::Value::as_u64)
@@ -121,9 +121,7 @@ pub async fn handle_depot_updated(notification: &DepotUpdatedNotification) -> Re
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
         (dl, fl)
-    } else {
-        (0, 0)
-    };
+    });
 
     info!(
         "auto-fetch complete: {downloaded} downloaded, {failed} failed (builder={})",

@@ -99,7 +99,9 @@ async fn parse_proc_net_if_inet6_and_fib() -> Option<BTreeMap<String, Vec<String
                 .strip_prefix("/32 host ")
                 .map(|s| s.trim().to_string())
             {
-                if ip != "127.0.0.1" && !ip.starts_with("127.") {
+                if ip != cellmembrane_types::service::BIND_LOOPBACK
+                    && !ip.starts_with("127.")
+                {
                     for addrs in map.values_mut() {
                         if addrs.is_empty() {
                             addrs.push(ip.clone());
