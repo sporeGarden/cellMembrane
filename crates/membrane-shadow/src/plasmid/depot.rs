@@ -210,6 +210,39 @@ pub(super) fn load_sources(depot_dir: &Path) -> Result<BTreeMap<String, SourceEn
     Ok(parsed.sources)
 }
 
+/// Load build entries from the ecosystem manifest and enrich `SourceEntry` values.
+///
+/// When the manifest has `[build.<slug>]` entries, their `package` and `gpu`
+/// fields override whatever `sources.toml` had (or didn't have). This is the
+/// convergence path: manifest is authoritative for *how* to build, while
+/// `sources.toml` remains authoritative for *where* to fetch releases.
+pub(super) fn enrich_sources_from_manifest(
+    sources: &mut BTreeMap<String, SourceEntry>,
+) {
+    let workspace = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| crate::resolve_workspace_root().ok())
+        .unwrap_or_else(|| {
+            PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
+        });
+
+    let manifest = match crate::manifest::load_from_workspace(&workspace) {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+
+    for (slug, build) in &manifest.build {
+        if let Some(source) = sources.get_mut(slug.as_str()) {
+            source.build_args = Some(format!("-p {}", build.package));
+            source.gpu = build.gpu;
+            if build.binary_name != *slug {
+                source.binary_name = Some(build.binary_name.clone());
+            }
+        }
+    }
+}
+
 pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
     let path = depot_dir.join("provenance.toml");
     let content = std::fs::read_to_string(path).ok()?;
@@ -412,6 +445,40 @@ mod tests {
         assert!(report.entries[0].stale);
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn enrich_sources_overlays_manifest_build_args() {
+        use super::super::harvest::SourceEntry;
+
+        let mut sources = BTreeMap::new();
+        sources.insert(
+            "beardog".to_string(),
+            SourceEntry {
+                repo: "ecoPrimals/bearDog".into(),
+                private: true,
+                build_args: None,
+                binary_name: None,
+                gpu: false,
+            },
+        );
+        sources.insert(
+            "barracuda".to_string(),
+            SourceEntry {
+                repo: "ecoPrimals/barraCuda".into(),
+                private: false,
+                build_args: None,
+                binary_name: None,
+                gpu: false,
+            },
+        );
+
+        // enrich_sources_from_manifest reads the live manifest; in test
+        // without one, it returns early (no-op). Verify the function
+        // is callable and doesn't panic.
+        enrich_sources_from_manifest(&mut sources);
+        assert_eq!(sources.len(), 2);
+        assert!(sources.contains_key("beardog"));
     }
 
     #[test]

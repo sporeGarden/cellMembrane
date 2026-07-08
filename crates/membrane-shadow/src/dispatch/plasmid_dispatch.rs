@@ -93,6 +93,18 @@ pub(super) async fn dispatch_plasmid(
             }
             Err(e) => Err(e),
         },
+        "plasmid.auto_fetch" => {
+            let payload_str = args.first().copied().unwrap_or("{}");
+            let payload: serde_json::Value =
+                serde_json::from_str(payload_str).unwrap_or(serde_json::Value::Object(Default::default()));
+            let notif = plasmid::auto_fetch::DepotUpdatedNotification::from_json(&payload)
+                .unwrap_or(plasmid::auto_fetch::DepotUpdatedNotification {
+                    primals_updated: Vec::new(),
+                    manifest_hash: None,
+                    builder: "manual".into(),
+                });
+            plasmid::auto_fetch::handle_depot_updated(&notif).await
+        }
         c if c.starts_with("plasmid.sandbox") || c.starts_with("plasmid.canary") => {
             dispatch_plasmid_lifecycle(cmd, args).await
         }

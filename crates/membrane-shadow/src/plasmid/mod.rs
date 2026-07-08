@@ -11,6 +11,7 @@
 //!
 //! BLAKE3 checksums are verified in-process using the `blake3` crate.
 
+pub mod auto_fetch;
 pub mod build;
 pub(crate) mod canary;
 pub(crate) mod canary_remote;

@@ -144,7 +144,8 @@ fn targets_for_primal(cli_target: Option<&str>, source: &SourceEntry) -> Vec<Str
 /// so gates with GPU hardware can run CUDA/Vulkan workloads via `dlopen`.
 pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     let depot_dir = resolve_depot(args.depot_dir.as_deref())?;
-    let sources = load_sources(&depot_dir)?;
+    let mut sources = load_sources(&depot_dir)?;
+    super::depot::enrich_sources_from_manifest(&mut sources);
     let provenance = load_provenance(&depot_dir);
 
     let manifest_configs = load_manifest_build_configs();
@@ -214,6 +215,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             .filter(|r| matches!(r.status, HarvestStatus::Built))
             .collect();
         if !built.is_empty() {
+            let built_names: Vec<String> = built
+                .iter()
+                .map(|r| r.binary.clone())
+                .collect();
+
             for target in &targets_built {
                 let arch_results: Vec<&HarvestResult> = built
                     .iter()
@@ -227,10 +233,57 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
                 }
             }
             drift::publish_depot_checksums(&depot_dir).await;
+
+            notify_mesh_depot_updated(&built_names).await;
         }
     }
 
     Ok(format_harvest_outcome(&results))
+}
+
+/// Notify the local songBird mesh that the depot was updated.
+///
+/// Sends `mesh.publish { topic: "depot.updated" }` via the local songBird
+/// UDS socket. Peers receive this as `mesh.subscribe` and auto-fetch.
+/// Failures are non-fatal — depot data is still consistent.
+async fn notify_mesh_depot_updated(built_primals: &[String]) {
+    let socket_path = std::path::PathBuf::from(cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SONGBIRD_SOCKET,
+        cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET,
+    ));
+
+    if !socket_path.exists() {
+        info!("mesh.publish skipped — songBird socket not found");
+        return;
+    }
+
+    let gate = crate::gate::resolve_local_gate_identity();
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "mesh.publish",
+        "params": {
+            "topic": "depot.updated",
+            "payload": {
+                "primals_updated": built_primals,
+                "builder": gate,
+            }
+        },
+        "id": 1
+    });
+
+    let request_str = request.to_string();
+    match crate::jsonrpc::call(&socket_path, &request_str).await {
+        Ok(response) => {
+            info!(
+                primals = ?built_primals,
+                "mesh.publish depot.updated sent: {response}"
+            );
+        }
+        Err(e) => {
+            warn!("mesh.publish depot.updated failed (non-fatal): {e}");
+        }
+    }
 }
 
 fn determine_primals(

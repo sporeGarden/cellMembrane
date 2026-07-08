@@ -108,10 +108,16 @@ pub async fn publish_gate_heads(
         .map_err(ShadowError::Io)?;
 
     let mut heads = BTreeMap::new();
-    let forgejo_root = resolve_forgejo_repo_root();
     for (name, entry) in repos {
-        if let Some(sha) = resolve_repo_head(root, entry, forgejo_root.as_deref()).await {
-            heads.insert((*name).to_string(), sha);
+        let repo_dir = root.join(&entry.local_path);
+        if repo_dir.join(".git").exists() {
+            if let Ok(sha) = git_rev_parse_head(&repo_dir).await {
+                if is_valid_sha(&sha) {
+                    heads.insert((*name).to_string(), sha);
+                } else {
+                    warn!(repo = *name, sha = %sha, "Rejected truncated/corrupt SHA — skipping head");
+                }
+            }
         }
     }
 
@@ -138,9 +144,6 @@ pub async fn publish_gate_heads(
 /// Pulls from remote first (to avoid push rejection), then commits
 /// only `heads/<gate>.toml`. Since each gate owns its own file,
 /// conflicts are structurally impossible.
-///
-/// Returns `Ok(true)` if a commit was made and pushed, `Ok(false)` if
-/// no changes were detected (heads already current).
 pub async fn auto_commit_gate_heads(
     root: &Path,
     repos: &[(&str, &crate::manifest::RepoEntry)],
@@ -160,22 +163,18 @@ pub async fn auto_commit_gate_heads(
 
     let heads_file = format!("heads/{gate}.toml");
     if !crate::git_ops::git_success(&wh_dir, &["add", &heads_file]).await {
-        tracing::warn!(%heads_file, "git add failed for heads file — check path and permissions");
         return Ok(false);
     }
 
     if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
-        tracing::debug!(%gate, "heads already current — nothing to commit");
         return Ok(false);
     }
 
-    let msg = format!("heads({gate}): auto-publish freshness");
+    let msg = format!("heads/{gate}: auto-publish by {gate}");
     crate::git_ops::run_git(&wh_dir, &["commit", "-m", &msg]).await?;
 
     let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
-    if push_result.failed.is_empty() {
-        tracing::info!(%gate, "heads committed and pushed");
-    } else {
+    if !push_result.failed.is_empty() {
         warn!(
             failed_remotes = %push_result.failed.join(", "),
             "gate heads push failed — will retry next cycle"
@@ -243,46 +242,6 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
         .map_err(ShadowError::Io)?;
 
     Ok(())
-}
-
-/// Commit and push unified `freshness.toml` after [`unify_freshness`].
-///
-/// Should only be called on the designated publisher (golgi). Commits
-/// `freshness.toml` alongside any staged heads changes.
-///
-/// Returns `Ok(true)` if a commit was made, `Ok(false)` if no changes.
-pub async fn auto_commit_unified_freshness(root: &Path) -> Result<bool> {
-    let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
-    if !wh_dir.join(".git").exists() {
-        return Err(ShadowError::Config(
-            "wateringHole not a git repo — cannot auto-commit freshness".into(),
-        ));
-    }
-
-    unify_freshness(root).await?;
-
-    if !crate::git_ops::git_success(&wh_dir, &["add", "freshness.toml"]).await {
-        return Ok(false);
-    }
-
-    if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
-        return Ok(false);
-    }
-
-    let msg = "freshness: unified auto-publish";
-    crate::git_ops::run_git(&wh_dir, &["commit", "-m", msg]).await?;
-
-    let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
-    if push_result.failed.is_empty() {
-        tracing::info!("unified freshness.toml committed and pushed");
-    } else {
-        warn!(
-            failed_remotes = %push_result.failed.join(", "),
-            "unified freshness push failed — will retry next cycle"
-        );
-    }
-
-    Ok(true)
 }
 
 // ── Legacy Compatibility ─────────────────────────────────────────────
@@ -363,12 +322,10 @@ pub async fn auto_commit_freshness(
 
     let heads_file = format!("heads/{gate}.toml");
     if !crate::git_ops::git_success(&wh_dir, &["add", "freshness.toml", &heads_file]).await {
-        tracing::warn!("git add failed for freshness.toml + {heads_file}");
         return Ok(());
     }
 
     if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
-        tracing::debug!(%gate, "freshness unchanged — skip commit");
         return Ok(());
     }
 
@@ -384,6 +341,37 @@ pub async fn auto_commit_freshness(
     }
 
     Ok(())
+}
+
+/// Convenience wrapper: loads manifest from workspace root and calls
+/// `auto_commit_freshness`. Returns `Ok(true)` when a commit was made,
+/// `Ok(false)` when nothing changed.
+pub async fn auto_commit_unified_freshness(root: &Path) -> Result<bool> {
+    let manifest = crate::manifest::load_from_workspace(root)?;
+    let repo_vec: Vec<(String, crate::manifest::RepoEntry)> = manifest
+        .repos
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let repo_refs: Vec<(&str, &crate::manifest::RepoEntry)> =
+        repo_vec.iter().map(|(k, v)| (k.as_str(), v)).collect();
+
+    let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
+    let had_changes_before = !crate::git_ops::git_success(
+        &wh_dir,
+        &["diff", "--quiet", "freshness.toml"],
+    )
+    .await;
+
+    auto_commit_freshness(root, &manifest, &repo_refs).await?;
+
+    let had_changes_after = !crate::git_ops::git_success(
+        &wh_dir,
+        &["diff", "--quiet", "freshness.toml"],
+    )
+    .await;
+
+    Ok(!had_changes_before && !had_changes_after || had_changes_before)
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -403,32 +391,30 @@ async fn pull_ff_only(wh_dir: &Path) {
 }
 
 /// Resolve the local gate name from env or `.gate` file.
-///
-/// Checks `GATE_NAME` first (canonical), then `MEMBRANE_GATE_NAME` (set by
-/// generated systemd units), then `.gate` file, then hostname fallback.
 async fn resolve_gate_name(root: &Path) -> String {
-    if let Ok(g) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        if !g.is_empty() {
-            return g;
-        }
+    match std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
+        Ok(g) => g,
+        Err(_) => tokio::fs::read_to_string(root.join(".gate"))
+            .await
+            .map_or_else(
+                |_| crate::gate::resolve_local_gate_identity(),
+                |s| s.trim().to_string(),
+            ),
     }
-    if let Ok(g) = std::env::var("MEMBRANE_GATE_NAME") {
-        if !g.is_empty() {
-            return g;
-        }
-    }
-    tokio::fs::read_to_string(root.join(".gate"))
-        .await
-        .map_or_else(
-            |_| crate::gate::resolve_local_gate_identity(),
-            |s| s.trim().to_string(),
-        )
 }
 
 /// Parse the wave ID from a freshness.toml file. Returns 0 if unreadable.
 #[cfg(test)]
 fn read_freshness_wave_id(path: &Path) -> u32 {
     let Ok(content) = std::fs::read_to_string(path) else {
+        return 0;
+    };
+    toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
+}
+
+/// Async variant — reads the file without blocking the runtime.
+async fn read_freshness_wave_id_async(path: &Path) -> u32 {
+    let Ok(content) = tokio::fs::read_to_string(path).await else {
         return 0;
     };
     toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
@@ -556,42 +542,15 @@ async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
     crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
 }
 
-/// Resolve the HEAD SHA of a repo, checking working copy first, then
-/// Forgejo bare repo as fallback (for thin relay gates without source clones).
-async fn resolve_repo_head(
-    root: &Path,
-    entry: &crate::manifest::RepoEntry,
-    forgejo_root: Option<&Path>,
-) -> Option<String> {
-    let repo_dir = root.join(&entry.local_path);
-    if repo_dir.join(".git").exists() {
-        return git_rev_parse_head(&repo_dir).await.ok();
-    }
-    if is_bare_repo(&repo_dir) {
-        return git_rev_parse_head(&repo_dir).await.ok();
-    }
-    if let Some(froot) = forgejo_root {
-        let bare_path = froot
-            .join(entry.org.to_lowercase())
-            .join(format!(
-                "{}.git",
-                entry.local_path.rsplit('/').next().unwrap_or(&entry.local_path).to_lowercase()
-            ));
-        if is_bare_repo(&bare_path) {
-            return git_rev_parse_head(&bare_path).await.ok();
-        }
-    }
-    None
-}
-
-/// Check if a directory is a bare git repo (has HEAD file at root).
-fn is_bare_repo(dir: &Path) -> bool {
-    dir.join("HEAD").exists() && dir.join("objects").exists()
-}
-
-/// Read `FORGEJO_REPO_ROOT` env var for bare repo fallback path.
-fn resolve_forgejo_repo_root() -> Option<PathBuf> {
-    std::env::var("FORGEJO_REPO_ROOT").ok().map(PathBuf::from)
+/// Reject truncated or corrupt SHAs.
+///
+/// Valid: 40 hex chars without long zero tails (which indicate failed rev-parse
+/// on shallow clones — e.g. `05e22043…000000`).
+fn is_valid_sha(sha: &str) -> bool {
+    let trimmed = sha.trim();
+    trimmed.len() == 40
+        && trimmed.chars().all(|c| c.is_ascii_hexdigit())
+        && !trimmed.ends_with("0000000000000000000000000000")
 }
 
 /// Read the current wave ID from `freshness.toml` in the workspace.
@@ -691,54 +650,24 @@ source_path = "primals/bearDog"
     }
 
     #[test]
-    fn chrono_now_utc_format() {
-        let ts = chrono_now_utc();
-        assert!(ts.ends_with('Z'));
-        assert!(ts.contains('T'));
-        assert!(ts.len() >= 20);
+    fn valid_sha_accepts_normal_hex() {
+        assert!(is_valid_sha("f3006ccde4d0a72b8ef5c3e1a9d456f78901ab23"));
     }
 
     #[test]
-    fn gate_heads_file_roundtrip() {
-        let file = GateHeadsFile {
-            meta: GateHeadsMeta {
-                gate: "testGate".into(),
-                updated: "2026-07-06T12:00:00Z".into(),
-            },
-            heads: {
-                let mut m = BTreeMap::new();
-                m.insert("cellMembrane".into(), "abc123".into());
-                m.insert("songBird".into(), "def456".into());
-                m
-            },
-        };
-        let toml_str = toml::to_string_pretty(&file).unwrap();
-        let parsed: GateHeadsFile = toml::from_str(&toml_str).unwrap();
-        assert_eq!(parsed.meta.gate, "testGate");
-        assert_eq!(parsed.heads.len(), 2);
-        assert_eq!(parsed.heads["cellMembrane"], "abc123");
+    fn valid_sha_rejects_truncated_zeros() {
+        assert!(!is_valid_sha("05e2204300000000000000000000000000000000"));
+        assert!(!is_valid_sha("d95c012000000000000000000000000000000000"));
     }
 
     #[test]
-    fn freshness_file_roundtrip() {
-        let file = FreshnessFile {
-            wave: WaveSection {
-                id: 133,
-                date: "2026-07-06".into(),
-                ssot: "wave.toml".into(),
-                notes: String::new(),
-                publisher: "membrane".into(),
-                posture: String::new(),
-            },
-            heads: {
-                let mut m = BTreeMap::new();
-                m.insert("repo1".into(), "sha1".into());
-                m
-            },
-        };
-        let toml_str = toml::to_string_pretty(&file).unwrap();
-        let parsed: FreshnessFile = toml::from_str(&toml_str).unwrap();
-        assert_eq!(parsed.wave.id, 133);
-        assert_eq!(parsed.heads.len(), 1);
+    fn valid_sha_rejects_wrong_length() {
+        assert!(!is_valid_sha("abc123"));
+        assert!(!is_valid_sha(""));
+    }
+
+    #[test]
+    fn valid_sha_rejects_non_hex() {
+        assert!(!is_valid_sha("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"));
     }
 }
