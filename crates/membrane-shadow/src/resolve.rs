@@ -137,7 +137,7 @@ fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
 fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<TransportEndpoint> {
     if !svc.has_socket {
         return svc.port.map(|port| TransportEndpoint::Tcp {
-            host: "127.0.0.1".into(),
+            host: cellmembrane_types::service::BIND_LOOPBACK.into(),
             port,
         });
     }
@@ -330,7 +330,11 @@ mod tests {
         match ep.unwrap() {
             TransportEndpoint::Uds { path } => {
                 assert!(path.contains("beardog"));
-                assert!(path.ends_with(".sock"));
+                assert!(
+                    std::path::Path::new(&path)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("sock"))
+                );
             }
             _ => panic!("expected UDS"),
         }

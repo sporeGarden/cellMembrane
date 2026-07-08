@@ -144,7 +144,9 @@ async fn resolve_agentic(
     }
 
     // Rebase failed or leader is a mirror — abort any in-progress rebase state
-    let _ = git_ok(local_path, &["rebase", "--abort"]).await;
+    if !git_ok(local_path, &["rebase", "--abort"]).await {
+        tracing::warn!(repo = %local_path.display(), "rebase --abort failed (may not have been in progress)");
+    }
 
     // Phase 3: signal conflict — emit to stderr and return None for impulse handling
     error!(

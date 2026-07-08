@@ -255,16 +255,19 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
         },
     });
 
-    let songbird_running = tokio::net::TcpStream::connect(("127.0.0.1", 7700_u16))
-        .await
-        .is_ok();
+    let songbird_running = tokio::net::TcpStream::connect((
+        cellmembrane_types::service::BIND_LOOPBACK,
+        cellmembrane_types::service::DEFAULT_FEDERATION_PORT,
+    ))
+    .await
+    .is_ok();
     checks.push(DeployCheck {
         name: "songbird reachable".into(),
         ok: songbird_running,
         detail: if songbird_running {
-            "TCP :7700 open".into()
+            format!("TCP :{} open", cellmembrane_types::service::DEFAULT_FEDERATION_PORT)
         } else {
-            "TCP :7700 closed".into()
+            format!("TCP :{} closed", cellmembrane_types::service::DEFAULT_FEDERATION_PORT)
         },
     });
 
@@ -496,7 +499,7 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
 
 /// Check if a port has a listener (best-effort via TCP connect to loopback).
 async fn port_is_listening(port: u16) -> bool {
-    tokio::net::TcpStream::connect(("127.0.0.1", port))
+    tokio::net::TcpStream::connect((cellmembrane_types::service::BIND_LOOPBACK, port))
         .await
         .is_ok()
 }

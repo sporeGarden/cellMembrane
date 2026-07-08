@@ -139,11 +139,14 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
                 .is_ok_and(|s| s.success());
 
             if !rebase_ok {
-                let _ = tokio::process::Command::new("git")
+                if let Err(e) = tokio::process::Command::new("git")
                     .args(["rebase", "--abort"])
                     .current_dir(repo_dir)
                     .status()
-                    .await;
+                    .await
+                {
+                    tracing::warn!(repo = %repo_dir.display(), error = %e, "rebase --abort failed");
+                }
                 return false;
             }
         }

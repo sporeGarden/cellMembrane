@@ -670,9 +670,8 @@ mod tests {
     #[test]
     fn profile_dispatch_missing_gate() {
         let result = dispatch_profile("nonexistent_gate_xyz");
-        match result {
-            Ok(outcome) => assert!(!outcome.ok, "unknown gate should fail"),
-            Err(_) => {} // workspace not found is acceptable in test
+        if let Ok(outcome) = result {
+            assert!(!outcome.ok, "unknown gate should fail");
         }
     }
 }

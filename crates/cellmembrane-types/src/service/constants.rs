@@ -452,6 +452,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn timeout_constants_reasonable() {
         assert!(DEFAULT_SSH_TIMEOUT_SECS >= 5);
         assert!(DEFAULT_GIT_OP_TIMEOUT_SECS >= 30);

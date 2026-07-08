@@ -215,7 +215,9 @@ pub fn install_cascade_timer(
         };
     }
 
-    let _ = systemctl(&["daemon-reload"]);
+    if !systemctl(&["daemon-reload"]) {
+        tracing::warn!("systemctl daemon-reload failed");
+    }
     let enable_ok = systemctl(&["enable", "--now", "membrane-cascade.timer"]);
 
     super::BootstrapPhase {
@@ -271,6 +273,9 @@ pub fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
         );
     }
 
+    let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    let bind_all = cellmembrane_types::service::BIND_ALL;
+
     format!(
         "[Unit]\n\
          Description=songBird mesh hub ({gate})\n\
@@ -278,7 +283,7 @@ pub fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
          Wants=network-online.target\n\n\
          [Service]\n\
          Type=simple\n\
-         ExecStart={base}/songbird server --socket {socket} --bind 0.0.0.0 --port 7700\n\
+         ExecStart={base}/songbird server --socket {socket} --bind {bind_all} --port {federation_port}\n\
          {env_lines}\
          Restart=always\n\
          RestartSec=3\n\
@@ -541,8 +546,12 @@ mod tests {
         let svc = MembraneService::with_capability(ServiceCapability::MeshRelay)
             .expect("MeshRelay must exist");
         let exec = "/opt/membrane/primals/x86_64/songbird server --socket /run/s.sock";
-        let extra = " --federation-port 7700 --bind 0.0.0.0";
-        let content = generate_unit_content(svc, exec, extra, "/etc/membrane");
+        let extra = format!(
+            " --federation-port {} --bind {}",
+            cellmembrane_types::service::DEFAULT_FEDERATION_PORT,
+            cellmembrane_types::service::BIND_ALL,
+        );
+        let content = generate_unit_content(svc, exec, &extra, "/etc/membrane");
         let exec_line = format!("ExecStart={exec}{extra}");
         assert!(
             content.contains(&exec_line),

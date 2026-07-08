@@ -407,33 +407,60 @@ pub async fn depot_sync(
     );
     let checksums_synced = sync_checksums_to_wan(config, &checksums_src).await;
 
-    let total = synced + current + failed + missing;
-    let ok = failed == 0;
-    let checksums_note = if checksums_synced {
+    Ok(format_depot_sync_outcome(&DepotSyncResult {
+        synced,
+        verified,
+        current,
+        failed,
+        missing,
+        depot_dir,
+        install_dir,
+        arch,
+        checksums_synced,
+    }))
+}
+
+struct DepotSyncResult {
+    synced: usize,
+    verified: usize,
+    current: usize,
+    failed: usize,
+    missing: usize,
+    depot_dir: String,
+    install_dir: String,
+    arch: String,
+    checksums_synced: bool,
+}
+
+fn format_depot_sync_outcome(r: &DepotSyncResult) -> crate::ShadowOutcome {
+    let total = r.synced + r.current + r.failed + r.missing;
+    let ok = r.failed == 0;
+    let checksums_note = if r.checksums_synced {
         "checksums.toml synced"
     } else {
         "checksums.toml sync skipped"
     };
 
-    Ok(crate::ShadowOutcome {
+    crate::ShadowOutcome {
         ok,
         message: format!(
-            "depot_sync: {synced} synced ({verified} verified), {current} current, {missing} missing, \
-             {failed} failed (of {total}) — {checksums_note}"
+            "depot_sync: {} synced ({} verified), {} current, {} missing, \
+             {} failed (of {total}) — {checksums_note}",
+            r.synced, r.verified, r.current, r.missing, r.failed
         ),
         data: Some(serde_json::json!({
-            "synced": synced,
-            "verified": verified,
-            "current": current,
-            "failed": failed,
-            "missing": missing,
+            "synced": r.synced,
+            "verified": r.verified,
+            "current": r.current,
+            "failed": r.failed,
+            "missing": r.missing,
             "total": total,
-            "depot_dir": depot_dir,
-            "install_dir": install_dir,
-            "arch": arch,
-            "checksums_synced": checksums_synced,
+            "depot_dir": r.depot_dir,
+            "install_dir": r.install_dir,
+            "arch": r.arch,
+            "checksums_synced": r.checksums_synced,
         })),
-    })
+    }
 }
 
 /// Ensure the WAN-serving checksums.toml is up to date.

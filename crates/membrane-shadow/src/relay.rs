@@ -507,10 +507,13 @@ pub async fn check_parity(config: &RelayConfig, repo_paths: &[&str]) -> Vec<Pari
             continue;
         }
 
-        let _ =
-            crate::git_ops::git_success(&local_path, &["fetch", github, "main", "--quiet"]).await;
-        let _ =
-            crate::git_ops::git_success(&local_path, &["fetch", forgejo, "main", "--quiet"]).await;
+        if !crate::git_ops::git_success(&local_path, &["fetch", github, "main", "--quiet"]).await {
+            tracing::warn!(repo = %local_path.display(), remote = %github, "fetch failed");
+        }
+        if !crate::git_ops::git_success(&local_path, &["fetch", forgejo, "main", "--quiet"]).await
+        {
+            tracing::warn!(repo = %local_path.display(), remote = %forgejo, "fetch failed");
+        }
 
         let gh_ahead_range = format!("{forgejo}/main..{github}/main");
         let fg_ahead_range = format!("{github}/main..{forgejo}/main");
