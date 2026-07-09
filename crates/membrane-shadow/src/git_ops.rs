@@ -33,6 +33,18 @@ pub struct PushResult {
     pub failed: Vec<String>,
 }
 
+/// Per-push outcome with failure classification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PushOutcome {
+    /// Push accepted by the remote.
+    Ok,
+    /// Push rejected because the remote bare repo is shallow and cannot
+    /// resolve delta bases for merge commits. Recovery: reshallow from mirror.
+    ShallowRejected,
+    /// Push failed for another reason (timeout, auth, network, etc.).
+    Failed,
+}
+
 /// Stage a specific file, commit, and push to all remotes.
 ///
 /// Returns the push result so callers can surface partial failures.
@@ -79,17 +91,17 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
     result
 }
 
-/// Attempt a single push to a remote.
+/// Attempt a single push to a remote with shallow-failure detection.
 async fn try_push(repo_dir: &Path, remote: &str) -> bool {
-    tokio::process::Command::new("git")
-        .args(["push", remote, "main", "--quiet"])
-        .current_dir(repo_dir)
-        .env("GIT_SSH_COMMAND", SSH_CMD_WITH_TIMEOUT)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|s| s.success())
+    let outcome = git_push_classified(repo_dir, &["push", remote, "main", "--quiet"]).await;
+    if outcome == PushOutcome::ShallowRejected {
+        tracing::warn!(
+            remote = %remote,
+            repo = %repo_dir.display(),
+            "post-sync push rejected: shallow bare repo — reshallow needed"
+        );
+    }
+    outcome == PushOutcome::Ok
 }
 
 /// Auto-reconcile a non-ff rejection: fetch, try ff-merge, fallback to rebase.
@@ -262,6 +274,46 @@ pub async fn git_success(repo_path: &Path, args: &[&str]) -> bool {
         .is_ok_and(|r| r.is_ok_and(|s| s.success()))
 }
 
+/// Run a git push command with stderr capture for failure classification.
+///
+/// Detects shallow-repo rejections (where the remote bare repo cannot resolve
+/// delta bases for merge commits) and classifies them distinctly from general
+/// push failures. This enables callers to trigger auto-reshallow recovery.
+pub async fn git_push_classified(repo_path: &Path, args: &[&str]) -> PushOutcome {
+    let child = git_command(repo_path, args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output();
+
+    let Ok(Ok(output)) = tokio::time::timeout(GIT_OP_TIMEOUT, child).await else {
+        return PushOutcome::Failed;
+    };
+
+    if output.status.success() {
+        return PushOutcome::Ok;
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if is_shallow_rejection(&stderr) {
+        PushOutcome::ShallowRejected
+    } else {
+        PushOutcome::Failed
+    }
+}
+
+/// Detect whether a push failure is caused by a shallow bare repo.
+///
+/// Git produces various error messages when pushing objects that reference
+/// bases missing in a shallow clone: "shallow update not allowed",
+/// "unresolved deltas", "missing tree", "bad object".
+fn is_shallow_rejection(stderr: &str) -> bool {
+    let lower = stderr.to_ascii_lowercase();
+    lower.contains("shallow update not allowed")
+        || lower.contains("unresolved delta")
+        || (lower.contains("missing") && lower.contains("tree"))
+        || lower.contains("unable to read")
+}
+
 /// Run a git command, returning stdout as `Option` (returns `None` on failure/timeout).
 pub async fn git_output_opt(repo_path: &Path, args: &[&str]) -> Option<String> {
     git_output(repo_path, args).await.ok()
@@ -417,5 +469,46 @@ mod tests {
         let workspace = crate_dir.parent().unwrap().parent().unwrap();
         let result = run_git(workspace, &["checkout", "--this-flag-does-not-exist"]).await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn shallow_rejection_detected() {
+        assert!(is_shallow_rejection(
+            "error: shallow update not allowed"
+        ));
+        assert!(is_shallow_rejection(
+            "fatal: pack has unresolved deltas"
+        ));
+        assert!(is_shallow_rejection(
+            "error: missing tree 0000000000000000000000000000000000000000"
+        ));
+        assert!(is_shallow_rejection(
+            "error: unable to read sha1 file of blob"
+        ));
+    }
+
+    #[test]
+    fn shallow_rejection_negative() {
+        assert!(!is_shallow_rejection("Everything up-to-date"));
+        assert!(!is_shallow_rejection(
+            "error: failed to push some refs to 'forgejo'"
+        ));
+        assert!(!is_shallow_rejection("remote: Permission denied"));
+    }
+
+    #[test]
+    fn push_outcome_variants() {
+        assert_eq!(PushOutcome::Ok, PushOutcome::Ok);
+        assert_ne!(PushOutcome::Ok, PushOutcome::ShallowRejected);
+        assert_ne!(PushOutcome::ShallowRejected, PushOutcome::Failed);
+    }
+
+    #[tokio::test]
+    async fn classified_push_returns_failed_for_bogus_remote() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        let outcome =
+            git_push_classified(workspace, &["push", "nonexistent-remote", "main"]).await;
+        assert_eq!(outcome, PushOutcome::Failed);
     }
 }

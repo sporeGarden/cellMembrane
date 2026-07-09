@@ -145,6 +145,9 @@ impl FirewallRuleset {
     }
 
     /// Generate the full UFW setup script.
+    ///
+    /// Ends with `ufw reload` to ensure iptables rules are consistent with
+    /// the UFW config, even if rules existed in config but were not active.
     #[must_use]
     pub fn to_ufw_script(&self) -> String {
         let mut lines = vec![
@@ -156,6 +159,7 @@ impl FirewallRuleset {
             lines.push(rule.to_ufw_command());
         }
         lines.push("ufw --force enable".to_string());
+        lines.push("ufw reload".to_string());
         lines.join("\n")
     }
 }
@@ -406,11 +410,12 @@ mod tests {
     }
 
     #[test]
-    fn ufw_script_has_reset_and_enable() {
+    fn ufw_script_has_reset_enable_and_reload() {
         let ruleset = FirewallRuleset::for_composition(MembraneComposition::Relay);
         let script = ruleset.to_ufw_script();
         assert!(script.starts_with("ufw --force reset"));
-        assert!(script.ends_with("ufw --force enable"));
+        assert!(script.contains("ufw --force enable"));
+        assert!(script.ends_with("ufw reload"));
     }
 
     #[test]

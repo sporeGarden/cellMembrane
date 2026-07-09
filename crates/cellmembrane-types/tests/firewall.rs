@@ -41,6 +41,7 @@ fn firewall_ufw_script_format() {
     assert!(script.contains("ufw allow 22/tcp"));
     assert!(script.contains("ufw allow 3478/tcp"));
     assert!(script.contains("ufw --force enable"));
+    assert!(script.contains("ufw reload"));
 }
 
 #[test]

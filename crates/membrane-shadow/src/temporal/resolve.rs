@@ -10,9 +10,9 @@ use std::path::Path;
 
 use super::types::{RemotePosition, TemporalMatrix, TemporalSyncResult};
 use crate::error::Result;
-use crate::git_ops::{git_success as git_ok, rev_list_count};
+use crate::git_ops::{PushOutcome, git_push_classified, git_success as git_ok, rev_list_count};
 use cellmembrane_types::{DivergencePolicy, PushTarget};
-use tracing::error;
+use tracing::{error, warn};
 
 /// The sovereign remote name, resolved from `MEMBRANE_SOVEREIGN_REMOTE` env var
 /// or defaulting to "forgejo". Authority-first push always converges to this
@@ -187,21 +187,22 @@ pub(super) async fn push_to_followers(
         if push_target == PushTarget::Forgejo && pos.remote != "forgejo" {
             continue;
         }
-        // Sovereign remote gets a normal push (or force-with-lease if we rebased).
-        // Mirror remotes always get force-with-lease to handle their independent
-        // state without creating circular divergence.
         let use_force = force_lease || pos.remote != sov;
-        let ok = if use_force {
-            git_ok(
-                local_path,
-                &["push", "--force-with-lease", &pos.remote, branch],
-            )
-            .await
+        let args: Vec<&str> = if use_force {
+            vec!["push", "--force-with-lease", &pos.remote, branch]
         } else {
-            git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await
+            vec!["push", &pos.remote, branch, "--quiet"]
         };
-        if ok {
-            pushed.push(pos.remote.clone());
+        match git_push_classified(local_path, &args).await {
+            PushOutcome::Ok => pushed.push(pos.remote.clone()),
+            PushOutcome::ShallowRejected => {
+                warn!(
+                    remote = %pos.remote,
+                    repo = %local_path.display(),
+                    "push rejected: shallow bare repo cannot resolve deltas — reshallow needed"
+                );
+            }
+            PushOutcome::Failed => {}
         }
     }
     pushed
@@ -235,13 +236,21 @@ pub(super) async fn resolve_tree_parity(
 
     let mut pushed_to = Vec::new();
     for follower in followers {
-        if git_ok(
+        match git_push_classified(
             local_path,
             &["push", "--force-with-lease", follower, branch],
         )
         .await
         {
-            pushed_to.push(follower.clone());
+            PushOutcome::Ok => pushed_to.push(follower.clone()),
+            PushOutcome::ShallowRejected => {
+                warn!(
+                    remote = %follower,
+                    repo = %local_path.display(),
+                    "tree-parity push rejected: shallow bare repo — reshallow needed"
+                );
+            }
+            PushOutcome::Failed => {}
         }
     }
 
@@ -283,18 +292,21 @@ pub(super) async fn push_converge_followers(
         if ahead == 0 {
             continue;
         }
-        // Sovereign remote: normal push. Mirror remotes: force-with-lease.
-        let ok = if pos.remote == sov {
-            git_ok(local_path, &["push", &pos.remote, branch, "--quiet"]).await
+        let args: Vec<&str> = if pos.remote == sov {
+            vec!["push", &pos.remote, branch, "--quiet"]
         } else {
-            git_ok(
-                local_path,
-                &["push", "--force-with-lease", &pos.remote, branch],
-            )
-            .await
+            vec!["push", "--force-with-lease", &pos.remote, branch]
         };
-        if ok {
-            pushed_to.push(pos.remote.clone());
+        match git_push_classified(local_path, &args).await {
+            PushOutcome::Ok => pushed_to.push(pos.remote.clone()),
+            PushOutcome::ShallowRejected => {
+                warn!(
+                    remote = %pos.remote,
+                    repo = %local_path.display(),
+                    "push rejected: shallow bare repo cannot resolve deltas — reshallow needed"
+                );
+            }
+            PushOutcome::Failed => {}
         }
     }
     pushed_to
