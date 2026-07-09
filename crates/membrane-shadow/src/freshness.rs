@@ -112,11 +112,7 @@ pub async fn publish_gate_heads(
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
             if let Ok(sha) = git_rev_parse_head(&repo_dir).await {
-                if is_valid_sha(&sha) {
-                    heads.insert((*name).to_string(), sha);
-                } else {
-                    warn!(repo = *name, sha = %sha, "Rejected truncated/corrupt SHA — skipping head");
-                }
+                heads.insert((*name).to_string(), sha);
             }
         }
     }
@@ -147,7 +143,7 @@ pub async fn publish_gate_heads(
 pub async fn auto_commit_gate_heads(
     root: &Path,
     repos: &[(&str, &crate::manifest::RepoEntry)],
-) -> Result<bool> {
+) -> Result<()> {
     let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     if !wh_dir.join(".git").exists() {
         return Err(ShadowError::Config(
@@ -157,17 +153,18 @@ pub async fn auto_commit_gate_heads(
 
     let gate = resolve_gate_name(root).await;
 
+    // Pull to avoid push rejection (simple FF — no conflict resolution needed).
     pull_ff_only(&wh_dir).await;
 
     publish_gate_heads(root, repos).await?;
 
     let heads_file = format!("heads/{gate}.toml");
     if !crate::git_ops::git_success(&wh_dir, &["add", &heads_file]).await {
-        return Ok(false);
+        return Ok(());
     }
 
     if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
-        return Ok(false);
+        return Ok(());
     }
 
     let msg = format!("heads/{gate}: auto-publish by {gate}");
@@ -181,7 +178,7 @@ pub async fn auto_commit_gate_heads(
         );
     }
 
-    Ok(true)
+    Ok(())
 }
 
 // ── Unified Freshness (golgi only, backward compat) ─────────────────
@@ -343,37 +340,6 @@ pub async fn auto_commit_freshness(
     Ok(())
 }
 
-/// Convenience wrapper: loads manifest from workspace root and calls
-/// `auto_commit_freshness`. Returns `Ok(true)` when a commit was made,
-/// `Ok(false)` when nothing changed.
-pub async fn auto_commit_unified_freshness(root: &Path) -> Result<bool> {
-    let manifest = crate::manifest::load_from_workspace(root)?;
-    let repo_vec: Vec<(String, crate::manifest::RepoEntry)> = manifest
-        .repos
-        .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-    let repo_refs: Vec<(&str, &crate::manifest::RepoEntry)> =
-        repo_vec.iter().map(|(k, v)| (k.as_str(), v)).collect();
-
-    let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
-    let had_changes_before = !crate::git_ops::git_success(
-        &wh_dir,
-        &["diff", "--quiet", "freshness.toml"],
-    )
-    .await;
-
-    auto_commit_freshness(root, &manifest, &repo_refs).await?;
-
-    let had_changes_after = !crate::git_ops::git_success(
-        &wh_dir,
-        &["diff", "--quiet", "freshness.toml"],
-    )
-    .await;
-
-    Ok(had_changes_before || !had_changes_after)
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────
 
 /// Pull with fast-forward only — no rebase, no conflict resolution.
@@ -413,7 +379,6 @@ fn read_freshness_wave_id(path: &Path) -> u32 {
 }
 
 /// Async variant — reads the file without blocking the runtime.
-#[allow(dead_code)]
 async fn read_freshness_wave_id_async(path: &Path) -> u32 {
     let Ok(content) = tokio::fs::read_to_string(path).await else {
         return 0;
@@ -543,17 +508,6 @@ async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
     crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
 }
 
-/// Reject truncated or corrupt SHAs.
-///
-/// Valid: 40 hex chars without long zero tails (which indicate failed rev-parse
-/// on shallow clones — e.g. `05e22043…000000`).
-fn is_valid_sha(sha: &str) -> bool {
-    let trimmed = sha.trim();
-    trimmed.len() == 40
-        && trimmed.chars().all(|c| c.is_ascii_hexdigit())
-        && !trimmed.ends_with("0000000000000000000000000000")
-}
-
 /// Read the current wave ID from `freshness.toml` in the workspace.
 ///
 /// Returns `0` if the file is missing, unparseable, or has no wave ID.
@@ -648,27 +602,5 @@ source_path = "primals/bearDog"
             read_freshness_wave_id(Path::new("/tmp/nonexistent-freshness-xyz.toml")),
             0
         );
-    }
-
-    #[test]
-    fn valid_sha_accepts_normal_hex() {
-        assert!(is_valid_sha("f3006ccde4d0a72b8ef5c3e1a9d456f78901ab23"));
-    }
-
-    #[test]
-    fn valid_sha_rejects_truncated_zeros() {
-        assert!(!is_valid_sha("05e2204300000000000000000000000000000000"));
-        assert!(!is_valid_sha("d95c012000000000000000000000000000000000"));
-    }
-
-    #[test]
-    fn valid_sha_rejects_wrong_length() {
-        assert!(!is_valid_sha("abc123"));
-        assert!(!is_valid_sha(""));
-    }
-
-    #[test]
-    fn valid_sha_rejects_non_hex() {
-        assert!(!is_valid_sha("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"));
     }
 }

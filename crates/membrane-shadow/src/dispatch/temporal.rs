@@ -219,30 +219,15 @@ async fn dispatch_cascade_stress(
 
 /// `temporal.unify-freshness` — merge wave.toml + heads/*.toml into freshness.toml.
 ///
-/// Intended for golgi quorum timer (backward compat). Commits and pushes the
-/// unified file. Once all consumers read per-gate files directly, this command
-/// and freshness.toml can be removed.
+/// Intended for golgi quorum timer (backward compat). Once all consumers read
+/// the new per-gate files directly, this command and freshness.toml can be removed.
 async fn dispatch_unify_freshness(
     _config: &ShadowConfig,
-    args: &[&str],
+    _args: &[&str],
 ) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
-    let commit = !args.contains(&"--no-commit");
-
-    if commit {
-        if crate::freshness::auto_commit_unified_freshness(&root).await? {
-            Ok(ShadowOutcome::ok(
-                "freshness.toml regenerated, committed, and pushed".to_string(),
-            ))
-        } else {
-            Ok(ShadowOutcome::ok(
-                "freshness.toml regenerated (no changes to commit)".to_string(),
-            ))
-        }
-    } else {
-        crate::freshness::unify_freshness(&root).await?;
-        Ok(ShadowOutcome::ok(
-            "freshness.toml regenerated from wave.toml + heads/*.toml (local only)".to_string(),
-        ))
-    }
+    crate::freshness::unify_freshness(&root).await?;
+    Ok(ShadowOutcome::ok(
+        "freshness.toml regenerated from wave.toml + heads/*.toml".to_string(),
+    ))
 }

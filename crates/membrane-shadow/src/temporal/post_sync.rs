@@ -64,13 +64,13 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.publish_freshness && opts.mode == CascadeMode::Sync {
+        // Every gate writes its own heads file (zero conflict).
         match crate::freshness::publish_gate_heads(root, repos).await {
             Ok(()) => {
                 lines.push("  [freshness] PUBLISHED heads/<gate>.toml".to_string());
                 match crate::freshness::auto_commit_gate_heads(root, repos).await {
-                    Ok(true) => lines.push("  [freshness] COMMITTED+PUSHED heads".to_string()),
-                    Ok(false) => lines.push("  [freshness] heads unchanged — skip commit".to_string()),
-                    Err(e) => lines.push(format!("  [freshness] auto-push heads FAIL: {e}")),
+                    Ok(()) => {}
+                    Err(e) => lines.push(format!("  [freshness] auto-push heads: {e}")),
                 }
             }
             Err(e) => lines.push(format!("  [freshness] gate heads FAIL: {e}")),
@@ -79,12 +79,9 @@ pub(super) async fn run_post_sync_phases(
         // Only the designated publisher also writes unified freshness.toml (backward compat).
         let is_designated_publisher = is_freshness_publisher();
         if is_designated_publisher {
-            match crate::freshness::auto_commit_unified_freshness(root).await {
-                Ok(true) => {
-                    lines.push("  [freshness] UNIFIED+COMMITTED freshness.toml".to_string());
-                }
-                Ok(false) => {
-                    lines.push("  [freshness] UNIFIED freshness.toml (no change)".to_string());
+            match crate::freshness::unify_freshness(root).await {
+                Ok(()) => {
+                    lines.push("  [freshness] UNIFIED freshness.toml (compat)".to_string());
                 }
                 Err(e) => lines.push(format!("  [freshness] unify FAIL: {e}")),
             }
@@ -99,10 +96,6 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.mode == CascadeMode::Sync {
-        if should_rebuild_zola(lines) {
-            run_zola_rebuild(root, m, lines).await;
-        }
-
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
     }
 
@@ -405,66 +398,6 @@ async fn run_auto_fetch(lines: &mut Vec<String>) {
     }
 }
 
-/// Check if sporePrint was pulled during this cascade and Zola auto-build is enabled.
-fn should_rebuild_zola(lines: &[String]) -> bool {
-    let auto_build = std::env::var(cellmembrane_types::service::ENV_ZOLA_AUTO_BUILD)
-        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
-    if !auto_build {
-        return false;
-    }
-    let repo = cellmembrane_types::service::SPOREPRINT_REPO;
-    lines.iter().any(|l| l.contains(repo) && l.contains("OK"))
-}
-
-/// Run `zola build` in the sporePrint directory after cascade detected changes.
-async fn run_zola_rebuild(
-    root: &std::path::Path,
-    m: &crate::manifest::EcosystemManifest,
-    lines: &mut Vec<String>,
-) {
-    let repo_name = cellmembrane_types::service::SPOREPRINT_REPO;
-    let Some(entry) = m.repos.get(repo_name) else {
-        lines.push(format!("  [zola] SKIP — {repo_name} not in manifest"));
-        return;
-    };
-    let site_dir = root.join(&entry.local_path);
-    if !site_dir.join("config.toml").exists() {
-        lines.push(format!(
-            "  [zola] SKIP — no config.toml in {}",
-            entry.local_path
-        ));
-        return;
-    }
-
-    let result = tokio::process::Command::new("zola")
-        .arg("build")
-        .current_dir(&site_dir)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .await;
-
-    match result {
-        Ok(output) if output.status.success() => {
-            lines.push(format!(
-                "  [zola] REBUILT {repo_name} ({})",
-                entry.local_path
-            ));
-        }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let first_line = stderr.lines().next().unwrap_or("unknown error");
-            lines.push(format!("  [zola] FAIL — {first_line}"));
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            lines.push("  [zola] SKIP — zola binary not installed".into());
-        }
-        Err(e) => {
-            lines.push(format!("  [zola] FAIL — {e}"));
-        }
-    }
-}
-
 pub(super) use super::nucleus_restart::run_cascade_restart;
 
 /// Commit cascade state to rootPulse and verify sovereignty.
@@ -546,9 +479,7 @@ pub(super) fn summarize_depot_freshness() -> String {
         cellmembrane_types::service::DEFAULT_STALENESS_THRESHOLD_SECS,
     );
 
-    let gate = crate::gate::resolve_local_gate_identity();
-    let composition = crate::plasmid::resolve_gate_primals(&gate);
-    for name in composition {
+    for name in crate::plasmid::nucleus_primals() {
         total += 1;
         let path = primals_dir.join(name);
         if path.exists() {
@@ -604,9 +535,7 @@ pub fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
          timestamp = \"{}\"\n",
         chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
     );
-    if let Err(e) = std::fs::write(&state_path, content) {
-        tracing::warn!(path = %state_path.display(), error = %e, "rootpulse state write failed");
-    }
+    let _ = std::fs::write(&state_path, content);
 }
 
 /// Load the last rootpulse session ID from gate-local state.
@@ -671,35 +600,6 @@ timestamp = "2026-06-19T12:00:00Z"
 
         let gate = table.get("gate").and_then(toml::Value::as_str).unwrap();
         assert_eq!(gate, "sporeGate");
-    }
-
-    #[test]
-    fn sporeprint_detected_in_cascade_lines() {
-        let lines_with: Vec<String> = vec![
-            "  bearDog                           OK pull".into(),
-            "  sporePrint                        OK pull".into(),
-        ];
-        let repo = cellmembrane_types::service::SPOREPRINT_REPO;
-        assert!(lines_with.iter().any(|l: &String| l.contains(repo) && l.contains("OK")));
-
-        let lines_without: Vec<String> = vec!["  bearDog                           OK pull".into()];
-        assert!(!lines_without.iter().any(|l: &String| l.contains(repo) && l.contains("OK")));
-    }
-
-    #[test]
-    fn zola_env_var_parsing() {
-        for val in ["1", "true", "yes"] {
-            assert!(
-                matches!(val, "1" | "true" | "yes"),
-                "{val} should trigger zola auto-build"
-            );
-        }
-        for val in ["0", "false", "no", ""] {
-            assert!(
-                !matches!(val, "1" | "true" | "yes"),
-                "{val} should NOT trigger zola auto-build"
-            );
-        }
     }
 
     #[test]
