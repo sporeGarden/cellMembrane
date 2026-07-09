@@ -171,7 +171,10 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
     let mobility = profile
         .and_then(|p| p.mobility.as_deref())
         .unwrap_or("unknown");
-    let mesh_ip = mesh_address(gate_name).unwrap_or("unpeered");
+    let mesh_ip = profile
+        .and_then(|p| p.wg_ip.as_deref())
+        .or_else(|| mesh_address(gate_name))
+        .unwrap_or("unpeered");
     let lan_ip = profile.and_then(|p| p.lan_ip.as_deref());
     let dns_name = cellmembrane_types::service::lan_dns_name(gate_name);
     let mesh_peer = profile.and_then(|p| p.mesh_peer.as_deref());
@@ -350,27 +353,43 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
 }
 
 fn topology_mesh() -> ShadowOutcome {
-    let manifest_gates: Option<Vec<String>> = temporal::resolve_workspace_root()
+    let manifest = temporal::resolve_workspace_root()
         .ok()
         .and_then(|root| manifest::EcosystemManifest::find_in_workspace(&root))
-        .and_then(|path| manifest::EcosystemManifest::load(&path).ok())
-        .map(|m| m.gates.keys().cloned().collect());
+        .and_then(|path| manifest::EcosystemManifest::load(&path).ok());
 
-    let fallback: Vec<String> = KNOWN_MESH_GATES.iter().map(|&s| s.to_owned()).collect();
-
-    let gate_names = manifest_gates.as_ref().unwrap_or(&fallback);
+    let gate_names: Vec<String> = manifest.as_ref().map_or_else(
+        || KNOWN_MESH_GATES.iter().map(|&s| s.to_owned()).collect(),
+        |m| m.gates.keys().cloned().collect(),
+    );
 
     let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
 
-    for gate in gate_names {
-        if let Some(ip) = mesh_address(gate) {
-            let zone = ZoneLabel::for_gate(gate);
+    for gate in &gate_names {
+        let ip = resolve_mesh_ip(manifest.as_ref(), gate);
+        if let Some(ip) = ip {
+            let zone = manifest
+                .as_ref()
+                .and_then(|m| m.gates.get(gate.as_str()))
+                .and_then(|p| p.zone)
+                .unwrap_or_else(|| ZoneLabel::for_gate(gate));
             lines.push(format_mesh_line(gate, ip, zone));
         }
     }
 
-    let data = build_mesh_data(gate_names);
+    let data = build_mesh_data(manifest.as_ref(), &gate_names);
     ShadowOutcome::ok_with(lines.join("\n"), serde_json::json!(data))
+}
+
+/// Resolve mesh IP: manifest `wg_ip` first, then static fallback.
+fn resolve_mesh_ip<'a>(
+    manifest: Option<&'a manifest::EcosystemManifest>,
+    gate: &str,
+) -> Option<&'a str> {
+    manifest
+        .and_then(|m| m.gates.get(gate))
+        .and_then(|p| p.wg_ip.as_deref())
+        .or_else(|| mesh_address(gate))
 }
 
 /// Format a single mesh entry line for display.
@@ -379,15 +398,22 @@ fn format_mesh_line(gate: &str, ip: &str, zone: ZoneLabel) -> String {
 }
 
 /// Build the JSON data array for mesh entries.
-fn build_mesh_data(gate_names: &[String]) -> Vec<serde_json::Value> {
+fn build_mesh_data(
+    manifest: Option<&manifest::EcosystemManifest>,
+    gate_names: &[String],
+) -> Vec<serde_json::Value> {
     gate_names
         .iter()
         .filter_map(|g| {
-            mesh_address(g).map(|ip| {
+            resolve_mesh_ip(manifest, g).map(|ip| {
+                let zone = manifest
+                    .and_then(|m| m.gates.get(g.as_str()))
+                    .and_then(|p| p.zone)
+                    .unwrap_or_else(|| ZoneLabel::for_gate(g));
                 serde_json::json!({
                     "gate": g,
                     "ip": ip,
-                    "zone": ZoneLabel::for_gate(g).label(),
+                    "zone": zone.label(),
                 })
             })
         })
@@ -498,7 +524,7 @@ mod tests {
     #[test]
     fn build_mesh_data_includes_known_gates() {
         let gates: Vec<String> = vec!["golgi".into(), "sporeGate".into(), "unknownGate".into()];
-        let data = build_mesh_data(&gates);
+        let data = build_mesh_data(None, &gates);
         assert_eq!(data.len(), 2, "unknownGate should be filtered out");
         assert_eq!(data[0]["gate"], "golgi");
         assert_eq!(data[1]["gate"], "sporeGate");
@@ -506,14 +532,14 @@ mod tests {
 
     #[test]
     fn build_mesh_data_empty_input() {
-        let data = build_mesh_data(&[]);
+        let data = build_mesh_data(None, &[]);
         assert!(data.is_empty());
     }
 
     #[test]
     fn build_mesh_data_includes_zone_label() {
         let gates = vec!["eastGate".into()];
-        let data = build_mesh_data(&gates);
+        let data = build_mesh_data(None, &gates);
         assert_eq!(data.len(), 1);
         assert_eq!(data[0]["zone"], "backbone");
     }

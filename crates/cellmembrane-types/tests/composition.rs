@@ -230,6 +230,30 @@ fn parse_name_resolves_all_variants() {
 }
 
 #[test]
+fn parse_name_manifest_aliases() {
+    assert_eq!(
+        MembraneComposition::parse_name("thin-relay"),
+        Some(MembraneComposition::Relay)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("full"),
+        Some(MembraneComposition::Nucleus)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("compute"),
+        Some(MembraneComposition::Tower)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("cold_storage"),
+        Some(MembraneComposition::Nest)
+    );
+    assert_eq!(
+        MembraneComposition::parse_name("THIN-RELAY"),
+        Some(MembraneComposition::Relay)
+    );
+}
+
+#[test]
 fn config_nucleus_composition_parses() {
     let toml = r#"
         [membrane]

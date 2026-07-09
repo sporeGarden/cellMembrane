@@ -93,6 +93,33 @@ pub(crate) fn nucleus_primals() -> Vec<&'static str> {
         .collect()
 }
 
+/// Resolve the primal set for the local gate from the manifest composition.
+///
+/// Resolution chain:
+///   1. If `gate` has a `composition` field in the manifest, and that
+///      composition is defined in `[compositions]`, use its `primals` list.
+///   2. Otherwise fall back to the full registry (`nucleus_primals()`).
+///
+/// This enables composition-aware operations: a thin-relay gate fetches
+/// only songBird + nestGate, while a full NUCLEUS gate gets all 13.
+#[allow(dead_code)]
+pub(crate) fn resolve_gate_primals(gate: &str) -> Vec<String> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+    if let Ok(manifest) =
+        crate::manifest::load_from_workspace(std::path::Path::new(&workspace))
+    {
+        if let Some(profile) = manifest.gate_composition(gate) {
+            if !profile.primals.is_empty() {
+                return profile.primals.clone();
+            }
+        }
+    }
+    nucleus_primals().into_iter().map(String::from).collect()
+}
+
 /// Detect the local platform's default Rust target triple (musl static).
 pub(crate) fn detect_target_triple() -> String {
     cellmembrane_types::TargetArch::detect_host()

@@ -23,6 +23,13 @@ pub mod shadow;
 use crate::error::{Result, ShadowError};
 use crate::{ShadowConfig, ShadowOutcome};
 
+/// Resolve gate name from CLI args, falling back to local gate identity.
+fn resolve_gate_arg(args: &[&str]) -> String {
+    args.first().map_or_else(crate::gate::resolve_local_gate_identity, |s| {
+        (*s).to_owned()
+    })
+}
+
 pub use config::{
     default_routes_for_roles, format_route_line, generate_from_manifest, parse_port,
     parse_songbird_proxy_routes, to_songbird_proxy_routes, to_songbird_routes_toml,
@@ -126,7 +133,8 @@ fn dispatch_config_validate(args: &[&str]) -> Result<ShadowOutcome> {
 
 /// Generate a gateway config from the ecosystem manifest.
 fn dispatch_config_generate(args: &[&str]) -> Result<ShadowOutcome> {
-    let gate_name = args.first().copied().unwrap_or("sporeGate");
+    let gate_name_owned = resolve_gate_arg(args);
+    let gate_name = gate_name_owned.as_str();
     let config = generate_from_manifest(gate_name)?;
     let toml_str = toml::to_string_pretty(&config)
         .map_err(|e| ShadowError::Config(format!("TOML serialize: {e}")))?;
@@ -139,7 +147,8 @@ fn dispatch_config_generate(args: &[&str]) -> Result<ShadowOutcome> {
 
 /// Output the environment variables needed for the Tower gateway deployment.
 fn dispatch_env(args: &[&str]) -> Result<ShadowOutcome> {
-    let gate_name = args.first().copied().unwrap_or("sporeGate");
+    let gate_name_owned = resolve_gate_arg(args);
+    let gate_name = gate_name_owned.as_str();
     let config = generate_from_manifest(gate_name)?;
     let routes_env = to_songbird_proxy_routes(&config);
 
@@ -170,7 +179,8 @@ fn dispatch_env(args: &[&str]) -> Result<ShadowOutcome> {
 
 /// Generate systemd unit files for the Tower gateway (songBird + bearDog).
 fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
-    let gate_name = args.first().copied().unwrap_or("sporeGate");
+    let gate_name_owned = resolve_gate_arg(args);
+    let gate_name = gate_name_owned.as_str();
     let config = generate_from_manifest(gate_name)?;
     let routes_env = to_songbird_proxy_routes(&config);
 
@@ -206,7 +216,8 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
 ///
 /// Returns a structured checklist. Does NOT perform any mutations.
 async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
-    let gate_name = args.first().copied().unwrap_or("sporeGate");
+    let gate_name_owned = resolve_gate_arg(args);
+    let gate_name = gate_name_owned.as_str();
     let arch = crate::plasmid::detect_target_triple();
 
     let depot_dir = crate::gate::resolve_plasmidbin_dir();

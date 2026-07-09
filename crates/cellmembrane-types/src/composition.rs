@@ -162,13 +162,17 @@ impl MembraneComposition {
 
 impl MembraneComposition {
     /// Parse a composition name (case-insensitive). Returns `None` for unknown names.
+    ///
+    /// Accepts both enum names (`relay`, `nucleus`) and manifest profile aliases
+    /// (`thin-relay`, `full`, `compute`) so that `GateProfile.composition` strings
+    /// resolve without a separate mapping layer.
     #[must_use]
     pub fn parse_name(s: &str) -> Option<Self> {
-        match s.to_ascii_lowercase().as_str() {
-            "relay" => Some(Self::Relay),
+        match s.to_ascii_lowercase().replace('-', "_").as_str() {
+            "relay" | "thin_relay" => Some(Self::Relay),
             "rustdesk" | "rust_desk" => Some(Self::RustDesk),
-            "tower" => Some(Self::Tower),
-            "nest" => Some(Self::Nest),
+            "tower" | "compute" => Some(Self::Tower),
+            "nest" | "cold_storage" => Some(Self::Nest),
             "nucleus" | "full" => Some(Self::Nucleus),
             "peptidoglycan" | "pepti" => Some(Self::Peptidoglycan),
             _ => None,
