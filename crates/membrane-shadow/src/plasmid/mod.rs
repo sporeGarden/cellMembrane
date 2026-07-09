@@ -102,7 +102,6 @@ pub(crate) fn nucleus_primals() -> Vec<&'static str> {
 ///
 /// This enables composition-aware operations: a thin-relay gate fetches
 /// only songBird + nestGate, while a full NUCLEUS gate gets all 13.
-#[allow(dead_code)]
 pub(crate) fn resolve_gate_primals(gate: &str) -> Vec<String> {
     let workspace = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,

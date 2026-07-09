@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::warn;
 
-use super::{detect_target_triple, nucleus_primals};
+use super::detect_target_triple;
 
 const INTER_PRIMAL_DELAY_MS: u64 = 500;
 
@@ -53,6 +53,8 @@ pub enum RefreshStatus {
 /// 4. `systemctl restart {unit}`
 /// 5. Health check (socket exists or liveness probe)
 pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result<ShadowOutcome> {
+    let gate = crate::gate::resolve_local_gate_identity();
+    let composition_primals = super::resolve_gate_primals(&gate);
     let primals_to_refresh: Vec<&str> = match args.primal.as_deref() {
         Some(name) => {
             if cellmembrane_types::MembraneService::for_binary(name).is_none() {
@@ -62,7 +64,7 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
             }
             vec![name]
         }
-        None => nucleus_primals(),
+        None => composition_primals.iter().map(String::as_str).collect(),
     };
 
     let source_dir = resolve_refresh_source(args.source_dir.as_deref());
@@ -132,7 +134,8 @@ async fn sync_depot_binaries(config: &crate::ShadowConfig) {
     let arch = super::detect_target_triple();
     let depot_dir = format!("{depot_root}/{arch}");
 
-    let primals = super::nucleus_primals();
+    let gate = crate::gate::resolve_local_gate_identity();
+    let primals = super::resolve_gate_primals(&gate);
     let primal_list = primals.join(" ");
 
     // Atomic copy with post-copy BLAKE3 verification:

@@ -173,11 +173,16 @@ fn parse_mesh_response(response: &str) -> (bool, String) {
 }
 
 /// Health sweep: probe each primal via JSON-RPC, fall back to process detection.
+///
+/// Scoped to the local gate's composition profile when available, otherwise
+/// checks all nucleus primals.
 pub async fn health_sweep(arch: &str) -> (bool, String) {
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
-    let primals = crate::plasmid::nucleus_primals();
+    let gate = super::resolve_local_gate_identity();
+    let composition_primals = crate::plasmid::resolve_gate_primals(&gate);
+    let primals: Vec<&str> = composition_primals.iter().map(String::as_str).collect();
     let mut alive = 0u32;
     let mut dead = 0u32;
 
@@ -269,7 +274,9 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
         return (false, format!("depot dir missing: {}", bin_dir.display()));
     }
 
-    let primals = crate::plasmid::nucleus_primals();
+    let gate = super::resolve_local_gate_identity();
+    let composition_primals = crate::plasmid::resolve_gate_primals(&gate);
+    let primals: Vec<&str> = composition_primals.iter().map(String::as_str).collect();
     let mut present = 0u32;
     let mut missing = 0u32;
     let mut oldest_age_secs: u64 = 0;

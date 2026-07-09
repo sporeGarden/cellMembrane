@@ -546,7 +546,9 @@ pub(super) fn summarize_depot_freshness() -> String {
         cellmembrane_types::service::DEFAULT_STALENESS_THRESHOLD_SECS,
     );
 
-    for name in crate::plasmid::nucleus_primals() {
+    let gate = crate::gate::resolve_local_gate_identity();
+    let composition = crate::plasmid::resolve_gate_primals(&gate);
+    for name in composition {
         total += 1;
         let path = primals_dir.join(name);
         if path.exists() {

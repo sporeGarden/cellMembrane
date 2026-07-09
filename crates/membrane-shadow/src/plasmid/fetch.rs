@@ -7,7 +7,7 @@ use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use super::{detect_target_triple, nucleus_primals};
+use super::detect_target_triple;
 
 /// Source backend for binary downloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,11 +138,12 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     let bin_dir = dest_root.join("primals").join(&arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
-    #[allow(clippy::option_if_let_else)] // lifetimes differ: &'a str vs &'static str
-    let primals: Vec<&str> = match args.primal.as_deref() {
-        Some(p) => vec![p],
-        None => nucleus_primals(),
-    };
+    let gate = crate::gate::resolve_local_gate_identity();
+    let composition_primals = super::resolve_gate_primals(&gate);
+    let primals: Vec<&str> = args.primal.as_deref().map_or_else(
+        || composition_primals.iter().map(String::as_str).collect(),
+        |p| vec![p],
+    );
 
     if args.dry_run {
         return Ok(format_dry_run(&primals, &arch, &tag, &bin_dir, args.source));
@@ -564,18 +565,18 @@ mod tests {
 
     #[test]
     fn nucleus_has_13_primals() {
-        assert_eq!(nucleus_primals().len(), 13);
+        assert_eq!(crate::plasmid::nucleus_primals().len(), 13);
     }
 
     #[test]
     fn nucleus_primals_derived_from_registry() {
-        let derived = nucleus_primals();
+        let derived = crate::plasmid::nucleus_primals();
         let registry: Vec<&str> = cellmembrane_types::MembraneService::all()
             .iter()
             .filter(|s| s.is_primal)
             .map(|s| s.binary)
             .collect();
-        assert_eq!(derived, registry, "nucleus_primals() must match registry");
+        assert_eq!(derived, registry, "super::nucleus_primals() must match registry");
     }
 
     #[test]

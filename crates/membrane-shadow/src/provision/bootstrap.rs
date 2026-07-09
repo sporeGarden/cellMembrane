@@ -90,7 +90,9 @@ async fn setup_directories(ip: &str) -> Result<String> {
 }
 
 /// Phase 3: Deploy binaries from local depot via SCP.
-async fn deploy_binaries(ip: &str) -> Result<String> {
+///
+/// Scoped to the target gate's composition profile when available.
+async fn deploy_binaries(ip: &str, gate_name: &str) -> Result<String> {
     let depot_dir = crate::plasmid::depot::resolve_depot(None)?;
     let arch = crate::plasmid::detect_target_triple();
     let bin_dir = depot_dir.join("primals").join(&arch);
@@ -102,7 +104,7 @@ async fn deploy_binaries(ip: &str) -> Result<String> {
         )));
     }
 
-    let primals = crate::plasmid::nucleus_primals();
+    let primals = crate::plasmid::resolve_gate_primals(gate_name);
     let mut deployed = 0u32;
 
     for primal in &primals {
@@ -318,7 +320,7 @@ echo "units installed"
 /// Tower services (crypto spine + mesh relay) are started first via their
 /// dedicated systemd units. Remaining NUCLEUS primals are started via their
 /// individual units, discovered from the service registry rather than hardcoded.
-async fn start_services(ip: &str) -> Result<String> {
+async fn start_services(ip: &str, gate_name: &str) -> Result<String> {
     let spine = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
@@ -326,8 +328,10 @@ async fn start_services(ip: &str) -> Result<String> {
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
 
-    let nucleus_others: Vec<&str> = crate::plasmid::nucleus_primals()
-        .into_iter()
+    let composition = crate::plasmid::resolve_gate_primals(gate_name);
+    let nucleus_others: Vec<&str> = composition
+        .iter()
+        .map(String::as_str)
         .filter(|p| *p != spine && *p != relay)
         .collect();
     let enable_cmds: String = nucleus_others
@@ -457,7 +461,7 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
     }
 
     info!("deploying binaries");
-    match deploy_binaries(&ip).await {
+    match deploy_binaries(&ip, gate_name).await {
         Ok(detail) => phases.push(format!("binaries: {detail}")),
         Err(e) => {
             phases.push(format!("binaries: FAIL — {e}"));
@@ -477,7 +481,7 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
     }
 
     info!("starting services");
-    match start_services(&ip).await {
+    match start_services(&ip, gate_name).await {
         Ok(_) => phases.push("services: started".into()),
         Err(e) => phases.push(format!("services: FAIL — {e}")),
     }

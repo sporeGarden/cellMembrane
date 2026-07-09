@@ -322,8 +322,9 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     let mut installed = 0u32;
     let mut failed = 0u32;
 
-    let primals = crate::plasmid::nucleus_primals();
-    for primal in &primals {
+    let gate = super::resolve_local_gate_identity();
+    let composition_primals = crate::plasmid::resolve_gate_primals(&gate);
+    for primal in &composition_primals {
         let src = bin_dir.join(primal);
         if !src.exists() {
             continue;

@@ -134,10 +134,7 @@ pub(super) async fn finalize_bootstrap(
     ip: &str,
     phases: &mut Vec<String>,
 ) {
-    let primals: Vec<String> = crate::plasmid::nucleus_primals()
-        .into_iter()
-        .map(Into::into)
-        .collect();
+    let primals = crate::plasmid::resolve_gate_primals(gate_name);
     crate::plasmid::canary::register_remote_canary(gate_name, ip, Some(droplet.id), primals).await;
     phases.push("registry: remote canary registered".into());
 

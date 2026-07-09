@@ -28,7 +28,8 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
     );
     let install_dir = std::path::Path::new(&install_base);
 
-    let primals = crate::plasmid::nucleus_primals();
+    let gate = crate::gate::resolve_local_gate_identity();
+    let primals = crate::plasmid::resolve_gate_primals(&gate);
     let mut restarted = 0u32;
     let mut skipped = 0u32;
     let mut failed = 0u32;
@@ -50,7 +51,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
         }
 
         let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
-            primal: (*primal).to_string(),
+            primal: primal.clone(),
             commit: depot_hash[..8].to_string(),
             binary_path: depot_bin.clone(),
             timeout_secs: None,
