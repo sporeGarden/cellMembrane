@@ -983,4 +983,125 @@ repos = ["cellMembrane"]
         assert!(g.nucleus_status.is_none());
         assert!(g.bond_types.is_empty());
     }
+
+    #[test]
+    fn composition_profiles_parsed() {
+        let toml_str = r#"
+[meta]
+version = "3.0.0"
+[sync]
+
+[compositions.full]
+description = "Complete sovereign stack"
+primals = ["beardog", "songbird", "skunkbat", "nestgate"]
+services = ["mesh", "tls", "firewall", "cas"]
+requires = ["rust", "musl-tools"]
+examples = ["eastGate", "ironGate"]
+
+[compositions.thin-relay]
+description = "Relay + depot only"
+primals = ["songbird"]
+services = ["relay", "depot"]
+repos = ["wateringHole"]
+notes = "No Rust toolchain needed"
+examples = ["golgiBody"]
+
+[compositions.tower]
+description = "Minimal secure mesh entry"
+primals = ["beardog", "songbird", "skunkbat"]
+services = ["tls", "mesh", "firewall"]
+examples = ["grapheneGate"]
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert_eq!(m.compositions.len(), 3);
+
+        let full = m.composition("full").unwrap();
+        assert_eq!(full.primals.len(), 4);
+        assert_eq!(full.services.len(), 4);
+        assert_eq!(full.requires.len(), 2);
+        assert_eq!(full.examples, vec!["eastGate", "ironGate"]);
+
+        let relay = m.composition("thin-relay").unwrap();
+        assert_eq!(relay.primals, vec!["songbird"]);
+        assert_eq!(relay.repos, vec!["wateringHole"]);
+        assert!(relay.notes.as_deref().unwrap().contains("No Rust"));
+
+        let tower = m.composition("tower").unwrap();
+        assert_eq!(tower.primals.len(), 3);
+        assert!(tower.requires.is_empty());
+    }
+
+    #[test]
+    fn composition_names_returns_all() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[compositions.full]
+description = "Full"
+[compositions.tower]
+description = "Tower"
+[compositions.relay]
+description = "Relay"
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        let names = m.composition_names();
+        assert_eq!(names.len(), 3);
+        assert!(names.contains(&"full"));
+        assert!(names.contains(&"tower"));
+        assert!(names.contains(&"relay"));
+    }
+
+    #[test]
+    fn gate_composition_resolves_profile() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+
+[compositions.tower]
+description = "Minimal mesh entry"
+primals = ["beardog", "songbird", "skunkbat"]
+
+[compositions.thin-relay]
+description = "Relay only"
+primals = ["songbird"]
+
+[gates.grapheneGate]
+composition = "tower"
+repos = []
+
+[gates.golgiBody]
+composition = "thin-relay"
+repos = ["wateringHole"]
+
+[gates.eastGate]
+repos = ["bearDog"]
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+
+        let g_comp = m.gate_composition("grapheneGate").unwrap();
+        assert_eq!(g_comp.primals.len(), 3);
+        assert_eq!(g_comp.description, "Minimal mesh entry");
+
+        let golgi_comp = m.gate_composition("golgiBody").unwrap();
+        assert_eq!(golgi_comp.primals, vec!["songbird"]);
+
+        assert!(m.gate_composition("eastGate").is_none());
+        assert!(m.gate_composition("unknown").is_none());
+    }
+
+    #[test]
+    fn compositions_default_when_absent() {
+        let toml_str = r#"
+[meta]
+version = "1.0.0"
+[sync]
+"#;
+        let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
+        assert!(m.compositions.is_empty());
+        assert!(m.composition_names().is_empty());
+        assert!(m.composition("anything").is_none());
+    }
 }
