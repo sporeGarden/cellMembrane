@@ -22,6 +22,9 @@ pub struct EcosystemManifest {
     /// K-Derm diderm topology — node placement and roles.
     #[serde(default)]
     pub topology: Option<Topology>,
+    /// Composition profiles — fractal deployment patterns (full, thin-relay, tower, etc.).
+    #[serde(default)]
+    pub compositions: BTreeMap<String, CompositionProfile>,
     /// Build metadata keyed by primal slug (e.g. `beardog`).
     /// Drives `plasmid.harvest` — replaces per-primal bash workarounds.
     #[serde(default)]
@@ -227,6 +230,40 @@ pub struct ManifestBuildConfig {
     pub linker: Option<String>,
     /// Whether this primal needs a glibc build for GPU workloads.
     pub gpu: bool,
+}
+
+/// Composition profile — a replicable, fractal deployment pattern.
+///
+/// Each composition defines a set of primals, services, and requirements
+/// that together form a deployable unit. The same manifest drives any gate:
+/// the `composition` field on a `GateProfile` selects which pattern to use.
+///
+/// Fractal principle: the pattern is the same shape at every scale.
+/// A full NUCLEUS, a thin relay VPS, an HPC compute node, and a
+/// mobile Tower all read from this manifest and deploy accordingly.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompositionProfile {
+    /// Human-readable description.
+    #[serde(default)]
+    pub description: String,
+    /// Primals included in this composition.
+    #[serde(default)]
+    pub primals: Vec<String>,
+    /// Services to start (e.g. `["relay", "depot", "sporeprint"]`).
+    #[serde(default)]
+    pub services: Vec<String>,
+    /// System requirements (e.g. `["rust", "musl-tools", "gpu"]`).
+    #[serde(default)]
+    pub requires: Vec<String>,
+    /// Repos this composition tracks (if different from full set).
+    #[serde(default)]
+    pub repos: Vec<String>,
+    /// Notes for operators.
+    #[serde(default)]
+    pub notes: Option<String>,
+    /// Example gates using this composition.
+    #[serde(default)]
+    pub examples: Vec<String>,
 }
 
 /// Gate profile — topology-aware configuration for deterministic deployment.
@@ -543,6 +580,27 @@ impl EcosystemManifest {
             .get(gate)
             .and_then(|p| p.ssh_user.as_deref())
             .unwrap_or("root")
+    }
+
+    /// Look up a composition profile by name.
+    #[must_use]
+    pub fn composition(&self, name: &str) -> Option<&CompositionProfile> {
+        self.compositions.get(name)
+    }
+
+    /// Resolve the composition for a given gate, returning its profile.
+    #[must_use]
+    pub fn gate_composition(&self, gate: &str) -> Option<&CompositionProfile> {
+        self.gates
+            .get(gate)
+            .and_then(|p| p.composition.as_deref())
+            .and_then(|name| self.compositions.get(name))
+    }
+
+    /// List all defined composition profiles.
+    #[must_use]
+    pub fn composition_names(&self) -> Vec<&str> {
+        self.compositions.keys().map(String::as_str).collect()
     }
 }
 

@@ -73,6 +73,7 @@ pub(super) async fn dispatch_plasmid(
         "plasmid.trigger" => plasmid::trigger(config).await,
         "plasmid.depot_sync" => plasmid::depot_sync(config).await,
         "plasmid.status" => plasmid::status().await,
+        "plasmid.composition" => dispatch_composition(args),
         "plasmid.staleness" => dispatch_staleness(),
         "plasmid.auto_fetch" => {
             let payload_str = args.first().copied().unwrap_or("{}");
@@ -313,5 +314,100 @@ pub(super) fn dispatch_depot_integrity(args: &[&str]) -> crate::Result<ShadowOut
             report.architectures.len()
         ),
         serde_json::to_value(&report)?,
+    ))
+}
+
+/// `plasmid.composition` — Query manifest composition profiles.
+///
+/// Usage:
+///   membrane plasmid.composition                   # list all profiles
+///   membrane plasmid.composition --profile thin-relay  # show one profile
+///   membrane plasmid.composition --gate golgiBody   # show gate's composition
+fn dispatch_composition(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+    let manifest = crate::manifest::load_from_workspace(std::path::Path::new(&workspace))?;
+
+    let profile_name = cli::extract_flag_value(args, "--profile");
+    let gate_name = cli::extract_flag_value(args, "--gate");
+
+    if let Some(gate) = gate_name {
+        let comp = manifest.gate_composition(gate);
+        let comp_name = manifest
+            .gates
+            .get(gate)
+            .and_then(|g| g.composition.as_deref())
+            .unwrap_or("unknown");
+
+        return comp.map_or_else(
+            || {
+                Ok(ShadowOutcome::ok(format!(
+                    "{gate}: composition '{comp_name}' (not defined in [compositions] section)"
+                )))
+            },
+            |profile| {
+                Ok(ShadowOutcome::ok_with(
+                    format!(
+                        "{gate}: composition '{comp_name}' — {} primals, {} services",
+                        profile.primals.len(),
+                        profile.services.len()
+                    ),
+                    serde_json::json!({
+                        "gate": gate,
+                        "composition": comp_name,
+                        "description": &profile.description,
+                        "primals": &profile.primals,
+                        "services": &profile.services,
+                        "requires": &profile.requires,
+                        "repos": &profile.repos,
+                        "notes": &profile.notes,
+                    }),
+                ))
+            },
+        );
+    }
+
+    if let Some(name) = profile_name {
+        return manifest.composition(name).map_or_else(
+            || Ok(ShadowOutcome::fail(format!("composition '{name}' not found in manifest"))),
+            |profile| {
+                Ok(ShadowOutcome::ok_with(
+                    format!("{name}: {} — {} primals", profile.description, profile.primals.len()),
+                    serde_json::json!({
+                        "name": name,
+                        "description": &profile.description,
+                        "primals": &profile.primals,
+                        "services": &profile.services,
+                        "requires": &profile.requires,
+                        "repos": &profile.repos,
+                        "notes": &profile.notes,
+                        "examples": &profile.examples,
+                    }),
+                ))
+            },
+        );
+    }
+
+    let names = manifest.composition_names();
+    let data: Vec<serde_json::Value> = names
+        .iter()
+        .filter_map(|name| {
+            manifest.composition(name).map(|p| {
+                serde_json::json!({
+                    "name": name,
+                    "description": &p.description,
+                    "primals_count": p.primals.len(),
+                    "primals": &p.primals,
+                    "examples": &p.examples,
+                })
+            })
+        })
+        .collect();
+
+    Ok(ShadowOutcome::ok_with(
+        format!("{} composition profiles defined", names.len()),
+        serde_json::json!(data),
     ))
 }
