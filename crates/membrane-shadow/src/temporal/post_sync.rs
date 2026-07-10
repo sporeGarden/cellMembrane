@@ -99,6 +99,11 @@ pub(super) async fn run_post_sync_phases(
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
     }
 
+    // Rebuild static site if sporePrint was pulled and this gate serves content.
+    if opts.mode == CascadeMode::Sync {
+        run_content_rebuild_if_needed(root, lines).await;
+    }
+
     harvest_info
 }
 
@@ -550,6 +555,45 @@ pub fn load_rootpulse_session() -> Option<String> {
         .get("session")
         .and_then(|v| v.as_str())
         .map(String::from)
+}
+
+/// Rebuild sporePrint static site if this gate has the content dir and Zola installed.
+///
+/// Runs unconditionally after each cascade — Zola is fast (sub-second for unchanged
+/// content) and guarantees the served `public/` always matches the latest source.
+async fn run_content_rebuild_if_needed(root: &std::path::Path, lines: &mut Vec<String>) {
+    let site_dir = root.join(cellmembrane_types::service::SPOREPRINT_CONTENT_DIR);
+    if !site_dir.join("config.toml").exists() {
+        return;
+    }
+
+    let result = tokio::process::Command::new("zola")
+        .arg("build")
+        .current_dir(&site_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await;
+
+    match result {
+        Ok(output) if output.status.success() => {
+            lines.push(format!(
+                "  [content] REBUILT sporePrint ({})",
+                site_dir.display()
+            ));
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let first_line = stderr.lines().next().unwrap_or("unknown error");
+            lines.push(format!("  [content] zola build FAIL — {first_line}"));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Zola not installed — expected on non-content gates, silent skip.
+        }
+        Err(e) => {
+            lines.push(format!("  [content] zola exec error — {e}"));
+        }
+    }
 }
 
 #[cfg(test)]

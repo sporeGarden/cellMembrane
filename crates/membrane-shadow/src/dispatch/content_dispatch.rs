@@ -1,20 +1,94 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Content domain dispatch — S3 sporePrint content integrity verification.
+//! Content domain dispatch — sporePrint static site build + integrity verification.
 
 use crate::{ShadowConfig, ShadowOutcome};
+use tracing::{info, warn};
 
 pub(super) async fn dispatch_content(
     config: &ShadowConfig,
     cmd: &str,
-    _args: &[&str],
+    args: &[&str],
 ) -> crate::Result<ShadowOutcome> {
     match cmd {
+        "content.rebuild" => dispatch_content_rebuild(args).await,
         "content.verify" => dispatch_content_verify(config).await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown content command: {cmd}"
         ))),
     }
+}
+
+/// `content.rebuild` — run `zola build` in the sporePrint directory.
+///
+/// Intended to be chained after cascade on gates that serve the static site
+/// (currently golgi). Finds sporePrint via workspace root + manifest path,
+/// or falls back to `ECOPRIMALS_ROOT/infra/sporePrint`.
+async fn dispatch_content_rebuild(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let site_dir = resolve_sporeprint_dir(args);
+
+    if !site_dir.join("config.toml").exists() {
+        return Ok(ShadowOutcome::fail(format!(
+            "content.rebuild: no config.toml in {} — not a Zola site",
+            site_dir.display()
+        )));
+    }
+
+    info!(path = %site_dir.display(), "content.rebuild: running zola build");
+
+    let result = tokio::process::Command::new("zola")
+        .arg("build")
+        .current_dir(&site_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await;
+
+    match result {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let line_count = stdout.lines().count();
+            info!(pages = line_count, "content.rebuild: zola build succeeded");
+            Ok(ShadowOutcome::ok(format!(
+                "content.rebuild: OK — zola build in {} ({line_count} output lines)",
+                site_dir.display()
+            )))
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let first_line = stderr.lines().next().unwrap_or("unknown error");
+            warn!(error = %first_line, "content.rebuild: zola build failed");
+            Ok(ShadowOutcome::fail(format!(
+                "content.rebuild: FAIL — {first_line}"
+            )))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Ok(ShadowOutcome::fail(
+                "content.rebuild: zola binary not found — install with: cargo install zola"
+            ))
+        }
+        Err(e) => Ok(ShadowOutcome::fail(format!(
+            "content.rebuild: execution error — {e}"
+        ))),
+    }
+}
+
+/// Resolve the sporePrint directory from args, env, or workspace.
+fn resolve_sporeprint_dir(args: &[&str]) -> std::path::PathBuf {
+    if let Some(path) = crate::cli::extract_flag_value(args, "--path") {
+        return std::path::PathBuf::from(path);
+    }
+
+    if let Ok(root) = crate::temporal::resolve_workspace_root() {
+        let manifest_path = root.join(cellmembrane_types::service::SPOREPRINT_CONTENT_DIR);
+        if manifest_path.exists() {
+            return manifest_path;
+        }
+    }
+
+    let eco_root = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.to_string());
+    std::path::PathBuf::from(eco_root).join(cellmembrane_types::service::SPOREPRINT_CONTENT_DIR)
 }
 
 async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowOutcome> {
