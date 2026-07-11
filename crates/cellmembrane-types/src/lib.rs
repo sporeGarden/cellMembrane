@@ -75,7 +75,10 @@ pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
     binary_integrity_for,
 };
-pub use sync::{CascadeSource, DivergencePolicy, GateTransport, PushTarget};
+pub use sync::{
+    CascadeSource, DivergencePolicy, GateTransport, MembraneSyncMode, PushTarget, RepoCategory,
+    SyncPriority,
+};
 pub use topology::{
     AffinityTable, BackboneLink, NetworkSegment, PhysicalZone, ResolvedTopology, TopologyMap,
     TopologyMeta, ZoneStatus,

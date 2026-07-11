@@ -87,9 +87,12 @@ impl EcosystemManifest {
         orgs
     }
 
-    /// Get repos filtered by membrane type.
+    /// Get repos filtered by membrane sync mode.
     #[must_use]
-    pub fn repos_by_membrane(&self, membrane: &str) -> Vec<(&str, &RepoEntry)> {
+    pub fn repos_by_membrane(
+        &self,
+        membrane: cellmembrane_types::MembraneSyncMode,
+    ) -> Vec<(&str, &RepoEntry)> {
         self.repos
             .iter()
             .filter(|(_, e)| e.membrane == membrane)
@@ -126,8 +129,8 @@ impl EcosystemManifest {
     /// Get the `cargo build` package argument for a primal.
     /// Returns `Some("--package <pkg>")` for workspace primals, `None` otherwise.
     #[must_use]
-    pub fn build_package_arg(&self, slug: &str) -> Option<String> {
-        self.build.get(slug).map(|b| b.package.clone())
+    pub fn build_package_arg(&self, slug: &str) -> Option<&str> {
+        self.build.get(slug).map(|b| b.package.as_str())
     }
 
     /// Return the ordered list of build-authority gates from `[topology.roles]`.
@@ -286,6 +289,7 @@ pub async fn load_from_workspace_async(workspace_root: &Path) -> Result<Ecosyste
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cellmembrane_types::{PushTarget, ZoneLabel};
 
     fn sample_manifest_toml() -> &'static str {
         r#"
@@ -342,12 +346,12 @@ repos = ["bearDog", "cellMembrane"]
 
         let bear = &manifest.repos["bearDog"];
         assert_eq!(bear.local_path, "primals/bearDog");
-        assert_eq!(bear.category, "primal");
+        assert_eq!(bear.category, cellmembrane_types::RepoCategory::Primal);
         assert_eq!(bear.org, "ecoPrimals");
 
         let cm = &manifest.repos["cellMembrane"];
         assert_eq!(cm.local_path, "gardens/cellMembrane");
-        assert_eq!(cm.category, "garden");
+        assert_eq!(cm.category, cellmembrane_types::RepoCategory::Garden);
     }
 
     #[test]
@@ -576,7 +580,7 @@ targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]
         assert_eq!(barra.package, "barracuda-core");
 
         assert!(m.build_entry("nonexistent").is_none());
-        assert_eq!(m.build_package_arg("beardog"), Some("beardog".into()));
+        assert_eq!(m.build_package_arg("beardog"), Some("beardog"));
     }
 
     #[test]

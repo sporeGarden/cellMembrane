@@ -363,7 +363,10 @@ fn topology_mesh() -> ShadowOutcome {
         |m| m.gates.keys().cloned().collect(),
     );
 
-    let mut lines = vec!["=== WireGuard Mesh (10.13.37.0/24) ===".to_owned()];
+    let mut lines = vec![format!(
+        "=== WireGuard Mesh ({}) ===",
+        cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET
+    )];
 
     for gate in &gate_names {
         let ip = resolve_mesh_ip(manifest.as_ref(), gate);

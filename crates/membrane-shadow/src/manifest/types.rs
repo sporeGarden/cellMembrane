@@ -168,15 +168,15 @@ pub struct RepoEntry {
     pub org: String,
     /// Local path relative to workspace root.
     pub local_path: String,
-    /// Membrane type: `inner-only`, `trailing-mirror`, `bidirectional`, `outer-only`.
+    /// Membrane sync mode: inner-only, trailing-mirror, bidirectional, outer-only.
     #[serde(default)]
-    pub membrane: String,
-    /// Sync priority: `high`, `standard`, `low`.
+    pub membrane: cellmembrane_types::MembraneSyncMode,
+    /// Sync priority: high, standard, low.
     #[serde(default)]
-    pub sync_priority: String,
-    /// Category: `primal`, `spring`, `garden`, `infra`, `root`.
+    pub sync_priority: cellmembrane_types::SyncPriority,
+    /// Category: primal, spring, garden, infra, root, protist.
     #[serde(default)]
-    pub category: String,
+    pub category: cellmembrane_types::RepoCategory,
     /// Human description.
     #[serde(default)]
     pub description: String,

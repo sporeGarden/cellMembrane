@@ -21,6 +21,7 @@ mod download;
 mod drift;
 mod fetch;
 mod harvest;
+mod harvest_support;
 pub(crate) mod integrity;
 mod refresh;
 pub(crate) mod sandbox;
@@ -547,7 +548,9 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
     let sigs_cmd = format!(
         "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_depot}/signatures.toml 2>/dev/null"
     );
-    let _ = crate::ssh::exec_raw(config, &sigs_cmd).await;
+    if let Err(e) = crate::ssh::exec_raw(config, &sigs_cmd).await {
+        tracing::debug!(error = %e, "WAN signatures.toml sync: SSH copy failed");
+    }
 
     true
 }

@@ -175,6 +175,93 @@ impl fmt::Display for CascadeSource {
     }
 }
 
+/// How a repository relates to the inner/outer membrane boundary.
+///
+/// Declared per-repo in the ecosystem manifest as `membrane`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MembraneSyncMode {
+    /// Only synced within the inner membrane (sovereign Forgejo).
+    #[default]
+    InnerOnly,
+    /// Inner is source of truth; outer (GitHub) is a delayed mirror.
+    TrailingMirror,
+    /// Changes flow both directions (inner ↔ outer).
+    Bidirectional,
+    /// Outer-only (GitHub source, no Forgejo copy).
+    OuterOnly,
+}
+
+impl fmt::Display for MembraneSyncMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InnerOnly => write!(f, "inner-only"),
+            Self::TrailingMirror => write!(f, "trailing-mirror"),
+            Self::Bidirectional => write!(f, "bidirectional"),
+            Self::OuterOnly => write!(f, "outer-only"),
+        }
+    }
+}
+
+/// Sync priority for temporal cascade ordering.
+///
+/// Declared per-repo in the ecosystem manifest as `sync_priority`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncPriority {
+    /// Synced first — critical infrastructure repos.
+    High,
+    /// Normal ordering (default).
+    #[default]
+    Standard,
+    /// Synced last — non-critical or large repos.
+    Low,
+}
+
+impl fmt::Display for SyncPriority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::High => write!(f, "high"),
+            Self::Standard => write!(f, "standard"),
+            Self::Low => write!(f, "low"),
+        }
+    }
+}
+
+/// Repository category in the ecosystem taxonomy.
+///
+/// Declared per-repo in the ecosystem manifest as `category`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepoCategory {
+    /// Core primal binary (bearDog, songBird, etc.).
+    #[default]
+    Primal,
+    /// Spring runtime/framework (primalSpring, groundSpring).
+    Spring,
+    /// Garden tooling (cellMembrane, peptiDog).
+    Garden,
+    /// Infrastructure and configuration (wateringHole).
+    Infra,
+    /// Monorepo root.
+    Root,
+    /// Composition target (footPrint, etc.).
+    Protist,
+}
+
+impl fmt::Display for RepoCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Primal => write!(f, "primal"),
+            Self::Spring => write!(f, "spring"),
+            Self::Garden => write!(f, "garden"),
+            Self::Infra => write!(f, "infra"),
+            Self::Root => write!(f, "root"),
+            Self::Protist => write!(f, "protist"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

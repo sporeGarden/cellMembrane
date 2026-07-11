@@ -79,7 +79,7 @@ impl EcosystemManifest {
                     issues.push(format!("repos.{name}: linker is empty (omit or set a value)"));
                 }
             }
-            if entry.gpu && entry.category != "primal" {
+            if entry.gpu && entry.category != cellmembrane_types::RepoCategory::Primal {
                 issues.push(format!(
                     "repos.{name}: gpu=true but category is \"{}\", expected \"primal\"",
                     entry.category,

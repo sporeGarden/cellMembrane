@@ -77,9 +77,10 @@ async fn setup_directories(ip: &str) -> Result<String> {
         cellmembrane_types::ServiceCapability::TurnServer,
     );
     let config_dir = cellmembrane_types::service::DEFAULT_CONFIG_DIR;
+    let eco_root = cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT;
     let script = format!(
         r#"
-        mkdir -p {base} /run/membrane /opt/ecoPrimals \
+        mkdir -p {base} /run/membrane {eco_root} \
                  {base}/sandbox /run/membrane/sandbox \
                  {base}/canary /run/membrane/canary \
                  /var/lib/membrane/{relay_binary} {config_dir}
