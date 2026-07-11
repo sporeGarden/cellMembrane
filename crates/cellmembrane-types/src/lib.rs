@@ -69,13 +69,13 @@ pub use gateway::{
     BackendStatus, CertExpiry, GatewayConfig, GatewayHealth, GatewayRoute, ProbeResult,
     ShadowComparison, ShadowReport, TlsGatewayConfig,
 };
-pub use identity::{BindMode, GateMobility, MembraneIdentity};
+pub use identity::{BindMode, GateMobility, GateRole, MembraneIdentity};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
     binary_integrity_for,
 };
-pub use sync::{DivergencePolicy, GateTransport, PushTarget};
+pub use sync::{CascadeSource, DivergencePolicy, GateTransport, PushTarget};
 pub use topology::{
     AffinityTable, BackboneLink, NetworkSegment, PhysicalZone, ResolvedTopology, TopologyMap,
     TopologyMeta, ZoneStatus,

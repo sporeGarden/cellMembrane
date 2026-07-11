@@ -106,23 +106,10 @@ pub(crate) fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<Tra
     Some(resolve_mesh_relay(gate_name, capability))
 }
 
-/// Map well-known role names to service capabilities.
-///
-/// Covers manifest role strings (e.g. `roles = ["forgejo", "relay"]`)
-/// and their semantic aliases.
+/// Map a role name to its service capability via `GateRole::as_capability()`.
 #[must_use]
 pub(crate) fn role_to_capability(role: &str) -> Option<ServiceCapability> {
-    match role {
-        "relay" | "mesh_relay" => Some(ServiceCapability::MeshRelay),
-        "turn" | "stun" => Some(ServiceCapability::TurnServer),
-        "security" | "crypto" | "auth" => Some(ServiceCapability::CryptoSigner),
-        "content" | "forgejo" | "depot" => Some(ServiceCapability::ContentServing),
-        "observability" | "metrics" => Some(ServiceCapability::Observability),
-        "compute" | "build" | "build_hub" => Some(ServiceCapability::ComputeOrchestration),
-        "storage" | "nest" | "ledger" => Some(ServiceCapability::Storage),
-        "identity" | "biomeos" => Some(ServiceCapability::Identity),
-        _ => None,
-    }
+    cellmembrane_types::GateRole::from(role).as_capability()
 }
 
 fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
@@ -171,7 +158,10 @@ fn resolve_mesh_tcp(target_gate: &str, svc: &MembraneService) -> Option<Transpor
     let port = svc.port?;
     let manifest = load_manifest()?;
     let ip = manifest.mesh_ip_for(target_gate)?;
-    Some(TransportEndpoint::Tcp { host: ip, port })
+    Some(TransportEndpoint::Tcp {
+        host: ip.to_string(),
+        port,
+    })
 }
 
 /// Build a mesh relay endpoint — routes through songBird relay infrastructure.
@@ -286,8 +276,12 @@ mod tests {
         assert!(role_to_capability("turn").is_some());
         assert!(role_to_capability("auth").is_some());
         assert!(role_to_capability("nest").is_some());
-        assert!(role_to_capability("biomeos").is_some());
         assert!(role_to_capability("metrics").is_some());
+        assert!(role_to_capability("identity").is_some());
+        assert!(
+            role_to_capability("biomeos").is_none(),
+            "biomeos is a primal name, not a role — use 'identity' role instead"
+        );
         assert!(
             role_to_capability("dns_primary").is_none(),
             "DNS roles are infra, not primal capabilities"

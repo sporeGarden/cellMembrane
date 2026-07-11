@@ -190,7 +190,9 @@ fn resolve_gate_ssh(gate: &str) -> (String, String) {
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
     );
     if let Ok(manifest) = crate::manifest::load_from_workspace(std::path::Path::new(&workspace)) {
-        let host = manifest.ssh_target_for(gate).unwrap_or_else(|| gate.into());
+        let host = manifest
+            .ssh_target_for(gate)
+            .map_or_else(|| gate.to_string(), String::from);
         let user = manifest.ssh_user_for(gate).to_string();
         return (host, user);
     }

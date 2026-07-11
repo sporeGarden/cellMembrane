@@ -103,7 +103,15 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         gate_name.to_string()
     };
 
-    let source = cli::extract_flag_value(args, "--source").unwrap_or("temporal");
+    let source = cli::extract_flag_value(args, "--source")
+        .and_then(|s| match s {
+            "temporal" => Some(cellmembrane_types::CascadeSource::Temporal),
+            "forgejo" => Some(cellmembrane_types::CascadeSource::Forgejo),
+            "origin" => Some(cellmembrane_types::CascadeSource::Origin),
+            "auto" => Some(cellmembrane_types::CascadeSource::Auto),
+            _ => None,
+        })
+        .unwrap_or_default();
     let check_only = args.contains(&"--check");
     let clone_missing = args.contains(&"--clone-missing");
     let dry_run = args.contains(&"--dry-run");

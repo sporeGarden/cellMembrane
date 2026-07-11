@@ -72,7 +72,7 @@ pub struct BuildEntry {
 pub struct Topology {
     /// Envelope model: `monoderm` or `diderm`.
     #[serde(default)]
-    pub model: String,
+    pub model: cellmembrane_types::EnvelopeTopology,
     /// Inner membrane node name.
     #[serde(default)]
     pub inner_membrane: String,
@@ -136,9 +136,9 @@ pub struct SyncConfig {
     /// Forgejo SSH URL for git operations.
     #[serde(default)]
     pub forgejo_ssh: String,
-    /// Default sync source (`origin`, `forgejo`, `auto`, `temporal`).
-    #[serde(default = "default_source")]
-    pub default_source: String,
+    /// Default cascade sync source preference.
+    #[serde(default)]
+    pub default_source: cellmembrane_types::CascadeSource,
     /// Default git branch.
     #[serde(default = "default_branch")]
     pub default_branch: String,
@@ -163,9 +163,6 @@ pub struct SyncConfig {
     pub push_remotes: Vec<String>,
 }
 
-fn default_source() -> String {
-    "temporal".into()
-}
 fn default_branch() -> String {
     "main".into()
 }
@@ -314,9 +311,9 @@ pub struct GateProfile {
     /// Site topology annotation (e.g., `"triangle_3hub_backbone"`).
     #[serde(default)]
     pub site_topology: Option<String>,
-    /// Functional roles this gate performs (e.g., `["build_hub", "depot", "firewall"]`).
+    /// Functional roles this gate performs (e.g., `["build_hub", "depot", "nat_firewall"]`).
     #[serde(default)]
-    pub roles: Vec<String>,
+    pub roles: Vec<cellmembrane_types::GateRole>,
     /// `WireGuard` mesh IP (e.g., `"10.13.37.2"`).
     #[serde(default)]
     pub wg_ip: Option<String>,
@@ -512,54 +509,29 @@ impl EcosystemManifest {
     /// Returns `(gate_name, &GateProfile)` tuples.
     #[must_use]
     pub fn gates_for_role(&self, role: &str) -> Vec<(&str, &GateProfile)> {
+        let target = cellmembrane_types::GateRole::from(role);
         self.gates
             .iter()
-            .filter(|(_, profile)| profile.roles.iter().any(|r| r == role))
+            .filter(|(_, profile)| profile.roles.contains(&target))
             .map(|(name, profile)| (name.as_str(), profile))
             .collect()
     }
 
     /// Resolve the `WireGuard` mesh IP for a named gate.
     #[must_use]
-    pub fn mesh_ip_for(&self, gate: &str) -> Option<String> {
-        self.gates.get(gate).and_then(|p| p.wg_ip.clone())
+    pub fn mesh_ip_for(&self, gate: &str) -> Option<&str> {
+        self.gates.get(gate).and_then(|p| p.wg_ip.as_deref())
     }
 
-    /// Basic manifest validation — returns a list of human-readable issues.
-    #[must_use]
-    pub fn validate(&self) -> Vec<String> {
-        let mut issues = Vec::new();
-        if self.meta.version.is_empty() {
-            issues.push("meta.version is empty".into());
-        }
-        if self.repos.is_empty() {
-            issues.push("no repos defined".into());
-        }
-        for (name, entry) in &self.repos {
-            if entry.local_path.is_empty() {
-                issues.push(format!("repos.{name}: missing local_path"));
-            }
-            if entry.org.is_empty() {
-                issues.push(format!("repos.{name}: missing org"));
-            }
-        }
-        for (name, gate) in &self.gates {
-            for repo in &gate.repos {
-                if !self.repos.contains_key(repo) {
-                    issues.push(format!("gates.{name}: references unknown repo '{repo}'"));
-                }
-            }
-        }
-        issues
-    }
+    // validate() is provided by manifest/validate.rs — cross-field integrity checks.
 
     /// Look up a gate's LAN IP from the manifest.
     ///
     /// Returns the `lan_ip` field if set, enabling direct TCP resolution on
     /// the local subnet without DNS or `WireGuard` overlay.
     #[must_use]
-    pub fn lan_ip_for(&self, gate: &str) -> Option<String> {
-        self.gates.get(gate).and_then(|p| p.lan_ip.clone())
+    pub fn lan_ip_for(&self, gate: &str) -> Option<&str> {
+        self.gates.get(gate).and_then(|p| p.lan_ip.as_deref())
     }
 
     /// Resolve the best SSH target for a gate from the manifest.
@@ -568,12 +540,12 @@ impl EcosystemManifest {
     /// peer) → `wg_ip` (mesh overlay). Returns `None` if the gate is not in
     /// the manifest or has no routable address.
     #[must_use]
-    pub fn ssh_target_for(&self, gate: &str) -> Option<String> {
+    pub fn ssh_target_for(&self, gate: &str) -> Option<&str> {
         let p = self.gates.get(gate)?;
         p.host
-            .clone()
-            .or_else(|| p.lan_ip.clone())
-            .or_else(|| p.wg_ip.clone())
+            .as_deref()
+            .or(p.lan_ip.as_deref())
+            .or(p.wg_ip.as_deref())
     }
 
     /// Resolve the SSH user for a gate (defaults to `"root"`).
@@ -607,6 +579,7 @@ impl EcosystemManifest {
     }
 }
 
+mod validate;
 mod wave;
 pub use wave::{ExitCriterion, WaveState};
 
@@ -708,7 +681,7 @@ repos = ["bearDog", "cellMembrane"]
     #[test]
     fn parse_manifest_sync_config() {
         let manifest: EcosystemManifest = toml::from_str(sample_manifest_toml()).unwrap();
-        assert_eq!(manifest.sync.default_source, "temporal");
+        assert_eq!(manifest.sync.default_source, cellmembrane_types::CascadeSource::Temporal);
         assert_eq!(manifest.sync.push_target, PushTarget::Forgejo);
         assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::MergeFf);
     }
@@ -802,9 +775,9 @@ repos = ["cellMembrane"]
 wg_ip = "10.13.37.5"
 "#;
         let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        assert_eq!(manifest.lan_ip_for("sporeGate"), Some("192.168.4.3".into()));
+        assert_eq!(manifest.lan_ip_for("sporeGate"), Some("192.168.4.3"));
         assert_eq!(manifest.lan_ip_for("eastGate"), None);
-        assert_eq!(manifest.mesh_ip_for("sporeGate"), Some("10.13.37.2".into()));
+        assert_eq!(manifest.mesh_ip_for("sporeGate"), Some("10.13.37.2"));
         assert_eq!(manifest.lan_ip_for("unknown"), None);
     }
 
@@ -817,7 +790,7 @@ version = "1.0.0"
 [gates]
 "#;
         let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        assert_eq!(manifest.sync.default_source, "temporal");
+        assert_eq!(manifest.sync.default_source, cellmembrane_types::CascadeSource::Temporal);
         assert_eq!(manifest.sync.default_branch, "main");
         assert_eq!(manifest.sync.divergence_policy, DivergencePolicy::Flag);
         assert_eq!(manifest.sync.push_target, PushTarget::All);
@@ -846,9 +819,9 @@ wg_ip = "10.13.37.6"
 repos = []
 "#;
         let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        assert_eq!(m.ssh_target_for("golgiBody"), Some("157.230.3.183".into()));
-        assert_eq!(m.ssh_target_for("sporeGate"), Some("192.168.4.3".into()));
-        assert_eq!(m.ssh_target_for("flockGate"), Some("10.13.37.6".into()));
+        assert_eq!(m.ssh_target_for("golgiBody"), Some("157.230.3.183"));
+        assert_eq!(m.ssh_target_for("sporeGate"), Some("192.168.4.3"));
+        assert_eq!(m.ssh_target_for("flockGate"), Some("10.13.37.6"));
         assert_eq!(m.ssh_target_for("southGate"), None);
         assert_eq!(m.ssh_target_for("unknown"), None);
     }

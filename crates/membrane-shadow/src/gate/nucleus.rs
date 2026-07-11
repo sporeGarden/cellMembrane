@@ -143,8 +143,9 @@ pub(super) fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
 
 /// Generate systemd timer + service units for autonomous cascade.
 ///
-/// Runs `membrane temporal.cascade --source forgejo` periodically so the
-/// gate converges without human intervention. This is Quorum Phase 1:
+/// Runs `membrane temporal.cascade` periodically so the gate converges
+/// without human intervention. Uses the manifest `default_source` for
+/// the `--source` flag (falls back to `temporal`). This is Quorum Phase 1:
 /// the gate autonomously pulls all ecosystem repos on a schedule.
 ///
 /// The timer uses `OnCalendar` with `RandomizedDelaySec` to avoid
@@ -155,6 +156,13 @@ pub fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> (String
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
 
+    let source = crate::temporal::resolve_workspace_root()
+        .ok()
+        .and_then(|r| crate::manifest::load_from_workspace(&r).ok())
+        .map_or_else(cellmembrane_types::CascadeSource::default, |m| {
+            m.sync.default_source
+        });
+
     let service = format!(
         r"[Unit]
 Description=Membrane Autonomous Cascade ({gate_name})
@@ -163,7 +171,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart={install_base}/membrane temporal.cascade --source forgejo
+ExecStart={install_base}/membrane temporal.cascade --source {source}
 Environment=GATE_NAME={gate_name}
 TimeoutStartSec=300
 StandardOutput=journal

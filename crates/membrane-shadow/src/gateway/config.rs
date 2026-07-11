@@ -127,10 +127,11 @@ pub fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
 /// Pure function: maps role strings to default route configurations.
 /// Gates with `http` or `gateway` roles get the standard `JupyterHub` routes.
 #[must_use]
-pub fn default_routes_for_roles(roles: &[String]) -> Vec<GatewayRoute> {
+pub fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -> Vec<GatewayRoute> {
+    use cellmembrane_types::GateRole;
     let has_http_role = roles
         .iter()
-        .any(|r| r.contains("http") || r.contains("gateway"));
+        .any(|r| matches!(r, GateRole::Http | GateRole::Gateway));
 
     if !has_http_role {
         return Vec::new();
@@ -331,7 +332,8 @@ mod tests {
 
     #[test]
     fn default_routes_for_http_role() {
-        let roles = vec!["http".to_owned(), "ci".to_owned()];
+        use cellmembrane_types::GateRole;
+        let roles = vec![GateRole::Http, GateRole::Ci];
         let routes = default_routes_for_roles(&roles);
         assert_eq!(routes.len(), 4);
         assert!(routes.iter().all(|r| r.host == "lab.primals.eco"));
@@ -343,14 +345,16 @@ mod tests {
 
     #[test]
     fn default_routes_for_gateway_role() {
-        let roles = vec!["gateway".to_owned()];
+        use cellmembrane_types::GateRole;
+        let roles = vec![GateRole::Gateway];
         let routes = default_routes_for_roles(&roles);
         assert_eq!(routes.len(), 4);
     }
 
     #[test]
     fn default_routes_for_non_http_role() {
-        let roles = vec!["ci".to_owned(), "compute".to_owned()];
+        use cellmembrane_types::GateRole;
+        let roles = vec![GateRole::Ci, GateRole::Compute];
         let routes = default_routes_for_roles(&roles);
         assert!(routes.is_empty());
     }

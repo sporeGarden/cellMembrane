@@ -433,7 +433,9 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let format = cli::extract_flag_value(args, "--format").unwrap_or("nftables");
 
     let is_plasma_membrane = args.contains(&"--plasma-membrane")
-        || profile.is_some_and(|p| p.roles.iter().any(|r| r == "nat_firewall"));
+        || profile.is_some_and(|p| {
+            p.roles.contains(&cellmembrane_types::GateRole::NatFirewall)
+        });
 
     let nft_config = if is_plasma_membrane {
         let wan = cli::extract_flag_value(args, "--wan")
@@ -453,9 +455,13 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
             gate_name: gate_name.into(),
             enable_nat: !args.contains(&"--no-nat"),
             enable_dhcp: !args.contains(&"--no-dhcp")
-                && profile.is_some_and(|p| p.roles.iter().any(|r| r == "dhcp")),
+                && profile.is_some_and(|p| {
+                    p.roles.contains(&cellmembrane_types::GateRole::Dhcp)
+                }),
             trust_lan_input: args.contains(&"--trust-lan")
-                || profile.is_some_and(|p| p.roles.iter().any(|r| r == "nat_firewall")),
+                || profile.is_some_and(|p| {
+                    p.roles.contains(&cellmembrane_types::GateRole::NatFirewall)
+                }),
             wireguard_interface: cli::extract_flag_value(args, "--wg-iface")
                 .map(Into::into)
                 .or_else(|| if has_wg { Some("wg0".into()) } else { None }),
@@ -499,11 +505,14 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
     let subnet = cli::extract_flag_value(args, "--subnet")
         .unwrap_or(cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET);
 
-    let local_ip = m.mesh_ip_for(&gate_name).ok_or_else(|| {
-        crate::error::ShadowError::Config(format!(
-            "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
-        ))
-    })?;
+    let local_ip = m
+        .mesh_ip_for(&gate_name)
+        .map(String::from)
+        .ok_or_else(|| {
+            crate::error::ShadowError::Config(format!(
+                "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
+            ))
+        })?;
 
     let keepalive: u16 = cli::extract_flag_value(args, "--keepalive")
         .and_then(|k| k.parse().ok())
@@ -518,18 +527,20 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
     let is_local_hub = m
         .gates
         .get(&gate_name)
-        .is_some_and(|p| p.roles.iter().any(|r| r == "wg_hub"));
+        .is_some_and(|p| p.roles.contains(&cellmembrane_types::GateRole::WgHub));
 
     let mut peers = Vec::new();
     for (name, profile) in &m.gates {
         if *name == gate_name {
             continue;
         }
-        let Some(mesh_ip) = m.mesh_ip_for(name) else {
+        let Some(mesh_ip) = m.mesh_ip_for(name).map(String::from) else {
             continue;
         };
 
-        let is_hub = profile.roles.iter().any(|r| r == "wg_hub");
+        let is_hub = profile
+            .roles
+            .contains(&cellmembrane_types::GateRole::WgHub);
 
         let endpoint = profile
             .wan_endpoint

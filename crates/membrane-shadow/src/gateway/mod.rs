@@ -484,7 +484,7 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
         checks.push(DeployCheck {
             name: format!("{gate_name} SSH target"),
             ok: ssh_target.is_some(),
-            detail: ssh_target.unwrap_or_else(|| "no routable address".into()),
+            detail: ssh_target.unwrap_or("no routable address").to_string(),
         });
     }
 

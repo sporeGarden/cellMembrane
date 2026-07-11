@@ -256,10 +256,11 @@ fn request_beardog_sign(data: &str) -> Option<SignResult> {
 
     #[cfg(unix)]
     {
+        use base64::Engine;
+
         let socket_name = signer_socket_name();
         let socket_path = crate::impulse::discover_socket(&socket_name)?;
 
-        use base64::Engine;
         let message_b64 = base64::engine::general_purpose::STANDARD.encode(data.as_bytes());
         let request = serde_json::json!({
             "jsonrpc": "2.0",

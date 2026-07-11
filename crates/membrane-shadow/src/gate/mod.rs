@@ -160,7 +160,10 @@ pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
     let source = crate::temporal::resolve_workspace_root()
         .ok()
         .and_then(|r| crate::manifest::load_from_workspace(&r).ok())
-        .map_or_else(|| "forgejo".into(), |m| m.sync.default_source);
+        .map_or_else(
+            || cellmembrane_types::CascadeSource::Forgejo,
+            |m| m.sync.default_source,
+        );
     let root = &config.vps_root;
     let cmd = format!("cd {root} && membrane temporal.cascade --source {source} 2>&1");
     let output = ssh::exec(config, &cmd).await?;

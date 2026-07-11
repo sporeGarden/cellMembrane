@@ -146,6 +146,35 @@ impl fmt::Display for GateTransport {
     }
 }
 
+/// Default cascade sync source preference.
+///
+/// Controls which git remote is preferred when `temporal.cascade` syncs repos.
+/// Declared in the ecosystem manifest as `sync.default_source`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CascadeSource {
+    /// Use the temporal matrix leader selection (default).
+    #[default]
+    Temporal,
+    /// Prefer the sovereign Forgejo remote.
+    Forgejo,
+    /// Prefer the GitHub mirror remote (`origin`).
+    Origin,
+    /// Auto-detect best source per repo.
+    Auto,
+}
+
+impl fmt::Display for CascadeSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Temporal => write!(f, "temporal"),
+            Self::Forgejo => write!(f, "forgejo"),
+            Self::Origin => write!(f, "origin"),
+            Self::Auto => write!(f, "auto"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

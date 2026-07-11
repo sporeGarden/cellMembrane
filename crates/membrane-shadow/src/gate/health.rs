@@ -483,10 +483,7 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
     let gate = super::resolve_local_gate_identity();
 
     let profile = manifest.gates.get(&gate)?;
-    let is_tls_gate = profile
-        .roles
-        .iter()
-        .any(|r| r == "caddy" || r == "caddy_tls" || r == "tls_terminator");
+    let is_tls_gate = profile.roles.iter().any(cellmembrane_types::GateRole::is_tls);
     if !is_tls_gate {
         return None;
     }

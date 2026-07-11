@@ -189,7 +189,10 @@ async fn relay_status() -> crate::Result<ShadowOutcome> {
     let ssh_ok_ext = crate::ssh::check_connectivity(ext_host).await;
 
     let repo_count = m.repos.len();
-    let topology = m.topology.as_ref().map_or("unknown", |t| t.model.as_str());
+    let topology = m
+        .topology
+        .as_ref()
+        .map_or_else(|| "unknown".to_string(), |t| t.model.to_string());
 
     let msg = format!(
         "=== Relay Chain Status ===\n\

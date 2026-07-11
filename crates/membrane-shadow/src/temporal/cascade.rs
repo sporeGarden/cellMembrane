@@ -38,8 +38,8 @@ pub enum PostSyncPhase {
 pub struct CascadeOpts<'a> {
     /// Gate name to cascade (e.g. "golgiBody").
     pub gate: &'a str,
-    /// Source preference (e.g. "forgejo").
-    pub source: &'a str,
+    /// Source preference for display/logging.
+    pub source: cellmembrane_types::CascadeSource,
     /// Cascade execution mode.
     pub mode: CascadeMode,
     /// If true, clone repos not yet present locally.
@@ -303,7 +303,7 @@ mod tests {
     fn cascade_opts_default_fields() {
         let opts = CascadeOpts {
             gate: "eastGate",
-            source: "forgejo",
+            source: cellmembrane_types::CascadeSource::Forgejo,
             mode: CascadeMode::DryRun,
             clone_missing: false,
             publish_freshness: true,
