@@ -698,6 +698,7 @@ dependencies = [
 name = "membrane-shadow"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "blake3",
  "cellmembrane-types",
  "chrono",

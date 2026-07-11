@@ -259,20 +259,31 @@ fn request_beardog_sign(data: &str) -> Option<SignResult> {
         let socket_name = signer_socket_name();
         let socket_path = crate::impulse::discover_socket(&socket_name)?;
 
+        use base64::Engine;
+        let message_b64 = base64::engine::general_purpose::STANDARD.encode(data.as_bytes());
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": "crypto.sign_ed25519",
-            "params": { "data": data }
+            "params": {
+                "message": message_b64,
+                "key_id": "depot_signing_key",
+                "purpose": "depot"
+            }
         });
         let request_str = serde_json::to_string(&request).ok()?;
         let response_bytes = uds_sign_request(&socket_path, &request_str)?;
         let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
         let result = response.get("result")?;
 
+        let pk_b64 = result.get("public_key")?.as_str()?;
+        let sig_b64 = result.get("signature")?.as_str()?;
+        let pk_bytes = base64::engine::general_purpose::STANDARD.decode(pk_b64).ok()?;
+        let sig_bytes = base64::engine::general_purpose::STANDARD.decode(sig_b64).ok()?;
+
         Some(SignResult {
-            public_key: result.get("public_key")?.as_str()?.to_string(),
-            signature: result.get("signature")?.as_str()?.to_string(),
+            public_key: hex::encode(pk_bytes),
+            signature: hex::encode(sig_bytes),
         })
     }
 }
