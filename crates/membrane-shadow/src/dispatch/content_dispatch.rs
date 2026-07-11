@@ -23,7 +23,7 @@ pub(super) async fn dispatch_content(
 ///
 /// Intended to be chained after cascade on gates that serve the static site
 /// (currently golgi). Finds sporePrint via workspace root + manifest path,
-/// or falls back to `ECOPRIMALS_ROOT/infra/sporePrint`.
+/// or falls back to `ECOPRIMALS_ROOT/sporePrint`.
 async fn dispatch_content_rebuild(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let site_dir = resolve_sporeprint_dir(args);
 
@@ -74,9 +74,18 @@ async fn dispatch_content_rebuild(args: &[&str]) -> crate::Result<ShadowOutcome>
 }
 
 /// Resolve the sporePrint directory from args, env, or workspace.
+///
+/// Priority: `--path <dir>` flag > first positional arg > workspace/manifest > default.
 fn resolve_sporeprint_dir(args: &[&str]) -> std::path::PathBuf {
     if let Some(path) = crate::cli::extract_flag_value(args, "--path") {
         return std::path::PathBuf::from(path);
+    }
+
+    if let Some(positional) = args.iter().find(|a| !a.starts_with('-')) {
+        let p = std::path::PathBuf::from(positional);
+        if p.exists() {
+            return p;
+        }
     }
 
     if let Ok(root) = crate::temporal::resolve_workspace_root() {

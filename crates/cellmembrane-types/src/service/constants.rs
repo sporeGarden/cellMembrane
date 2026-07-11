@@ -400,7 +400,7 @@ pub const DEFAULT_PETALTONGUE_BIND: &str = "127.0.0.1:8080";
 pub const ENV_PETALTONGUE_BIND: &str = "PETALTONGUE_BIND";
 
 /// Default sporePrint content root relative to `ECOPRIMALS_ROOT`.
-pub const SPOREPRINT_CONTENT_DIR: &str = "infra/sporePrint";
+pub const SPOREPRINT_CONTENT_DIR: &str = "sporePrint";
 
 /// Environment variable for the ACME domain (bearDog TLS).
 pub const ENV_ACME_DOMAIN: &str = "BEARDOG_ACME_DOMAIN";

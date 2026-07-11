@@ -22,6 +22,7 @@ mod infra;
 mod plasmid_dispatch;
 mod provision_dispatch;
 mod relay_dispatch;
+mod sign_dispatch;
 mod sovereign;
 mod temporal;
 
@@ -100,6 +101,16 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             tokio::task::spawn_blocking(move || {
                 let refs: Vec<&str> = args.iter().map(String::as_str).collect();
                 plasmid_dispatch::dispatch_depot_integrity(&refs)
+            })
+            .await
+            .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
+        }
+        c if c.starts_with("sign.") => {
+            let cmd = cmd.to_owned();
+            let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+            tokio::task::spawn_blocking(move || {
+                let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                sign_dispatch::dispatch_sign(&cmd, &refs)
             })
             .await
             .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
