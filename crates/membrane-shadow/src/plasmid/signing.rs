@@ -158,6 +158,43 @@ fn load_signatures(path: &Path) -> SignaturesFile {
         .unwrap_or_default()
 }
 
+/// Fetch `signatures.toml` from the WAN depot over HTTPS.
+///
+/// Returns an empty `SignaturesFile` if the depot is unreachable or the
+/// file doesn't exist yet (signing activation pending).
+#[cfg(feature = "http")]
+pub async fn fetch_wan_signatures() -> SignaturesFile {
+    let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
+        .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
+    let url = format!("{base_url}/signatures.toml");
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    else {
+        return SignaturesFile::default();
+    };
+
+    let Ok(resp) = client.get(&url).send().await else {
+        return SignaturesFile::default();
+    };
+
+    if !resp.status().is_success() {
+        return SignaturesFile::default();
+    }
+
+    resp.text()
+        .await
+        .ok()
+        .and_then(|body| toml::from_str(&body).ok())
+        .unwrap_or_default()
+}
+
+#[cfg(not(feature = "http"))]
+pub async fn fetch_wan_signatures() -> SignaturesFile {
+    SignaturesFile::default()
+}
+
 /// Pure ed25519 verification using `ed25519-dalek`.
 fn verify_ed25519(message: &str, signature_hex: &str, public_key_hex: &str) -> bool {
     use ed25519_dalek::{Signature, Verifier, VerifyingKey};

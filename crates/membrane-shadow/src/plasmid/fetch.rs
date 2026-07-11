@@ -184,6 +184,16 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         results.extend(gnu_results);
     }
 
+    if args.source == FetchSource::Wan {
+        let wan_sigs = super::signing::fetch_wan_signatures().await;
+        if !wan_sigs.signatures.is_empty() {
+            let sigs_path = dest_root.join("signatures.toml");
+            if let Ok(content) = toml::to_string(&wan_sigs) {
+                let _ = tokio::fs::write(&sigs_path, content).await;
+            }
+        }
+    }
+
     let sig_valid = super::signing::verify_depot_with_policy(
         &dest_root,
         cellmembrane_types::DepotTrustPolicy::VerifyIfPresent,

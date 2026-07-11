@@ -281,13 +281,13 @@ pub struct GateProfile {
     pub target: Option<String>,
     /// Mobility classification: `fixed` or `mobile`.
     #[serde(default)]
-    pub mobility: Option<String>,
+    pub mobility: Option<cellmembrane_types::GateMobility>,
     /// Mesh relay peer address for federation (e.g. `157.230.3.183:7700`).
     #[serde(default)]
     pub mesh_peer: Option<String>,
-    /// `PRIMAL_BIND_MODE` for this gate (e.g. `tcp_only`, `fallback`, `uds`).
+    /// How primal processes bind their control sockets.
     #[serde(default)]
-    pub bind_mode: Option<String>,
+    pub bind_mode: Option<cellmembrane_types::BindMode>,
     /// Composition: which primals to start (e.g. `tower`, `compute`, `full`).
     #[serde(default)]
     pub composition: Option<String>,
@@ -900,7 +900,7 @@ repos = ["wateringHole", "bearDog"]
         assert_eq!(g.adb_ports, vec![9100, 9200, 9140]);
         assert_eq!(g.nucleus_status.as_deref(), Some("Tower LIVE"));
         assert_eq!(g.bond_types, vec!["covalent"]);
-        assert_eq!(g.mobility.as_deref(), Some("mobile"));
+        assert_eq!(g.mobility, Some(cellmembrane_types::GateMobility::Mobile));
         assert_eq!(g.repos.len(), 2);
     }
 

@@ -169,8 +169,8 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
         .and_then(|p| p.target.as_deref())
         .unwrap_or("unknown");
     let mobility = profile
-        .and_then(|p| p.mobility.as_deref())
-        .unwrap_or("unknown");
+        .and_then(|p| p.mobility)
+        .map_or_else(|| "unknown".to_string(), |m| m.to_string());
     let mesh_ip = profile
         .and_then(|p| p.wg_ip.as_deref())
         .or_else(|| mesh_address(gate_name))

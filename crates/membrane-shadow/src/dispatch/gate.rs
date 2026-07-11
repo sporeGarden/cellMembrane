@@ -223,8 +223,8 @@ fn dispatch_profile(gate_name: &str) -> crate::Result<ShadowOutcome> {
         "gate.profile: {gate_name}\n  target: {}\n  mobility: {}\n  bind_mode: {}\n  \
          composition: {}\n  transport: {}\n  mesh_peer: {}\n  repos: {}",
         profile.target.as_deref().unwrap_or("(default)"),
-        profile.mobility.as_deref().unwrap_or("fixed"),
-        profile.bind_mode.as_deref().unwrap_or("(auto)"),
+        profile.mobility.map_or_else(|| "fixed".to_string(), |m| m.to_string()),
+        profile.bind_mode.map_or_else(|| "auto".to_string(), |b| b.to_string()),
         profile.composition.as_deref().unwrap_or("full"),
         profile
             .transport

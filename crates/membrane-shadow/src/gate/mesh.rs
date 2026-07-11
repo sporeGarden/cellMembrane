@@ -28,7 +28,7 @@ pub(super) const fn transport_to_fetch_source(
 pub(super) struct GateManifestProfile {
     pub transport: GateTransport,
     pub mesh_peer: Option<String>,
-    pub mobility: Option<String>,
+    pub mobility: Option<cellmembrane_types::GateMobility>,
     pub composition: Option<String>,
 }
 
@@ -46,7 +46,7 @@ pub(super) fn resolve_gate_profile(gate_name: &str) -> GateManifestProfile {
         .map_or_else(GateManifestProfile::default, |p| GateManifestProfile {
             transport: p.transport.unwrap_or_default(),
             mesh_peer: p.mesh_peer.clone(),
-            mobility: p.mobility.clone(),
+            mobility: p.mobility,
             composition: p.composition.clone(),
         })
 }

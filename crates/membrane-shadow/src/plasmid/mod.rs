@@ -103,21 +103,52 @@ pub(crate) fn nucleus_primals() -> Vec<&'static str> {
 ///
 /// This enables composition-aware operations: a thin-relay gate fetches
 /// only songBird + nestGate, while a full NUCLEUS gate gets all 13.
+///
+/// Uses a process-level cache to avoid re-reading the manifest on every call.
+/// The cache is keyed on the gate name and populated on first access.
 pub(crate) fn resolve_gate_primals(gate: &str) -> Vec<String> {
-    let workspace = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-    );
-    if let Ok(manifest) =
+    use std::sync::OnceLock;
+
+    static CACHED: OnceLock<(String, Vec<String>)> = OnceLock::new();
+
+    let cached = CACHED.get_or_init(|| {
+        let workspace = cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+            cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+        );
+        let primals = crate::manifest::load_from_workspace(std::path::Path::new(&workspace))
+            .ok()
+            .and_then(|manifest| {
+                let profile = manifest.gate_composition(gate)?;
+                if profile.primals.is_empty() {
+                    None
+                } else {
+                    Some(profile.primals.clone())
+                }
+            })
+            .unwrap_or_else(|| nucleus_primals().into_iter().map(String::from).collect());
+        (gate.to_string(), primals)
+    });
+
+    if cached.0 == gate {
+        cached.1.clone()
+    } else {
+        let workspace = cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+            cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+        );
         crate::manifest::load_from_workspace(std::path::Path::new(&workspace))
-    {
-        if let Some(profile) = manifest.gate_composition(gate) {
-            if !profile.primals.is_empty() {
-                return profile.primals.clone();
-            }
-        }
+            .ok()
+            .and_then(|manifest| {
+                let profile = manifest.gate_composition(gate)?;
+                if profile.primals.is_empty() {
+                    None
+                } else {
+                    Some(profile.primals.clone())
+                }
+            })
+            .unwrap_or_else(|| nucleus_primals().into_iter().map(String::from).collect())
     }
-    nucleus_primals().into_iter().map(String::from).collect()
 }
 
 /// Detect the local platform's default Rust target triple (musl static).

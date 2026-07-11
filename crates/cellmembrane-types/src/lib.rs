@@ -69,7 +69,7 @@ pub use gateway::{
     BackendStatus, CertExpiry, GatewayConfig, GatewayHealth, GatewayRoute, ProbeResult,
     ShadowComparison, ShadowReport, TlsGatewayConfig,
 };
-pub use identity::{GateMobility, MembraneIdentity};
+pub use identity::{BindMode, GateMobility, MembraneIdentity};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,

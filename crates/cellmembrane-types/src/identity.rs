@@ -47,6 +47,36 @@ impl fmt::Display for GateMobility {
     }
 }
 
+/// How primal processes bind their control sockets.
+///
+/// Determines the `PRIMAL_BIND_MODE` env var pushed to systemd units.
+/// UDS is preferred for local-only gates; TCP is required for ADB/remote
+/// gates where UDS paths don't cross host boundaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BindMode {
+    /// Bind both UDS and TCP (default — auto-detect best path).
+    #[default]
+    Auto,
+    /// TCP socket only (required for ADB-tethered or remote-only gates).
+    TcpOnly,
+    /// UDS with TCP fallback (prefer UDS, fall back to TCP if socket path fails).
+    Fallback,
+    /// UDS only (pure local, no network socket).
+    Uds,
+}
+
+impl fmt::Display for BindMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Auto => write!(f, "auto"),
+            Self::TcpOnly => write!(f, "tcp_only"),
+            Self::Fallback => write!(f, "fallback"),
+            Self::Uds => write!(f, "uds"),
+        }
+    }
+}
+
 /// Persistent membrane identity from `[membrane.identity]` in `membrane.toml`.
 ///
 /// The family ID ties this membrane to its ecosystem. The gate ID distinguishes
