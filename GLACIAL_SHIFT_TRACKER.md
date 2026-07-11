@@ -1,8 +1,8 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-07 (Wave 133e/134a)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED
+**Last updated:** 2026-07-11 (Wave 136b)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed
 **Wave 134a update (deep debt sweep — refactor + idiom + manifest-driven evolution):**
 Deep debt sweep across cellMembrane codebase:
 1. `manifest/mod.rs` refactored 905L→693L: serde types extracted to `manifest/types.rs` (286L).
