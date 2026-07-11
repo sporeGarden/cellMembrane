@@ -15,7 +15,11 @@ const DEFAULT_SHADOW_PATHS: &[&str] = &["/hub/login", "/api/status", "/hub/api"]
 
 /// Dispatch `gateway.shadow` — compare Caddy (:443) vs Tower (:8443).
 pub async fn dispatch_shadow(config: &ShadowConfig, args: &[&str]) -> Result<ShadowOutcome> {
-    let host = extract_host(args).unwrap_or("lab.primals.eco");
+    let default_host = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
+        "lab.primals.eco",
+    );
+    let host = extract_host(args).unwrap_or(default_host.as_str());
     let legacy_port = extract_port(args, "--legacy-port").unwrap_or(443);
     let tower_port = extract_port(args, "--tower-port").unwrap_or(8443);
     let paths = extract_paths(args);

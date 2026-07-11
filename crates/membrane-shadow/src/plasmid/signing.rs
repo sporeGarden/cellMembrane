@@ -172,22 +172,33 @@ pub async fn fetch_wan_signatures() -> SignaturesFile {
         .timeout(std::time::Duration::from_secs(10))
         .build()
     else {
+        tracing::debug!("WAN signatures: failed to build HTTP client");
         return SignaturesFile::default();
     };
 
-    let Ok(resp) = client.get(&url).send().await else {
-        return SignaturesFile::default();
+    let resp = match client.get(&url).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::debug!(error = %e, "WAN signatures: fetch failed");
+            return SignaturesFile::default();
+        }
     };
 
     if !resp.status().is_success() {
+        tracing::debug!(status = %resp.status(), "WAN signatures: non-success response");
         return SignaturesFile::default();
     }
 
-    resp.text()
-        .await
-        .ok()
-        .and_then(|body| toml::from_str(&body).ok())
-        .unwrap_or_default()
+    match resp.text().await {
+        Ok(body) => toml::from_str(&body).unwrap_or_else(|e| {
+            tracing::debug!(error = %e, "WAN signatures: invalid TOML");
+            SignaturesFile::default()
+        }),
+        Err(e) => {
+            tracing::debug!(error = %e, "WAN signatures: failed to read response body");
+            SignaturesFile::default()
+        }
+    }
 }
 
 #[cfg(not(feature = "http"))]

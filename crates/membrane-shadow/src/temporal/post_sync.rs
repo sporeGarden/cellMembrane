@@ -199,8 +199,8 @@ pub(super) async fn run_post_cascade_sandbox(
     lines: &mut Vec<String>,
 ) -> Vec<String> {
     let Ok(depot_dir) = crate::plasmid::depot::resolve_depot(None) else {
-        lines.push("  [sandbox] SKIP — depot not resolved".into());
-        return built_primals.to_vec();
+        lines.push("  [sandbox] BLOCKED — depot not resolved, no primals promoted".into());
+        return Vec::new();
     };
 
     let arch = crate::plasmid::detect_target_triple();

@@ -153,10 +153,16 @@ systemctl list-units --type=service --state=running --no-pager --no-legend | \
 
 /// Run cascade sync on the VPS via the `membrane` binary.
 ///
+/// Uses the manifest `sync.default_source` if available, falling back to "forgejo".
+///
 /// Shadow for: `biomeOS gate.pull`
 pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
+    let source = crate::temporal::resolve_workspace_root()
+        .ok()
+        .and_then(|r| crate::manifest::load_from_workspace(&r).ok())
+        .map_or_else(|| "forgejo".into(), |m| m.sync.default_source);
     let root = &config.vps_root;
-    let cmd = format!("cd {root} && membrane temporal.cascade --source forgejo 2>&1");
+    let cmd = format!("cd {root} && membrane temporal.cascade --source {source} 2>&1");
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
 }

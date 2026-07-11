@@ -92,15 +92,28 @@ fn try_forward_to_gates(impulse: &ImpulseFile, payload: &str) {
         }
         let Some(ep) = crate::resolve::resolve_endpoint(&ctx, gate, ServiceCapability::MeshRelay)
         else {
+            tracing::debug!(target_gate = %gate, "impulse relay: no endpoint resolved — skipping");
             continue;
         };
+        let target = gate.clone();
         let req = request.clone();
         let _ = std::thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build();
-            if let Ok(rt) = rt {
-                let _ = rt.block_on(crate::jsonrpc::call_endpoint(&ep, &req));
+            match rt {
+                Ok(rt) => {
+                    if rt.block_on(crate::jsonrpc::call_endpoint(&ep, &req)).is_err() {
+                        tracing::debug!(target_gate = %target, "impulse relay: delivery failed");
+                    }
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        target_gate = %target,
+                        error = %e,
+                        "impulse relay: runtime build failed"
+                    );
+                }
             }
         });
     }

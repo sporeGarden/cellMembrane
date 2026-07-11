@@ -34,9 +34,9 @@ pub(super) async fn has_upstream_changes(
 
 /// Fetch HEAD from both outer (GitHub) and inner (Forgejo) membranes.
 ///
-/// Returns the commit that is farthest ahead — if either remote has a newer
-/// commit than provenance, we should detect drift. Both Forgejo and GitHub
-/// are checked to ensure all membrane layers see pushes.
+/// Prefers sovereign (Forgejo) as the authoritative source. Falls back
+/// to GitHub when Forgejo is unreachable. If both respond, returns
+/// Forgejo HEAD since sovereign-inner pushes are the primary flow.
 async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
     let forgejo_host = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_FORGEJO_SSH_HOST,
@@ -46,7 +46,7 @@ async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
     let forgejo = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await;
     let github = try_ls_remote_head(&format!("https://github.com/{repo}.git")).await;
 
-    github.or(forgejo)
+    forgejo.or(github)
 }
 
 async fn try_ls_remote_head(url: &str) -> Option<String> {

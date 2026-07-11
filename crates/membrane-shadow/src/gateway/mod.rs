@@ -365,8 +365,14 @@ async fn dispatch_retire_caddy(config: &ShadowConfig, args: &[&str]) -> Result<S
 
 /// Generate all 4 sporePrint NUCLEUS systemd units (petalTongue + nestGate + songBird + bearDog).
 fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
-    let gate_name = args.first().copied().unwrap_or("golgiBody");
-    let domain = crate::cli::extract_flag_value(args, "--domain").unwrap_or("primals.eco");
+    let resolved_gate = crate::gate::resolve_local_gate_identity();
+    let gate_name = args.first().copied().unwrap_or(resolved_gate.as_str());
+    let resolved_domain = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
+        "primals.eco",
+    );
+    let domain = crate::cli::extract_flag_value(args, "--domain")
+        .unwrap_or(resolved_domain.as_str());
 
     let params = crate::gate::sporeprint::SporePrintDeployParams::new(gate_name, domain);
     let units = crate::gate::sporeprint::generate_sporeprint_units(&params);
@@ -396,7 +402,8 @@ fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
 
 /// Pre-deployment readiness check for sporePrint NUCLEUS on a target gate.
 fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
-    let gate_name = args.first().copied().unwrap_or("golgiBody");
+    let resolved_gate = crate::gate::resolve_local_gate_identity();
+    let gate_name = args.first().copied().unwrap_or(resolved_gate.as_str());
     let arch = crate::plasmid::detect_target_triple();
 
     let depot_dir = crate::gate::resolve_plasmidbin_dir();
@@ -578,7 +585,7 @@ mod tests {
     fn sporeprint_units_default_gate() {
         let result = dispatch_sporeprint_units(&[]);
         assert!(result.ok);
-        assert!(result.message.contains("golgiBody"));
+        assert!(result.message.contains("sporePrint NUCLEUS"));
     }
 
     #[test]
@@ -591,7 +598,7 @@ mod tests {
     #[test]
     fn sporeprint_check_default_gate() {
         let result = dispatch_sporeprint_check(&[]);
-        assert!(result.message.contains("golgiBody"));
+        assert!(result.message.contains("sporePrint NUCLEUS deploy check"));
     }
 
     #[test]

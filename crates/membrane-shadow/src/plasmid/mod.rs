@@ -522,16 +522,34 @@ fn format_depot_sync_outcome(r: &DepotSyncResult) -> crate::ShadowOutcome {
     }
 }
 
-/// Ensure the WAN-serving checksums.toml is up to date.
+/// Copy depot metadata to the WAN-serving directory so Caddy serves current files.
 ///
-/// Copies from the plasmidBin repo root to wherever Caddy serves it.
-/// Returns true if the sync succeeded.
+/// Copies checksums.toml and signatures.toml from the plasmidBin repo root
+/// to the WAN depot path. Returns true if the primary checksums copy succeeded.
 async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &str) -> bool {
-    let cmd = format!("[ -f {checksums_path} ] && echo EXISTS || echo MISSING");
+    let wan_depot = format!(
+        "{}/plasmidBin",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+    );
+    let cmd = format!(
+        "cp -f {checksums_path} {wan_depot}/checksums.toml 2>/dev/null && echo OK || echo FAIL"
+    );
     let Ok((out, _)) = crate::ssh::exec_raw(config, &cmd).await else {
+        tracing::warn!("WAN checksums sync: SSH connection failed");
         return false;
     };
-    out.trim() == "EXISTS"
+    if out.trim() != "OK" {
+        tracing::warn!("WAN checksums sync: copy failed");
+        return false;
+    }
+
+    let sigs_src = checksums_path.replace("checksums.toml", "signatures.toml");
+    let sigs_cmd = format!(
+        "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_depot}/signatures.toml 2>/dev/null"
+    );
+    let _ = crate::ssh::exec_raw(config, &sigs_cmd).await;
+
+    true
 }
 
 /// `plasmid.status` — Report depot freshness and upstream drift.

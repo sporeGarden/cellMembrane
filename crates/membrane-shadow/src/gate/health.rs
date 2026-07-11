@@ -10,6 +10,8 @@ use std::path::Path;
 const STALE_THRESHOLD_DAYS: u64 = 7;
 const SECS_PER_DAY: u64 = 86_400;
 const SECS_PER_HOUR: u64 = 3_600;
+const CERT_WARNING_THRESHOLD_DAYS: i64 = 14;
+const MAX_CERT_PROBE_DOMAINS: usize = 5;
 
 /// A single status probe (e.g. depot integrity, mesh connectivity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -237,11 +239,14 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
         }
 
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if response.contains("\"jsonrpc\"")
-                || response.contains("\"result\"")
-                || response.contains("\"error\"")
-            {
+            if response.contains("\"result\"") {
                 return true;
+            }
+            if response.contains("\"error\"") {
+                tracing::debug!(
+                    primal = %primal,
+                    "health: JSON-RPC responded with error — primal running but unhealthy"
+                );
             }
         }
     }
@@ -491,7 +496,7 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
         .clone()
         .unwrap_or_default()
         .into_iter()
-        .take(5)
+        .take(MAX_CERT_PROBE_DOMAINS)
         .collect();
 
     if domains.is_empty() {
@@ -504,7 +509,6 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
 
     let mut results: Vec<String> = Vec::new();
     let mut any_expiring = false;
-    let warning_threshold_days: i64 = 14;
 
     for domain in &domains {
         let d = domain.clone();
@@ -514,7 +518,7 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
         if days < 0 {
             results.push(format!("{domain}: EXPIRED/unreachable"));
             any_expiring = true;
-        } else if days < warning_threshold_days {
+        } else if days < CERT_WARNING_THRESHOLD_DAYS {
             results.push(format!("{domain}: {days}d remaining (WARNING)"));
             any_expiring = true;
         } else {

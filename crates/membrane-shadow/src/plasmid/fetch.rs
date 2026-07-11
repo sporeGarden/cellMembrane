@@ -189,7 +189,9 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         if !wan_sigs.signatures.is_empty() {
             let sigs_path = dest_root.join("signatures.toml");
             if let Ok(content) = toml::to_string(&wan_sigs) {
-                let _ = tokio::fs::write(&sigs_path, content).await;
+                if let Err(e) = tokio::fs::write(&sigs_path, content).await {
+                    tracing::warn!(error = %e, "failed to persist WAN signatures.toml");
+                }
             }
         }
     }
