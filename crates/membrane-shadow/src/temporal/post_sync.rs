@@ -213,7 +213,6 @@ pub(super) async fn run_post_cascade_sandbox(
         let binary_path = bin_dir.join(primal);
         if !binary_path.exists() {
             lines.push(format!("  [sandbox] {primal}: SKIP (binary not in depot)"));
-            passed.push(primal.clone());
             continue;
         }
 
@@ -540,7 +539,13 @@ pub fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
          timestamp = \"{}\"\n",
         chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
     );
-    let _ = std::fs::write(&state_path, content);
+    if let Err(e) = std::fs::write(&state_path, &content) {
+        tracing::warn!(
+            path = %state_path.display(),
+            error = %e,
+            "rootpulse: failed to persist session state"
+        );
+    }
 }
 
 /// Load the last rootpulse session ID from gate-local state.

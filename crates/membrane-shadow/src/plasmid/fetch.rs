@@ -210,7 +210,12 @@ async fn fetch_gpu_primals(
 ) -> Vec<FetchResult> {
     let gnu_arch = cellmembrane_types::TargetArch::X86_64Gnu.triple();
     let gnu_bin_dir = dest_root.join("primals").join(gnu_arch);
-    if tokio::fs::create_dir_all(&gnu_bin_dir).await.is_err() {
+    if let Err(e) = tokio::fs::create_dir_all(&gnu_bin_dir).await {
+        tracing::warn!(
+            path = %gnu_bin_dir.display(),
+            error = %e,
+            "GPU fetch: cannot create depot directory — skipping GPU primals"
+        );
         return Vec::new();
     }
 

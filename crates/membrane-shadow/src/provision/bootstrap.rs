@@ -506,10 +506,15 @@ pub async fn bootstrap_droplet(droplet: &DropletState, gate_name: &str) -> Provi
 
     super::verify::finalize_bootstrap(droplet, gate_name, &ip, &mut phases).await;
 
+    let has_failures = phases.iter().any(|p| p.contains("FAIL"));
     ProvisionOutcome {
-        success: true,
+        success: !has_failures,
         droplet: Some(droplet.clone()),
-        message: format!("bootstrap complete for {gate_name} at {ip}"),
+        message: if has_failures {
+            format!("bootstrap PARTIAL for {gate_name} at {ip} — check phases")
+        } else {
+            format!("bootstrap complete for {gate_name} at {ip}")
+        },
         phases,
     }
 }

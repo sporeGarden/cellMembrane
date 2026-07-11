@@ -346,7 +346,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sandbox_gate_passes_nonexistent_primals_through() {
+    async fn sandbox_gate_skips_nonexistent_primals() {
         let built = vec![
             "fake_primal_alpha_99".to_string(),
             "fake_primal_beta_99".to_string(),
@@ -355,20 +355,20 @@ mod tests {
         let passed = post_sync::run_post_cascade_sandbox(&built, &mut lines).await;
         assert_eq!(
             passed.len(),
-            built.len(),
-            "primals not in depot should pass through (skip)"
+            0,
+            "primals not in depot should be skipped, not counted as passed"
         );
     }
 
     #[tokio::test]
-    async fn sandbox_gate_returns_all_when_binary_missing_from_depot() {
+    async fn sandbox_gate_does_not_pass_missing_binary() {
         let built = vec!["nonexistent_primal_xyz_99".to_string()];
         let mut lines = Vec::new();
         let passed = post_sync::run_post_cascade_sandbox(&built, &mut lines).await;
         assert_eq!(
             passed.len(),
-            built.len(),
-            "when binary not found in depot, primal should pass through (skip)"
+            0,
+            "missing depot binary must not be counted as sandbox pass"
         );
     }
 

@@ -85,10 +85,16 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
         let unit_content = generate_unit_content(svc, &exec_start, &extra_args, &config_dir);
         let unit_path = systemd_dir.join(format!("{}-membrane.service", svc.binary));
 
-        if std::fs::write(&unit_path, &unit_content).is_ok() {
-            installed += 1;
-        } else {
+        if let Err(e) = std::fs::write(&unit_path, &unit_content) {
+            tracing::warn!(
+                service = %svc.binary,
+                path = %unit_path.display(),
+                error = %e,
+                "systemd unit write failed"
+            );
             failed += 1;
+        } else {
+            installed += 1;
         }
     }
 

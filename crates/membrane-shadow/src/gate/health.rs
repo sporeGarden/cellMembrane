@@ -195,6 +195,7 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
     for primal in &primals {
         let bin_path = bin_dir.join(primal);
         if !bin_path.exists() {
+            tracing::debug!(primal = %primal, "health: binary not in depot — marking dead");
             dead += 1;
             continue;
         }
@@ -206,6 +207,7 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
         if probe_primal_jsonrpc(primal).await || pgrep_found {
             alive += 1;
         } else {
+            tracing::debug!(primal = %primal, "health: primal not responding — marking dead");
             dead += 1;
         }
     }

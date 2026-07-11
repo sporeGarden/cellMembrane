@@ -297,6 +297,12 @@ pub async fn git_push_classified(repo_path: &Path, args: &[&str]) -> PushOutcome
     if is_shallow_rejection(&stderr) {
         PushOutcome::ShallowRejected
     } else {
+        let detail = stderr.lines().next().unwrap_or("unknown error");
+        tracing::debug!(
+            repo = %repo_path.display(),
+            error = %detail,
+            "git push failed"
+        );
         PushOutcome::Failed
     }
 }
