@@ -378,14 +378,6 @@ fn read_freshness_wave_id(path: &Path) -> u32 {
     toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
 }
 
-/// Async variant — reads the file without blocking the runtime.
-async fn read_freshness_wave_id_async(path: &Path) -> u32 {
-    let Ok(content) = tokio::fs::read_to_string(path).await else {
-        return 0;
-    };
-    toml::from_str::<FreshnessFile>(&content).map_or(0, |f| f.wave.id)
-}
-
 /// Check installed binary freshness against source HEAD SHAs.
 ///
 /// Reads provenance sidecars from `~/.local/share/ecoPrimals/provenance/`

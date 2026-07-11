@@ -326,6 +326,9 @@ pub struct GateProfile {
     /// Hostname or primary IP for SSH/direct access.
     #[serde(default)]
     pub host: Option<String>,
+    /// Public domains served by this gate (for TLS cert monitoring).
+    #[serde(default)]
+    pub domains: Option<Vec<String>>,
     /// WAN-facing interface name (e.g., `"enp1s0"`).
     #[serde(default)]
     pub wan_interface: Option<String>,

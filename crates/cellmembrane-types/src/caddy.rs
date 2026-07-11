@@ -10,6 +10,22 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write as _};
 
+/// Default security headers applied to every TLS-enabled vhost.
+///
+/// Addresses EXP-01 (clickjacking, MIME sniffing, HSTS) from the
+/// Wave 136 security sprint. Stripped `-Server` removes Caddy version
+/// fingerprinting from responses.
+const SECURITY_HEADER_BLOCK: &str = "\
+    header {\n\
+    \x20       Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\"\n\
+    \x20       X-Content-Type-Options nosniff\n\
+    \x20       X-Frame-Options DENY\n\
+    \x20       X-XSS-Protection \"0\"\n\
+    \x20       Referrer-Policy strict-origin-when-cross-origin\n\
+    \x20       Permissions-Policy \"camera=(), microphone=(), geolocation=()\"\n\
+    \x20       -Server\n\
+    \x20   }";
+
 /// A single Caddy vhost block — one domain/service mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CaddyVhost {
@@ -71,6 +87,10 @@ impl CaddyConfig {
 
             if !vhost.tls {
                 let _ = writeln!(out, "    tls off");
+            }
+
+            if vhost.tls {
+                let _ = writeln!(out, "    {SECURITY_HEADER_BLOCK}");
             }
 
             for directive in &vhost.extra_directives {
@@ -185,6 +205,34 @@ mod tests {
         let parsed: CaddyConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.gate_name, "golgiBody-ext");
         assert_eq!(parsed.vhosts.len(), 3);
+    }
+
+    #[test]
+    fn security_headers_on_tls_vhost() {
+        let conf = sample_config();
+        let output = conf.to_caddyfile();
+        assert!(output.contains("Strict-Transport-Security"), "HSTS header");
+        assert!(output.contains("X-Content-Type-Options nosniff"), "nosniff");
+        assert!(output.contains("X-Frame-Options DENY"), "frame deny");
+        assert!(output.contains("Referrer-Policy"), "referrer policy");
+        assert!(output.contains("-Server"), "strip server header");
+    }
+
+    #[test]
+    fn no_security_headers_on_tls_off() {
+        let conf = CaddyConfig {
+            gate_name: "test".into(),
+            acme_email: None,
+            vhosts: vec![CaddyVhost {
+                domain: "local.dev".into(),
+                upstream: "127.0.0.1:8080".into(),
+                path: None,
+                tls: false,
+                extra_directives: vec![],
+            }],
+        };
+        let output = conf.to_caddyfile();
+        assert!(!output.contains("Strict-Transport-Security"), "no HSTS on plain HTTP");
     }
 
     #[test]

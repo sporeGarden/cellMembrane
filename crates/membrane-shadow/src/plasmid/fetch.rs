@@ -70,12 +70,14 @@ pub struct FetchArgs {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FetchStatus {
-    /// Downloaded successfully.
+    /// Downloaded and verified (or no checksum available to verify against).
     Ok,
     /// Already present — skipped.
     Exists,
-    /// Download failed (network, checksum, or filesystem error).
+    /// Download failed (network or filesystem error).
     DownloadFailed,
+    /// Downloaded but BLAKE3 verification failed — binary removed from depot.
+    VerificationFailed,
 }
 
 impl std::fmt::Display for FetchStatus {
@@ -84,6 +86,7 @@ impl std::fmt::Display for FetchStatus {
             Self::Ok => write!(f, "ok"),
             Self::Exists => write!(f, "exists"),
             Self::DownloadFailed => write!(f, "download_failed"),
+            Self::VerificationFailed => write!(f, "verification_failed"),
         }
     }
 }
@@ -319,6 +322,41 @@ use super::download;
 
 // ── Fetch orchestration ──────────────────────────────────────────────────────
 
+/// Download a single primal binary with retry-on-failure.
+///
+/// Tries the arch-suffixed asset name first (`primal-arch`), then bare name.
+/// On transport failure: waits 2s and retries once.
+async fn download_with_retry(
+    primal: &str,
+    arch: &str,
+    tag: &str,
+    local_path: &Path,
+    args: &FetchArgs,
+    config: &crate::ShadowConfig,
+) -> bool {
+    let arch_asset = format!("{primal}-{arch}");
+    let got = download::download_asset(
+        args.source, config, tag, &arch_asset, arch, primal, local_path,
+    )
+    .await
+        || download::download_asset(
+            args.source, config, tag, primal, arch, primal, local_path,
+        )
+        .await;
+
+    if got {
+        return true;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    download::download_asset(args.source, config, tag, &arch_asset, arch, primal, local_path)
+        .await
+        || download::download_asset(
+            args.source, config, tag, primal, arch, primal, local_path,
+        )
+        .await
+}
+
 async fn fetch_primals(
     primals: &[&str],
     bin_dir: &Path,
@@ -345,55 +383,29 @@ async fn fetch_primals(
 
         let _ = tokio::fs::remove_file(&local_path).await;
 
-        let arch_asset = format!("{primal}-{arch}");
-        let got = download::download_asset(
-            args.source,
-            config,
-            tag,
-            &arch_asset,
-            arch,
-            primal,
-            &local_path,
-        )
-        .await
-            || download::download_asset(
-                args.source,
-                config,
-                tag,
-                primal,
-                arch,
-                primal,
-                &local_path,
-            )
-            .await;
+        if !download_with_retry(primal, arch, tag, &local_path, args, config).await {
+            results.push(FetchResult {
+                primal: (*primal).to_string(),
+                status: FetchStatus::DownloadFailed,
+                tag: Some(tag.to_string()),
+                verified: false,
+            });
+            continue;
+        }
 
-        if !got {
-            // PARTIAL-FETCH-RESUME: one retry after short backoff
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            let retry_got = download::download_asset(
-                args.source,
-                config,
-                tag,
-                &arch_asset,
-                arch,
-                primal,
-                &local_path,
-            )
-            .await
-                || download::download_asset(
-                    args.source,
-                    config,
-                    tag,
-                    primal,
-                    arch,
-                    primal,
-                    &local_path,
-                )
-                .await;
-            if !retry_got {
+        if let Some(expected) = checksums.get(*primal) {
+            let verified =
+                checksum::verify_blake3_async(local_path.clone(), expected.clone()).await;
+            if !verified {
+                tracing::warn!(
+                    primal = %primal,
+                    path = %local_path.display(),
+                    "BLAKE3 verification FAILED — removing tampered/corrupt binary"
+                );
+                let _ = tokio::fs::remove_file(&local_path).await;
                 results.push(FetchResult {
                     primal: (*primal).to_string(),
-                    status: FetchStatus::DownloadFailed,
+                    status: FetchStatus::VerificationFailed,
                     tag: Some(tag.to_string()),
                     verified: false,
                 });
@@ -412,11 +424,7 @@ async fn fetch_primals(
             }
         }
 
-        let is_verified = if let Some(expected) = checksums.get(*primal) {
-            checksum::verify_blake3_async(local_path.clone(), expected.clone()).await
-        } else {
-            false
-        };
+        let is_verified = checksums.contains_key(*primal);
 
         results.push(FetchResult {
             primal: (*primal).to_string(),
@@ -475,7 +483,10 @@ fn format_fetch_outcome(
     let failed = u32::try_from(
         results
             .iter()
-            .filter(|r| r.status == FetchStatus::DownloadFailed)
+            .filter(|r| {
+                r.status == FetchStatus::DownloadFailed
+                    || r.status == FetchStatus::VerificationFailed
+            })
             .count(),
     )
     .unwrap_or(u32::MAX);
@@ -500,6 +511,7 @@ fn format_fetch_outcome(
                 FetchStatus::Ok => "OK",
                 FetchStatus::Exists => "EXISTS",
                 FetchStatus::DownloadFailed => "FAIL",
+                FetchStatus::VerificationFailed => "FAIL blake3",
             };
             format!("  [{:<12}] {mark}", r.primal)
         })

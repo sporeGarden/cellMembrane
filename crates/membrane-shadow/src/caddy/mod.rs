@@ -372,7 +372,7 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-fn parse_days_remaining(not_after: &str) -> i64 {
+pub(crate) fn parse_days_remaining(not_after: &str) -> i64 {
     if not_after.is_empty() {
         return 0;
     }

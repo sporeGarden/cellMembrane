@@ -87,6 +87,10 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let vcs_probe = probe_vcs_parity().await;
     probes.push(vcs_probe);
 
+    if let Some(cert_probe) = probe_tls_cert_expiry().await {
+        probes.push(cert_probe);
+    }
+
     let healthy = probes.iter().all(|p| p.ok);
 
     Ok(GateStatus {
@@ -456,6 +460,98 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     paths
 }
 
+/// Probe TLS cert expiry for publicly-served domains.
+///
+/// Only runs on gates that serve TLS (have a `caddy_tls` or `tls_terminator`
+/// role in the manifest). Returns `None` if TLS is not locally relevant.
+///
+/// Uses `openssl s_client` to probe each domain's cert expiry. Any cert
+/// with <14 days remaining triggers a probe failure (EXP-03 monitoring).
+async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+    let manifest = crate::manifest::load_from_workspace(std::path::Path::new(&workspace)).ok()?;
+    let gate = super::resolve_local_gate_identity();
+
+    let profile = manifest.gates.get(&gate)?;
+    let is_tls_gate = profile
+        .roles
+        .iter()
+        .any(|r| r == "caddy" || r == "caddy_tls" || r == "tls_terminator");
+    if !is_tls_gate {
+        return None;
+    }
+
+    let domains: Vec<String> = profile
+        .domains
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .take(5)
+        .collect();
+
+    if domains.is_empty() {
+        return Some(StatusProbe {
+            name: "tls.cert_expiry".into(),
+            ok: true,
+            detail: "no domains configured".into(),
+        });
+    }
+
+    let mut results: Vec<String> = Vec::new();
+    let mut any_expiring = false;
+    let warning_threshold_days: i64 = 14;
+
+    for domain in &domains {
+        let d = domain.clone();
+        let days = tokio::task::spawn_blocking(move || check_cert_days(&d))
+            .await
+            .unwrap_or(-1);
+        if days < 0 {
+            results.push(format!("{domain}: EXPIRED/unreachable"));
+            any_expiring = true;
+        } else if days < warning_threshold_days {
+            results.push(format!("{domain}: {days}d remaining (WARNING)"));
+            any_expiring = true;
+        } else {
+            results.push(format!("{domain}: {days}d remaining"));
+        }
+    }
+
+    Some(StatusProbe {
+        name: "tls.cert_expiry".into(),
+        ok: !any_expiring,
+        detail: results.join(", "),
+    })
+}
+
+/// Check TLS cert days remaining for a domain via local openssl probe.
+fn check_cert_days(domain: &str) -> i64 {
+    let cmd = format!(
+        "echo | openssl s_client -connect {domain}:443 -servername {domain} 2>/dev/null \
+         | openssl x509 -noout -enddate 2>/dev/null"
+    );
+    let Ok(result) = std::process::Command::new("sh")
+        .args(["-c", &cmd])
+        .output()
+    else {
+        return -1;
+    };
+    if !result.status.success() {
+        return -1;
+    }
+
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let not_after = stdout
+        .lines()
+        .find(|l| l.starts_with("notAfter="))
+        .map_or("", |l| l.trim_start_matches("notAfter=").trim());
+
+    crate::caddy::parse_days_remaining(not_after)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,6 +638,12 @@ mod tests {
         let paths = resolve_primal_socket_paths("beardog");
         assert!(paths.iter().any(|p| p.contains("beardog.sock")));
         assert!(paths.len() >= 2);
+    }
+
+    #[test]
+    fn check_cert_days_unreachable_returns_negative() {
+        let days = check_cert_days("unreachable.invalid.test");
+        assert!(days <= 0, "unreachable domain should return <=0 days");
     }
 
     #[test]
