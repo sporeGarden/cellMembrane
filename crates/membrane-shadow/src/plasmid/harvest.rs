@@ -232,6 +232,10 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
                     }
                 }
             }
+            if super::signing::sign_and_persist(&depot_dir) {
+                info!("depot signed (BLAKE3 + ed25519)");
+            }
+
             drift::publish_depot_checksums(&depot_dir).await;
 
             notify_mesh_depot_updated(&built_names).await;

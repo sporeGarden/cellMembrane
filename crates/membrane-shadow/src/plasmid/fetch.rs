@@ -184,6 +184,14 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         results.extend(gnu_results);
     }
 
+    let sig_valid = super::signing::verify_depot_with_policy(
+        &dest_root,
+        cellmembrane_types::DepotTrustPolicy::VerifyIfPresent,
+    );
+    if !sig_valid {
+        tracing::warn!("depot signature verification FAILED after fetch");
+    }
+
     Ok(format_fetch_outcome(
         args.source,
         &arch,

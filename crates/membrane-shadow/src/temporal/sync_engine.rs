@@ -16,8 +16,12 @@ use crate::git_ops::{git_output as git, git_success as git_ok};
 use cellmembrane_types::PushTarget;
 
 /// Files that are machine-generated and safely discardable before a pull.
-pub(super) const REGENERABLE_METADATA: &[&str] =
-    &["checksums.toml", "provenance.toml", "freshness.toml"];
+pub(super) const REGENERABLE_METADATA: &[&str] = &[
+    "checksums.toml",
+    "provenance.toml",
+    "freshness.toml",
+    "signatures.toml",
+];
 
 /// Check if a repository has uncommitted changes that would block a pull.
 pub(super) async fn has_dirty_worktree(local_path: &Path) -> bool {
@@ -279,7 +283,8 @@ mod tests {
         assert!(REGENERABLE_METADATA.contains(&"checksums.toml"));
         assert!(REGENERABLE_METADATA.contains(&"provenance.toml"));
         assert!(REGENERABLE_METADATA.contains(&"freshness.toml"));
-        assert_eq!(REGENERABLE_METADATA.len(), 3);
+        assert!(REGENERABLE_METADATA.contains(&"signatures.toml"));
+        assert_eq!(REGENERABLE_METADATA.len(), 4);
     }
 
     #[test]

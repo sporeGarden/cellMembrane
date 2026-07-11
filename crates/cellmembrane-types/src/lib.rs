@@ -47,6 +47,7 @@ pub mod identity;
 pub mod provider;
 pub mod service;
 pub mod signal;
+pub mod signing;
 pub mod sync;
 pub mod topology;
 pub mod transport;
@@ -79,6 +80,7 @@ pub use topology::{
     AffinityTable, BackboneLink, NetworkSegment, PhysicalZone, ResolvedTopology, TopologyMap,
     TopologyMeta, ZoneStatus,
 };
+pub use signing::{DepotSignature, DepotTrustPolicy, SignatureAlgorithm, SignaturesFile};
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 

@@ -428,6 +428,7 @@ mod tests {
         assert!(sync_engine::REGENERABLE_METADATA.contains(&"checksums.toml"));
         assert!(sync_engine::REGENERABLE_METADATA.contains(&"provenance.toml"));
         assert!(sync_engine::REGENERABLE_METADATA.contains(&"freshness.toml"));
-        assert_eq!(sync_engine::REGENERABLE_METADATA.len(), 3);
+        assert!(sync_engine::REGENERABLE_METADATA.contains(&"signatures.toml"));
+        assert_eq!(sync_engine::REGENERABLE_METADATA.len(), 4);
     }
 }

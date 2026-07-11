@@ -135,8 +135,11 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
         return;
     }
 
-    if !crate::git_ops::git_success(depot_dir, &["add", "checksums.toml", "provenance.toml"]).await
-    {
+    let mut add_args = vec!["add", "checksums.toml", "provenance.toml"];
+    if depot_dir.join("signatures.toml").exists() {
+        add_args.push("signatures.toml");
+    }
+    if !crate::git_ops::git_success(depot_dir, &add_args).await {
         return;
     }
 
@@ -146,8 +149,13 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
         return;
     }
 
+    let signed_label = if depot_dir.join("signatures.toml").exists() {
+        " + signatures"
+    } else {
+        ""
+    };
     let commit_msg = format!(
-        "harvest: update checksums + provenance ({})",
+        "harvest: update checksums + provenance{signed_label} ({})",
         chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
     );
 

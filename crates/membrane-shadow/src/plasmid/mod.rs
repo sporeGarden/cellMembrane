@@ -24,6 +24,7 @@ mod harvest;
 pub(crate) mod integrity;
 mod refresh;
 pub(crate) mod sandbox;
+pub(crate) mod signing;
 pub(crate) mod toolchain;
 
 pub use build::BuildArgs;
