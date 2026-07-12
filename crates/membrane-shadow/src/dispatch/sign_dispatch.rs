@@ -206,7 +206,7 @@ fn signer_socket_name() -> String {
     let binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
-    format!("{binary}-default.sock")
+    format!("{binary}.sock")
 }
 
 fn load_signatures_summary(

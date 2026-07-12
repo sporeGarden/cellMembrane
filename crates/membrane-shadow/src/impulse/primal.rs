@@ -24,7 +24,7 @@ fn signer_socket_name() -> String {
     format!("{binary}-default.sock")
 }
 
-pub fn try_relay_impulse(impulse: &ImpulseFile) {
+pub(super) fn try_relay_impulse(impulse: &ImpulseFile) {
     #[cfg(not(unix))]
     {
         let _ = impulse;
@@ -120,7 +120,7 @@ fn try_forward_to_gates(impulse: &ImpulseFile, payload: &str) {
 }
 
 #[must_use]
-pub fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
+pub(super) fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
     #[cfg(not(unix))]
     {
         let _ = impulse_id;

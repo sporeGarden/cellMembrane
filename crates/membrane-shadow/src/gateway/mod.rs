@@ -184,10 +184,10 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
     let config = generate_from_manifest(gate_name)?;
     let routes_env = to_songbird_proxy_routes(&config);
 
-    let mut params = crate::gate::nucleus::GatewayUnitParams::for_gate(gate_name);
+    let mut params = crate::gate::systemd_units::GatewayUnitParams::for_gate(gate_name);
     params.proxy_routes = &routes_env;
 
-    let (songbird_unit, beardog_unit) = crate::gate::nucleus::generate_gateway_units(&params);
+    let (songbird_unit, beardog_unit) = crate::gate::systemd_units::generate_gateway_units(&params);
 
     let mut lines = vec!["--- songbird-gateway.service ---".to_owned()];
     lines.extend(songbird_unit.lines().map(String::from));

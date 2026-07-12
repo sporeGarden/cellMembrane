@@ -525,7 +525,7 @@ repos = ["wateringHole", "bearDog"]
         assert_eq!(g.tether_role.as_deref(), Some("usb_rndis"));
         assert_eq!(g.adb_ports, vec![9100, 9200, 9140]);
         assert_eq!(g.nucleus_status.as_deref(), Some("Tower LIVE"));
-        assert_eq!(g.bond_types, vec!["covalent"]);
+        assert_eq!(g.bond_types, vec![cellmembrane_types::BondType::Covalent]);
         assert_eq!(g.mobility, Some(cellmembrane_types::GateMobility::Mobile));
         assert_eq!(g.repos.len(), 2);
     }

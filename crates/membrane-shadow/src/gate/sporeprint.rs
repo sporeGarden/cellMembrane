@@ -10,7 +10,7 @@
 //! - songBird: mesh routing (live topology, capability.call)
 //! - bearDog: TLS termination (ACME cert for the domain)
 
-use super::nucleus::{generate_songbird_unit, GatewayUnitParams};
+use super::systemd_units::{generate_songbird_unit, GatewayUnitParams};
 
 /// Parameters for sporePrint-specific NUCLEUS deployment (4 primals).
 pub struct SporePrintDeployParams<'a> {

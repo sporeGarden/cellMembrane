@@ -122,7 +122,7 @@ fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let gate_name = crate::gate::resolve_local_gate_identity();
 
     if args.contains(&"--generate") {
-        let (service, timer) = crate::gate::nucleus::generate_cascade_timer(interval, &gate_name);
+        let (service, timer) = crate::gate::systemd_units::generate_cascade_timer(interval, &gate_name);
         let data = serde_json::json!({
             "service": service,
             "timer": timer,
@@ -137,7 +137,7 @@ fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
         ));
     }
 
-    let phase = crate::gate::nucleus::install_cascade_timer(interval, &gate_name, dry_run);
+    let phase = crate::gate::systemd_units::install_cascade_timer(interval, &gate_name, dry_run);
     let data = serde_json::json!({
         "phase": phase.name,
         "ok": phase.ok,

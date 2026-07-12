@@ -357,7 +357,7 @@ pub struct GateProfile {
     pub nucleus_status: Option<String>,
     /// Bond types for topology affinity (e.g., `["covalent"]`).
     #[serde(default)]
-    pub bond_types: Vec<String>,
+    pub bond_types: Vec<cellmembrane_types::BondType>,
     /// Whether this gate can build primals (Rust + musl-tools installed).
     #[serde(default)]
     pub build_authority: bool,

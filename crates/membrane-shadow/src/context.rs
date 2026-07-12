@@ -286,7 +286,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
 ///
 /// Filters by gate and/or project. Returns all matching braids sorted by
 /// update time (most recent first).
-pub fn sense(
+pub(crate) fn sense(
     workspace_root: &Path,
     filter_gate: Option<&str>,
     filter_project: Option<&str>,

@@ -20,7 +20,7 @@ use cellmembrane_types::signing::{
 /// Returns `None` if bearDog is unavailable or signing fails. This is
 /// intentionally best-effort: cascade proceeds without signatures when
 /// bearDog is not running (e.g. development environments).
-pub fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
+fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
     let checksums_path = depot_dir.join("checksums.toml");
     let checksums_content = std::fs::read(&checksums_path).ok()?;
     let checksums_blake3 = blake3::hash(&checksums_content).to_hex().to_string();
@@ -86,7 +86,7 @@ pub fn sign_and_persist(depot_dir: &Path) -> bool {
 /// 2. The ed25519 signature is valid for the stated public key
 ///
 /// This is a standalone verification — no bearDog needed.
-pub fn verify_depot_signature(depot_dir: &Path, sig: &DepotSignature) -> bool {
+fn verify_depot_signature(depot_dir: &Path, sig: &DepotSignature) -> bool {
     let checksums_path = depot_dir.join("checksums.toml");
     let Ok(checksums_content) = std::fs::read(&checksums_path) else {
         return false;
@@ -268,7 +268,7 @@ fn request_beardog_sign(data: &str) -> Option<SignResult> {
             "method": "crypto.sign_ed25519",
             "params": {
                 "message": message_b64,
-                "key_id": "depot_signing_key",
+                "key_id": "depot-signer",
                 "purpose": "depot"
             }
         });
@@ -292,7 +292,7 @@ fn request_beardog_sign(data: &str) -> Option<SignResult> {
 fn signer_socket_name() -> String {
     let binary =
         cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
-    format!("{binary}-default.sock")
+    format!("{binary}.sock")
 }
 
 #[cfg(unix)]
@@ -306,9 +306,6 @@ fn uds_sign_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
         .ok()?;
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(5)))
-        .ok()?;
-    stream
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
         .ok()?;
     writeln!(stream, "{request}").ok()?;
     stream.shutdown(std::net::Shutdown::Write).ok()?;

@@ -173,52 +173,6 @@ pub(crate) fn format_topology_summary(map: &TopologyMap) -> String {
     out
 }
 
-/// Format a resolved gate topology for human output.
-#[cfg(test)]
-#[must_use]
-fn format_resolved(resolved: &cellmembrane_types::topology::ResolvedTopology) -> String {
-    use std::fmt::Write;
-    let mut out = String::new();
-    let _ = writeln!(out, "Gate: {}", resolved.gate);
-
-    if let Some(zone_id) = &resolved.zone_id {
-        let _ = write!(out, "Zone: {zone_id}");
-        if let Some(site) = &resolved.site {
-            let _ = write!(out, " (site: {site})");
-        }
-        out.push('\n');
-    } else {
-        out.push_str("Zone: (not assigned)\n");
-    }
-
-    if let Some(speed) = resolved.expected_speed_mbps {
-        let _ = writeln!(out, "Expected speed: {}G", speed / 1000);
-    }
-
-    if let Some(hub_port) = &resolved.hub_port {
-        let _ = writeln!(out, "Hub port: {hub_port}");
-    }
-
-    if let Some(seg_id) = &resolved.segment_id {
-        let _ = write!(out, "Segment: {seg_id}");
-        if let Some(seg) = &resolved.segment {
-            if let Some(subnet) = &seg.subnet {
-                let _ = write!(out, " ({subnet})");
-            }
-        }
-        out.push('\n');
-    }
-
-    if !resolved.issues.is_empty() {
-        out.push_str("\nIssues:\n");
-        for issue in &resolved.issues {
-            let _ = writeln!(out, "  - {issue}");
-        }
-    }
-
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,13 +286,12 @@ wan_turn = 0.3
     }
 
     #[test]
-    fn format_resolved_output() {
+    fn resolve_gate_populates_fields() {
         let map = parse_topology_map(SAMPLE_TOML).unwrap();
         let resolved = map.resolve_gate("eastGate");
-        let output = format_resolved(&resolved);
-        assert!(output.contains("eastGate"));
-        assert!(output.contains("backbone"));
-        assert!(output.contains("192.168.4.0/22"));
+        assert_eq!(resolved.gate, "eastGate");
+        assert_eq!(resolved.zone_id.as_deref(), Some("backbone"));
+        assert!(resolved.segment.as_ref().and_then(|s| s.subnet.as_deref()) == Some("192.168.4.0/22"));
     }
 
     #[test]

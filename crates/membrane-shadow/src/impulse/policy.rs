@@ -56,7 +56,7 @@ impl fmt::Display for SuggestedAction {
 }
 
 #[must_use]
-pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> DivergeType {
+pub(super) fn classify_diverge_type(positions: &[(String, u32, u32)]) -> DivergeType {
     let ahead_remotes: Vec<_> = positions.iter().filter(|(_, a, _)| *a > 0).collect();
     let behind_remotes: Vec<_> = positions.iter().filter(|(_, _, b)| *b > 0).collect();
 
@@ -71,7 +71,7 @@ pub fn classify_diverge_type(positions: &[(String, u32, u32)]) -> DivergeType {
 }
 
 #[must_use]
-pub fn suggest_action(
+pub(super) fn suggest_action(
     diverge_type: &DivergeType,
     repo_policy: DivergencePolicy,
 ) -> SuggestedAction {
@@ -89,7 +89,7 @@ pub fn suggest_action(
 }
 
 #[must_use]
-pub fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
+pub(super) fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
     if expires.is_empty() {
         return false;
     }
@@ -97,13 +97,13 @@ pub fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
 }
 
 #[cfg(test)]
-pub fn is_fully_acked(impulse: &ImpulseFile) -> bool {
+pub(super) fn is_fully_acked(impulse: &ImpulseFile) -> bool {
     is_fully_acked_with_externals(impulse, &[])
 }
 
 /// Check if impulse is fully acked, considering both inline acks and external ack files.
 #[must_use]
-pub fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[ImpulseAck]) -> bool {
+pub(super) fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[ImpulseAck]) -> bool {
     if !impulse.meta.ack_required || impulse.to.gates.is_empty() {
         return false;
     }
@@ -116,7 +116,7 @@ pub fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[Imp
 }
 
 /// Load external ack files for a given impulse ID from `impulses/acks/`.
-pub fn load_external_acks(workspace_root: &Path, impulse_id: &str) -> Vec<ImpulseAck> {
+pub(super) fn load_external_acks(workspace_root: &Path, impulse_id: &str) -> Vec<ImpulseAck> {
     let acks_dir = workspace_root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
         .join("impulses/acks");
