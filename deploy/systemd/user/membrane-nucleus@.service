@@ -17,6 +17,7 @@ Wants=songbird-federation.service
 
 [Service]
 Type=simple
+UMask=0002
 ExecStart=${ECOPRIMALS_ROOT}/infra/plasmidBin/primals/${MEMBRANE_TARGET}/%i server \
     --socket %t/biomeos/%i.sock
 Environment=ECOPRIMALS_ROOT=%h/Development/ecoPrimals

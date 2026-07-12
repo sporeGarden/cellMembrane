@@ -121,6 +121,19 @@ pub const DEFAULT_LAN_IFACE: &str = "eno1";
 pub const DEFAULT_LAN_SUBNET: &str = "192.168.4.0/22";
 /// Default `WireGuard` mesh subnet CIDR.
 pub const DEFAULT_WG_MESH_SUBNET: &str = "10.13.37.0/24";
+/// Systemd `RuntimeDirectoryMode` for primal services.
+///
+/// `0755` allows non-root processes to traverse `/run/membrane/` and
+/// connect to primal UDS sockets. Combined with `DEFAULT_SERVICE_UMASK`.
+pub const DEFAULT_RUNTIME_DIRECTORY_MODE: &str = "0755";
+
+/// Systemd `UMask` for primal services.
+///
+/// `0002` causes socket files to be created as `srw-rw-r--` (0664) instead
+/// of `srw-------` (0600), allowing non-root IPC clients (e.g. membrane CLI,
+/// Neural API cross-primal routing) to connect.
+pub const DEFAULT_SERVICE_UMASK: &str = "0002";
+
 /// Default systemd unit directory.
 pub const SYSTEMD_UNIT_DIR: &str = "/etc/systemd/system";
 /// Default secrets environment file path.

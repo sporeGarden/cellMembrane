@@ -123,7 +123,9 @@ impl ServerContract {
             Self::SocketOnly | Self::Tarpc => {
                 format!("{install_base}/{binary} server --socket {socket_path}")
             }
-            Self::BiomeosApi => format!("{install_base}/{binary} api --socket {socket_path}"),
+            Self::BiomeosApi => {
+                format!("{install_base}/{binary} neural-api --socket {socket_path}")
+            }
             Self::External => format!("{install_base}/{binary}"),
         }
     }
@@ -273,11 +275,18 @@ impl ServicePaths {
     }
 
     /// Resolve socket path for a service.
+    ///
+    /// Prefers `api_socket` name when available (e.g. biomeOS → `neural-api-default.sock`),
+    /// falling back to `{binary}.sock`.
     #[must_use]
     pub fn socket_path(&self, service: &MembraneService) -> Option<String> {
-        service
-            .has_socket
-            .then(|| format!("{}/{}.sock", self.socket_base, service.binary))
+        if !service.has_socket {
+            return None;
+        }
+        let name = service
+            .api_socket
+            .map_or_else(|| service.binary.to_owned(), |api| format!("{api}-default"));
+        Some(format!("{}/{name}.sock", self.socket_base))
     }
 }
 

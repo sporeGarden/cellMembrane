@@ -459,6 +459,8 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     {
         if let Some(api) = svc.api_socket {
             paths.insert(0, format!("{socket_base}/{api}.sock"));
+            paths.insert(0, format!("{socket_base}/{api}-default.sock"));
+            paths.push(format!("{xdg_runtime}/{ns}/{api}-default.sock"));
         }
         for alias in svc.socket_aliases {
             paths.push(format!("{socket_base}/{alias}.sock"));

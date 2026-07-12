@@ -15,6 +15,7 @@ ConditionPathExists=/opt/membrane/%i
 
 [Service]
 Type=simple
+UMask=0002
 ExecStart=/opt/membrane/%i server --socket /run/membrane/%i.sock
 Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
@@ -23,6 +24,7 @@ Environment=HOME=/root
 Restart=always
 RestartSec=3
 RuntimeDirectory=membrane
+RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
 StandardOutput=journal
 StandardError=journal

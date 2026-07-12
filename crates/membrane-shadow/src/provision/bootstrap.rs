@@ -84,6 +84,7 @@ async fn setup_directories(ip: &str) -> Result<String> {
                  {base}/sandbox /run/membrane/sandbox \
                  {base}/canary /run/membrane/canary \
                  /var/lib/membrane/{relay_binary} {config_dir}
+        chmod 755 /run/membrane /run/membrane/sandbox /run/membrane/canary
         echo "directories created"
     "#
     );
@@ -165,6 +166,9 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
 
+    let umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK;
+    let rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE;
+
     let bearer_unit = format!(
         r"[Unit]
 Description={spine} Crypto Spine (Membrane Tower)
@@ -175,11 +179,15 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
+UMask={umask}
 ExecStart={install_base}/{spine} server --socket /run/membrane/{spine}.sock --audit-dir /var/lib/membrane/{spine}
 Environment={spine_upper}_NODE_ID={gate_name}
 Environment={spine_upper}_LOG_LEVEL=info
 Restart=always
 RestartSec=3
+RuntimeDirectory=membrane
+RuntimeDirectoryMode={rtd_mode}
+RuntimeDirectoryPreserve=yes
 MemoryMax=64M
 
 [Install]
@@ -199,6 +207,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
+UMask={umask}
 ExecStartPre=-/bin/rm -f /run/membrane/{relay}.sock
 ExecStart={install_base}/{relay} server \
     --socket /run/membrane/{relay}.sock \
@@ -217,6 +226,9 @@ Environment={relay_upper}_FEDERATION_ENABLED=true
 Environment={relay_upper}_PEERS={hub_id}@{vps_peer}
 Restart=always
 RestartSec=5
+RuntimeDirectory=membrane
+RuntimeDirectoryMode={rtd_mode}
+RuntimeDirectoryPreserve=yes
 MemoryMax=128M
 
 [Install]
@@ -232,9 +244,13 @@ Wants={relay}-membrane.service
 
 [Service]
 Type=simple
+UMask={umask}
 ExecStart={install_base}/%i server --socket /run/membrane/%i.sock --security-socket /run/membrane/{spine}.sock --pid-dir /run/membrane
 Restart=always
 RestartSec=5
+RuntimeDirectory=membrane
+RuntimeDirectoryMode={rtd_mode}
+RuntimeDirectoryPreserve=yes
 MemoryMax=128M
 
 [Install]

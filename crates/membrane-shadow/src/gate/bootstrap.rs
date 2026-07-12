@@ -254,7 +254,8 @@ fn permissions_phase(dry_run: bool) -> BootstrapPhase {
     let mut ok = true;
     let mut details = Vec::new();
 
-    for dir in [membrane_dir.as_str(), depot_str.as_str()] {
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
+    for dir in [membrane_dir.as_str(), depot_str.as_str(), socket_base] {
         if std::fs::create_dir_all(dir).is_ok() {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(0o755);

@@ -81,16 +81,20 @@ pub fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
          After=network.target\n\n\
          [Service]\n\
          Type=simple\n\
+         UMask={umask}\n\
          ExecStart={base}/nestgate server --socket {socket}\n\
          Environment=GATE_NAME={gate}\n\
          Restart=on-failure\n\
          RestartSec=3\n\
          RuntimeDirectory=membrane\n\
+         RuntimeDirectoryMode={rtd_mode}\n\
          RuntimeDirectoryPreserve=yes\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n",
         gate = params.gate_name,
         base = params.install_base,
+        umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK,
+        rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE,
     )
 }
 

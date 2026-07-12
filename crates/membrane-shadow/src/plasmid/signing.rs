@@ -390,15 +390,28 @@ mod tests {
     }
 
     #[test]
-    fn sign_and_persist_returns_false_without_beardog() {
+    fn sign_and_persist_without_beardog_returns_false() {
         let tmp = std::env::temp_dir().join("depot_sign_test");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         std::fs::write(tmp.join("checksums.toml"), "# empty").unwrap();
 
-        assert!(!sign_and_persist(&tmp));
+        let original = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE).ok();
+        unsafe {
+            std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, "/nonexistent");
+        }
 
+        let result = sign_and_persist(&tmp);
+
+        unsafe {
+            match &original {
+                Some(v) => std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, v),
+                None => std::env::remove_var(cellmembrane_types::service::ENV_SOCKET_BASE),
+            }
+        }
         let _ = std::fs::remove_dir_all(&tmp);
+
+        assert!(!result, "should return false when bearDog socket is unreachable");
     }
 
     #[test]

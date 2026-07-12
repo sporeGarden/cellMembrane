@@ -35,10 +35,15 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let paths = cellmembrane_types::service::ServicePaths::from_env();
     let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
 
-    if let Err(e) = std::fs::create_dir_all(std::path::Path::new(
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    )) {
+    let socket_base = std::path::Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE);
+    if let Err(e) = std::fs::create_dir_all(socket_base) {
         tracing::warn!(error = %e, "failed to create socket base directory");
+    } else {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        if let Err(e) = std::fs::set_permissions(socket_base, perms) {
+            tracing::warn!(error = %e, "failed to set socket base directory permissions");
+        }
     }
 
     let security_binary = cellmembrane_types::MembraneService::binary_for(
@@ -251,15 +256,19 @@ fn generate_unit_content(
          After=network.target\n\n\
          [Service]\n\
          Type=simple\n\
+         UMask={umask}\n\
          {env_file_line}\
          ExecStart={exec_start}{extra_args}\n\
          Restart=on-failure\n\
          RestartSec=3\n\
          RuntimeDirectory=membrane\n\
+         RuntimeDirectoryMode={rtd_mode}\n\
          RuntimeDirectoryPreserve=yes\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n",
         binary = svc.binary,
+        umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK,
+        rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE,
     )
 }
 
@@ -399,6 +408,21 @@ mod tests {
         assert!(
             content.contains(&format!("Description={} primal", svc.binary)),
             "description should include binary name"
+        );
+    }
+
+    #[test]
+    fn generate_unit_content_includes_socket_permissions() {
+        let svc = MembraneService::with_capability(ServiceCapability::CryptoSigner)
+            .expect("CryptoSigner must exist");
+        let content = generate_unit_content(svc, "/bin/x", "", "/etc/membrane");
+        assert!(
+            content.contains("UMask=0002"),
+            "unit should set UMask=0002 for socket accessibility"
+        );
+        assert!(
+            content.contains("RuntimeDirectoryMode=0755"),
+            "unit should set RuntimeDirectoryMode=0755"
         );
     }
 

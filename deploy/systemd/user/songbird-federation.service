@@ -15,6 +15,7 @@ After=network-online.target
 
 [Service]
 Type=simple
+UMask=0002
 ExecStart=${ECOPRIMALS_ROOT}/infra/plasmidBin/primals/${MEMBRANE_TARGET}/songbird server \
     --socket %t/biomeos/songbird.sock \
     --federation-port 7700

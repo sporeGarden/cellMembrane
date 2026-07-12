@@ -94,26 +94,20 @@ impl NeuralBridge {
 
     /// Call a capability method through biomeOS Neural API.
     ///
-    /// Sends `capability.call` JSON-RPC with the given domain, method, and
-    /// params. Returns `BridgeResult::Handled` if biomeOS routes successfully,
-    /// or `BridgeResult::Fallthrough` if the socket is unreachable, the
-    /// method is not routed, or any error occurs.
+    /// Sends a direct `{domain}.{method}` JSON-RPC call. The Neural API
+    /// routes dotted methods natively (e.g. `lifecycle.status`, `crypto.sign`).
+    /// Returns `BridgeResult::Handled` on success, `BridgeResult::Fallthrough`
+    /// if the socket is unreachable or the method is not routed.
     pub async fn capability_call(
         &self,
         domain: &str,
         method: &str,
         params: serde_json::Value,
     ) -> BridgeResult {
-        self.rpc_call(
-            "capability.call",
-            serde_json::json!({
-                "capability": domain,
-                "method": method,
-                "params": params,
-            }),
-        )
-        .await
-        .map_or(BridgeResult::Fallthrough, BridgeResult::Handled)
+        let dotted_method = format!("{domain}.{method}");
+        self.rpc_call(&dotted_method, params)
+            .await
+            .map_or(BridgeResult::Fallthrough, BridgeResult::Handled)
     }
 
     /// Low-level JSON-RPC 2.0 call over UDS.
@@ -257,11 +251,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn discover_returns_none_without_socket() {
+    fn discover_respects_env_override() {
+        let original = std::env::var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET).ok();
+        let original_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE).ok();
+        unsafe {
+            std::env::set_var(
+                cellmembrane_types::service::ENV_NEURAL_API_SOCKET,
+                "/nonexistent/path/neural-api.sock",
+            );
+            std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, "/nonexistent");
+        }
+
         let result = NeuralBridge::discover();
+
+        unsafe {
+            match &original {
+                Some(v) => {
+                    std::env::set_var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET, v);
+                }
+                None => {
+                    std::env::remove_var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET);
+                }
+            }
+            match &original_base {
+                Some(v) => std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, v),
+                None => std::env::remove_var(cellmembrane_types::service::ENV_SOCKET_BASE),
+            }
+        }
+
         assert!(
             result.is_none(),
-            "should fall through when no socket exists"
+            "should fall through when no socket exists at overridden paths"
         );
     }
 
