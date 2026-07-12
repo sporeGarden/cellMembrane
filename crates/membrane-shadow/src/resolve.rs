@@ -112,8 +112,12 @@ pub(crate) fn role_to_capability(role: &str) -> Option<ServiceCapability> {
     cellmembrane_types::GateRole::from(role).as_capability()
 }
 
-fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
+pub(crate) fn is_local_gate(ctx: &ResolutionContext, target_gate: &str) -> bool {
     ctx.local_gate.eq_ignore_ascii_case(target_gate)
+}
+
+fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
+    is_local_gate(ctx, target_gate)
 }
 
 /// Resolve a local UDS endpoint — check socket existence in priority order.

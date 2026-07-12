@@ -16,6 +16,7 @@
 
 mod content_dispatch;
 mod data;
+mod deploy_dispatch;
 mod gate;
 mod impulse;
 mod infra;
@@ -49,6 +50,10 @@ fn bridge_mapping(cmd: &str) -> Option<(&str, &str)> {
         "token.list" => Some(("auth", "auth.token.list")),
         "token.create" => Some(("auth", "auth.token.create")),
         "token.revoke" => Some(("auth", "auth.token.revoke")),
+        "deploy.composition" => Some(("composition", "deploy")),
+        "deploy.graph" => Some(("graph", "execute")),
+        "deploy.resurrect" => Some(("lifecycle", "resurrect")),
+        "lifecycle.status" => Some(("lifecycle", "status")),
         _ => None,
     }
 }
@@ -118,6 +123,8 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("plasmid.") => {
             plasmid_dispatch::dispatch_plasmid(config, cmd, args).await
         }
+        c if c.starts_with("deploy.") => deploy_dispatch::dispatch_deploy(cmd, args).await,
+        c if c.starts_with("lifecycle.") => deploy_dispatch::dispatch_lifecycle(cmd, args).await,
         c if c.starts_with("relay.") => relay_dispatch::dispatch_relay(cmd, args).await,
         c if c.starts_with("content.") => {
             content_dispatch::dispatch_content(config, cmd, args).await
