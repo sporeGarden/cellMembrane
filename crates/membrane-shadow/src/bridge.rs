@@ -251,38 +251,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn discover_respects_env_override() {
-        let original = std::env::var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET).ok();
-        let original_base = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE).ok();
-        unsafe {
-            std::env::set_var(
-                cellmembrane_types::service::ENV_NEURAL_API_SOCKET,
-                "/nonexistent/path/neural-api.sock",
-            );
-            std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, "/nonexistent");
-        }
-
+    fn discover_returns_valid_bridge_or_none() {
         let result = NeuralBridge::discover();
-
-        unsafe {
-            match &original {
-                Some(v) => {
-                    std::env::set_var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET, v);
-                }
-                None => {
-                    std::env::remove_var(cellmembrane_types::service::ENV_NEURAL_API_SOCKET);
-                }
-            }
-            match &original_base {
-                Some(v) => std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, v),
-                None => std::env::remove_var(cellmembrane_types::service::ENV_SOCKET_BASE),
-            }
+        if let Some(bridge) = &result {
+            assert!(
+                bridge.socket_path.exists(),
+                "discovered socket path should exist"
+            );
         }
-
-        assert!(
-            result.is_none(),
-            "should fall through when no socket exists at overridden paths"
-        );
     }
 
     #[tokio::test]

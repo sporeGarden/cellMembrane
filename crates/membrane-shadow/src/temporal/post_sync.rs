@@ -524,7 +524,7 @@ fn is_freshness_publisher() -> bool {
 /// Persist rootpulse session to gate-local state (not the shared manifest).
 ///
 /// Writes to `{workspace}/infra/wateringHole/.rootpulse_state.toml`.
-pub fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
+pub(crate) fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
     let Ok(root) = crate::temporal::resolve_workspace_root() else {
         return;
     };
@@ -549,7 +549,7 @@ pub fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {
 }
 
 /// Load the last rootpulse session ID from gate-local state.
-pub fn load_rootpulse_session() -> Option<String> {
+pub(crate) fn load_rootpulse_session() -> Option<String> {
     let root = crate::temporal::resolve_workspace_root().ok()?;
     let state_path = root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)

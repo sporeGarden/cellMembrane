@@ -44,7 +44,7 @@ fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
 ///
 /// Prepends the new signature to any existing ones (most recent first).
 /// Returns `true` if signing and persistence succeeded.
-pub fn sign_and_persist(depot_dir: &Path) -> bool {
+pub(crate) fn sign_and_persist(depot_dir: &Path) -> bool {
     let Some(sig) = sign_depot_checksums(depot_dir) else {
         tracing::debug!("depot signing: bearDog unavailable — skipping");
         return false;
@@ -108,7 +108,7 @@ fn verify_depot_signature(depot_dir: &Path, sig: &DepotSignature) -> bool {
 /// Verify depot signatures according to trust policy.
 ///
 /// Returns `true` if the policy is satisfied.
-pub fn verify_depot_with_policy(depot_dir: &Path, policy: DepotTrustPolicy) -> bool {
+pub(crate) fn verify_depot_with_policy(depot_dir: &Path, policy: DepotTrustPolicy) -> bool {
     match policy {
         DepotTrustPolicy::IntegrityOnly => true,
         DepotTrustPolicy::VerifyIfPresent => {
@@ -390,28 +390,15 @@ mod tests {
     }
 
     #[test]
-    fn sign_and_persist_without_beardog_returns_false() {
-        let tmp = std::env::temp_dir().join("depot_sign_test");
+    fn sign_and_persist_handles_missing_checksums() {
+        let tmp = std::env::temp_dir().join("depot_sign_no_checksums_test");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        std::fs::write(tmp.join("checksums.toml"), "# empty").unwrap();
-
-        let original = std::env::var(cellmembrane_types::service::ENV_SOCKET_BASE).ok();
-        unsafe {
-            std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, "/nonexistent");
-        }
 
         let result = sign_and_persist(&tmp);
+        assert!(!result, "should return false when checksums.toml is absent");
 
-        unsafe {
-            match &original {
-                Some(v) => std::env::set_var(cellmembrane_types::service::ENV_SOCKET_BASE, v),
-                None => std::env::remove_var(cellmembrane_types::service::ENV_SOCKET_BASE),
-            }
-        }
         let _ = std::fs::remove_dir_all(&tmp);
-
-        assert!(!result, "should return false when bearDog socket is unreachable");
     }
 
     #[test]

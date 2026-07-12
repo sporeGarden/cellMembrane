@@ -330,7 +330,7 @@ pub async fn check_all(workspace_root: &Path, repo_paths: &[&str]) -> Result<Tem
 }
 
 /// Resolve workspace root. Delegates to [`crate::resolve_workspace_root`].
-pub fn resolve_workspace_root() -> Result<PathBuf> {
+pub(crate) fn resolve_workspace_root() -> Result<PathBuf> {
     crate::resolve_workspace_root()
 }
 

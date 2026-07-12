@@ -30,11 +30,10 @@ fn resolve_gate_arg(args: &[&str]) -> String {
     })
 }
 
-pub use config::{
-    default_routes_for_roles, format_route_line, generate_from_manifest, parse_port,
-    parse_songbird_proxy_routes, to_songbird_proxy_routes, to_songbird_routes_toml,
+use config::{
+    format_route_line, generate_from_manifest, load_gateway_config, parse_port,
+    to_songbird_proxy_routes,
 };
-use config::load_gateway_config;
 
 /// Dispatch gateway commands.
 pub async fn dispatch(config: &ShadowConfig, cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {

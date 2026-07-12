@@ -147,14 +147,10 @@ async fn deploy_binaries(ip: &str, gate_name: &str) -> Result<String> {
 
 /// Generate systemd unit content for the Tower atomic services.
 fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
-    let spine = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-    let relay = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-    let spine_upper = spine.to_uppercase();
-    let relay_upper = relay.to_uppercase();
+    use cellmembrane_types::{MembraneService, ServiceCapability};
+    let spine = MembraneService::binary_for(ServiceCapability::CryptoSigner);
+    let relay = MembraneService::binary_for(ServiceCapability::MeshRelay);
+    let (spine_upper, relay_upper) = (spine.to_uppercase(), relay.to_uppercase());
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
     let vps_peer = crate::manifest::resolve_federation_peer();
     let hub_id = cellmembrane_types::service::env_or(

@@ -238,7 +238,7 @@ pub use wave::{ExitCriterion, WaveState};
 /// Resolve the federation peer address from the manifest (golgi by default).
 /// Falls back to `DEFAULT_VPS_MESH_PEER` if manifest is unavailable.
 #[must_use]
-pub fn resolve_federation_peer() -> String {
+pub(crate) fn resolve_federation_peer() -> String {
     let workspace = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
@@ -262,7 +262,7 @@ pub fn resolve_federation_peer() -> String {
 ///
 /// # Errors
 /// Returns error if manifest not found or unparseable.
-pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
+pub(crate) fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
         ShadowError::Parse(format!(
             "ecosystem_manifest.toml not found under {}",
@@ -276,7 +276,7 @@ pub fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
 ///
 /// # Errors
 /// Returns error if manifest not found or unparseable.
-pub async fn load_from_workspace_async(workspace_root: &Path) -> Result<EcosystemManifest> {
+pub(crate) async fn load_from_workspace_async(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
         ShadowError::Parse(format!(
             "ecosystem_manifest.toml not found under {}",

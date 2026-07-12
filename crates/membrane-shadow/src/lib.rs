@@ -52,6 +52,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(clippy::missing_errors_doc)]
+#![allow(clippy::redundant_pub_crate)]
 
 pub mod bridge;
 pub mod caddy;

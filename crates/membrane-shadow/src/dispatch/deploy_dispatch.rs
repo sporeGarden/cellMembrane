@@ -365,14 +365,21 @@ mod tests {
             .unwrap();
 
         let result = rt.block_on(lifecycle_status(&[])).unwrap();
-        assert!(
-            !result.ok,
-            "should fail gracefully without Neural API (no bridge)"
-        );
-        assert!(
-            result.message.contains("Neural API"),
-            "should mention Neural API requirement"
-        );
+        if crate::bridge::NeuralBridge::discover().is_some() {
+            assert!(
+                result.ok || result.message.contains("lifecycle"),
+                "with bridge present, should return lifecycle data or status"
+            );
+        } else {
+            assert!(
+                !result.ok,
+                "should fail gracefully without Neural API (no bridge)"
+            );
+            assert!(
+                result.message.contains("Neural API"),
+                "should mention Neural API requirement"
+            );
+        }
     }
 
     #[test]

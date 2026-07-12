@@ -241,7 +241,7 @@ pub async fn validate(args: &SandboxArgs) -> crate::Result<SandboxResult> {
 /// Returns `None` if the primal has no dependencies, or `Some(binary_name)` of
 /// the required security provider.
 #[must_use]
-pub fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
+fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
     use cellmembrane_types::MembraneComposition;
     use cellmembrane_types::service::ServiceCapability;
 
@@ -417,7 +417,7 @@ pub async fn validate_and_promote(
 }
 
 /// List active sandbox instances by scanning the sandbox socket directory.
-pub fn list_active() -> Vec<SandboxInstance> {
+pub(crate) fn list_active() -> Vec<SandboxInstance> {
     let socket_dir = resolve_sandbox_socket_dir();
     let bin_dir = resolve_sandbox_bin_dir();
     let mut instances = Vec::new();

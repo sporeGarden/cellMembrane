@@ -11,7 +11,7 @@ use cellmembrane_types::gateway::{GatewayConfig, GatewayRoute};
 
 /// Format a route for display.
 #[must_use]
-pub fn format_route_line(route: &GatewayRoute) -> String {
+pub(super) fn format_route_line(route: &GatewayRoute) -> String {
     let path = if route.path_prefix.is_empty() {
         "/*"
     } else {
@@ -25,7 +25,7 @@ pub fn format_route_line(route: &GatewayRoute) -> String {
 
 /// Parse a port number from a bind address string (e.g. "0.0.0.0:443" → 443).
 #[must_use]
-pub fn parse_port(bind: &str) -> Option<u16> {
+pub(super) fn parse_port(bind: &str) -> Option<u16> {
     bind.rsplit(':').next()?.parse().ok()
 }
 
@@ -34,7 +34,7 @@ pub fn parse_port(bind: &str) -> Option<u16> {
 /// songBird uses a comma-separated format: `host/path=capability,host/path=capability,...`
 /// This bridges our typed `GatewayConfig` to songBird's runtime route table.
 #[must_use]
-pub fn to_songbird_proxy_routes(config: &GatewayConfig) -> String {
+pub(super) fn to_songbird_proxy_routes(config: &GatewayConfig) -> String {
     config
         .routes
         .iter()
@@ -54,8 +54,9 @@ pub fn to_songbird_proxy_routes(config: &GatewayConfig) -> String {
 ///
 /// Inverse of [`to_songbird_proxy_routes`] — parses the runtime format back
 /// into typed routes for validation or display.
+#[cfg(test)]
 #[must_use]
-pub fn parse_songbird_proxy_routes(env_val: &str) -> Vec<GatewayRoute> {
+pub(super) fn parse_songbird_proxy_routes(env_val: &str) -> Vec<GatewayRoute> {
     env_val
         .split(',')
         .filter(|s| !s.is_empty())
@@ -88,8 +89,9 @@ pub fn parse_songbird_proxy_routes(env_val: &str) -> Vec<GatewayRoute> {
 /// capability = "jupyter"
 /// timeout_secs = 30
 /// ```
+#[cfg(test)]
 #[must_use]
-pub fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
+pub(super) fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
     use std::fmt::Write;
 
     let mut out = String::new();
@@ -127,7 +129,7 @@ pub fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
 /// Pure function: maps role strings to default route configurations.
 /// Gates with `http` or `gateway` roles get the standard `JupyterHub` routes.
 #[must_use]
-pub fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -> Vec<GatewayRoute> {
+pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -> Vec<GatewayRoute> {
     use cellmembrane_types::GateRole;
     let has_http_role = roles
         .iter()
@@ -169,7 +171,7 @@ pub fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -> Vec<G
 }
 
 /// Generate a gateway config from the ecosystem manifest for a specific gate.
-pub fn generate_from_manifest(gate_name: &str) -> Result<GatewayConfig> {
+pub(super) fn generate_from_manifest(gate_name: &str) -> Result<GatewayConfig> {
     let root = crate::temporal::resolve_workspace_root()?;
     let manifest = crate::manifest::load_from_workspace(&root)?;
     let profile = manifest.gates.get(gate_name).ok_or_else(|| {

@@ -10,7 +10,7 @@ use super::types::{
 use crate::error::{Result, ShadowError};
 
 /// Parse a TOML file that may use either `[impulse]` or legacy `[signal]` table name.
-pub fn parse_impulse_or_signal(
+pub(super) fn parse_impulse_or_signal(
     contents: &str,
 ) -> std::result::Result<ImpulseFile, toml::de::Error> {
     toml::from_str::<ImpulseFile>(contents).or_else(|_| {
@@ -38,7 +38,7 @@ pub fn parse_impulse_or_signal(
 }
 
 /// Find an impulse by ID (exact match or filename stem contains).
-pub fn find_impulse_by_id(
+pub(super) fn find_impulse_by_id(
     active_dir: &Path,
     impulse_id: &str,
 ) -> Result<(std::path::PathBuf, ImpulseFile)> {

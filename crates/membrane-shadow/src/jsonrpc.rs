@@ -225,7 +225,8 @@ pub async fn call_endpoint(
 
 /// Convenience: build a JSON-RPC request object for a method with no params.
 #[must_use]
-pub fn request(method: &str, id: u32) -> String {
+#[cfg(test)]
+pub(crate) fn request(method: &str, id: u32) -> String {
     serde_json::json!({
         "jsonrpc": "2.0",
         "method": method,
@@ -237,7 +238,7 @@ pub fn request(method: &str, id: u32) -> String {
 
 /// Convenience: build a JSON-RPC request with params.
 #[must_use]
-pub fn request_with_params(method: &str, params: &serde_json::Value, id: u32) -> String {
+pub(crate) fn request_with_params(method: &str, params: &serde_json::Value, id: u32) -> String {
     serde_json::json!({
         "jsonrpc": "2.0",
         "method": method,

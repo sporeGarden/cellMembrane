@@ -56,7 +56,7 @@ fn resolve_canary_socket_dir() -> PathBuf {
     PathBuf::from(env_or(ENV_CANARY_SOCKET_DIR, DEFAULT_CANARY_SOCKET_DIR))
 }
 
-pub fn resolve_canary_bin_dir() -> PathBuf {
+pub(crate) fn resolve_canary_bin_dir() -> PathBuf {
     PathBuf::from(env_or(ENV_CANARY_BIN_DIR, DEFAULT_CANARY_BIN_DIR))
 }
 

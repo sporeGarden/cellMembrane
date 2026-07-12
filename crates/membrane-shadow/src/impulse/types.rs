@@ -255,24 +255,24 @@ pub struct PotentialHealth {
 }
 
 #[must_use]
-pub fn impulses_dir(workspace_root: &Path) -> PathBuf {
+pub(super) fn impulses_dir(workspace_root: &Path) -> PathBuf {
     workspace_root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
         .join("impulses")
 }
 
 #[must_use]
-pub fn active_dir(workspace_root: &Path) -> PathBuf {
+pub(super) fn active_dir(workspace_root: &Path) -> PathBuf {
     impulses_dir(workspace_root).join("active")
 }
 
 #[must_use]
-pub fn current_wave(workspace_root: &Path) -> u32 {
+pub(super) fn current_wave(workspace_root: &Path) -> u32 {
     crate::freshness::current_wave(workspace_root)
 }
 
 #[must_use]
-pub fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
+pub(super) fn resolve_head_ref(workspace_root: &Path, project: &str) -> String {
     if project.is_empty() {
         return String::new();
     }
