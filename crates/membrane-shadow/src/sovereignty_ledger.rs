@@ -202,7 +202,7 @@ fn resolve_neural_api_endpoint() -> Option<cellmembrane_types::TransportEndpoint
         }
     }
 
-    crate::resolve::resolve_by_role(&ctx, "biomeos")
+    crate::resolve::resolve_by_role(&ctx, "identity")
 }
 
 #[cfg(test)]

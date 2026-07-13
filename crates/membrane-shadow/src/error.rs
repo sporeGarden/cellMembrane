@@ -70,6 +70,15 @@ pub enum ShadowError {
     Rpc(String),
 }
 
+impl ShadowError {
+    /// Whether this error represents a JSON-RPC application-level error
+    /// (as opposed to a transport/IO failure).
+    #[must_use]
+    pub const fn is_rpc_error(&self) -> bool {
+        matches!(self, Self::Rpc(_))
+    }
+}
+
 /// Result type for shadow operations.
 pub type Result<T> = std::result::Result<T, ShadowError>;
 

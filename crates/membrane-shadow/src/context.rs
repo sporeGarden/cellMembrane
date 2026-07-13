@@ -91,6 +91,22 @@ pub enum FocusStatus {
     Complete,
 }
 
+impl std::str::FromStr for FocusStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(Self::Active),
+            "paused" => Ok(Self::Paused),
+            "blocked" => Ok(Self::Blocked),
+            "complete" => Ok(Self::Complete),
+            _ => Err(format!(
+                "unknown status: {s} (expected: active|paused|blocked|complete)"
+            )),
+        }
+    }
+}
+
 impl std::fmt::Display for FocusStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -521,6 +537,15 @@ mod tests {
         assert_eq!(FocusStatus::Paused.to_string(), "paused");
         assert_eq!(FocusStatus::Blocked.to_string(), "BLOCKED");
         assert_eq!(FocusStatus::Complete.to_string(), "complete");
+    }
+
+    #[test]
+    fn focus_status_from_str() {
+        assert_eq!("active".parse::<FocusStatus>().unwrap(), FocusStatus::Active);
+        assert_eq!("paused".parse::<FocusStatus>().unwrap(), FocusStatus::Paused);
+        assert_eq!("blocked".parse::<FocusStatus>().unwrap(), FocusStatus::Blocked);
+        assert_eq!("complete".parse::<FocusStatus>().unwrap(), FocusStatus::Complete);
+        assert!("invalid".parse::<FocusStatus>().is_err());
     }
 
     #[test]

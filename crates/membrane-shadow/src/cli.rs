@@ -38,24 +38,14 @@ pub(crate) fn parse_impulse_post_args<'a>(
         .ok_or_else(|| ShadowError::Config("--subject required".into()))?;
 
     let type_str = extract_flag_value(args, "--type").unwrap_or("status");
-    let impulse_type = match type_str {
-        "frago" => impulse::ImpulseType::Frago,
-        "status" => impulse::ImpulseType::Status,
-        "request" => impulse::ImpulseType::Request,
-        "announce" => impulse::ImpulseType::Announce,
-        _ => {
-            return Err(ShadowError::Config(format!(
-                "unknown impulse type: {type_str} (expected: frago|status|request|announce)"
-            )));
-        }
-    };
+    let impulse_type: impulse::ImpulseType = type_str
+        .parse()
+        .map_err(ShadowError::Config)?;
 
     let priority_str = extract_flag_value(args, "--priority").unwrap_or("routine");
-    let priority = match priority_str {
-        "priority" => impulse::Priority::Priority,
-        "flash" => impulse::Priority::Flash,
-        _ => impulse::Priority::Routine,
-    };
+    let priority: impulse::Priority = priority_str
+        .parse()
+        .map_err(ShadowError::Config)?;
 
     let to_gates: Vec<&str> = to_str.split(',').collect();
 
@@ -80,17 +70,9 @@ pub(crate) fn parse_context_weave_args<'a>(
         .ok_or_else(|| ShadowError::Config("--summary required".into()))?;
 
     let status_str = extract_flag_value(args, "--status").unwrap_or("active");
-    let status = match status_str {
-        "active" => context::FocusStatus::Active,
-        "paused" => context::FocusStatus::Paused,
-        "blocked" => context::FocusStatus::Blocked,
-        "complete" => context::FocusStatus::Complete,
-        _ => {
-            return Err(ShadowError::Config(format!(
-                "unknown status: {status_str} (expected: active|paused|blocked|complete)"
-            )));
-        }
-    };
+    let status: context::FocusStatus = status_str
+        .parse()
+        .map_err(ShadowError::Config)?;
 
     let ttl_str = extract_flag_value(args, "--ttl").unwrap_or("48");
     let ttl_hours: u32 = ttl_str.parse().unwrap_or(48);

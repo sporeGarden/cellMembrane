@@ -198,27 +198,35 @@ async fn probe_s4_auth() -> StatusProbe {
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
 
-    if let Some(result) =
-        crate::bridge::try_bridge(binary_name, "health", serde_json::json!({})).await
-    {
-        let status = result
-            .get("status")
-            .and_then(|v| v.as_str())
-            .unwrap_or("alive");
-        let btsp = result
-            .get("auth_mode")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let detail = if btsp == "btsp" {
-            format!("ENFORCED — {binary_name} BTSP active (via neuralAPI)")
-        } else {
-            format!("RESPONDING — {binary_name} {status} (via neuralAPI)")
-        };
-        return StatusProbe {
-            name: "sovereignty.s4_auth".into(),
-            ok: true,
-            detail,
-        };
+    match crate::bridge::try_bridge(binary_name, "health", serde_json::json!({})).await {
+        Ok(Some(result)) => {
+            let status = result
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("alive");
+            let btsp = result
+                .get("auth_mode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let detail = if btsp == "btsp" {
+                format!("ENFORCED — {binary_name} BTSP active (via neuralAPI)")
+            } else {
+                format!("RESPONDING — {binary_name} {status} (via neuralAPI)")
+            };
+            return StatusProbe {
+                name: "sovereignty.s4_auth".into(),
+                ok: true,
+                detail,
+            };
+        }
+        Err(_) => {
+            return StatusProbe {
+                name: "sovereignty.s4_auth".into(),
+                ok: true,
+                detail: format!("RESPONDING — {binary_name} reachable (via neuralAPI)"),
+            };
+        }
+        Ok(None) => {}
     }
 
     let socket_paths = resolve_primal_socket_paths(binary_name);

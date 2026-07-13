@@ -40,7 +40,7 @@ impl<'a> SporePrintDeployParams<'a> {
 /// petalTongue renders sporePrint content (Zola pages, SceneGraph→SVG viz)
 /// and listens on loopback, behind bearDog TLS termination.
 #[must_use]
-pub fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
+fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
     let bind = cellmembrane_types::service::DEFAULT_PETALTONGUE_BIND;
     let content_root = format!(
         "{}/{}",
@@ -71,7 +71,7 @@ pub fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String 
 /// nestGate provides content-addressed storage with BLAKE3 integrity.
 /// Binds to UDS socket for local IPC only (petalTongue accesses via socket).
 #[must_use]
-pub fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
+fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
     let socket = format!("{socket_base}/nestgate.sock");
 
@@ -103,7 +103,7 @@ pub fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
 /// Unlike the generic gateway bearDog (which proxies to songBird socket),
 /// the sporePrint bearDog proxies to petalTongue on loopback:8080.
 #[must_use]
-pub fn generate_beardog_acme_unit(params: &SporePrintDeployParams<'_>) -> String {
+fn generate_beardog_acme_unit(params: &SporePrintDeployParams<'_>) -> String {
     let upstream = cellmembrane_types::service::DEFAULT_PETALTONGUE_BIND;
 
     format!(

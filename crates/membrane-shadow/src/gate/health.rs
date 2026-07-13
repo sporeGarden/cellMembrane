@@ -105,7 +105,7 @@ pub async fn status() -> crate::error::Result<GateStatus> {
 
 /// Probe mesh status via neuralAPI-routed `capability.call` with fallback to direct UDS.
 async fn probe_mesh_status() -> (bool, String) {
-    if let Some(result) =
+    if let Ok(Some(result)) =
         crate::bridge::try_bridge("mesh_relay", "mesh.status", serde_json::json!({})).await
     {
         return parse_mesh_json(&result);
@@ -226,8 +226,10 @@ pub async fn health_sweep(arch: &str) -> (bool, String) {
 /// Any valid JSON-RPC response (including method-not-found errors) proves
 /// the primal is alive.
 async fn probe_primal_jsonrpc(primal: &str) -> bool {
-    if let Some(result) = crate::bridge::try_bridge(primal, "health", serde_json::json!({})).await {
-        return result.get("status").is_some() || result.is_object();
+    match crate::bridge::try_bridge(primal, "health", serde_json::json!({})).await {
+        Ok(Some(result)) => return result.get("status").is_some() || result.is_object(),
+        Err(_) => return true,
+        Ok(None) => {}
     }
 
     let socket_paths = resolve_primal_socket_paths(primal);

@@ -8,8 +8,8 @@
 //! capabilities, and composition tiers.
 
 use super::{
-    BIND_ALL, BIND_LOOPBACK, HealthCheckMethod, MembraneService, Protocol, ServerContract,
-    ServiceCapability, TransportMode,
+    BIND_ALL, BIND_LOOPBACK, DEFAULT_FEDERATION_PORT, HealthCheckMethod, MembraneService, Protocol,
+    ServerContract, ServiceCapability, TransportMode,
 };
 use crate::composition::MembraneComposition;
 
@@ -44,7 +44,7 @@ const SONGBIRD: MembraneService = MembraneService {
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     system_install_path: None,
-    extra_ports: &[],
+    extra_ports: &[(DEFAULT_FEDERATION_PORT, Protocol::Tcp, "songbird-federation")],
     min_composition: MembraneComposition::Relay,
     vps_transport: TransportMode::TcpOptIn,
     capabilities: &[ServiceCapability::MeshRelay, ServiceCapability::TurnServer],

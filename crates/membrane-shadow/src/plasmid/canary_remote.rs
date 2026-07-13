@@ -48,7 +48,7 @@ pub async fn load_remote_canaries() -> RemoteCanaryRegistry {
 }
 
 /// Save the remote canary registry to disk.
-pub async fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
+async fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
     let path = remote_canaries_path();
     if let Some(parent) = path.parent() {
         if let Err(e) = tokio::fs::create_dir_all(parent).await {

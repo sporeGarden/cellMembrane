@@ -2,7 +2,7 @@
 
 //! Deploy and lifecycle dispatch — Neural API front-end commands.
 //!
-//! These commands route through the Neural API (`capability.call`) with no
+//! These commands route through the Neural API (dotted JSON-RPC methods) with no
 //! shadow fallback. They require biomeOS to be running on the target gate
 //! (or reachable via mesh). This is the canonical deployment authority path:
 //! `membrane deploy.*` / `membrane lifecycle.*` replace ad-hoc manual patterns.
@@ -60,7 +60,7 @@ async fn deploy_composition(args: &[&str]) -> crate::Result<ShadowOutcome> {
     });
 
     route_to_gate(gate, "composition", "deploy", params)
-        .await
+        .await?
         .map_or_else(
             || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
             |value| Ok(format_deploy_result("deploy.composition", gate, &value)),
@@ -86,7 +86,7 @@ async fn deploy_graph(args: &[&str]) -> crate::Result<ShadowOutcome> {
     });
 
     route_to_gate(gate, "graph", "execute", params)
-        .await
+        .await?
         .map_or_else(
             || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
             |value| Ok(format_deploy_result("deploy.graph", gate, &value)),
@@ -108,7 +108,7 @@ async fn deploy_resurrect(args: &[&str]) -> crate::Result<ShadowOutcome> {
     });
 
     route_to_gate(gate, "lifecycle", "resurrect", params)
-        .await
+        .await?
         .map_or_else(
             || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
             |value| {
@@ -139,7 +139,7 @@ async fn lifecycle_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
     }
 
     route_to_gate(gate, "lifecycle", "status", params)
-        .await
+        .await?
         .map_or_else(
             || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
             |value| Ok(format_lifecycle_status(gate, primal_filter, &value)),
@@ -159,43 +159,42 @@ async fn route_to_gate(
     domain: &str,
     method: &str,
     params: serde_json::Value,
-) -> Option<serde_json::Value> {
+) -> crate::Result<Option<serde_json::Value>> {
     let ctx = crate::resolve::ResolutionContext::from_env();
 
     if crate::resolve::is_local_gate(&ctx, target_gate) {
         return bridge::try_bridge(domain, method, params).await;
     }
 
-    let ep = crate::resolve::resolve_endpoint(
+    let Some(ep) = crate::resolve::resolve_endpoint(
         &ctx,
         target_gate,
         cellmembrane_types::ServiceCapability::Identity,
-    )?;
+    ) else {
+        return Ok(None);
+    };
 
-    let request = crate::jsonrpc::request_with_params(
-        "capability.call",
-        &serde_json::json!({
-            "capability": domain,
-            "method": method,
-            "params": params,
-        }),
-        1,
-    );
+    let dotted = format!("{domain}.{method}");
+    let request = crate::jsonrpc::request_with_params(&dotted, &params, 1);
 
-    let response = crate::jsonrpc::call_endpoint(&ep, &request).await.ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(&response).ok()?;
+    let Ok(response) = crate::jsonrpc::call_endpoint(&ep, &request).await else {
+        return Ok(None);
+    };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) else {
+        return Ok(None);
+    };
 
-    if parsed.get("error").is_some() {
-        tracing::debug!(
-            gate = target_gate,
-            domain,
-            method,
-            "remote capability.call returned error"
-        );
-        return None;
+    if let Some(error) = parsed.get("error") {
+        let msg = error
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown");
+        return Err(crate::error::ShadowError::Rpc(format!(
+            "{target_gate}: {dotted}: {msg}"
+        )));
     }
 
-    parsed.get("result").cloned()
+    Ok(parsed.get("result").cloned())
 }
 
 fn local_gate_name() -> &'static str {
@@ -364,21 +363,30 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = rt.block_on(lifecycle_status(&[])).unwrap();
-        if crate::bridge::NeuralBridge::discover().is_some() {
-            assert!(
-                result.ok || result.message.contains("lifecycle"),
-                "with bridge present, should return lifecycle data or status"
-            );
-        } else {
-            assert!(
-                !result.ok,
-                "should fail gracefully without Neural API (no bridge)"
-            );
-            assert!(
-                result.message.contains("Neural API"),
-                "should mention Neural API requirement"
-            );
+        match rt.block_on(lifecycle_status(&[])) {
+            Ok(result) => {
+                if crate::bridge::NeuralBridge::discover().is_some() {
+                    assert!(
+                        result.ok || result.message.contains("lifecycle"),
+                        "with bridge present, should return lifecycle data or status"
+                    );
+                } else {
+                    assert!(
+                        !result.ok,
+                        "should fail gracefully without Neural API (no bridge)"
+                    );
+                    assert!(
+                        result.message.contains("Neural API"),
+                        "should mention Neural API requirement"
+                    );
+                }
+            }
+            Err(e) => {
+                assert!(
+                    e.is_rpc_error(),
+                    "only RPC errors should propagate: {e}"
+                );
+            }
         }
     }
 

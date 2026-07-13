@@ -236,6 +236,11 @@ mod wave;
 pub use wave::{ExitCriterion, WaveState};
 
 /// Resolve the federation peer address from the manifest (golgi by default).
+///
+/// Prefers `wg_ip` over `host` — mesh traffic should traverse the encrypted
+/// `WireGuard` overlay when available, falling back to public IP only when no
+/// overlay address is configured.
+///
 /// Falls back to `DEFAULT_VPS_MESH_PEER` if manifest is unavailable.
 #[must_use]
 pub(crate) fn resolve_federation_peer() -> String {
@@ -247,11 +252,11 @@ pub(crate) fn resolve_federation_peer() -> String {
     if let Ok(manifest) = load_from_workspace(std::path::Path::new(&workspace)) {
         let hub_gates = manifest.gates_for_role("wg_hub");
         if let Some((_, profile)) = hub_gates.first() {
-            if let Some(ref host) = profile.host {
-                return format!("{host}:{port}");
-            }
             if let Some(ref ip) = profile.wg_ip {
                 return format!("{ip}:{port}");
+            }
+            if let Some(ref host) = profile.host {
+                return format!("{host}:{port}");
             }
         }
     }

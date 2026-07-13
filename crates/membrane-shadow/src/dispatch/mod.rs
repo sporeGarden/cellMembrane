@@ -68,8 +68,10 @@ fn bridge_mapping(cmd: &str) -> Option<(&str, &str)> {
 pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     if let Some((domain, method)) = bridge_mapping(cmd) {
         let params = serde_json::json!({ "args": args });
-        if let Some(result) = bridge::try_bridge(domain, method, params).await {
-            return Ok(ShadowOutcome::ok(result.to_string()));
+        match bridge::try_bridge(domain, method, params).await {
+            Ok(Some(result)) => return Ok(ShadowOutcome::ok(result.to_string())),
+            Err(e) => return Err(e),
+            Ok(None) => {}
         }
     }
 

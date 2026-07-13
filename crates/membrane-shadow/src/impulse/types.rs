@@ -34,6 +34,23 @@ impl std::fmt::Display for ImpulseType {
     }
 }
 
+impl std::str::FromStr for ImpulseType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "frago" => Ok(Self::Frago),
+            "status" => Ok(Self::Status),
+            "request" => Ok(Self::Request),
+            "announce" => Ok(Self::Announce),
+            "sync" => Ok(Self::Sync),
+            _ => Err(format!(
+                "unknown impulse type: {s} (expected: frago|status|request|announce|sync)"
+            )),
+        }
+    }
+}
+
 /// Priority levels for impulses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -52,6 +69,21 @@ impl std::fmt::Display for Priority {
             Self::Routine => write!(f, "routine"),
             Self::Priority => write!(f, "PRIORITY"),
             Self::Flash => write!(f, "FLASH"),
+        }
+    }
+}
+
+impl std::str::FromStr for Priority {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "routine" => Ok(Self::Routine),
+            "priority" => Ok(Self::Priority),
+            "flash" => Ok(Self::Flash),
+            _ => Err(format!(
+                "unknown priority: {s} (expected: routine|priority|flash)"
+            )),
         }
     }
 }
@@ -293,10 +325,28 @@ mod tests {
     }
 
     #[test]
+    fn impulse_type_from_str() {
+        assert_eq!("frago".parse::<ImpulseType>().unwrap(), ImpulseType::Frago);
+        assert_eq!("status".parse::<ImpulseType>().unwrap(), ImpulseType::Status);
+        assert_eq!("request".parse::<ImpulseType>().unwrap(), ImpulseType::Request);
+        assert_eq!("announce".parse::<ImpulseType>().unwrap(), ImpulseType::Announce);
+        assert_eq!("sync".parse::<ImpulseType>().unwrap(), ImpulseType::Sync);
+        assert!("invalid".parse::<ImpulseType>().is_err());
+    }
+
+    #[test]
     fn priority_display() {
         assert_eq!(Priority::Routine.to_string(), "routine");
         assert_eq!(Priority::Priority.to_string(), "PRIORITY");
         assert_eq!(Priority::Flash.to_string(), "FLASH");
+    }
+
+    #[test]
+    fn priority_from_str() {
+        assert_eq!("routine".parse::<Priority>().unwrap(), Priority::Routine);
+        assert_eq!("priority".parse::<Priority>().unwrap(), Priority::Priority);
+        assert_eq!("flash".parse::<Priority>().unwrap(), Priority::Flash);
+        assert!("invalid".parse::<Priority>().is_err());
     }
 
     #[test]

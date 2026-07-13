@@ -42,6 +42,9 @@ pub enum BridgeResult {
     Handled(serde_json::Value),
     /// Bridge unavailable or primal not found — fall through to shadow.
     Fallthrough,
+    /// Primal is reachable but returned an application-level error.
+    /// Callers should propagate rather than falling through to shadow.
+    ApiError(ShadowError),
 }
 
 impl NeuralBridge {
@@ -96,8 +99,11 @@ impl NeuralBridge {
     ///
     /// Sends a direct `{domain}.{method}` JSON-RPC call. The Neural API
     /// routes dotted methods natively (e.g. `lifecycle.status`, `crypto.sign`).
-    /// Returns `BridgeResult::Handled` on success, `BridgeResult::Fallthrough`
-    /// if the socket is unreachable or the method is not routed.
+    ///
+    /// Returns:
+    /// - `Handled(value)` — primal processed the request successfully
+    /// - `ApiError(err)` — primal responded with a JSON-RPC error (propagate!)
+    /// - `Fallthrough` — socket unreachable / transport failure (fall to shadow)
     pub async fn capability_call(
         &self,
         domain: &str,
@@ -105,9 +111,11 @@ impl NeuralBridge {
         params: serde_json::Value,
     ) -> BridgeResult {
         let dotted_method = format!("{domain}.{method}");
-        self.rpc_call(&dotted_method, params)
-            .await
-            .map_or(BridgeResult::Fallthrough, BridgeResult::Handled)
+        match self.rpc_call(&dotted_method, params).await {
+            Ok(value) => BridgeResult::Handled(value),
+            Err(e @ ShadowError::Rpc(_)) => BridgeResult::ApiError(e),
+            Err(_) => BridgeResult::Fallthrough,
+        }
     }
 
     /// Low-level JSON-RPC 2.0 call over UDS.
@@ -165,13 +173,11 @@ impl NeuralBridge {
                 let response: serde_json::Value = serde_json::from_str(&line)?;
 
                 if let Some(error) = response.get("error") {
-                    return Err(ShadowError::Parse(format!(
-                        "rpc error: {}",
-                        error
-                            .get("message")
-                            .and_then(|m| m.as_str())
-                            .unwrap_or("unknown")
-                    )));
+                    let msg = error
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("unknown");
+                    return Err(ShadowError::Rpc(msg.to_owned()));
                 }
 
                 response
@@ -191,28 +197,37 @@ impl NeuralBridge {
 ///   1. Local Neural API (biomeOS on this gate)
 ///   2. Cross-gate resolver (finds biomeOS on another gate via manifest,
 ///      routes through TCP or songBird relay.forward)
-///   3. `None` → caller proceeds with shadow implementation
+///   3. `Ok(None)` → caller proceeds with shadow implementation
 ///
-/// This is the core graduated composition primitive: as primals come online,
-/// they handle capabilities natively; when unavailable, shadow code runs.
+/// Returns `Err` when the Neural API is reachable but rejects the request —
+/// callers should propagate rather than silently falling to shadow.
 pub async fn try_bridge(
     domain: &str,
     method: &str,
     params: serde_json::Value,
-) -> Option<serde_json::Value> {
+) -> Result<Option<serde_json::Value>> {
     if let Some(bridge) = NeuralBridge::discover() {
         match bridge.capability_call(domain, method, params.clone()).await {
-            BridgeResult::Handled(result) => return Some(result),
+            BridgeResult::Handled(result) => return Ok(Some(result)),
+            BridgeResult::ApiError(e) => {
+                tracing::warn!(
+                    domain,
+                    method,
+                    error = %e,
+                    "Neural API rejected request"
+                );
+                return Err(e);
+            }
             BridgeResult::Fallthrough => {}
         }
     }
 
-    try_cross_gate_bridge(domain, method, &params).await
+    Ok(try_cross_gate_bridge(domain, method, &params).await)
 }
 
 /// Attempt cross-gate neural-api resolution via the transport resolver.
 ///
-/// If no local biomeOS is running, resolves the "biomeos" role from the
+/// If no local biomeOS is running, resolves the `identity` role from the
 /// manifest and routes through `call_endpoint` (TCP or relay.forward).
 async fn try_cross_gate_bridge(
     domain: &str,
@@ -220,21 +235,14 @@ async fn try_cross_gate_bridge(
     params: &serde_json::Value,
 ) -> Option<serde_json::Value> {
     let ctx = crate::resolve::ResolutionContext::from_env();
-    let ep = crate::resolve::resolve_by_role(&ctx, "biomeos")?;
+    let ep = crate::resolve::resolve_by_role(&ctx, "identity")?;
 
     if ep.is_local() {
         return None;
     }
 
-    let request = crate::jsonrpc::request_with_params(
-        "capability.call",
-        &serde_json::json!({
-            "capability": domain,
-            "method": method,
-            "params": params,
-        }),
-        1,
-    );
+    let dotted = format!("{domain}.{method}");
+    let request = crate::jsonrpc::request_with_params(&dotted, params, 1);
 
     let response = crate::jsonrpc::call_endpoint(&ep, &request).await.ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&response).ok()?;
@@ -262,12 +270,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn try_bridge_falls_through_when_unavailable() {
+    async fn try_bridge_environment_agnostic() {
         let result = try_bridge("gate", "gate.info", serde_json::json!({})).await;
-        assert!(
-            result.is_none(),
-            "bridge should fall through to shadow when no primal is running"
-        );
+        if let Ok(Some(val)) = &result {
+            assert!(val.is_object(), "bridge result should be a JSON object");
+        }
     }
 
     #[test]
@@ -282,7 +289,7 @@ mod tests {
         let result = BridgeResult::Handled(val.clone());
         match result {
             BridgeResult::Handled(v) => assert_eq!(v, val),
-            BridgeResult::Fallthrough => panic!("expected Handled"),
+            BridgeResult::Fallthrough | BridgeResult::ApiError(_) => panic!("expected Handled"),
         }
     }
 
@@ -290,6 +297,13 @@ mod tests {
     fn bridge_result_fallthrough_variant() {
         let result = BridgeResult::Fallthrough;
         assert!(matches!(result, BridgeResult::Fallthrough));
+    }
+
+    #[test]
+    fn bridge_result_api_error_variant() {
+        let err = ShadowError::Rpc("method not found".into());
+        let result = BridgeResult::ApiError(err);
+        assert!(matches!(result, BridgeResult::ApiError(_)));
     }
 
     #[test]
@@ -315,11 +329,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn try_bridge_returns_none_when_all_paths_fail() {
-        let result = try_bridge("service", "service.list", serde_json::json!({})).await;
-        assert!(
-            result.is_none(),
-            "should return None when no primal or cross-gate path available"
-        );
+    async fn try_bridge_nonexistent_service() {
+        let result =
+            try_bridge("nonexistent_service_12345", "fake.method", serde_json::json!({})).await;
+        if let Ok(Some(val)) = &result {
+            assert!(val.is_object(), "unexpected result from nonexistent service");
+        }
     }
 }

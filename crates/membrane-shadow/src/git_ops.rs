@@ -41,6 +41,9 @@ pub enum PushOutcome {
     /// Push rejected because the remote bare repo is shallow and cannot
     /// resolve delta bases for merge commits. Recovery: reshallow from mirror.
     ShallowRejected,
+    /// Push rejected because the remote has diverged (non-fast-forward).
+    /// Recovery: `--force-with-lease` if trees are identical (rebase-only divergence).
+    NonFastForward,
     /// Push failed for another reason (timeout, auth, network, etc.).
     Failed,
 }
@@ -91,17 +94,21 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
     result
 }
 
-/// Attempt a single push to a remote with shallow-failure detection.
+/// Attempt a single push to a remote with failure classification.
 async fn try_push(repo_dir: &Path, remote: &str) -> bool {
     let outcome = git_push_classified(repo_dir, &["push", remote, "main", "--quiet"]).await;
-    if outcome == PushOutcome::ShallowRejected {
-        tracing::warn!(
-            remote = %remote,
-            repo = %repo_dir.display(),
-            "post-sync push rejected: shallow bare repo — reshallow needed"
-        );
+    match outcome {
+        PushOutcome::Ok => return true,
+        PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
+            tracing::warn!(
+                remote = %remote,
+                repo = %repo_dir.display(),
+                "post-sync push rejected: shallow/non-ff"
+            );
+        }
+        PushOutcome::Failed => {}
     }
-    outcome == PushOutcome::Ok
+    false
 }
 
 /// Auto-reconcile a non-ff rejection: fetch, try ff-merge, fallback to rebase.
@@ -296,6 +303,8 @@ pub async fn git_push_classified(repo_path: &Path, args: &[&str]) -> PushOutcome
     let stderr = String::from_utf8_lossy(&output.stderr);
     if is_shallow_rejection(&stderr) {
         PushOutcome::ShallowRejected
+    } else if is_non_fast_forward(&stderr) {
+        PushOutcome::NonFastForward
     } else {
         let detail = stderr.lines().next().unwrap_or("unknown error");
         tracing::debug!(
@@ -318,6 +327,29 @@ fn is_shallow_rejection(stderr: &str) -> bool {
         || lower.contains("unresolved delta")
         || (lower.contains("missing") && lower.contains("tree"))
         || lower.contains("unable to read")
+}
+
+/// Detect whether a push failure is non-fast-forward (history diverged).
+fn is_non_fast_forward(stderr: &str) -> bool {
+    let lower = stderr.to_ascii_lowercase();
+    lower.contains("non-fast-forward")
+        || lower.contains("updates were rejected")
+        || lower.contains("failed to push some refs")
+}
+
+/// Check whether HEAD and a remote ref point to identical trees (content-parity).
+///
+/// Returns `true` if both refs resolve to the same `tree` object — meaning the
+/// only divergence is commit history (rebase-only), not content. Safe to
+/// force-with-lease in this case.
+pub async fn trees_match(repo_path: &Path, remote_ref: &str) -> bool {
+    let local_tree = git_output_opt(repo_path, &["rev-parse", "HEAD^{tree}"]).await;
+    let remote_tree = git_output_opt(repo_path, &["rev-parse", &format!("{remote_ref}^{{tree}}")]).await;
+
+    match (local_tree, remote_tree) {
+        (Some(l), Some(r)) => l.trim() == r.trim() && !l.trim().is_empty(),
+        _ => false,
+    }
 }
 
 /// Run a git command, returning stdout as `Option` (returns `None` on failure/timeout).
@@ -507,6 +539,37 @@ mod tests {
         assert_eq!(PushOutcome::Ok, PushOutcome::Ok);
         assert_ne!(PushOutcome::Ok, PushOutcome::ShallowRejected);
         assert_ne!(PushOutcome::ShallowRejected, PushOutcome::Failed);
+        assert_ne!(PushOutcome::NonFastForward, PushOutcome::Failed);
+        assert_ne!(PushOutcome::NonFastForward, PushOutcome::ShallowRejected);
+    }
+
+    #[test]
+    fn non_fast_forward_detection() {
+        assert!(is_non_fast_forward(
+            "! [rejected] main -> main (non-fast-forward)"
+        ));
+        assert!(is_non_fast_forward(
+            "error: failed to push some refs to 'ssh://git@git.primals.eco:2222/ecoPrimals/wateringHole.git'"
+        ));
+        assert!(is_non_fast_forward(
+            " ! [remote rejected] main -> main (Updates were rejected because the tip is behind)"
+        ));
+        assert!(!is_non_fast_forward("Everything up-to-date"));
+        assert!(!is_non_fast_forward("shallow update not allowed"));
+    }
+
+    #[tokio::test]
+    async fn trees_match_on_head() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        assert!(trees_match(workspace, "HEAD").await);
+    }
+
+    #[tokio::test]
+    async fn trees_match_false_for_nonexistent_ref() {
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = crate_dir.parent().unwrap().parent().unwrap();
+        assert!(!trees_match(workspace, "nonexistent-ref-12345").await);
     }
 
     #[tokio::test]

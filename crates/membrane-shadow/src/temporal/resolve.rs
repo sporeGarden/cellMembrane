@@ -195,11 +195,11 @@ pub(super) async fn push_to_followers(
         };
         match git_push_classified(local_path, &args).await {
             PushOutcome::Ok => pushed.push(pos.remote.clone()),
-            PushOutcome::ShallowRejected => {
+            PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
                 warn!(
                     remote = %pos.remote,
                     repo = %local_path.display(),
-                    "push rejected: shallow bare repo cannot resolve deltas — reshallow needed"
+                    "push rejected: shallow/non-ff — reshallow or manual intervention needed"
                 );
             }
             PushOutcome::Failed => {}
@@ -243,11 +243,11 @@ pub(super) async fn resolve_tree_parity(
         .await
         {
             PushOutcome::Ok => pushed_to.push(follower.clone()),
-            PushOutcome::ShallowRejected => {
+            PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
                 warn!(
                     remote = %follower,
                     repo = %local_path.display(),
-                    "tree-parity push rejected: shallow bare repo — reshallow needed"
+                    "tree-parity push rejected: shallow/non-ff — reshallow needed"
                 );
             }
             PushOutcome::Failed => {}
@@ -299,11 +299,25 @@ pub(super) async fn push_converge_followers(
         };
         match git_push_classified(local_path, &args).await {
             PushOutcome::Ok => pushed_to.push(pos.remote.clone()),
-            PushOutcome::ShallowRejected => {
+            PushOutcome::NonFastForward if pos.remote == sov => {
+                let remote_ref = format!("{}/{branch}", pos.remote);
+                if crate::git_ops::trees_match(local_path, &remote_ref).await {
+                    tracing::info!(
+                        remote = %pos.remote,
+                        repo = %local_path.display(),
+                        "tree-parity: retrying sovereign push with --force-with-lease"
+                    );
+                    let force_args = vec!["push", "--force-with-lease", &pos.remote, branch];
+                    if git_push_classified(local_path, &force_args).await == PushOutcome::Ok {
+                        pushed_to.push(pos.remote.clone());
+                    }
+                }
+            }
+            PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
                 warn!(
                     remote = %pos.remote,
                     repo = %local_path.display(),
-                    "push rejected: shallow bare repo cannot resolve deltas — reshallow needed"
+                    "push rejected: shallow/non-ff — reshallow or manual intervention needed"
                 );
             }
             PushOutcome::Failed => {}
