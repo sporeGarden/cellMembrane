@@ -62,6 +62,31 @@ pub enum DepotTrustPolicy {
     RequireSigned,
 }
 
+impl std::str::FromStr for DepotTrustPolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "integrity-only" | "integrity_only" => Ok(Self::IntegrityOnly),
+            "verify-if-present" | "verify_if_present" => Ok(Self::VerifyIfPresent),
+            "require-signed" | "require_signed" => Ok(Self::RequireSigned),
+            _ => Err(format!(
+                "unknown trust policy: {s} (expected: integrity-only|verify-if-present|require-signed)"
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for DepotTrustPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IntegrityOnly => write!(f, "integrity-only"),
+            Self::VerifyIfPresent => write!(f, "verify-if-present"),
+            Self::RequireSigned => write!(f, "require-signed"),
+        }
+    }
+}
+
 /// Wrapper for `signatures.toml` — may contain multiple signatures
 /// (e.g. from different gates or re-signing events).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -162,5 +187,55 @@ mod tests {
     #[test]
     fn algorithm_display() {
         assert_eq!(format!("{}", SignatureAlgorithm::Ed25519), "ed25519");
+    }
+
+    #[test]
+    fn trust_policy_from_str_kebab_case() {
+        assert_eq!(
+            "integrity-only".parse::<DepotTrustPolicy>().unwrap(),
+            DepotTrustPolicy::IntegrityOnly
+        );
+        assert_eq!(
+            "verify-if-present".parse::<DepotTrustPolicy>().unwrap(),
+            DepotTrustPolicy::VerifyIfPresent
+        );
+        assert_eq!(
+            "require-signed".parse::<DepotTrustPolicy>().unwrap(),
+            DepotTrustPolicy::RequireSigned
+        );
+    }
+
+    #[test]
+    fn trust_policy_from_str_snake_case() {
+        assert_eq!(
+            "integrity_only".parse::<DepotTrustPolicy>().unwrap(),
+            DepotTrustPolicy::IntegrityOnly
+        );
+        assert_eq!(
+            "verify_if_present".parse::<DepotTrustPolicy>().unwrap(),
+            DepotTrustPolicy::VerifyIfPresent
+        );
+        assert_eq!(
+            "require_signed".parse::<DepotTrustPolicy>().unwrap(),
+            DepotTrustPolicy::RequireSigned
+        );
+    }
+
+    #[test]
+    fn trust_policy_from_str_invalid() {
+        assert!("bogus".parse::<DepotTrustPolicy>().is_err());
+        assert!("".parse::<DepotTrustPolicy>().is_err());
+    }
+
+    #[test]
+    fn trust_policy_display_roundtrip() {
+        for policy in [
+            DepotTrustPolicy::IntegrityOnly,
+            DepotTrustPolicy::VerifyIfPresent,
+            DepotTrustPolicy::RequireSigned,
+        ] {
+            let s = policy.to_string();
+            assert_eq!(s.parse::<DepotTrustPolicy>().unwrap(), policy);
+        }
     }
 }

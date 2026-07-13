@@ -118,6 +118,8 @@ pub async fn bootstrap(
         .await,
     );
 
+    phases.push(timed_phase("sign.verify", sign_verify_phase(dry_run)).await);
+
     phases.push(timed_phase("sandbox.validate", sandbox_phase(&arch, dry_run)).await);
 
     let install_arch = arch.clone();
@@ -347,6 +349,36 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
     }
 }
 
+async fn sign_verify_phase(dry_run: bool) -> BootstrapPhase {
+    let depot = super::local::resolve_plasmidbin_dir();
+    let (ok, detail) = tokio::task::spawn_blocking(move || {
+        let valid = crate::plasmid::signing::verify_depot_with_policy(
+            &depot,
+            cellmembrane_types::DepotTrustPolicy::RequireSigned,
+        );
+        if valid {
+            (true, "Ed25519 signature verified".into())
+        } else {
+            (
+                false,
+                "Ed25519 signature verification FAILED — depot unsigned or tampered".into(),
+            )
+        }
+    })
+    .await
+    .unwrap_or_else(|_| (false, "spawn_blocking failed".into()));
+
+    BootstrapPhase {
+        name: "sign.verify".into(),
+        ok: if dry_run { true } else { ok },
+        detail: if dry_run {
+            format!("dry-run: would verify — current: {detail}")
+        } else {
+            detail
+        },
+    }
+}
+
 async fn fetch_phase(
     config: &ShadowConfig,
     transport: cellmembrane_types::GateTransport,
@@ -369,6 +401,7 @@ async fn fetch_phase(
         force: true,
         dry_run: false,
         dest: None,
+        trust_policy: cellmembrane_types::DepotTrustPolicy::RequireSigned,
     };
     let (ok, detail) = match crate::plasmid::fetch(config, &fetch_args).await {
         Ok(outcome) => {

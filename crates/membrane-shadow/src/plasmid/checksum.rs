@@ -99,12 +99,12 @@ pub(super) fn load_checksums(bin_dir: &Path, tag: &str) -> HashMap<String, Strin
         .unwrap_or(bin_dir)
         .join(format!("checksums-{tag}.toml"));
 
-    let alt_path = bin_dir.join("checksums.toml");
+    let alt_path = bin_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
 
     let depot_root_path = bin_dir
         .parent()
         .and_then(|p| p.parent())
-        .map(|d| d.join("checksums.toml"));
+        .map(|d| d.join(cellmembrane_types::service::CHECKSUMS_FILE));
 
     let path = if checksums_path.exists() {
         checksums_path
@@ -143,7 +143,7 @@ pub(super) fn persist_checksums(
     for (name, hash) in sorted {
         let _ = writeln!(content, "{name} = \"{hash}\"");
     }
-    let path = depot_root.join("checksums.toml");
+    let path = depot_root.join(cellmembrane_types::service::CHECKSUMS_FILE);
     if let Err(e) = std::fs::write(&path, content.as_bytes()) {
         tracing::warn!(error = %e, path = %path.display(), "failed to persist checksums.toml");
     }

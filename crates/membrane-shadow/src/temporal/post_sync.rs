@@ -376,6 +376,7 @@ async fn run_auto_fetch(lines: &mut Vec<String>) {
         force: false,
         dry_run: false,
         dest: None,
+        trust_policy: cellmembrane_types::DepotTrustPolicy::VerifyIfPresent,
     };
 
     match crate::plasmid::fetch(&config, &fetch_args).await {

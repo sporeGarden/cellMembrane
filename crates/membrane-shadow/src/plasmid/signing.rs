@@ -21,7 +21,7 @@ use cellmembrane_types::signing::{
 /// intentionally best-effort: cascade proceeds without signatures when
 /// bearDog is not running (e.g. development environments).
 fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let checksums_content = std::fs::read(&checksums_path).ok()?;
     let checksums_blake3 = blake3::hash(&checksums_content).to_hex().to_string();
 
@@ -50,7 +50,7 @@ pub(crate) fn sign_and_persist(depot_dir: &Path) -> bool {
         return false;
     };
 
-    let sigs_path = depot_dir.join("signatures.toml");
+    let sigs_path = depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE);
     let mut file = load_signatures(&sigs_path);
 
     file.signatures.retain(|s| s.signer_gate != sig.signer_gate);
@@ -87,7 +87,7 @@ pub(crate) fn sign_and_persist(depot_dir: &Path) -> bool {
 ///
 /// This is a standalone verification — no bearDog needed.
 fn verify_depot_signature(depot_dir: &Path, sig: &DepotSignature) -> bool {
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let Ok(checksums_content) = std::fs::read(&checksums_path) else {
         return false;
     };
@@ -112,7 +112,7 @@ pub(crate) fn verify_depot_with_policy(depot_dir: &Path, policy: DepotTrustPolic
     match policy {
         DepotTrustPolicy::IntegrityOnly => true,
         DepotTrustPolicy::VerifyIfPresent => {
-            let sigs_path = depot_dir.join("signatures.toml");
+            let sigs_path = depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE);
             let file = load_signatures(&sigs_path);
             file.latest().map_or_else(
                 || {
@@ -132,7 +132,7 @@ pub(crate) fn verify_depot_with_policy(depot_dir: &Path, policy: DepotTrustPolic
             )
         }
         DepotTrustPolicy::RequireSigned => {
-            let sigs_path = depot_dir.join("signatures.toml");
+            let sigs_path = depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE);
             let file = load_signatures(&sigs_path);
             let Some(sig) = file.latest() else {
                 tracing::warn!("depot verify: RequireSigned but no signatures.toml");
@@ -475,6 +475,128 @@ mod tests {
             &tmp,
             DepotTrustPolicy::VerifyIfPresent
         ));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn make_signed_depot(depot: &Path) -> DepotSignature {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let checksums_content =
+            "# test checksums\n[x86_64-unknown-linux-musl]\nbeardog = { blake3 = \"abc\", size = 1024 }\n";
+        std::fs::write(
+            depot.join(cellmembrane_types::service::CHECKSUMS_FILE),
+            checksums_content,
+        )
+        .unwrap();
+
+        let checksums_blake3 = blake3::hash(checksums_content.as_bytes())
+            .to_hex()
+            .to_string();
+
+        let signing_key = SigningKey::from_bytes(&[42u8; 32]);
+        let verifying_key = signing_key.verifying_key();
+        let signature = signing_key.sign(checksums_blake3.as_bytes());
+
+        let sig = DepotSignature {
+            algorithm: SignatureAlgorithm::Ed25519,
+            public_key: hex::encode(verifying_key.as_bytes()),
+            checksums_blake3,
+            signature: hex::encode(signature.to_bytes()),
+            signer_gate: "testGate".into(),
+            signed_at: "2026-07-13T12:00:00Z".into(),
+        };
+
+        let file = SignaturesFile {
+            signatures: vec![sig.clone()],
+        };
+        let content = toml::to_string(&file).unwrap();
+        std::fs::write(
+            depot.join(cellmembrane_types::service::SIGNATURES_FILE),
+            content,
+        )
+        .unwrap();
+
+        sig
+    }
+
+    #[test]
+    fn require_signed_passes_with_valid_signature() {
+        let tmp = std::env::temp_dir().join("depot_require_signed_valid_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let _sig = make_signed_depot(&tmp);
+
+        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::RequireSigned));
+        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::VerifyIfPresent));
+        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::IntegrityOnly));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn require_signed_rejects_tampered_checksums() {
+        let tmp = std::env::temp_dir().join("depot_require_signed_tampered_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let _sig = make_signed_depot(&tmp);
+
+        std::fs::write(
+            tmp.join(cellmembrane_types::service::CHECKSUMS_FILE),
+            "# tampered content",
+        )
+        .unwrap();
+
+        assert!(!verify_depot_with_policy(&tmp, DepotTrustPolicy::RequireSigned));
+        assert!(!verify_depot_with_policy(&tmp, DepotTrustPolicy::VerifyIfPresent));
+        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::IntegrityOnly));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn require_signed_rejects_forged_signature() {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let tmp = std::env::temp_dir().join("depot_require_signed_forged_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let checksums = "# real checksums\n";
+        std::fs::write(
+            tmp.join(cellmembrane_types::service::CHECKSUMS_FILE),
+            checksums,
+        )
+        .unwrap();
+
+        let checksums_blake3 = blake3::hash(checksums.as_bytes()).to_hex().to_string();
+        let attacker_key = SigningKey::from_bytes(&[99u8; 32]);
+        let attacker_sig = attacker_key.sign(checksums_blake3.as_bytes());
+
+        let legit_key = SigningKey::from_bytes(&[1u8; 32]);
+        let legit_vk = legit_key.verifying_key();
+
+        let forged = DepotSignature {
+            algorithm: SignatureAlgorithm::Ed25519,
+            public_key: hex::encode(legit_vk.as_bytes()),
+            checksums_blake3,
+            signature: hex::encode(attacker_sig.to_bytes()),
+            signer_gate: "attackerGate".into(),
+            signed_at: "2026-07-13T12:00:00Z".into(),
+        };
+
+        let file = SignaturesFile {
+            signatures: vec![forged],
+        };
+        std::fs::write(
+            tmp.join(cellmembrane_types::service::SIGNATURES_FILE),
+            toml::to_string(&file).unwrap(),
+        )
+        .unwrap();
+
+        assert!(!verify_depot_with_policy(&tmp, DepotTrustPolicy::RequireSigned));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

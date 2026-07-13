@@ -36,6 +36,15 @@ pub const INFRA_PLASMID_BIN: &str = "infra/plasmidBin";
 /// Directory name for the binary depot.
 pub const PLASMID_BIN_DIR: &str = "plasmidBin";
 
+/// Depot checksums manifest filename.
+pub const CHECKSUMS_FILE: &str = "checksums.toml";
+
+/// Depot signatures manifest filename.
+pub const SIGNATURES_FILE: &str = "signatures.toml";
+
+/// Environment variable to override the depot trust policy.
+pub const ENV_DEPOT_TRUST_POLICY: &str = "DEPOT_TRUST_POLICY";
+
 // ── Standard deployment environment variables ────────────────────────
 
 /// Environment variable for the `plasmidBin` depot directory.

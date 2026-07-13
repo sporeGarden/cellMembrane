@@ -105,6 +105,7 @@ pub async fn handle_depot_updated(notification: &DepotUpdatedNotification) -> Re
         force: false,
         dry_run: false,
         dest: None,
+        trust_policy: cellmembrane_types::DepotTrustPolicy::VerifyIfPresent,
     };
 
     let outcome = super::fetch(&config, &fetch_args).await?;

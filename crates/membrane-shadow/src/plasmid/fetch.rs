@@ -64,6 +64,8 @@ pub struct FetchArgs {
     pub dry_run: bool,
     /// Override output directory.
     pub dest: Option<String>,
+    /// Depot trust policy — controls signature verification behavior.
+    pub trust_policy: cellmembrane_types::DepotTrustPolicy,
 }
 
 /// Outcome of fetching a single primal binary.
@@ -158,6 +160,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 
     download::cleanup_partial_downloads(&bin_dir).await;
 
+    // ── Phase 1: metadata — checksums + signatures ──────────────────
     let bd = bin_dir.clone();
     let t = tag.clone();
     let mut checksums = tokio::task::spawn_blocking(move || checksum::load_checksums(&bd, &t))
@@ -176,18 +179,11 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
             }
         }
     }
-    let mut results =
-        fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
-
-    if should_fetch_gpu(&primals) {
-        let gnu_results = fetch_gpu_primals(&primals, &dest_root, &tag, args, config).await;
-        results.extend(gnu_results);
-    }
 
     if args.source == FetchSource::Wan {
         let wan_sigs = super::signing::fetch_wan_signatures().await;
         if !wan_sigs.signatures.is_empty() {
-            let sigs_path = dest_root.join("signatures.toml");
+            let sigs_path = dest_root.join(cellmembrane_types::service::SIGNATURES_FILE);
             if let Ok(content) = toml::to_string(&wan_sigs) {
                 if let Err(e) = tokio::fs::write(&sigs_path, content).await {
                     tracing::warn!(error = %e, "failed to persist WAN signatures.toml");
@@ -196,12 +192,30 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         }
     }
 
-    let sig_valid = super::signing::verify_depot_with_policy(
-        &dest_root,
-        cellmembrane_types::DepotTrustPolicy::VerifyIfPresent,
-    );
+    // ── Phase 2: verify depot signature BEFORE downloading binaries ──
+    let policy = args.trust_policy;
+    let dr = dest_root.clone();
+    let sig_valid =
+        tokio::task::spawn_blocking(move || super::signing::verify_depot_with_policy(&dr, policy))
+            .await
+            .unwrap_or(false);
+
     if !sig_valid {
-        tracing::warn!("depot signature verification FAILED after fetch");
+        let msg = format!(
+            "depot signature verification FAILED (policy={policy}) — aborting fetch"
+        );
+        tracing::warn!("{msg}");
+        return Ok(ShadowOutcome::fail(msg));
+    }
+    tracing::info!(policy = %policy, "depot signature verification passed");
+
+    // ── Phase 3: download binaries (checksums now trusted) ───────────
+    let mut results =
+        fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
+
+    if should_fetch_gpu(&primals) {
+        let gnu_results = fetch_gpu_primals(&primals, &dest_root, &tag, args, config).await;
+        results.extend(gnu_results);
     }
 
     Ok(format_fetch_outcome(
@@ -640,5 +654,22 @@ mod tests {
     fn load_checksums_returns_empty_for_missing() {
         let checksums = checksum::load_checksums(Path::new("/tmp/nonexistent-dir"), "v0.1");
         assert!(checksums.is_empty());
+    }
+
+    #[test]
+    fn fetch_args_trust_policy_defaults_to_verify_if_present() {
+        let args = FetchArgs {
+            source: FetchSource::Wan,
+            primal: None,
+            release_tag: None,
+            force: false,
+            dry_run: false,
+            dest: None,
+            trust_policy: cellmembrane_types::DepotTrustPolicy::default(),
+        };
+        assert_eq!(
+            args.trust_policy,
+            cellmembrane_types::DepotTrustPolicy::VerifyIfPresent
+        );
     }
 }

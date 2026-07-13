@@ -15,6 +15,11 @@ pub(super) async fn dispatch_plasmid(
         "plasmid.fetch" => {
             let source_str = cli::extract_flag_value(args, "--source").unwrap_or("github");
             let source: plasmid::FetchSource = source_str.parse()?;
+            let trust_policy = cli::extract_flag_value(args, "--trust-policy")
+                .map(str::parse::<cellmembrane_types::DepotTrustPolicy>)
+                .transpose()
+                .map_err(ShadowError::Config)?
+                .unwrap_or_else(resolve_default_trust_policy);
             let fetch_args = plasmid::FetchArgs {
                 source,
                 primal: cli::extract_flag_value(args, "--primal").map(Into::into),
@@ -22,6 +27,7 @@ pub(super) async fn dispatch_plasmid(
                 force: args.contains(&"--force"),
                 dry_run: args.contains(&"--dry-run"),
                 dest: cli::extract_flag_value(args, "--dest").map(Into::into),
+                trust_policy,
             };
             plasmid::fetch(config, &fetch_args).await
         }
@@ -410,4 +416,12 @@ fn dispatch_composition(args: &[&str]) -> crate::Result<ShadowOutcome> {
         format!("{} composition profiles defined", names.len()),
         serde_json::json!(data),
     ))
+}
+
+/// Resolve the default trust policy from env, falling back to `VerifyIfPresent`.
+fn resolve_default_trust_policy() -> cellmembrane_types::DepotTrustPolicy {
+    std::env::var(cellmembrane_types::service::ENV_DEPOT_TRUST_POLICY)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_default()
 }
