@@ -28,7 +28,7 @@ pub use super::canary_remote::{
 
 /// A canary primal instance — the previous known-good binary kept alive as fallback.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CanarySlot {
+pub(crate) struct CanarySlot {
     pub primal: String,
     pub binary_path: PathBuf,
     pub socket_path: PathBuf,
@@ -39,7 +39,7 @@ pub struct CanarySlot {
 
 /// Health status of a canary instance.
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct CanaryHealth {
+pub(crate) struct CanaryHealth {
     pub primal: String,
     pub commit: String,
     pub alive: bool,
@@ -48,7 +48,7 @@ pub struct CanaryHealth {
 
 /// Canary pool state (persisted as TOML).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub struct CanaryPool {
+pub(crate) struct CanaryPool {
     pub slots: Vec<CanarySlot>,
 }
 
@@ -68,7 +68,7 @@ fn pool_state_path() -> PathBuf {
 ///
 /// The binary is moved/copied to the canary directory and started on an isolated
 /// socket. If an existing canary for this primal is found, it's killed first.
-pub async fn retire_to_canary(
+pub(crate) async fn retire_to_canary(
     primal: &str,
     old_binary: &Path,
     commit: &str,
@@ -138,7 +138,7 @@ pub async fn retire_to_canary(
 }
 
 /// Health-check all canary instances in the pool.
-pub async fn canary_health_watch() -> Vec<CanaryHealth> {
+pub(crate) async fn canary_health_watch() -> Vec<CanaryHealth> {
     let pool = load_pool().await;
     let mut results = Vec::with_capacity(pool.slots.len());
 
@@ -173,7 +173,7 @@ fn is_stale(slot: &CanarySlot) -> bool {
 ///
 /// Returns a report of each canary's age and staleness status.
 /// If `auto_refresh` is true, stale canaries are killed and removed from the pool.
-pub async fn staleness_audit(auto_refresh: bool) -> Vec<CanaryStalenessReport> {
+pub(crate) async fn staleness_audit(auto_refresh: bool) -> Vec<CanaryStalenessReport> {
     let pool = load_pool().await;
     let mut reports = Vec::with_capacity(pool.slots.len());
     let mut stale_primals = Vec::new();
@@ -213,7 +213,7 @@ pub async fn staleness_audit(auto_refresh: bool) -> Vec<CanaryStalenessReport> {
 
 /// Staleness report for a single canary slot.
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct CanaryStalenessReport {
+pub(crate) struct CanaryStalenessReport {
     pub primal: String,
     pub commit: String,
     pub promoted_at: String,
@@ -223,7 +223,7 @@ pub struct CanaryStalenessReport {
 
 /// A failover target — either a local UDS socket or a remote SSH-reachable canary.
 #[derive(Debug, Clone, serde::Serialize)]
-pub enum FailoverTarget {
+pub(crate) enum FailoverTarget {
     /// Local canary (same host, isolated UDS socket).
     Local { primal: String, socket: PathBuf },
     /// Remote canary (SSH-reachable VPS droplet).
@@ -239,7 +239,7 @@ pub enum FailoverTarget {
 /// Combines local canary pool (UDS sockets) with remote canary droplets (SSH health probe).
 /// Stale canaries (older than `MEMBRANE_CANARY_MAX_AGE_HOURS`) are refused for failover
 /// to prevent rolling back to dangerously outdated binaries.
-pub async fn failover_targets() -> Vec<FailoverTarget> {
+pub(crate) async fn failover_targets() -> Vec<FailoverTarget> {
     let mut targets = Vec::new();
 
     // Local canary pool
@@ -291,7 +291,7 @@ pub async fn failover_targets() -> Vec<FailoverTarget> {
 /// Promote a canary back to production (rollback scenario).
 ///
 /// Copies the canary binary to the production path and returns the slot.
-pub async fn promote_canary(primal: &str, production_path: &Path) -> crate::Result<CanarySlot> {
+pub(crate) async fn promote_canary(primal: &str, production_path: &Path) -> crate::Result<CanarySlot> {
     let pool = load_pool().await;
 
     let slot = pool
@@ -329,12 +329,12 @@ pub async fn promote_canary(primal: &str, production_path: &Path) -> crate::Resu
 }
 
 /// List current canary pool state.
-pub async fn list() -> Vec<CanarySlot> {
+pub(crate) async fn list() -> Vec<CanarySlot> {
     load_pool().await.slots
 }
 
 /// Kill all canary instances (shutdown).
-pub async fn teardown_all() {
+pub(crate) async fn teardown_all() {
     let pool = load_pool().await;
     for slot in &pool.slots {
         kill_canary(slot).await;

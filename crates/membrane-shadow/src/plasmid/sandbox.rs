@@ -35,7 +35,7 @@ use cellmembrane_types::service::{
 
 /// A sandboxed primal instance under validation.
 #[derive(Debug, Clone)]
-pub struct SandboxInstance {
+pub(crate) struct SandboxInstance {
     pub primal: String,
     pub commit: String,
     pub binary_path: PathBuf,
@@ -46,7 +46,7 @@ pub struct SandboxInstance {
 
 /// Result of sandbox validation for a single primal.
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct SandboxResult {
+pub(crate) struct SandboxResult {
     pub primal: String,
     pub commit: String,
     pub health_ok: bool,
@@ -56,7 +56,7 @@ pub struct SandboxResult {
 
 /// Arguments for sandbox validation.
 #[derive(Debug, Clone)]
-pub struct SandboxArgs {
+pub(crate) struct SandboxArgs {
     pub primal: String,
     pub commit: String,
     pub binary_path: PathBuf,
@@ -76,12 +76,12 @@ fn resolve_sandbox_bin_dir() -> PathBuf {
 /// The binary is copied to the sandbox staging area and started with
 /// `--socket` pointing to an isolated namespace. If `security_socket` is
 /// provided (from a dependency chain), the process also gets `--security-socket`.
-pub async fn spin_up(args: &SandboxArgs) -> crate::Result<SandboxInstance> {
+pub(crate) async fn spin_up(args: &SandboxArgs) -> crate::Result<SandboxInstance> {
     spin_up_with_deps(args, None).await
 }
 
 /// Spin up with an optional security socket path for Tower dependency injection.
-pub async fn spin_up_with_deps(
+pub(crate) async fn spin_up_with_deps(
     args: &SandboxArgs,
     security_socket: Option<&Path>,
 ) -> crate::Result<SandboxInstance> {
@@ -148,7 +148,7 @@ pub async fn spin_up_with_deps(
 ///
 /// Retries up to `SANDBOX_PROBE_RETRIES` times with `SANDBOX_PROBE_INTERVAL_MS`
 /// delay between attempts (allows process startup time).
-pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
+pub(crate) async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
     let start = instance.started_at.unwrap_or_else(Instant::now);
     let request = crate::jsonrpc::HEALTH_REQUEST;
 
@@ -197,7 +197,7 @@ pub async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
 }
 
 /// Kill the sandbox process and clean up socket/binary.
-pub async fn teardown(instance: &SandboxInstance) {
+pub(crate) async fn teardown(instance: &SandboxInstance) {
     if let Some(pid) = instance.pid {
         super::graceful_kill(pid, 500).await;
     }
@@ -372,7 +372,7 @@ async fn wait_for_socket(path: &Path) {
 /// `production_path` is the target location (e.g. `/opt/membrane/songbird`).
 /// On success, the old production binary is returned as `Some(old_path)` for
 /// canary retirement.
-pub async fn validate_and_promote(
+pub(crate) async fn validate_and_promote(
     args: &SandboxArgs,
     production_path: &Path,
 ) -> crate::Result<(SandboxResult, Option<PathBuf>)> {

@@ -192,7 +192,7 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
     let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     let wave_path = wh_dir.join("wave.toml");
     let heads_dir = wh_dir.join("heads");
-    let freshness_path = wh_dir.join("freshness.toml");
+    let freshness_path = wh_dir.join(cellmembrane_types::service::FRESHNESS_FILE);
 
     let wave: WaveFile = tokio::fs::read_to_string(&wave_path)
         .await
@@ -254,7 +254,7 @@ pub async fn publish_freshness_toml(
 ) -> Result<()> {
     let freshness_path = root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
-        .join("freshness.toml");
+        .join(cellmembrane_types::service::FRESHNESS_FILE);
 
     let mut heads = tokio::fs::read_to_string(&freshness_path)
         .await
@@ -318,7 +318,7 @@ pub async fn auto_commit_freshness(
     publish_freshness_toml(root, manifest, repos).await?;
 
     let heads_file = format!("heads/{gate}.toml");
-    if !crate::git_ops::git_success(&wh_dir, &["add", "freshness.toml", &heads_file]).await {
+    if !crate::git_ops::git_success(&wh_dir, &["add", cellmembrane_types::service::FRESHNESS_FILE, &heads_file]).await {
         return Ok(());
     }
 
@@ -508,7 +508,7 @@ async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
 pub(crate) fn current_wave(workspace_root: &Path) -> u32 {
     let path = workspace_root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
-        .join("freshness.toml");
+        .join(cellmembrane_types::service::FRESHNESS_FILE);
     let Ok(content) = std::fs::read_to_string(&path) else {
         return 0;
     };

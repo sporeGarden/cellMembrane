@@ -79,7 +79,7 @@ fn has_dt_needed(data: &[u8], ph_off: usize, ph_ent_size: usize, ph_num: usize) 
 /// Reads ELF headers directly (no external `file` command dependency).
 /// For musl targets: also verifies static linkage (no `PT_INTERP` / `DT_NEEDED`).
 /// For gnu targets: allows dynamic linking (GPU primals need `dlopen` for CUDA/Vulkan).
-pub async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::Result<()> {
+pub(super) async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::Result<()> {
     let data = tokio::fs::read(bin_path)
         .await
         .map_err(|e| build_err(format!("BUILD-ELF-01: cannot read binary: {e}")))?;
@@ -173,7 +173,7 @@ pub(crate) fn resolve_ndk_strip() -> Option<String> {
 }
 
 /// Strip debug symbols from a binary (uses NDK strip for Android targets).
-pub async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
+pub(super) async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
     let strip_cmd = if target.contains("android") {
         resolve_ndk_strip().unwrap_or_else(|| "llvm-strip".into())
     } else {
@@ -197,7 +197,7 @@ pub async fn strip_binary(bin_path: &Path, primal: &str, target: &str) {
 /// `manifest_linker` is the `linker` field from `ecosystem_manifest.toml`
 /// for this primal, if present. It takes precedence over the default
 /// linker selection for non-Android targets.
-pub async fn build_binary(
+pub(super) async fn build_binary(
     source: &SourceEntry,
     target: &str,
     clone_dir: &Path,
@@ -266,7 +266,7 @@ pub async fn build_binary(
 }
 
 /// Shallow-clone a git repository. Returns true on success.
-pub async fn try_clone(url: &str, clone_dir: &Path) -> bool {
+pub(super) async fn try_clone(url: &str, clone_dir: &Path) -> bool {
     if clone_dir.exists() {
         if let Err(e) = tokio::fs::remove_dir_all(clone_dir).await {
             tracing::debug!(error = %e, "clone_dir cleanup (may not exist)");
