@@ -107,12 +107,25 @@ pub async fn publish_gate_heads(
         .await
         .map_err(ShadowError::Io)?;
 
+    let wh_local = cellmembrane_types::service::INFRA_WATERING_HOLE;
+
     let mut heads = BTreeMap::new();
     for (name, entry) in repos {
+        // Exclude self-reference: wateringHole recording its own SHA creates
+        // an infinite fixpoint problem where every write changes the hash,
+        // which changes the content, which changes the hash again.
+        if entry.local_path == wh_local || entry.local_path.ends_with("/wateringHole") {
+            continue;
+        }
+
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
-            if let Ok(sha) = git_rev_parse_head(&repo_dir).await {
-                heads.insert((*name).to_string(), sha);
+            // Use tree hash (content-addressed) rather than commit SHA
+            // (graph-dependent). Identical file states across different
+            // commit histories produce identical tree hashes, breaking
+            // the cyclic divergence caused by rebase artifacts.
+            if let Ok(tree) = git_rev_parse_tree(&repo_dir).await {
+                heads.insert((*name).to_string(), tree);
             }
         }
     }
@@ -262,11 +275,15 @@ pub async fn publish_freshness_toml(
         .and_then(|c| toml::from_str::<FreshnessFile>(&c).ok())
         .map_or_else(BTreeMap::new, |f| f.heads);
 
+    let wh_local = cellmembrane_types::service::INFRA_WATERING_HOLE;
     for (name, entry) in repos {
+        if entry.local_path == wh_local || entry.local_path.ends_with("/wateringHole") {
+            continue;
+        }
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
-            if let Ok(sha) = git_rev_parse_head(&repo_dir).await {
-                heads.insert((*name).to_string(), sha);
+            if let Ok(tree) = git_rev_parse_tree(&repo_dir).await {
+                heads.insert((*name).to_string(), tree);
             }
         }
     }
@@ -495,9 +512,22 @@ fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<Strin
     crate::git_ops::resolve_head_full(&repo_dir)
 }
 
-/// Async git rev-parse HEAD.
+/// Async git rev-parse HEAD — commit SHA (graph-dependent).
+///
+/// Retained for cases where commit identity matters (e.g., tracking which
+/// exact commit is deployed). For convergence comparison, prefer
+/// `git_rev_parse_tree` which is content-addressed.
+#[allow(dead_code)]
 async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
     crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
+}
+
+/// Content-addressed tree hash — identical file states produce identical
+/// hashes regardless of commit parentage, timestamps, or rebase history.
+/// This is what turns a cyclic graph into a DAG: convergence is determined
+/// by content identity, not graph identity.
+async fn git_rev_parse_tree(repo_dir: &Path) -> Result<String> {
+    crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD^{tree}"]).await
 }
 
 /// Read the current wave ID from `freshness.toml` in the workspace.

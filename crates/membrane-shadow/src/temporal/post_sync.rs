@@ -439,7 +439,11 @@ async fn run_rootpulse_sovereignty(
     }
 }
 
-/// Collect HEAD SHAs for all cloned repos in the cascade set.
+/// Collect tree hashes for all cloned repos in the cascade set.
+///
+/// Uses `HEAD^{tree}` (content-addressed) so identical file states at
+/// different commit SHAs produce identical entries — this is what makes
+/// convergence comparison a DAG rather than a cyclic graph.
 pub async fn collect_cascade_heads(
     root: &std::path::Path,
     repos: &[(&str, &crate::manifest::RepoEntry)],
@@ -448,8 +452,10 @@ pub async fn collect_cascade_heads(
     for (name, entry) in repos {
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
-            if let Ok(sha) = crate::git_ops::git_output(&repo_dir, &["rev-parse", "HEAD"]).await {
-                heads.insert((*name).to_string(), sha);
+            if let Ok(tree) =
+                crate::git_ops::git_output(&repo_dir, &["rev-parse", "HEAD^{tree}"]).await
+            {
+                heads.insert((*name).to_string(), tree);
             }
         }
     }
