@@ -30,7 +30,7 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
         crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
     let dry_run = args.contains(&"--dry-run");
 
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     if !checksums_path.exists() {
         return Ok(ShadowOutcome::fail(format!(
             "checksums.toml not found at {} — run `depot.integrity` first",
@@ -147,7 +147,7 @@ fn dispatch_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let depot_dir =
         crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
 
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let checksums_exist = checksums_path.exists();
 
     let sigs = load_signatures_summary(&depot_dir);
@@ -212,7 +212,7 @@ fn signer_socket_name() -> String {
 fn load_signatures_summary(
     depot_dir: &std::path::Path,
 ) -> cellmembrane_types::signing::SignaturesFile {
-    let sigs_path = depot_dir.join("signatures.toml");
+    let sigs_path = depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE);
     std::fs::read_to_string(&sigs_path)
         .ok()
         .and_then(|content| toml::from_str(&content).ok())

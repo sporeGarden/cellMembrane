@@ -16,7 +16,7 @@
 ///
 /// The timer uses `OnCalendar` with `RandomizedDelaySec` to avoid
 /// thundering-herd across gates.
-pub fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> (String, String) {
+pub(crate) fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> (String, String) {
     let install_base = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_INSTALL_BASE,
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
@@ -112,7 +112,7 @@ pub fn install_cascade_timer(
 // ── Tower gateway systemd units ──────────────────────────────────
 
 /// Parameters for Tower HTTP gateway systemd unit generation.
-pub struct GatewayUnitParams<'a> {
+pub(crate) struct GatewayUnitParams<'a> {
     pub gate_name: &'a str,
     pub install_base: &'a str,
     pub songbird_socket: &'a str,
@@ -140,7 +140,7 @@ impl<'a> GatewayUnitParams<'a> {
 /// and routes to the correct backend. The `http.proxy` method enables it to
 /// also serve as a reverse proxy (replacing Caddy's routing role).
 #[must_use]
-pub fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
+pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
     use std::fmt::Write as _;
 
     let mut env_lines = format!("Environment=GATE_NAME={}\n", params.gate_name);
@@ -186,7 +186,7 @@ pub fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
 /// bearDog handles TLS termination on :443 and proxies to songBird's
 /// `http.proxy` method. It manages ACME certificate renewal via HTTP-01.
 #[must_use]
-pub fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
+pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
     format!(
         "[Unit]\n\
          Description=bearDog ACME gateway ({gate})\n\
@@ -213,7 +213,7 @@ pub fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
 
 /// Generate both gateway units (songBird + bearDog) as a tuple.
 #[must_use]
-pub fn generate_gateway_units(params: &GatewayUnitParams<'_>) -> (String, String) {
+pub(crate) fn generate_gateway_units(params: &GatewayUnitParams<'_>) -> (String, String) {
     (
         generate_songbird_unit(params),
         generate_beardog_unit(params),

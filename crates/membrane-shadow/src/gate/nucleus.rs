@@ -17,7 +17,7 @@ pub(super) fn systemctl(args: &[&str]) -> bool {
 }
 
 /// Async variant for use in tokio contexts (e.g. cascade-restart).
-pub async fn systemctl_async(args: &[&str]) -> bool {
+pub(crate) async fn systemctl_async(args: &[&str]) -> bool {
     tokio::process::Command::new("systemctl")
         .args(args)
         .output()
@@ -198,7 +198,7 @@ fn csprng_hex(n: usize) -> Option<String> {
 // ── Systemd unit generation ─────────────────────────────────────────
 
 /// Resolve extra CLI args for a primal's systemd `ExecStart`, based on capability.
-fn extra_exec_args(svc: &cellmembrane_types::MembraneService) -> String {
+pub(crate) fn extra_exec_args(svc: &cellmembrane_types::MembraneService) -> String {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
@@ -235,7 +235,7 @@ fn extra_exec_args(svc: &cellmembrane_types::MembraneService) -> String {
 }
 
 /// Generate the systemd unit file content for a NUCLEUS primal.
-fn generate_unit_content(
+pub(crate) fn generate_unit_content(
     svc: &cellmembrane_types::MembraneService,
     exec_start: &str,
     extra_args: &str,

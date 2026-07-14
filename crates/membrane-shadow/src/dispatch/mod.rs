@@ -44,6 +44,7 @@ fn bridge_mapping(cmd: &str) -> Option<(&str, &str)> {
         "service.status" => Some(("gate", "gate.service.status")),
         "service.restart" => Some(("gate", "gate.service.restart")),
         "service.logs" => Some(("gate", "gate.service.logs")),
+        "service.template" => Some(("gate", "gate.service.template")),
         "repo.list" => Some(("content", "content.repo.list")),
         "repo.create" => Some(("content", "content.repo.create")),
         "mirror.sync-all" => Some(("content", "content.mirror.sync_all")),

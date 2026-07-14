@@ -182,7 +182,7 @@ fn parse_mesh_response(response: &str) -> (bool, String) {
 ///
 /// Scoped to the local gate's composition profile when available, otherwise
 /// checks all nucleus primals.
-pub async fn health_sweep(arch: &str) -> (bool, String) {
+pub(crate) async fn health_sweep(arch: &str) -> (bool, String) {
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 

@@ -214,6 +214,10 @@ pub(super) async fn dispatch_service(
             let output = service::logs(config, unit, lines).await?;
             Ok(ShadowOutcome::ok(output))
         }
+        "service.template" => {
+            let binary = cli::require_arg(args, 0, "primal-name")?;
+            Ok(dispatch_service_template(binary))
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown service command: {cmd}"
         ))),
@@ -260,5 +264,120 @@ pub(super) async fn dispatch_token(
             Ok(ShadowOutcome::ok(format!("REVOKED token id={id}")))
         }
         _ => Ok(ShadowOutcome::fail(format!("unknown token command: {cmd}"))),
+    }
+}
+
+/// Generate a systemd unit template for a primal by binary name.
+fn dispatch_service_template(binary: &str) -> ShadowOutcome {
+    let Some(svc) = cellmembrane_types::MembraneService::for_binary(binary) else {
+        return ShadowOutcome::fail(format!(
+            "unknown primal: {binary} — expected one of: {}",
+            cellmembrane_types::MembraneService::all()
+                .iter()
+                .map(|s| s.binary)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    };
+
+    if svc.server_contract == cellmembrane_types::service::ServerContract::External {
+        return ShadowOutcome::fail(format!(
+            "{binary} is an external service — systemd units are managed outside membrane"
+        ));
+    }
+
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
+    let socket_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SOCKET_BASE,
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    );
+    let config_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_CONFIG_DIR,
+        cellmembrane_types::service::DEFAULT_CONFIG_DIR,
+    );
+
+    let socket_path = format!("{socket_base}/{}.sock", svc.binary);
+    let security_socket = format!("{socket_base}/security.sock");
+    let exec_start = svc.server_contract.exec_args_with_base(
+        &install_base,
+        svc.binary,
+        &socket_path,
+        &security_socket,
+    );
+    let extra_args = crate::gate::nucleus::extra_exec_args(svc);
+    let unit_content =
+        crate::gate::nucleus::generate_unit_content(svc, &exec_start, &extra_args, &config_dir);
+
+    let unit_name = format!("membrane-{}.service", svc.binary);
+    ShadowOutcome::ok_with(
+        unit_content.clone(),
+        serde_json::json!({
+            "unit_name": unit_name,
+            "binary": svc.binary,
+            "server_contract": format!("{:?}", svc.server_contract),
+            "unit_content": unit_content,
+        }),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn template_generates_valid_systemd_unit() {
+        let result = dispatch_service_template("beardog");
+        assert!(result.ok, "beardog template should succeed: {}", result.message);
+        assert!(result.message.contains("[Unit]"));
+        assert!(result.message.contains("[Service]"));
+        assert!(result.message.contains("[Install]"));
+        assert!(result.message.contains("beardog"));
+    }
+
+    #[test]
+    fn template_includes_structured_data() {
+        let result = dispatch_service_template("songbird");
+        assert!(result.ok);
+        let data = result.data.expect("should have structured data");
+        assert_eq!(data["binary"], "songbird");
+        assert!(data["unit_name"].as_str().unwrap().contains("songbird"));
+        assert!(data["unit_content"].as_str().unwrap().contains("[Service]"));
+    }
+
+    #[test]
+    fn template_rejects_unknown_primal() {
+        let result = dispatch_service_template("nonexistent");
+        assert!(!result.ok);
+        assert!(result.message.contains("unknown primal"));
+    }
+
+    #[test]
+    fn template_rejects_external_services() {
+        let result = dispatch_service_template("caddy");
+        assert!(!result.ok);
+        assert!(result.message.contains("external service"));
+    }
+
+    #[test]
+    fn template_all_primals_generate_valid_units() {
+        for svc in cellmembrane_types::MembraneService::all() {
+            if svc.server_contract == cellmembrane_types::service::ServerContract::External {
+                continue;
+            }
+            let result = dispatch_service_template(svc.binary);
+            assert!(
+                result.ok,
+                "{} template should succeed: {}",
+                svc.binary, result.message
+            );
+            assert!(
+                result.message.contains("[Unit]"),
+                "{} missing [Unit]",
+                svc.binary
+            );
+        }
     }
 }

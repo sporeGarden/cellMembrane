@@ -54,7 +54,7 @@ fn update_checksums(
         targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>>,
     }
 
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let mut all_targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>> = BTreeMap::new();
     let pre_existing_targets: Vec<String> = std::fs::read_to_string(&checksums_path)
         .ok()
@@ -103,7 +103,7 @@ fn update_checksums(
 }
 
 async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result<()> {
-    let provenance_path = depot_dir.join("provenance.toml");
+    let provenance_path = depot_dir.join(cellmembrane_types::service::PROVENANCE_FILE);
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let header_target = detect_target_triple();
 
@@ -178,7 +178,7 @@ async fn rustc_version() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-pub fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
+pub(crate) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
     let path = resolve_path(
         override_dir,
         cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,
@@ -243,7 +243,7 @@ pub(super) fn enrich_sources_from_manifest(
 }
 
 pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
-    let path = depot_dir.join("provenance.toml");
+    let path = depot_dir.join(cellmembrane_types::service::PROVENANCE_FILE);
     let content = std::fs::read_to_string(path).ok()?;
     toml::from_str(&content).ok()
 }
@@ -302,7 +302,7 @@ impl std::fmt::Display for StalenessReport {
 ///
 /// This is a local-only check — no network calls.
 /// If `depot_dir` is `None`, resolves depot from env/defaults.
-pub fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> {
+pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> {
     let sources = load_sources(depot_dir)?;
     let provenance = load_provenance(depot_dir);
     let target = detect_target_triple();

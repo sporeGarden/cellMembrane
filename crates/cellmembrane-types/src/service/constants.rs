@@ -42,6 +42,12 @@ pub const CHECKSUMS_FILE: &str = "checksums.toml";
 /// Depot signatures manifest filename.
 pub const SIGNATURES_FILE: &str = "signatures.toml";
 
+/// Depot provenance manifest filename.
+pub const PROVENANCE_FILE: &str = "provenance.toml";
+
+/// Depot freshness manifest filename.
+pub const FRESHNESS_FILE: &str = "freshness.toml";
+
 /// Environment variable to override the depot trust policy.
 pub const ENV_DEPOT_TRUST_POLICY: &str = "DEPOT_TRUST_POLICY";
 

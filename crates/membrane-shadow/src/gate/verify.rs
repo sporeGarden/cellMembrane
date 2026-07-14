@@ -26,12 +26,12 @@ pub(crate) fn verify_local_depot(arch: &str) -> (bool, String) {
     let dest_root = resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
-    let checksums_path = if dest_root.join("checksums.toml").exists() {
-        dest_root.join("checksums.toml")
+    let checksums_path = if dest_root.join(cellmembrane_types::service::CHECKSUMS_FILE).exists() {
+        dest_root.join(cellmembrane_types::service::CHECKSUMS_FILE)
     } else if let Ok(workspace) = crate::temporal::resolve_workspace_root() {
         let ws_path = workspace
             .join(cellmembrane_types::service::INFRA_PLASMID_BIN)
-            .join("checksums.toml");
+            .join(cellmembrane_types::service::CHECKSUMS_FILE);
         if ws_path.exists() {
             ws_path
         } else {

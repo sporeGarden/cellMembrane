@@ -83,7 +83,7 @@ pub struct PreflightReport {
 }
 
 /// Run all preflight checks on the local system.
-pub async fn run_preflight(target_ip: Option<&str>) -> PreflightReport {
+pub(crate) async fn run_preflight(target_ip: Option<&str>) -> PreflightReport {
     let interfaces = interface::detect_interfaces().await;
     let mut checks = Vec::new();
 

@@ -105,7 +105,11 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
     let remote_depot = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT)
         .unwrap_or(default_remote_depot);
 
-    for filename in ["provenance.toml", "checksums.toml", "signatures.toml"] {
+    for filename in [
+        cellmembrane_types::service::PROVENANCE_FILE,
+        cellmembrane_types::service::CHECKSUMS_FILE,
+        cellmembrane_types::service::SIGNATURES_FILE,
+    ] {
         let local = local_depot.join(filename);
         if local.is_file() {
             let remote = format!("{remote_depot}/{filename}");
@@ -341,7 +345,7 @@ fn resolve_refresh_source(override_dir: Option<&str>) -> PathBuf {
 /// Returns `Some(warning)` if a divergence is detected.
 fn check_checksum_coherence(primal: &str, actual_hash: &str) -> Option<String> {
     let depot = super::depot::resolve_depot(None).ok()?;
-    let checksums_path = depot.join("checksums.toml");
+    let checksums_path = depot.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let content = std::fs::read_to_string(&checksums_path).ok()?;
     let table: toml::Table = content.parse().ok()?;
 

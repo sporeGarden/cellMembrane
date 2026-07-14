@@ -17,10 +17,10 @@ use cellmembrane_types::PushTarget;
 
 /// Files that are machine-generated and safely discardable before a pull.
 pub(super) const REGENERABLE_METADATA: &[&str] = &[
-    "checksums.toml",
-    "provenance.toml",
-    "freshness.toml",
-    "signatures.toml",
+    cellmembrane_types::service::CHECKSUMS_FILE,
+    cellmembrane_types::service::PROVENANCE_FILE,
+    cellmembrane_types::service::FRESHNESS_FILE,
+    cellmembrane_types::service::SIGNATURES_FILE,
 ];
 
 /// Check if a repository has uncommitted changes that would block a pull.

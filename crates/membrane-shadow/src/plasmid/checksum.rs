@@ -41,7 +41,7 @@ pub(super) async fn verify_blake3_async(path: PathBuf, expected: String) -> bool
 pub async fn fetch_wan_checksums(arch: &str) -> HashMap<String, String> {
     let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
-    let url = format!("{base_url}/checksums.toml");
+    let url = format!("{base_url}/{}", cellmembrane_types::service::CHECKSUMS_FILE);
 
     let Ok(client) = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))

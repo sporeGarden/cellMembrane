@@ -462,8 +462,9 @@ pub async fn depot_sync(
 
     // Phase 2: Sync checksums.toml to the WAN depot root
     let checksums_src = format!(
-        "{}/plasmidBin/checksums.toml",
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
+        "{}/plasmidBin/{}",
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::CHECKSUMS_FILE,
     );
     let checksums_synced = sync_checksums_to_wan(config, &checksums_src).await;
 
@@ -544,9 +545,13 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
         return false;
     }
 
-    let sigs_src = checksums_path.replace("checksums.toml", "signatures.toml");
+    let sigs_src = checksums_path.replace(
+        cellmembrane_types::service::CHECKSUMS_FILE,
+        cellmembrane_types::service::SIGNATURES_FILE,
+    );
     let sigs_cmd = format!(
-        "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_depot}/signatures.toml 2>/dev/null"
+        "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_depot}/{} 2>/dev/null",
+        cellmembrane_types::service::SIGNATURES_FILE,
     );
     if let Err(e) = crate::ssh::exec_raw(config, &sigs_cmd).await {
         tracing::debug!(error = %e, "WAN signatures.toml sync: SSH copy failed");

@@ -163,10 +163,10 @@ fn load_signatures(path: &Path) -> SignaturesFile {
 /// Returns an empty `SignaturesFile` if the depot is unreachable or the
 /// file doesn't exist yet (signing activation pending).
 #[cfg(feature = "http")]
-pub async fn fetch_wan_signatures() -> SignaturesFile {
+pub(super) async fn fetch_wan_signatures() -> SignaturesFile {
     let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
-    let url = format!("{base_url}/signatures.toml");
+    let url = format!("{base_url}/{}", cellmembrane_types::service::SIGNATURES_FILE);
 
     let Ok(client) = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))

@@ -69,7 +69,7 @@ impl DepotUpdatedNotification {
 ///
 /// Rate-limited: silently skips if called within `MIN_FETCH_INTERVAL_SECS`
 /// of the last successful fetch.
-pub async fn handle_depot_updated(notification: &DepotUpdatedNotification) -> Result<ShadowOutcome> {
+pub(crate) async fn handle_depot_updated(notification: &DepotUpdatedNotification) -> Result<ShadowOutcome> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

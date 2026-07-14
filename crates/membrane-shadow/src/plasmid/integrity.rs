@@ -49,7 +49,7 @@ pub struct IntegrityMismatch {
 
 /// Scan all arch directories under `primals/`, compute BLAKE3 hashes, and write
 /// a fresh `checksums.toml`. Used after harvest to regenerate integrity metadata.
-pub fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
+pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     let primals_dir = depot_dir.join("primals");
     let mut all_targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>> = BTreeMap::new();
     let mut architectures: Vec<String> = Vec::new();
@@ -105,7 +105,7 @@ pub fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
         out.push('\n');
     }
 
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     crate::atomic_write(&checksums_path, out.as_bytes()).map_err(ShadowError::Io)?;
 
     Ok(IntegrityReport {
@@ -121,14 +121,14 @@ pub fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
 
 /// Read existing `checksums.toml` and verify every listed binary matches its
 /// recorded BLAKE3 hash. Reports mismatches and missing files.
-pub fn verify_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
+pub(crate) fn verify_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     #[derive(Deserialize)]
     struct ChecksumFile {
         #[serde(flatten)]
         targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>>,
     }
 
-    let checksums_path = depot_dir.join("checksums.toml");
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let content = std::fs::read_to_string(&checksums_path).map_err(ShadowError::Io)?;
     let parsed: ChecksumFile = toml::from_str(&content)?;
 

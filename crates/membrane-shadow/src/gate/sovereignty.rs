@@ -23,7 +23,7 @@ fn resolve_sovereign_domain() -> String {
 }
 
 /// Probe all four sovereignty shadows (S1 TLS, S2 Relay, S3 Content, S4 Auth).
-pub async fn probe_sovereignty() -> Vec<StatusProbe> {
+pub(crate) async fn probe_sovereignty() -> Vec<StatusProbe> {
     let (s1, s2, s3, s4) = tokio::join!(
         probe_s1_tls(),
         probe_s2_relay(),

@@ -13,7 +13,7 @@
 use super::systemd_units::{generate_songbird_unit, GatewayUnitParams};
 
 /// Parameters for sporePrint-specific NUCLEUS deployment (4 primals).
-pub struct SporePrintDeployParams<'a> {
+pub(crate) struct SporePrintDeployParams<'a> {
     pub gate_name: &'a str,
     pub install_base: &'a str,
     pub ecoprimals_root: &'a str,
@@ -137,7 +137,7 @@ fn generate_beardog_acme_unit(params: &SporePrintDeployParams<'_>) -> String {
 /// Uses the existing `generate_songbird_unit` for songBird and custom
 /// ACME-aware bearDog for domain-specific TLS termination.
 #[must_use]
-pub fn generate_sporeprint_units(params: &SporePrintDeployParams<'_>) -> SporePrintUnits {
+pub(crate) fn generate_sporeprint_units(params: &SporePrintDeployParams<'_>) -> SporePrintUnits {
     let gw_params = GatewayUnitParams {
         gate_name: params.gate_name,
         install_base: params.install_base,
@@ -155,7 +155,7 @@ pub fn generate_sporeprint_units(params: &SporePrintDeployParams<'_>) -> SporePr
 }
 
 /// All 4 systemd unit file contents for a sporePrint NUCLEUS composition.
-pub struct SporePrintUnits {
+pub(crate) struct SporePrintUnits {
     pub petaltongue: String,
     pub nestgate: String,
     pub songbird: String,

@@ -135,9 +135,13 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
         return;
     }
 
-    let mut add_args = vec!["add", "checksums.toml", "provenance.toml"];
-    if depot_dir.join("signatures.toml").exists() {
-        add_args.push("signatures.toml");
+    let mut add_args = vec![
+        "add",
+        cellmembrane_types::service::CHECKSUMS_FILE,
+        cellmembrane_types::service::PROVENANCE_FILE,
+    ];
+    if depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE).exists() {
+        add_args.push(cellmembrane_types::service::SIGNATURES_FILE);
     }
     if !crate::git_ops::git_success(depot_dir, &add_args).await {
         return;
@@ -149,7 +153,7 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
         return;
     }
 
-    let signed_label = if depot_dir.join("signatures.toml").exists() {
+    let signed_label = if depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE).exists() {
         " + signatures"
     } else {
         ""
