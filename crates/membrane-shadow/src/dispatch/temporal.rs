@@ -3,6 +3,7 @@
 //! Temporal domain dispatch — temporal.check, temporal.sync, temporal.cascade.
 
 use crate::cli::{self, TapMessage};
+use crate::error::ShadowError;
 use crate::{ShadowConfig, ShadowOutcome, identity, manifest, temporal};
 use cellmembrane_types::PushTarget;
 use tracing::info;
@@ -103,14 +104,10 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         gate_name.to_string()
     };
 
-    let source = cli::extract_flag_value(args, "--source")
-        .and_then(|s| match s {
-            "temporal" => Some(cellmembrane_types::CascadeSource::Temporal),
-            "forgejo" => Some(cellmembrane_types::CascadeSource::Forgejo),
-            "origin" => Some(cellmembrane_types::CascadeSource::Origin),
-            "auto" => Some(cellmembrane_types::CascadeSource::Auto),
-            _ => None,
-        })
+    let source: cellmembrane_types::CascadeSource = cli::extract_flag_value(args, "--source")
+        .map(str::parse::<cellmembrane_types::CascadeSource>)
+        .transpose()
+        .map_err(ShadowError::Config)?
         .unwrap_or_default();
     let check_only = args.contains(&"--check");
     let clone_missing = args.contains(&"--clone-missing");

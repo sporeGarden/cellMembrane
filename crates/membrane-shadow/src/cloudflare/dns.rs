@@ -2,8 +2,8 @@
 
 //! Cloudflare DNS record operations — list, create, update, delete.
 
-use super::{CF_API_BASE, CfResponse, CloudflareConfig, resolve_zone_id};
-use crate::error::{Result, ShadowError};
+use super::{CF_API_BASE, CfResponse, CloudflareConfig, cf_parse_err, cf_request_err, resolve_zone_id};
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 /// A single DNS record from the Cloudflare API.
@@ -66,10 +66,10 @@ pub async fn dns_list(
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?
+        .map_err(|e| cf_request_err("dns_list", e))?
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("dns_list", e))?;
 
     body.into_result_or_default()
 }
@@ -102,12 +102,12 @@ pub async fn dns_create(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
+        .map_err(|e| cf_request_err("dns_create", e))?;
 
     let body: CfResponse<DnsRecord> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("dns_create", e))?;
 
     body.into_result()
 }
@@ -138,12 +138,12 @@ pub async fn dns_update(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
+        .map_err(|e| cf_request_err("dns_update", e))?;
 
     let body: CfResponse<DnsRecord> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("dns_update", e))?;
 
     body.into_result()
 }
@@ -161,12 +161,12 @@ pub async fn dns_delete(cf: &CloudflareConfig, zone: &str, record_id: &str) -> R
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
+        .map_err(|e| cf_request_err("dns_delete", e))?;
 
     let body: CfResponse<serde_json::Value> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("dns_delete", e))?;
 
     body.into_result().map(|_: serde_json::Value| ())
 }

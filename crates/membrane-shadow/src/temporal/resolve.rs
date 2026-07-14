@@ -195,6 +195,13 @@ pub(super) async fn push_to_followers(
         };
         match git_push_classified(local_path, &args).await {
             PushOutcome::Ok => pushed.push(pos.remote.clone()),
+            PushOutcome::BranchCheckedOut => {
+                warn!(
+                    remote = %pos.remote,
+                    repo = %local_path.display(),
+                    "push skipped: remote has branch checked out (non-bare repo)"
+                );
+            }
             PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
                 warn!(
                     remote = %pos.remote,
@@ -243,6 +250,13 @@ pub(super) async fn resolve_tree_parity(
         .await
         {
             PushOutcome::Ok => pushed_to.push(follower.clone()),
+            PushOutcome::BranchCheckedOut => {
+                warn!(
+                    remote = %follower,
+                    repo = %local_path.display(),
+                    "push skipped: remote has branch checked out (non-bare repo)"
+                );
+            }
             PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
                 warn!(
                     remote = %follower,
@@ -312,6 +326,13 @@ pub(super) async fn push_converge_followers(
                         pushed_to.push(pos.remote.clone());
                     }
                 }
+            }
+            PushOutcome::BranchCheckedOut => {
+                warn!(
+                    remote = %pos.remote,
+                    repo = %local_path.display(),
+                    "push skipped: remote has branch checked out (non-bare repo)"
+                );
             }
             PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
                 warn!(

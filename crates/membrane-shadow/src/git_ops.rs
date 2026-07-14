@@ -44,6 +44,10 @@ pub enum PushOutcome {
     /// Push rejected because the remote has diverged (non-fast-forward).
     /// Recovery: `--force-with-lease` if trees are identical (rebase-only divergence).
     NonFastForward,
+    /// Push rejected because the remote has the target branch checked out
+    /// (non-bare repo with `receive.denyCurrentBranch`). Non-recoverable —
+    /// reconciliation cannot help. Skip and continue.
+    BranchCheckedOut,
     /// Push failed for another reason (timeout, auth, network, etc.).
     Failed,
 }
@@ -75,8 +79,8 @@ pub async fn add_all_commit_push(
 /// Push to all configured remotes with auto-reconciliation on non-fast-forward.
 ///
 /// For each remote: attempt push. If rejected (non-ff), fetch + rebase + retry.
-/// This eliminates the chronic diderm divergence where parallel gate pushes
-/// create non-ff rejections requiring manual `--force-with-lease`.
+/// Skips reconciliation for non-recoverable rejections (checked-out branch,
+/// shallow repos) to avoid hanging on non-bare remotes.
 pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
     let remotes = resolve_push_remotes();
     let mut result = PushResult {
@@ -84,7 +88,12 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
         failed: Vec::new(),
     };
     for remote in &remotes {
-        let ok = try_push(repo_dir, remote).await || reconcile_and_push(repo_dir, remote).await;
+        let outcome = try_push(repo_dir, remote).await;
+        let ok = match outcome {
+            TryPushResult::Pushed => true,
+            TryPushResult::Recoverable => reconcile_and_push(repo_dir, remote).await,
+            TryPushResult::NonRecoverable => false,
+        };
         if ok {
             result.succeeded += 1;
         } else {
@@ -94,21 +103,43 @@ pub async fn push_all_remotes(repo_dir: &Path) -> PushResult {
     result
 }
 
+enum TryPushResult {
+    Pushed,
+    Recoverable,
+    NonRecoverable,
+}
+
 /// Attempt a single push to a remote with failure classification.
-async fn try_push(repo_dir: &Path, remote: &str) -> bool {
+async fn try_push(repo_dir: &Path, remote: &str) -> TryPushResult {
     let outcome = git_push_classified(repo_dir, &["push", remote, "main", "--quiet"]).await;
     match outcome {
-        PushOutcome::Ok => return true,
-        PushOutcome::ShallowRejected | PushOutcome::NonFastForward => {
+        PushOutcome::Ok => TryPushResult::Pushed,
+        PushOutcome::NonFastForward => {
             tracing::warn!(
                 remote = %remote,
                 repo = %repo_dir.display(),
-                "post-sync push rejected: shallow/non-ff"
+                "post-sync push rejected: non-fast-forward, will reconcile"
             );
+            TryPushResult::Recoverable
         }
-        PushOutcome::Failed => {}
+        PushOutcome::BranchCheckedOut => {
+            tracing::warn!(
+                remote = %remote,
+                repo = %repo_dir.display(),
+                "push rejected: remote has branch checked out (non-bare repo) — skipping"
+            );
+            TryPushResult::NonRecoverable
+        }
+        PushOutcome::ShallowRejected => {
+            tracing::warn!(
+                remote = %remote,
+                repo = %repo_dir.display(),
+                "push rejected: shallow repo — reshallow needed"
+            );
+            TryPushResult::NonRecoverable
+        }
+        PushOutcome::Failed => TryPushResult::NonRecoverable,
     }
-    false
 }
 
 /// Auto-reconcile a non-ff rejection: fetch, try ff-merge, fallback to rebase.
@@ -118,7 +149,30 @@ async fn try_push(repo_dir: &Path, remote: &str) -> bool {
 /// 2. Try `merge --ff-only` — preserves SHA identity if local is simply behind
 /// 3. If ff-merge fails (diverged), fall back to rebase
 /// 4. Push (retry up to 2 times)
+///
+/// Bounded by `GIT_OP_TIMEOUT` to prevent indefinite hangs when the remote
+/// is unreachable or pathologically slow.
 async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
+    match tokio::time::timeout(
+        GIT_OP_TIMEOUT,
+        reconcile_and_push_inner(repo_dir, remote),
+    )
+    .await
+    {
+        std::result::Result::Ok(ok) => ok,
+        Err(_elapsed) => {
+            tracing::warn!(
+                remote = %remote,
+                repo = %repo_dir.display(),
+                timeout_secs = GIT_OP_TIMEOUT.as_secs(),
+                "reconcile_and_push timed out"
+            );
+            false
+        }
+    }
+}
+
+async fn reconcile_and_push_inner(repo_dir: &Path, remote: &str) -> bool {
     for _attempt in 0..2 {
         let fetch_ok = tokio::process::Command::new("git")
             .args(["fetch", remote, "main"])
@@ -136,7 +190,6 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
 
         let merge_ref = format!("{remote}/main");
 
-        // Try fast-forward merge first — preserves SHA identity
         let ff_ok = tokio::process::Command::new("git")
             .args(["merge", "--ff-only", &merge_ref])
             .current_dir(repo_dir)
@@ -147,7 +200,6 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
             .is_ok_and(|s| s.success());
 
         if !ff_ok {
-            // Diverged — fall back to rebase
             let rebase_ok = tokio::process::Command::new("git")
                 .args(["rebase", &merge_ref])
                 .current_dir(repo_dir)
@@ -170,7 +222,10 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
             }
         }
 
-        if try_push(repo_dir, remote).await {
+        if matches!(
+            try_push(repo_dir, remote).await,
+            TryPushResult::Pushed
+        ) {
             return true;
         }
     }
@@ -301,7 +356,9 @@ pub async fn git_push_classified(repo_path: &Path, args: &[&str]) -> PushOutcome
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    if is_shallow_rejection(&stderr) {
+    if is_checked_out_branch(&stderr) {
+        PushOutcome::BranchCheckedOut
+    } else if is_shallow_rejection(&stderr) {
         PushOutcome::ShallowRejected
     } else if is_non_fast_forward(&stderr) {
         PushOutcome::NonFastForward
@@ -327,6 +384,16 @@ fn is_shallow_rejection(stderr: &str) -> bool {
         || lower.contains("unresolved delta")
         || (lower.contains("missing") && lower.contains("tree"))
         || lower.contains("unable to read")
+}
+
+/// Detect whether a push was rejected because the remote has the target
+/// branch checked out (non-bare repo). Git emits this when
+/// `receive.denyCurrentBranch` is active (the default for non-bare repos).
+fn is_checked_out_branch(stderr: &str) -> bool {
+    let lower = stderr.to_ascii_lowercase();
+    lower.contains("refusing to update checked out branch")
+        || lower.contains("branch is currently checked out")
+        || lower.contains("denycurrentbranch")
 }
 
 /// Detect whether a push failure is non-fast-forward (history diverged).
@@ -541,6 +608,30 @@ mod tests {
         assert_ne!(PushOutcome::ShallowRejected, PushOutcome::Failed);
         assert_ne!(PushOutcome::NonFastForward, PushOutcome::Failed);
         assert_ne!(PushOutcome::NonFastForward, PushOutcome::ShallowRejected);
+        assert_ne!(PushOutcome::BranchCheckedOut, PushOutcome::Failed);
+        assert_ne!(PushOutcome::BranchCheckedOut, PushOutcome::NonFastForward);
+    }
+
+    #[test]
+    fn checked_out_branch_detected() {
+        assert!(is_checked_out_branch(
+            "remote: error: refusing to update checked out branch: refs/heads/main"
+        ));
+        assert!(is_checked_out_branch(
+            " ! [remote rejected] main -> main (branch is currently checked out)"
+        ));
+        assert!(is_checked_out_branch(
+            "error: refusing to update because receive.denyCurrentBranch is set"
+        ));
+    }
+
+    #[test]
+    fn checked_out_branch_negative() {
+        assert!(!is_checked_out_branch("Everything up-to-date"));
+        assert!(!is_checked_out_branch(
+            "error: failed to push some refs to 'forgejo'"
+        ));
+        assert!(!is_checked_out_branch("shallow update not allowed"));
     }
 
     #[test]

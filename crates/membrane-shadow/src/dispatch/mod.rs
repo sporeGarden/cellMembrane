@@ -101,7 +101,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
                 impulse::dispatch_potential(&cmd, &refs)
             })
             .await
-            .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
+            .unwrap_or_else(|ref e| Err(spawn_blocking_err(e)))
         }
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,
         "depot.integrity" => {
@@ -111,7 +111,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
                 plasmid_dispatch::dispatch_depot_integrity(&refs)
             })
             .await
-            .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
+            .unwrap_or_else(|ref e| Err(spawn_blocking_err(e)))
         }
         c if c.starts_with("sign.") => {
             let cmd = cmd.to_owned();
@@ -121,7 +121,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
                 sign_dispatch::dispatch_sign(&cmd, &refs)
             })
             .await
-            .unwrap_or_else(|e| Err(ShadowError::Parse(format!("spawn_blocking: {e}"))))
+            .unwrap_or_else(|ref e| Err(spawn_blocking_err(e)))
         }
         c if c.starts_with("plasmid.") => {
             plasmid_dispatch::dispatch_plasmid(config, cmd, args).await
@@ -156,14 +156,23 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
     }
 }
 
-fn parse_webhook_provider(args: &[&str]) -> crate::webhook::WebhookProvider {
-    cli::extract_flag_value(args, "--provider").map_or(
-        crate::webhook::WebhookProvider::Forgejo,
-        |p| match p {
-            "github" => crate::webhook::WebhookProvider::GitHub,
-            _ => crate::webhook::WebhookProvider::Forgejo,
-        },
-    )
+fn spawn_blocking_err(e: &tokio::task::JoinError) -> ShadowError {
+    ShadowError::Io(std::io::Error::other(format!(
+        "spawn_blocking panicked: {e}"
+    )))
+}
+
+fn parse_webhook_provider(args: &[&str]) -> Result<crate::webhook::WebhookProvider> {
+    let Some(p) = cli::extract_flag_value(args, "--provider") else {
+        return Ok(crate::webhook::WebhookProvider::Forgejo);
+    };
+    match p {
+        "github" => Ok(crate::webhook::WebhookProvider::GitHub),
+        "forgejo" => Ok(crate::webhook::WebhookProvider::Forgejo),
+        _ => Err(crate::error::ShadowError::Config(format!(
+            "unknown webhook provider: {p} (expected: forgejo|github)"
+        ))),
+    }
 }
 
 /// Dispatch webhook commands.
@@ -177,7 +186,7 @@ async fn dispatch_webhook(
             let body = cli::require_arg(args, 0, "json_body")?;
             let event: crate::webhook::PushEvent = serde_json::from_str(body)
                 .map_err(|e| ShadowError::Parse(format!("invalid push event JSON: {e}")))?;
-            let provider = parse_webhook_provider(args);
+            let provider = parse_webhook_provider(args)?;
             crate::webhook::handle_push(&event, config, provider).await
         }
         "webhook.verify" => {
@@ -186,7 +195,7 @@ async fn dispatch_webhook(
             let body = cli::require_arg(args, 0, "body")?;
             let sig = cli::extract_flag_value(args, "--signature")
                 .ok_or_else(|| ShadowError::Config("--signature flag required".into()))?;
-            let provider = parse_webhook_provider(args);
+            let provider = parse_webhook_provider(args)?;
             crate::webhook::verify_provider_signature(
                 provider,
                 secret.as_bytes(),
@@ -572,17 +581,23 @@ mod tests {
 
     #[test]
     fn webhook_provider_parse() {
-        let provider = parse_webhook_provider(&["--provider", "github"]);
+        let provider = parse_webhook_provider(&["--provider", "github"]).unwrap();
         assert_eq!(provider, crate::webhook::WebhookProvider::GitHub);
 
-        let provider = parse_webhook_provider(&["--provider", "forgejo"]);
+        let provider = parse_webhook_provider(&["--provider", "forgejo"]).unwrap();
         assert_eq!(provider, crate::webhook::WebhookProvider::Forgejo);
     }
 
     #[test]
     fn webhook_provider_default_is_forgejo() {
-        let provider = parse_webhook_provider(&[]);
+        let provider = parse_webhook_provider(&[]).unwrap();
         assert_eq!(provider, crate::webhook::WebhookProvider::Forgejo);
+    }
+
+    #[test]
+    fn webhook_provider_rejects_unknown() {
+        let err = parse_webhook_provider(&["--provider", "gitlab"]).unwrap_err();
+        assert!(err.to_string().contains("unknown webhook provider"));
     }
 
     #[tokio::test]

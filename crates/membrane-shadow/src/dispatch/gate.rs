@@ -318,7 +318,11 @@ async fn dispatch_health_audit(
         plasmid::depot::detect_stale_primals(&depot_dir)
     })
     .await
-    .map_err(|e| crate::error::ShadowError::Config(format!("spawn failed: {e}")))??;
+    .map_err(|e| {
+        crate::error::ShadowError::Io(std::io::Error::other(format!(
+            "spawn_blocking panicked: {e}"
+        )))
+    })??;
 
     let mut entries: Vec<serde_json::Value> = Vec::new();
     for entry in &local_report.entries {

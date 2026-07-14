@@ -175,6 +175,22 @@ impl fmt::Display for CascadeSource {
     }
 }
 
+impl std::str::FromStr for CascadeSource {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "temporal" => Ok(Self::Temporal),
+            "forgejo" => Ok(Self::Forgejo),
+            "origin" => Ok(Self::Origin),
+            "auto" => Ok(Self::Auto),
+            _ => Err(format!(
+                "unknown cascade source: {s} (expected: temporal|forgejo|origin|auto)"
+            )),
+        }
+    }
+}
+
 /// How a repository relates to the inner/outer membrane boundary.
 ///
 /// Declared per-repo in the ecosystem manifest as `membrane`.
@@ -379,6 +395,41 @@ mod tests {
         assert!(PushTarget::All.includes_github());
         assert!(!PushTarget::Forgejo.includes_github());
         assert!(PushTarget::Github.includes_github());
+    }
+
+    // --- CascadeSource ---
+
+    #[test]
+    fn cascade_source_fromstr_roundtrip() {
+        for source in [
+            CascadeSource::Temporal,
+            CascadeSource::Forgejo,
+            CascadeSource::Origin,
+            CascadeSource::Auto,
+        ] {
+            let s = source.to_string();
+            let parsed: CascadeSource = s.parse().unwrap();
+            assert_eq!(parsed, source);
+        }
+    }
+
+    #[test]
+    fn cascade_source_fromstr_rejects_unknown() {
+        let err = "gitlab".parse::<CascadeSource>().unwrap_err();
+        assert!(err.contains("unknown cascade source"));
+    }
+
+    #[test]
+    fn cascade_source_default_is_temporal() {
+        assert_eq!(CascadeSource::default(), CascadeSource::Temporal);
+    }
+
+    #[test]
+    fn cascade_source_display() {
+        assert_eq!(CascadeSource::Temporal.to_string(), "temporal");
+        assert_eq!(CascadeSource::Forgejo.to_string(), "forgejo");
+        assert_eq!(CascadeSource::Origin.to_string(), "origin");
+        assert_eq!(CascadeSource::Auto.to_string(), "auto");
     }
 
     // --- GateTransport ---

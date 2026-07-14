@@ -99,6 +99,14 @@ impl<T> CfResponse<T> {
     }
 }
 
+fn cf_request_err(op: &str, e: impl std::fmt::Display) -> ShadowError {
+    ShadowError::CloudflareApi(format!("{op}: request failed: {e}"))
+}
+
+fn cf_parse_err(op: &str, e: impl std::fmt::Display) -> ShadowError {
+    ShadowError::CloudflareApi(format!("{op}: response parse failed: {e}"))
+}
+
 fn format_cf_errors(errors: &[CfError]) -> String {
     if errors.is_empty() {
         return "unknown error".into();
@@ -177,12 +185,12 @@ pub async fn cache_purge(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
+        .map_err(|e| cf_request_err("cache_purge", e))?;
 
     let body: CfResponse<serde_json::Value> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("cache_purge", e))?;
 
     body.into_result().map(|_: serde_json::Value| ())?;
 
@@ -209,12 +217,12 @@ pub async fn ssl_settings(cf: &CloudflareConfig, zone: &str) -> Result<SslSettin
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
+        .map_err(|e| cf_request_err("ssl_settings", e))?;
 
     let body: CfResponse<SslSettings> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("ssl_settings", e))?;
 
     body.into_result()
 }
@@ -232,12 +240,12 @@ pub async fn zone_settings(cf: &CloudflareConfig, zone: &str) -> Result<Vec<Zone
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("request failed: {e}")))?;
+        .map_err(|e| cf_request_err("zone_settings", e))?;
 
     let body: CfResponse<Vec<ZoneSetting>> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("zone_settings", e))?;
 
     body.into_result_or_default()
 }
@@ -258,12 +266,12 @@ async fn resolve_zone_id(cf: &CloudflareConfig, zone_name: &str) -> Result<Strin
         .header(header_key, &header_val)
         .send()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("zone lookup failed: {e}")))?;
+        .map_err(|e| cf_request_err("resolve_zone_id", e))?;
 
     let body: CfResponse<Vec<ZoneInfo>> = resp
         .json()
         .await
-        .map_err(|e| ShadowError::CloudflareApi(format!("parse failed: {e}")))?;
+        .map_err(|e| cf_parse_err("resolve_zone_id", e))?;
 
     let zones = body.into_result_or_default()?;
     zones

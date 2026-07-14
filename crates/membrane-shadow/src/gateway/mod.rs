@@ -237,14 +237,13 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
         });
     }
 
-    let config_ok = generate_from_manifest(gate_name).is_ok();
+    let config_result = generate_from_manifest(gate_name);
     checks.push(DeployCheck {
         name: "gateway config".into(),
-        ok: config_ok,
-        detail: if config_ok {
-            format!("generates for {gate_name}")
-        } else {
-            "manifest parse failed".into()
+        ok: config_result.is_ok(),
+        detail: match &config_result {
+            Ok(_) => format!("generates for {gate_name}"),
+            Err(e) => format!("manifest parse failed for {gate_name}: {e}"),
         },
     });
 

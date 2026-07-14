@@ -467,7 +467,11 @@ pub(super) async fn dispatch_context(cmd: &str, args: &[&str]) -> crate::Result<
                     context::sense(&root, fg.as_deref(), fp.as_deref(), all)
                 })
                 .await
-                .map_err(|e| ShadowError::Config(format!("spawn_blocking: {e}")))?
+                .map_err(|e| {
+                    ShadowError::Io(std::io::Error::other(format!(
+                        "spawn_blocking panicked: {e}"
+                    )))
+                })?
             }?;
             if braids.is_empty() {
                 Ok(ShadowOutcome::ok(
