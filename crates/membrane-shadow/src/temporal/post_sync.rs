@@ -452,6 +452,7 @@ pub async fn collect_cascade_heads(
     for (name, entry) in repos {
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
+            #[allow(clippy::literal_string_with_formatting_args)]
             if let Ok(tree) =
                 crate::git_ops::git_output(&repo_dir, &["rev-parse", "HEAD^{tree}"]).await
             {

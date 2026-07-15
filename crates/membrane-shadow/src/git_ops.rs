@@ -174,58 +174,20 @@ async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
 
 async fn reconcile_and_push_inner(repo_dir: &Path, remote: &str) -> bool {
     for _attempt in 0..2 {
-        let fetch_ok = tokio::process::Command::new("git")
-            .args(["fetch", remote, "main"])
-            .current_dir(repo_dir)
-            .env("GIT_SSH_COMMAND", SSH_CMD_WITH_TIMEOUT)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .await
-            .is_ok_and(|s| s.success());
-
-        if !fetch_ok {
+        if !git_success(repo_dir, &["fetch", remote, "main"]).await {
             return false;
         }
 
         let merge_ref = format!("{remote}/main");
 
-        let ff_ok = tokio::process::Command::new("git")
-            .args(["merge", "--ff-only", &merge_ref])
-            .current_dir(repo_dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .await
-            .is_ok_and(|s| s.success());
-
-        if !ff_ok {
-            let rebase_ok = tokio::process::Command::new("git")
-                .args(["rebase", &merge_ref])
-                .current_dir(repo_dir)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await
-                .is_ok_and(|s| s.success());
-
-            if !rebase_ok {
-                if let Err(e) = tokio::process::Command::new("git")
-                    .args(["rebase", "--abort"])
-                    .current_dir(repo_dir)
-                    .status()
-                    .await
-                {
-                    tracing::warn!(repo = %repo_dir.display(), error = %e, "rebase --abort failed");
-                }
-                return false;
-            }
+        if !git_success(repo_dir, &["merge", "--ff-only", &merge_ref]).await
+            && !git_success(repo_dir, &["rebase", &merge_ref]).await
+        {
+            let _ = git_success(repo_dir, &["rebase", "--abort"]).await;
+            return false;
         }
 
-        if matches!(
-            try_push(repo_dir, remote).await,
-            TryPushResult::Pushed
-        ) {
+        if matches!(try_push(repo_dir, remote).await, TryPushResult::Pushed) {
             return true;
         }
     }
@@ -311,7 +273,7 @@ pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
     let output = tokio::time::timeout(GIT_OP_TIMEOUT, child)
         .await
         .map_err(|_| {
-            ShadowError::Parse(format!(
+            ShadowError::Git(format!(
                 "git {:?} timed out after {}s",
                 args.first().unwrap_or(&"?"),
                 GIT_OP_TIMEOUT.as_secs(),

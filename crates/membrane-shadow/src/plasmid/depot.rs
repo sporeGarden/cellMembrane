@@ -92,7 +92,7 @@ fn update_checksums(
 
     for existing_target in &pre_existing_targets {
         if !all_targets.contains_key(existing_target) {
-            return Err(ShadowError::Parse(format!(
+            return Err(ShadowError::Config(format!(
                 "checksums validation gate: target section [{existing_target}] would be lost"
             )));
         }
