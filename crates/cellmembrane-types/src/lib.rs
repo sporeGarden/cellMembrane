@@ -54,7 +54,7 @@ pub mod transport;
 pub mod validation;
 pub mod wireguard;
 
-pub use arch::TargetArch;
+pub use arch::{CpuArch, LinkModel, Platform, TargetArch, TargetOs};
 pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, TrustLevel};
 pub use composition::{CompositionSpec, MembraneComposition};
 pub use config::{DeployPaths, MembraneConfig, ShadowMode};
