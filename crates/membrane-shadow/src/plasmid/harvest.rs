@@ -421,7 +421,7 @@ pub(super) async fn stage_to_depot_async(
         .map_err(|e| crate::error::ShadowError::Build(format!("atomic rename failed: {e}")))?;
 
     let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
-    let blake3 = super::compute_blake3_file_async(dest).await;
+    let blake3 = super::compute_blake3_file_async(dest).await?;
     Ok((size, blake3))
 }
 

@@ -217,6 +217,60 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
 }
 
 /// Push local depot binaries and metadata to the remote VPS depot via SCP.
+enum PushBinaryResult {
+    Synced,
+    Current,
+    Failed,
+}
+
+async fn push_single_binary(
+    config: &crate::ShadowConfig,
+    bin_entry: &std::fs::DirEntry,
+    remote_arch_dir: &str,
+    arch_str: &str,
+) -> PushBinaryResult {
+    let name = bin_entry.file_name();
+    let name_str = name.to_string_lossy();
+    let local_path = bin_entry.path();
+
+    let local_hash = match super::compute_blake3_file_async(local_path.clone()).await {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::warn!(binary = %name_str, error = %e, "push: cannot hash local binary");
+            return PushBinaryResult::Failed;
+        }
+    };
+    let remote_path = format!("{remote_arch_dir}/{name_str}");
+    let hash_cmd = format!("b3sum {remote_path} 2>/dev/null | cut -d' ' -f1");
+    let remote_hash = crate::ssh::exec_raw(config, &hash_cmd)
+        .await
+        .map(|(h, _)| h.trim().to_string())
+        .unwrap_or_default();
+
+    if local_hash == remote_hash {
+        return PushBinaryResult::Current;
+    }
+
+    let remote_tmp = format!("{remote_arch_dir}/.{name_str}.new");
+    match crate::ssh::scp_to(config, &local_path.to_string_lossy(), &remote_tmp).await {
+        Ok(()) => {
+            let mv_cmd =
+                format!("chmod 755 {remote_tmp} && mv -f {remote_tmp} {remote_path}");
+            if let Err(e) = crate::ssh::exec_raw(config, &mv_cmd).await {
+                tracing::warn!(binary = %name_str, error = %e, "push: atomic rename failed");
+                PushBinaryResult::Failed
+            } else {
+                tracing::info!(binary = %name_str, arch = %arch_str, "pushed to VPS depot");
+                PushBinaryResult::Synced
+            }
+        }
+        Err(e) => {
+            tracing::warn!(binary = %name_str, error = %e, "push: SCP failed");
+            PushBinaryResult::Failed
+        }
+    }
+}
+
 async fn depot_sync_push(
     config: &crate::ShadowConfig,
 ) -> crate::error::Result<crate::ShadowOutcome> {
@@ -267,39 +321,10 @@ async fn depot_sync_push(
             .collect();
 
         for bin_entry in &bins {
-            let name = bin_entry.file_name();
-            let name_str = name.to_string_lossy();
-            let local_path = bin_entry.path();
-
-            let local_hash = super::compute_blake3_file_async(local_path.clone()).await;
-            let remote_path = format!("{remote_arch_dir}/{name_str}");
-            let hash_cmd = format!("b3sum {remote_path} 2>/dev/null | cut -d' ' -f1");
-            let remote_hash = crate::ssh::exec_raw(config, &hash_cmd)
-                .await
-                .map(|(h, _)| h.trim().to_string())
-                .unwrap_or_default();
-
-            if !local_hash.is_empty() && local_hash == remote_hash {
-                current += 1;
-                continue;
-            }
-
-            let remote_tmp = format!("{remote_arch_dir}/.{name_str}.new");
-            match crate::ssh::scp_to(config, &local_path.to_string_lossy(), &remote_tmp).await {
-                Ok(()) => {
-                    let mv_cmd = format!("chmod 755 {remote_tmp} && mv -f {remote_tmp} {remote_path}");
-                    if let Err(e) = crate::ssh::exec_raw(config, &mv_cmd).await {
-                        tracing::warn!(binary = %name_str, error = %e, "push: atomic rename failed");
-                        failed += 1;
-                    } else {
-                        synced += 1;
-                        tracing::info!(binary = %name_str, arch = %arch_str, "pushed to VPS depot");
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(binary = %name_str, error = %e, "push: SCP failed");
-                    failed += 1;
-                }
+            match push_single_binary(config, bin_entry, &remote_arch_dir, &arch_str).await {
+                PushBinaryResult::Synced => synced += 1,
+                PushBinaryResult::Current => current += 1,
+                PushBinaryResult::Failed => failed += 1,
             }
         }
     }

@@ -261,19 +261,35 @@ async fn refresh_one(
         }
     }
 
-    let size_kb = tokio::fs::metadata(&local_path)
+    build_push_result(primal, &local_path, &remote_final).await
+}
+
+async fn build_push_result(primal: &str, local_path: &str, remote_final: &str) -> RefreshResult {
+    let size_kb = tokio::fs::metadata(local_path)
         .await
         .map_or(0, |m| m.len() / 1024);
-    let actual_hash = super::compute_blake3_file_async(PathBuf::from(&local_path)).await;
-    let hash_short = &actual_hash[..16.min(actual_hash.len())];
+    let actual_hash = super::compute_blake3_file_async(PathBuf::from(local_path))
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(primal, error = %e, "post-push hash failed");
+            String::new()
+        });
+    let hash_short = if actual_hash.is_empty() {
+        "?"
+    } else {
+        &actual_hash[..16.min(actual_hash.len())]
+    };
 
     let primal_owned = primal.to_string();
     let hash_owned = actual_hash.clone();
-    let divergence_note =
+    let divergence_note = if actual_hash.is_empty() {
+        None
+    } else {
         tokio::task::spawn_blocking(move || check_checksum_coherence(&primal_owned, &hash_owned))
             .await
             .ok()
-            .flatten();
+            .flatten()
+    };
 
     let detail = divergence_note.map_or_else(
         || format!("→ {remote_final} ({size_kb}KB blake3={hash_short})"),

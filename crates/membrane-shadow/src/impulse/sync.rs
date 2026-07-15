@@ -17,16 +17,25 @@ use crate::identity;
 use tracing::warn;
 
 /// Fire a SYNC divergence impulse — auto-called by `temporal.cascade`.
+///
+/// Content-addressed dedup: before creating a new impulse, scans
+/// `impulses/active/` for an existing diverge impulse on the same repo.
+/// If found, returns the existing impulse instead of duplicating.
 pub async fn post_sync_diverge(
     workspace_root: &Path,
     args: &SyncDivergeArgs,
 ) -> Result<SyncImpulseFile> {
+    let repo_name = args.repo_path.rsplit('/').next().unwrap_or(&args.repo_path);
+
+    if let Some(existing) = find_content_equivalent(workspace_root, repo_name).await {
+        tracing::debug!(repo = repo_name, "CAC dedup: content-equivalent impulse exists, skipping");
+        return Ok(existing);
+    }
+
     let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
     let ts_iso = now.format(cellmembrane_types::service::ISO8601_TZ).to_string();
-
-    let repo_name = args.repo_path.rsplit('/').next().unwrap_or(&args.repo_path);
 
     let mut remotes_map = std::collections::BTreeMap::new();
     let mut ahead_map = std::collections::BTreeMap::new();
@@ -120,6 +129,34 @@ pub async fn post_sync_diverge(
     }
 
     Ok(impulse)
+}
+
+/// Scan `impulses/active/` for an existing diverge impulse on the same repo.
+///
+/// Matches by filename pattern (`diverge-{repo_name}`) and verifies the
+/// payload repo matches. Returns the parsed impulse if found, allowing the
+/// caller to skip creating a duplicate.
+async fn find_content_equivalent(
+    workspace_root: &Path,
+    repo_name: &str,
+) -> Option<SyncImpulseFile> {
+    let active = active_dir(workspace_root);
+    let entries = std::fs::read_dir(&active).ok()?;
+
+    let needle = format!("diverge-{repo_name}");
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if !name_str.contains(&needle) || !name_str.ends_with(".toml") {
+            continue;
+        }
+        let content = tokio::fs::read_to_string(entry.path()).await.ok()?;
+        let parsed: SyncImpulseFile = toml::from_str(&content).ok()?;
+        if parsed.payload.repo.ends_with(repo_name) {
+            return Some(parsed);
+        }
+    }
+    None
 }
 
 async fn resolve_remote_head(workspace_root: &Path, repo_path: &str, remote: &str) -> String {

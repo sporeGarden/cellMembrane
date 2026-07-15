@@ -71,7 +71,10 @@ pub(crate) fn verify_local_depot(arch: &str) -> (bool, String) {
             }
             continue;
         }
-        let hash = crate::plasmid::compute_blake3_file(&bin_path);
+        let Ok(hash) = crate::plasmid::compute_blake3_file(&bin_path) else {
+            failed += 1;
+            continue;
+        };
         if hash == entry.blake3 {
             verified += 1;
         } else {
@@ -123,7 +126,14 @@ pub async fn verify_wan_checksums(arch: &str, dry_run: bool) -> super::bootstrap
             missing += 1;
             continue;
         }
-        let actual = crate::plasmid::compute_blake3_file_async(bin_path.clone()).await;
+        let actual = match crate::plasmid::compute_blake3_file_async(bin_path.clone()).await {
+            Ok(h) => h,
+            Err(e) => {
+                mismatch += 1;
+                warn!(name, error = %e, "WAN checksum verify: cannot hash local binary");
+                continue;
+            }
+        };
         if actual == *expected_hash {
             verified += 1;
         } else {

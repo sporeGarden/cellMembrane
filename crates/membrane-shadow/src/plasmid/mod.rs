@@ -86,18 +86,21 @@ async fn graceful_kill_bare(pid: u32, _grace_ms: u64) {
 }
 
 /// Compute BLAKE3 hash of a file, returning hex string.
-pub(crate) fn compute_blake3_file(path: &std::path::Path) -> String {
+pub(crate) fn compute_blake3_file(path: &std::path::Path) -> crate::error::Result<String> {
     depot::compute_blake3_file(path)
 }
 
 /// Async variant — runs the full-file BLAKE3 read on a blocking thread.
-pub(crate) async fn compute_blake3_file_async(path: std::path::PathBuf) -> String {
+pub(crate) async fn compute_blake3_file_async(
+    path: std::path::PathBuf,
+) -> crate::error::Result<String> {
     tokio::task::spawn_blocking(move || depot::compute_blake3_file(&path))
         .await
-        .unwrap_or_else(|e| {
-            tracing::error!(error = %e, "BLAKE3 hash task panicked — returning sentinel");
-            "HASH_FAILED".into()
-        })
+        .map_err(|e| {
+            crate::error::ShadowError::Io(std::io::Error::other(format!(
+                "BLAKE3 hash task panicked: {e}"
+            )))
+        })?
 }
 
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.
@@ -121,7 +124,7 @@ pub(crate) fn nucleus_primals() -> Vec<&'static str> {
         .collect()
 }
 
-/// Resolve the primal set for the local gate from the manifest composition.
+/// Resolve the primal set for a gate from the manifest composition.
 ///
 /// Resolution chain:
 ///   1. If `gate` has a `composition` field in the manifest, and that
@@ -131,51 +134,45 @@ pub(crate) fn nucleus_primals() -> Vec<&'static str> {
 /// This enables composition-aware operations: a thin-relay gate fetches
 /// only songBird + nestGate, while a full NUCLEUS gate gets all 13.
 ///
-/// Uses a process-level cache to avoid re-reading the manifest on every call.
-/// The cache is keyed on the gate name and populated on first access.
+/// Uses a process-level cache keyed by gate name. Each gate resolves
+/// once and is cached for all subsequent calls within the process.
 pub(crate) fn resolve_gate_primals(gate: &str) -> Vec<String> {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
     use std::sync::OnceLock;
 
-    static CACHED: OnceLock<(String, Vec<String>)> = OnceLock::new();
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Vec<String>>>> = OnceLock::new();
 
-    let cached = CACHED.get_or_init(|| {
-        let workspace = cellmembrane_types::service::env_or(
-            cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-            cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-        );
-        let primals = crate::manifest::load_from_workspace(std::path::Path::new(&workspace))
-            .ok()
-            .and_then(|manifest| {
-                let profile = manifest.gate_composition(gate)?;
-                if profile.primals.is_empty() {
-                    None
-                } else {
-                    Some(profile.primals.clone())
-                }
-            })
-            .unwrap_or_else(|| nucleus_primals().into_iter().map(String::from).collect());
-        (gate.to_string(), primals)
-    });
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let guard = cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    if cached.0 == gate {
-        cached.1.clone()
-    } else {
-        let workspace = cellmembrane_types::service::env_or(
-            cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-            cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-        );
-        crate::manifest::load_from_workspace(std::path::Path::new(&workspace))
-            .ok()
-            .and_then(|manifest| {
-                let profile = manifest.gate_composition(gate)?;
-                if profile.primals.is_empty() {
-                    None
-                } else {
-                    Some(profile.primals.clone())
-                }
-            })
-            .unwrap_or_else(|| nucleus_primals().into_iter().map(String::from).collect())
+    if let Some(primals) = guard.get(gate) {
+        return primals.clone();
     }
+    drop(guard);
+
+    let primals = resolve_primals_from_manifest(gate);
+
+    let mut guard = cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.entry(gate.to_string()).or_insert(primals).clone()
+}
+
+fn resolve_primals_from_manifest(gate: &str) -> Vec<String> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+    crate::manifest::load_from_workspace(std::path::Path::new(&workspace))
+        .ok()
+        .and_then(|manifest| {
+            let profile = manifest.gate_composition(gate)?;
+            if profile.primals.is_empty() {
+                None
+            } else {
+                Some(profile.primals.clone())
+            }
+        })
+        .unwrap_or_else(|| nucleus_primals().into_iter().map(String::from).collect())
 }
 
 /// Detect the local platform's default Rust target triple (musl static).

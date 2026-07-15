@@ -42,8 +42,22 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             continue;
         }
 
-        let depot_hash = crate::plasmid::compute_blake3_file_async(depot_bin.clone()).await;
-        let installed_hash = crate::plasmid::compute_blake3_file_async(installed_bin.clone()).await;
+        let depot_hash = match crate::plasmid::compute_blake3_file_async(depot_bin.clone()).await {
+            Ok(h) => h,
+            Err(e) => {
+                tracing::warn!(primal, error = %e, "cascade-restart: cannot hash depot binary");
+                failed += 1;
+                continue;
+            }
+        };
+        let installed_hash = match crate::plasmid::compute_blake3_file_async(installed_bin.clone()).await {
+            Ok(h) => h,
+            Err(e) => {
+                tracing::warn!(primal, error = %e, "cascade-restart: cannot hash installed binary");
+                failed += 1;
+                continue;
+            }
+        };
 
         if depot_hash == installed_hash {
             skipped += 1;

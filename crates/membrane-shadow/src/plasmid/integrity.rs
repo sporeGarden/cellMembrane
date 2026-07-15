@@ -79,7 +79,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
                 let name = file.file_name().to_string_lossy().to_string();
                 let path = file.path();
                 let size = std::fs::metadata(&path).map_or(0, |m| m.len());
-                let hash = compute_blake3_file(&path);
+                let hash = compute_blake3_file(&path)?;
                 arch_checksums.insert(name, ChecksumEntry { blake3: hash, size });
                 total_binaries += 1;
             }
@@ -150,7 +150,18 @@ pub(crate) fn verify_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
                 missing.push(format!("{arch}/{name}"));
                 continue;
             }
-            let actual = compute_blake3_file(&bin_path);
+            let actual = match compute_blake3_file(&bin_path) {
+                Ok(h) => h,
+                Err(e) => {
+                    mismatches.push(IntegrityMismatch {
+                        binary: name.clone(),
+                        arch: arch.clone(),
+                        expected: entry.blake3.clone(),
+                        actual: format!("error: {e}"),
+                    });
+                    continue;
+                }
+            };
             if actual == entry.blake3 {
                 verified += 1;
             } else {

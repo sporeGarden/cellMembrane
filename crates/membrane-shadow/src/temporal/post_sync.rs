@@ -100,8 +100,10 @@ pub(super) async fn run_post_sync_phases(
     }
 
     // Rebuild static site if sporePrint was pulled and this gate serves content.
+    // Post-rebuild, verify the generated `public/` directory is non-empty.
     if opts.mode == CascadeMode::Sync {
         run_content_rebuild_if_needed(root, lines).await;
+        check_content_health(root, lines).await;
     }
 
     harvest_info
@@ -608,6 +610,35 @@ async fn run_content_rebuild_if_needed(root: &std::path::Path, lines: &mut Vec<S
             lines.push(format!("  [content] zola exec error — {e}"));
         }
     }
+}
+
+/// Post-rebuild health check: verify sporePrint `public/` is non-empty and
+/// contains an `index.html`. Detects the P0 root-404 scenario where Zola
+/// succeeds but the output directory is stale or empty.
+async fn check_content_health(root: &std::path::Path, lines: &mut Vec<String>) {
+    let public_dir = root
+        .join(cellmembrane_types::service::SPOREPRINT_CONTENT_DIR)
+        .join("public");
+    if !public_dir.exists() {
+        return;
+    }
+
+    let index = public_dir.join("index.html");
+    if !index.exists() {
+        lines.push("  [content] WARNING: sporePrint public/ missing index.html — root will 404".into());
+        return;
+    }
+
+    let size = tokio::fs::metadata(&index).await.map_or(0, |m| m.len());
+    if size == 0 {
+        lines.push("  [content] WARNING: sporePrint public/index.html is empty".into());
+        return;
+    }
+
+    let file_count = std::fs::read_dir(&public_dir).map_or(0, std::iter::Iterator::count);
+    lines.push(format!(
+        "  [content] sporePrint healthy ({file_count} files, index {size}B)"
+    ));
 }
 
 #[cfg(test)]

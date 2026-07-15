@@ -29,6 +29,7 @@ hmac = "0.13.0"
 ed25519-dalek = "3.0.0"
 hex = "0.4.3"
 base64 = "0.22.1"
+portable-atomic = { version = "1", default-features = false, features = ["require-cas"], optional = true }
 
 [dev-dependencies]
 
@@ -36,6 +37,7 @@ base64 = "0.22.1"
 default = ["http", "cloudflare"]
 http = ["reqwest/rustls-tls"]
 cloudflare = ["http"]
+extra-platforms = ["portable-atomic"]
 
 [lints]
 workspace = true

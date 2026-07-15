@@ -24,10 +24,12 @@ pub(super) struct SourcesFile {
     pub sources: BTreeMap<String, SourceEntry>,
 }
 
-pub(super) fn compute_blake3_file(path: &Path) -> String {
-    super::checksum::compute_blake3(path).unwrap_or_else(|e| {
-        tracing::warn!(path = %path.display(), error = %e, "BLAKE3: cannot read file");
-        String::new()
+pub(super) fn compute_blake3_file(path: &Path) -> Result<String> {
+    super::checksum::compute_blake3(path).map_err(|e| {
+        ShadowError::Io(std::io::Error::other(format!(
+            "BLAKE3: cannot read {}: {e}",
+            path.display()
+        )))
     })
 }
 
@@ -71,7 +73,7 @@ fn update_checksums(
         let bin_path = staging_dir.join(&result.binary);
         if bin_path.exists() {
             let size = std::fs::metadata(&bin_path).map_or(0, |m| m.len());
-            let hash = compute_blake3_file(&bin_path);
+            let hash = compute_blake3_file(&bin_path)?;
             target_checksums.insert(result.binary.clone(), ChecksumEntry { blake3: hash, size });
         }
     }
@@ -638,7 +640,7 @@ mod tests {
     fn compute_blake3_file_on_empty() {
         let tmp = std::env::temp_dir().join("blake3_empty_test");
         std::fs::write(&tmp, b"").unwrap();
-        let hash = compute_blake3_file(&tmp);
+        let hash = compute_blake3_file(&tmp).unwrap();
         assert_eq!(hash.len(), 64);
         let _ = std::fs::remove_file(&tmp);
     }
