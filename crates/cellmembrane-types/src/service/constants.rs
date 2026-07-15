@@ -356,6 +356,10 @@ pub fn lan_dns_name(gate_name: &str) -> String {
 
 // ── Gateway constants (Tower HTTP gateway) ───────────────────────────
 
+/// Standard HTTPS port.
+pub const DEFAULT_HTTPS_PORT: u16 = 443;
+/// Shadow gateway validation port.
+pub const DEFAULT_SHADOW_PORT: u16 = 8443;
 /// Default bearDog TLS gateway bind address (production).
 pub const DEFAULT_GATEWAY_BIND: &str = "0.0.0.0:443";
 /// Default bearDog TLS gateway bind for shadow validation period.
@@ -439,6 +443,20 @@ pub const DEFAULT_ACME_EMAIL: &str = "acme@primals.eco";
 /// The 4 binaries in a sporePrint NUCLEUS composition.
 pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
     &["petaltongue", "nestgate", "songbird", "beardog"];
+
+// ── Timestamp Formats ────────────────────────────────────────────────
+
+/// ISO 8601 UTC timestamp format — `2026-07-15T14:30:00Z`.
+///
+/// Used across depot checksums, provenance, signing, wave metadata, and
+/// bootstrap identity. UTC (no timezone offset).
+pub const ISO8601_UTC: &str = "%Y-%m-%dT%H:%M:%SZ";
+
+/// ISO 8601 timestamp with timezone offset — `2026-07-15T14:30:00-04:00`.
+///
+/// Used for local-time-aware timestamps in impulses, focus context, and
+/// lifecycle tracking where the originating timezone matters.
+pub const ISO8601_TZ: &str = "%Y-%m-%dT%H:%M:%S%:z";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

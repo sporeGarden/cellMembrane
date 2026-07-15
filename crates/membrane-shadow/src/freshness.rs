@@ -483,7 +483,7 @@ fn chrono_today() -> String {
 
 /// Get current UTC timestamp as ISO 8601.
 fn chrono_now_utc() -> String {
-    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
+    chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string()
 }
 
 /// Provenance sidecar written by `plasmidbin install`.
@@ -510,16 +510,6 @@ fn resolve_source_head(workspace_root: &Path, source_path: &str) -> Option<Strin
         workspace_root.join(source_path)
     };
     crate::git_ops::resolve_head_full(&repo_dir)
-}
-
-/// Async git rev-parse HEAD — commit SHA (graph-dependent).
-///
-/// Retained for cases where commit identity matters (e.g., tracking which
-/// exact commit is deployed). For convergence comparison, prefer
-/// `git_rev_parse_tree` which is content-addressed.
-#[allow(dead_code)]
-async fn git_rev_parse_head(repo_dir: &Path) -> Result<String> {
-    crate::git_ops::git_output(repo_dir, &["rev-parse", "HEAD"]).await
 }
 
 /// Content-addressed tree hash — identical file states produce identical

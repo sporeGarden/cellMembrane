@@ -24,7 +24,7 @@ pub async fn post_sync_diverge(
     let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
-    let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    let ts_iso = now.format(cellmembrane_types::service::ISO8601_TZ).to_string();
 
     let repo_name = args.repo_path.rsplit('/').next().unwrap_or(&args.repo_path);
 

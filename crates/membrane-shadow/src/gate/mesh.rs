@@ -152,7 +152,9 @@ async fn configure_mesh(
     match crate::jsonrpc::call(std::path::Path::new(&socket_path), &request).await {
         Ok(response) => {
             let peer_count = peers.len();
-            if response.contains("\"result\"") || response.contains("\"ok\"") {
+            let has_result = serde_json::from_str::<serde_json::Value>(&response)
+                .is_ok_and(|j| j.get("result").is_some() || j.get("ok").is_some());
+            if has_result {
                 (
                     true,
                     format!("mesh.init sent ({peer_count} peers) as {gate_name}"),

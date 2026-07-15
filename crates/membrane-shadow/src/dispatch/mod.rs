@@ -166,13 +166,8 @@ fn parse_webhook_provider(args: &[&str]) -> Result<crate::webhook::WebhookProvid
     let Some(p) = cli::extract_flag_value(args, "--provider") else {
         return Ok(crate::webhook::WebhookProvider::Forgejo);
     };
-    match p {
-        "github" => Ok(crate::webhook::WebhookProvider::GitHub),
-        "forgejo" => Ok(crate::webhook::WebhookProvider::Forgejo),
-        _ => Err(crate::error::ShadowError::Config(format!(
-            "unknown webhook provider: {p} (expected: forgejo|github)"
-        ))),
-    }
+    p.parse::<crate::webhook::WebhookProvider>()
+        .map_err(crate::error::ShadowError::Config)
 }
 
 /// Dispatch webhook commands.

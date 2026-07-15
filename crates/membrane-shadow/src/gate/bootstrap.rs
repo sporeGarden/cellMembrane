@@ -589,7 +589,7 @@ fn emit_deployment_toml(
         };
     }
 
-    let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+    let timestamp = chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC);
     let hostname = std::fs::read_to_string("/proc/sys/kernel/hostname")
         .map(|s| s.trim().to_string())
         .or_else(|_| std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()))

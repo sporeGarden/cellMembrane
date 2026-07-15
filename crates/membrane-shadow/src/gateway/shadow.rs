@@ -20,8 +20,8 @@ pub async fn dispatch_shadow(config: &ShadowConfig, args: &[&str]) -> Result<Sha
         "lab.primals.eco",
     );
     let host = extract_host(args).unwrap_or(default_host.as_str());
-    let legacy_port = extract_port(args, "--legacy-port").unwrap_or(443);
-    let tower_port = extract_port(args, "--tower-port").unwrap_or(8443);
+    let legacy_port = extract_port(args, "--legacy-port").unwrap_or(cellmembrane_types::service::DEFAULT_HTTPS_PORT);
+    let tower_port = extract_port(args, "--tower-port").unwrap_or(cellmembrane_types::service::DEFAULT_SHADOW_PORT);
     let paths = extract_paths(args);
 
     let comparisons = run_shadow_comparisons(config, host, legacy_port, tower_port, &paths).await?;

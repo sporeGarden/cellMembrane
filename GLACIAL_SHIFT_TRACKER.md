@@ -1,8 +1,20 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-11 (Wave 136b)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed
+**Last updated:** 2026-07-15 (Wave 140a)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped
+**Wave 140a update (deep debt sweep — constants, types, dependency evolution, OS Atheism Phase 2):**
+Deep debt sprint (Waves 137b–140a). Constants & dedup: `ISO8601_UTC`/`ISO8601_TZ` extracted (18
+format strings), `DEFAULT_HTTPS_PORT`/`DEFAULT_SHADOW_PORT` extracted. Dead code removed
+(`git_rev_parse_head`). `unreachable!()` → `.expect()` in HMAC. `FromStr` for
+`MembraneComposition`, `WebhookProvider`. JSON substring probes → `serde_json` structural
+checks (7 sites: health, sovereignty, mesh, canary, sandbox). `nix` crate eliminated —
+`graceful_kill` uses `std::process::Command("kill")`. Smart refactor: `plasmid/mod.rs`
+875→514L (`depot_sync.rs` extracted), `plasmid/harvest.rs` 841→763L (`harvest_manifest.rs`
+extracted). OS Atheism Phase 2: `TransportEndpoint::NamedPipe`, `InitSystem::detect()`,
+platform-aware CSPRNG/chmod. Cascade hang fix (`BranchCheckedOut`, reconcile timeout).
+`harvest --local`, `depot_sync --push`, `sources.toml` auto-provision. Error taxonomy
+cleanup. `PermissionsExt` cross-platform guards. 1,074 tests.
 **Wave 134a update (deep debt sweep — refactor + idiom + manifest-driven evolution):**
 Deep debt sweep across cellMembrane codebase:
 1. `manifest/mod.rs` refactored 905L→693L: serde types extracted to `manifest/types.rs` (286L).

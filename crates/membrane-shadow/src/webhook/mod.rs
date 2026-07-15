@@ -34,6 +34,18 @@ pub enum WebhookProvider {
     GitHub,
 }
 
+impl std::str::FromStr for WebhookProvider {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "github" => Ok(Self::GitHub),
+            "forgejo" => Ok(Self::Forgejo),
+            _ => Err(format!("unknown webhook provider: {s} (expected: forgejo|github)")),
+        }
+    }
+}
+
 impl WebhookProvider {
     /// Detect provider from HTTP headers.
     ///

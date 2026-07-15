@@ -93,7 +93,7 @@ pub(super) fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> 
     if expires.is_empty() {
         return false;
     }
-    chrono::DateTime::parse_from_str(expires, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|exp| now > &exp)
+    chrono::DateTime::parse_from_str(expires, cellmembrane_types::service::ISO8601_TZ).is_ok_and(|exp| now > &exp)
 }
 
 #[cfg(test)]
@@ -235,7 +235,7 @@ mod tests {
     fn is_expired_future_is_false() {
         let now = chrono::Utc::now();
         let future = (now + chrono::Duration::hours(1))
-            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .format(cellmembrane_types::service::ISO8601_TZ)
             .to_string();
         assert!(!is_expired(&future, &now));
     }
@@ -244,7 +244,7 @@ mod tests {
     fn is_expired_past_is_true() {
         let now = chrono::Utc::now();
         let past = (now - chrono::Duration::hours(1))
-            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .format(cellmembrane_types::service::ISO8601_TZ)
             .to_string();
         assert!(is_expired(&past, &now));
     }

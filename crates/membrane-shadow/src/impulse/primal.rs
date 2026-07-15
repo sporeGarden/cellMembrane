@@ -147,7 +147,7 @@ pub(super) fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Opti
             algorithm: "ed25519".to_string(),
             public_key: result.get("public_key")?.as_str()?.to_string(),
             value: result.get("signature")?.as_str()?.to_string(),
-            signed_at: Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
+            signed_at: Local::now().format(cellmembrane_types::service::ISO8601_TZ).to_string(),
         })
     }
 }

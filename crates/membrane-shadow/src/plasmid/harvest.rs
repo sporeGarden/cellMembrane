@@ -13,14 +13,14 @@
 
 use crate::ShadowOutcome;
 use crate::error::{Result, ShadowError};
-use crate::manifest::ManifestBuildConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 use tracing::{info, warn};
 
-use std::path::PathBuf;
-
+use super::harvest_manifest::{
+    apply_manifest_overrides, load_manifest_build_configs, resolve_local_source_dir,
+};
 use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
@@ -429,88 +429,10 @@ pub(super) use super::depot::{
     load_provenance, load_sources, resolve_depot, update_depot_metadata,
 };
 
-/// Load build configs from the ecosystem manifest for all primals.
-///
-/// Returns a map keyed by lowercase primal name. If the manifest is unavailable,
-/// returns an empty map (graceful fallback to `sources.toml` only).
-fn load_manifest_build_configs() -> BTreeMap<String, ManifestBuildConfig> {
-    let workspace = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-    );
-    let workspace_path = std::path::Path::new(&workspace);
-    let manifest = match crate::manifest::load_from_workspace(workspace_path) {
-        Ok(m) => m,
-        Err(e) => {
-            info!(error = %e, "manifest unavailable — using sources.toml only");
-            return BTreeMap::new();
-        }
-    };
-
-    let mut configs = BTreeMap::new();
-    for (name, entry) in &manifest.repos {
-        let cfg = ManifestBuildConfig {
-            package: entry.package.clone(),
-            linker: entry.linker.clone(),
-            gpu: entry.gpu,
-        };
-        if cfg.package.is_some() || cfg.linker.is_some() || cfg.gpu {
-            let lower = name.to_lowercase();
-            configs.insert(lower, cfg);
-        }
-    }
-    configs
-}
-
-/// Apply manifest build config overrides onto a `SourceEntry`.
-///
-/// Manifest `package` becomes `build_args = "-p <package>"` (overrides existing).
-/// Manifest `gpu` overlays onto `source.gpu`.
-fn apply_manifest_overrides(source: &mut SourceEntry, cfg: &ManifestBuildConfig) {
-    if let Some(pkg) = &cfg.package {
-        source.build_args = Some(format!("-p {pkg}"));
-    }
-    if cfg.gpu {
-        source.gpu = true;
-    }
-}
-
-/// Resolve the local workspace directory for a primal.
-///
-/// Maps the lowercase primal slug (e.g. `beardog`) to the manifest's
-/// `local_path` (e.g. `primals/bearDog`) relative to the workspace root.
-/// Falls back to `sources.toml` `repo` field (last path segment) if
-/// manifest is unavailable.
-fn resolve_local_source_dir(primal: &str) -> Result<PathBuf> {
-    let workspace = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-    );
-    let workspace_path = std::path::Path::new(&workspace);
-
-    if let Ok(manifest) = crate::manifest::load_from_workspace(workspace_path) {
-        for (name, entry) in &manifest.repos {
-            if name.to_lowercase() == primal {
-                let dir = workspace_path.join(&entry.local_path);
-                if dir.exists() {
-                    return Ok(dir);
-                }
-                return Err(ShadowError::Config(format!(
-                    "--local: workspace dir does not exist: {}",
-                    dir.display()
-                )));
-            }
-        }
-    }
-
-    Err(ShadowError::Config(format!(
-        "--local: primal '{primal}' not found in ecosystem manifest"
-    )))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manifest::ManifestBuildConfig;
 
     #[test]
     fn source_entry_deserialize() {

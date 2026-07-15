@@ -207,7 +207,7 @@ fn current_wave(workspace_root: &Path) -> u32 {
 pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<ContextBraid> {
     let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
-    let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    let ts_iso = now.format(cellmembrane_types::service::ISO8601_TZ).to_string();
     let wave = current_wave(workspace_root);
 
     let breadcrumbs = if args.breadcrumbs.is_empty() {
@@ -472,7 +472,7 @@ fn clear_expired_braids(ctx_dir: &Path) -> Result<Vec<String>> {
 }
 
 fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> bool {
-    chrono::DateTime::parse_from_str(updated, "%Y-%m-%dT%H:%M:%S%:z").is_ok_and(|updated_dt| {
+    chrono::DateTime::parse_from_str(updated, cellmembrane_types::service::ISO8601_TZ).is_ok_and(|updated_dt| {
         let expires_at = updated_dt + chrono::Duration::hours(i64::from(ttl_hours));
         now > &expires_at
     })
@@ -552,7 +552,7 @@ mod tests {
     fn is_expired_within_ttl() {
         let now = Utc::now();
         let updated = (now - chrono::Duration::hours(1))
-            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .format(cellmembrane_types::service::ISO8601_TZ)
             .to_string();
         assert!(!is_expired(&updated, 24, &now));
     }
@@ -561,7 +561,7 @@ mod tests {
     fn is_expired_past_ttl() {
         let now = Utc::now();
         let updated = (now - chrono::Duration::hours(25))
-            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .format(cellmembrane_types::service::ISO8601_TZ)
             .to_string();
         assert!(is_expired(&updated, 24, &now));
     }

@@ -22,7 +22,7 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
-    let ts_iso = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    let ts_iso = now.format(cellmembrane_types::service::ISO8601_TZ).to_string();
 
     let slug = args
         .subject
@@ -233,7 +233,7 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
 
     let ack_entry = ImpulseAck {
         gate: gate_id.name.clone(),
-        timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
+        timestamp: Utc::now().format(cellmembrane_types::service::ISO8601_TZ).to_string(),
         note: note.to_string(),
     };
 

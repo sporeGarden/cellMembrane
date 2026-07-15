@@ -34,7 +34,7 @@ fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
         checksums_blake3,
         signature: sign_result.signature,
         signer_gate: gate,
-        signed_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        signed_at: chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string(),
     };
 
     Some(sig)

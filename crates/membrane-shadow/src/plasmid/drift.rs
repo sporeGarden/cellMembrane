@@ -160,7 +160,7 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
     };
     let commit_msg = format!(
         "harvest: update checksums + provenance{signed_label} ({})",
-        chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
+        chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC)
     );
 
     if let Err(e) = crate::git_ops::git_output(depot_dir, &["commit", "-m", &commit_msg]).await {

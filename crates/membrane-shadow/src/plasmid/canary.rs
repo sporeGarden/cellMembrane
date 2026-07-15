@@ -396,7 +396,8 @@ async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
     }
 
     match crate::jsonrpc::call(&slot.socket_path, request).await {
-        Ok(response) if response.contains("\"status\"") || response.contains("\"result\"") => {
+        Ok(response) if serde_json::from_str::<serde_json::Value>(&response)
+            .is_ok_and(|j| j.get("status").is_some() || j.get("result").is_some()) => {
             CanaryHealth {
                 primal: slot.primal.clone(),
                 commit: slot.commit.clone(),

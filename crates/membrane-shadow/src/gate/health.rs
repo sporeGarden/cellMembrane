@@ -241,14 +241,16 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
         }
 
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if response.contains("\"result\"") {
-                return true;
-            }
-            if response.contains("\"error\"") {
-                tracing::debug!(
-                    primal = %primal,
-                    "health: JSON-RPC responded with error — primal running but unhealthy"
-                );
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response) {
+                if json.get("result").is_some() {
+                    return true;
+                }
+                if json.get("error").is_some() {
+                    tracing::debug!(
+                        primal = %primal,
+                        "health: JSON-RPC responded with error — primal running but unhealthy"
+                    );
+                }
             }
         }
     }

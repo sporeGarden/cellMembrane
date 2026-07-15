@@ -122,7 +122,9 @@ pub async fn remote_health_check(ip: &str) -> bool {
 
     match result {
         Ok(Ok((stdout, code))) => {
-            code == 0 && (stdout.contains("\"status\"") || stdout.contains("\"result\""))
+            code == 0
+                && serde_json::from_str::<serde_json::Value>(&stdout)
+                    .is_ok_and(|j| j.get("status").is_some() || j.get("result").is_some())
         }
         _ => false,
     }

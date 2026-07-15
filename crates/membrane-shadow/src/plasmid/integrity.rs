@@ -91,7 +91,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
         }
     }
 
-    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let now = chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string();
     let mut out = format!("# plasmidBin checksums — BLAKE3\n# Generated: {now}\n\n");
     for (tgt, entries) in &all_targets {
         let _ = writeln!(out, "[{tgt}]");

@@ -180,6 +180,14 @@ impl MembraneComposition {
     }
 }
 
+impl std::str::FromStr for MembraneComposition {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Self::parse_name(s).ok_or_else(|| format!("unknown composition: {s}"))
+    }
+}
+
 impl fmt::Display for MembraneComposition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

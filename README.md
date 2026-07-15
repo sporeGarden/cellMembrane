@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 136b) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 140a) |
 
 ---
 
@@ -55,16 +55,18 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1005 tests — pedantic clippy clean
+cargo test                  # 1074 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 136b): ~8k lines types, ~33k lines shadow. All manifest fields
-type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`).
+Current state (Wave 140a): ~8k lines types, ~33k lines shadow. All manifest fields
+type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
+`MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
-drift detection. Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
+drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
+Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
 validate it with `cellmembrane-types`, and deploy with the `membrane` CLI.
@@ -93,9 +95,14 @@ membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VP
 membrane plasmid.build <primal> [--target T]  # guideStone-grade single-primal build
 membrane plasmid.fetch --source wan       # WAN HTTPS fetch + dual BLAKE3 verification
 membrane plasmid.harvest                  # Build + checksum + auto-publish to git
+membrane plasmid.harvest --local          # Build from local checkout (~10x faster)
 membrane plasmid.harvest --target aarch64-linux-android  # NDK cross-compile
 membrane plasmid.ndk.check                # Verify NDK toolchain readiness
 membrane plasmid.refresh                  # Push depot binaries to VPS (atomic replace)
+membrane plasmid.depot_sync               # Sync install-dir → depot on VPS
+membrane plasmid.depot_sync --push        # Push local depot → remote VPS depot (builder mode)
+membrane plasmid.pipeline                 # End-to-end: harvest → sandbox → refresh
+membrane plasmid.trigger                  # Kick remote VPS pipeline via SSH
 membrane plasmid.sandbox --primal beardog # Sandbox validation (isolated UDS probe)
 membrane plasmid.sandbox --primal X --promote  # Validate + atomic promote to production
 membrane plasmid.canary.list              # Show canary pool state (previous-good)
@@ -136,8 +143,11 @@ membrane temporal.cascade
 # Fetch all primals from WAN depot (BLAKE3 verified)
 membrane plasmid.fetch --source wan
 
-# Build + push + auto-publish checksums
-membrane plasmid.harvest && membrane plasmid.refresh
+# Build from local checkout + push to VPS
+membrane plasmid.harvest --local && membrane plasmid.refresh
+
+# Or full pipeline (harvest → sandbox → refresh)
+membrane plasmid.pipeline
 
 # SSH to VPS
 ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
@@ -148,8 +158,8 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 136b are **DONE**. Full wave-by-wave audit trail is preserved in
-`GLACIAL_SHIFT_TRACKER.md`.
+through Wave 140a are **DONE**. Full wave-by-wave audit trail is preserved in
+`GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
 |----------|---------|--------|
@@ -158,9 +168,11 @@ through Wave 136b are **DONE**. Full wave-by-wave audit trail is preserved in
 | Dark Forest | 21/21 PASS, 5-pillar compliance, stripped static ELF binaries | DONE |
 | NUCLEUS | 13/13 primals ALIVE, 5-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
-| Type safety | All manifest fields typed, `validate.rs` wired, zero `Result<_,String>` | DONE |
-| Code quality | 1005 tests, zero clippy warnings (pedantic), all files <800L, zero `#[allow]` | DONE |
+| Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
+| Code quality | 1074 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
+| Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
+| Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()` | DONE |
 
 ---
 
@@ -259,6 +271,9 @@ gardens/cellMembrane/
         service/              # Static service registry + path constants
           mod.rs              # Types, enums, ServicePaths, env vars, path constants
           registry.rs         # 17 const service entries + ALL_SERVICES array
+        arch.rs               # Platform, TargetOs, CpuArch, LinkModel (OS Atheism)
+        process.rs            # ServiceStatus, InitSystem, ServiceOutcome
+        transport.rs          # TransportEndpoint (UDS, TCP, NamedPipe, MeshRelay)
         signal.rs             # Ribocipher signal types
         signing.rs            # DepotSignature, DepotTrustPolicy, SignaturesFile
         sync.rs               # Sync config, GateTransport, CascadeSource
@@ -266,14 +281,16 @@ gardens/cellMembrane/
         validation.rs         # Report pattern (pass/fail/warn) + doc-tests
     membrane-shadow/          # Sovereign shadow functions CLI (#![forbid(unsafe_code)])
       src/
-        dispatch/             # CLI command router (7 domain submodules)
+        dispatch/             # CLI command router (8 domain submodules)
           mod.rs              # Top-level run() router + rootpulse + Neural Bridge
           temporal.rs         # cascade, check, sync dispatch
           impulse.rs          # impulse + potential sense dispatch
           infra.rs            # repo, mirror, service, token (remote VPS API)
           gate.rs             # gate status, health, bootstrap, provision
           data.rs             # manifest, identity, context, plasmid, relay, topology
+          plasmid_dispatch.rs # plasmid.harvest, depot_sync, pipeline, trigger
           relay_dispatch.rs   # relay.run/mediate/ship dispatch
+          sovereign.rs        # sovereignty + sovereign deploy dispatch
         gate/                 # Gate operations (modular)
           bootstrap.rs        # Local enrollment (per-phase timeouts, spawn_blocking)
           health.rs           # Native async UDS probes + rootpulse + status
@@ -293,17 +310,24 @@ gardens/cellMembrane/
         context.rs            # Context braid lifecycle
         plasmid/              # Primal binary lifecycle
           mod.rs              # Registry-derived primal list, graceful_kill, shared utils
+          depot.rs            # Depot resolution, sources.toml auto-provision
+          depot_sync.rs       # Depot sync (VPS ↔ local, --push mode)
           fetch.rs            # Fetch + WAN checksum verification + BLAKE3
           harvest.rs          # Build + checksum + sign + atomic publish to git
+          harvest_manifest.rs # Manifest build config integration
           signing.rs          # Depot signing (BLAKE3 + ed25519 via bearDog UDS)
           sandbox.rs          # Ephemeral isolated validation
           canary.rs           # Previous-good pool (retire → failover)
           drift.rs            # Source divergence detection
           download.rs         # SSH + WAN binary download
           toolchain.rs        # ELF validation + NDK cross-compile + strip
-        caddy/                # Caddy TLS + depot provisioning
+        caddy/                # Caddy TLS + depot provisioning (deprecated Wave 132)
+        gateway/              # Tower HTTP gateway (Caddy replacement)
         webhook/              # Webhook receiver (Forgejo + GitHub cascade wiring)
         bridge.rs             # Neural API bridge (UDS discovery)
+        jsonrpc.rs            # Centralized JSON-RPC client (UDS, TCP, relay)
+        resolve.rs            # Transport endpoint resolution
+        ribocipher.rs         # Cryptographic functions (HKDF, HMAC, CSPRNG)
         identity.rs           # Gate identity resolution (canonical)
         config.rs             # ShadowConfig resolution
         manifest/             # Ecosystem manifest parser
@@ -320,17 +344,18 @@ gardens/cellMembrane/
 
 ---
 
-## Testing Infrastructure
+## Testing
 
-cellMembrane K-Derm topology is validated by the ecosystem's testing infrastructure:
+1,074 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
-| Repo | Location | Role |
-|------|----------|------|
-| benchScale | `infra/benchScale/` | Reproducible isolated test environments, K-Derm diderm topology in `topologies/nucleus/` |
-| agentReagents | `infra/agentReagents/` | Manifest-driven VM image building, `plasmidBin` integration |
+```bash
+cargo test                  # Full suite (1074 tests)
+cargo clippy                # Pedantic + nursery, zero warnings
+cargo doc --open            # Full API docs
+```
 
-Both are mature Rust codebases in `infra/`. Wave-by-wave evolution history
-is preserved in `GLACIAL_SHIFT_TRACKER.md` and git log.
+Wave-by-wave evolution history is preserved in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 ---
 
@@ -338,15 +363,13 @@ is preserved in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Resource | Location | Relationship |
 |----------|----------|-------------|
-| Deploy script | `infra/plasmidBin/deploy_membrane.sh` | Legacy — fully replaced by `membrane` CLI (fossil record) |
+| Ecosystem manifest | `infra/wateringHole/ecosystem_manifest.toml` | Single source of truth for all primals, repos, gates |
 | Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
 | fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
 | K-NOME programming | `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md` | K-Derm topology parallels K-NOME methodology |
-| Config SSOT | `gardens/projectNUCLEUS/deploy/nucleus_config.sh` | Port map, VPS config, shadow settings |
 | Dark Forest standard | `infra/wateringHole/DARK_FOREST_GLACIAL_GATE_STANDARD.md` | 5-pillar security audit |
 | Glacial readiness | `infra/wateringHole/GLACIAL_SHIFT_READINESS.md` | 6 stadial entry criteria |
-| Credential tooling | `infra/plasmidBin/membrane/share_credentials.sh` | Age-encrypted credential sharing |
-| Validation | `gardens/projectNUCLEUS/validation/darkforest_membrane.sh` | Dark Forest audit harness |
+| Fossil record | `infra/fossilRecord/cellMembrane/` | Archived Wave 59/119 scripts (deploy, provision) |
 
 ---
 

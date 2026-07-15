@@ -162,23 +162,29 @@ pub(crate) async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
         }
 
         if let Ok(response) = crate::jsonrpc::call(&instance.socket_path, request).await {
-            if response.contains("\"status\"") && response.contains("healthy") {
-                return SandboxResult {
-                    primal: instance.primal.clone(),
-                    commit: instance.commit.clone(),
-                    health_ok: true,
-                    detail: extract_health_detail(&response),
-                    elapsed_ms: millis_u64(start.elapsed()),
-                };
-            }
-            if response.contains("\"result\"") {
-                return SandboxResult {
-                    primal: instance.primal.clone(),
-                    commit: instance.commit.clone(),
-                    health_ok: true,
-                    detail: format!("responding (attempt {})", attempt + 1),
-                    elapsed_ms: millis_u64(start.elapsed()),
-                };
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response) {
+                let is_healthy = json
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .is_some_and(|s| s.contains("healthy"));
+                if is_healthy {
+                    return SandboxResult {
+                        primal: instance.primal.clone(),
+                        commit: instance.commit.clone(),
+                        health_ok: true,
+                        detail: extract_health_detail(&response),
+                        elapsed_ms: millis_u64(start.elapsed()),
+                    };
+                }
+                if json.get("result").is_some() {
+                    return SandboxResult {
+                        primal: instance.primal.clone(),
+                        commit: instance.commit.clone(),
+                        health_ok: true,
+                        detail: format!("responding (attempt {})", attempt + 1),
+                        elapsed_ms: millis_u64(start.elapsed()),
+                    };
+                }
             }
         }
     }

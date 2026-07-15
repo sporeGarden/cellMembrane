@@ -62,7 +62,7 @@ async fn dispatch_health(_config: &ShadowConfig) -> Result<ShadowOutcome> {
         cellmembrane_types::service::DEFAULT_GATEWAY_BIND,
     );
 
-    let tls_port = parse_port(&gateway_bind).unwrap_or(443);
+    let tls_port = parse_port(&gateway_bind).unwrap_or(cellmembrane_types::service::DEFAULT_HTTPS_PORT);
     let tls_listening = port_is_listening(tls_port).await;
 
     let songbird_socket = cellmembrane_types::service::env_or(
