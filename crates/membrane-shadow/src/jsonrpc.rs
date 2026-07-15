@@ -203,6 +203,7 @@ pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String> {
 ///
 /// Dispatches to the appropriate transport based on the endpoint variant:
 /// - `Uds` → direct UDS call (local primal, no network)
+/// - `NamedPipe` → Windows Named Pipe (local primal, no network)
 /// - `Tcp` → `WireGuard` mesh TCP (cross-gate, riboCipher framed)
 /// - `MeshRelay` → songBird relay (multi-hop, encrypted)
 ///
@@ -213,6 +214,9 @@ pub async fn call_endpoint(
 ) -> Result<String> {
     match endpoint {
         cellmembrane_types::TransportEndpoint::Uds { path } => call(Path::new(path), request).await,
+        cellmembrane_types::TransportEndpoint::NamedPipe { pipe_name } => {
+            call_named_pipe_err(pipe_name)
+        }
         cellmembrane_types::TransportEndpoint::Tcp { host, port } => {
             call_tcp(host, *port, request).await
         }
@@ -220,6 +224,22 @@ pub async fn call_endpoint(
             peer_id,
             capability,
         } => call_via_relay(peer_id, capability, request).await,
+    }
+}
+
+/// Connect and call via Windows Named Pipe.
+///
+/// On Unix, this returns an error (named pipes are Windows-only).
+/// On Windows, this connects via `tokio::net::windows::named_pipe`.
+fn call_named_pipe_err(pipe_name: &str) -> Result<String> {
+    if cfg!(windows) {
+        Err(rpc_err(format_args!(
+            "Windows Named Pipe transport not yet implemented: {pipe_name}"
+        )))
+    } else {
+        Err(rpc_err(format_args!(
+            "Named Pipe transport unavailable on this platform (use UDS)"
+        )))
     }
 }
 

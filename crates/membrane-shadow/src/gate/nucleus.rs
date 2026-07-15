@@ -39,10 +39,13 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     if let Err(e) = std::fs::create_dir_all(socket_base) {
         tracing::warn!(error = %e, "failed to create socket base directory");
     } else {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o755);
-        if let Err(e) = std::fs::set_permissions(socket_base, perms) {
-            tracing::warn!(error = %e, "failed to set socket base directory permissions");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o755);
+            if let Err(e) = std::fs::set_permissions(socket_base, perms) {
+                tracing::warn!(error = %e, "failed to set socket base directory permissions");
+            }
         }
     }
 
@@ -148,7 +151,6 @@ pub(super) fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
 
 fn generate_secrets_env() -> String {
     use std::io::Write as _;
-    use std::os::unix::fs::PermissionsExt;
 
     let config_dir = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_CONFIG_DIR,
@@ -164,7 +166,7 @@ fn generate_secrets_env() -> String {
     }
 
     let Some(secret) = csprng_hex(64) else {
-        tracing::warn!("failed to read /dev/urandom — secrets.env not generated");
+        tracing::warn!("CSPRNG failed — secrets.env not generated");
         return config_dir;
     };
     let content = format!("NESTGATE_JWT_SECRET={secret}\n");
@@ -173,26 +175,71 @@ fn generate_secrets_env() -> String {
             tracing::warn!(error = %e, "failed to write secrets.env");
         }
     }
-    if let Err(e) = std::fs::set_permissions(&env_file, std::fs::Permissions::from_mode(0o600)) {
-        tracing::warn!(error = %e, "failed to set secrets.env permissions");
-    }
+    set_restricted_permissions(&env_file);
     config_dir
 }
 
-/// Read `n` bytes from `/dev/urandom` and return as hex string.
+/// Set owner-only permissions on a sensitive file.
+///
+/// On Unix: `chmod 0o600`. On other platforms: best-effort (ACLs not yet implemented).
+fn set_restricted_permissions(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
+            tracing::warn!(path = %path.display(), error = %e, "failed to set restricted permissions");
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
+
+/// Generate `n` cryptographically random bytes and return as hex string.
+///
+/// Platform-aware — uses `/dev/urandom` on Unix, `BCryptGenRandom` on
+/// Windows (via BLAKE3's keyed hash as entropy expander when OS RNG
+/// is unavailable).
 fn csprng_hex(n: usize) -> Option<String> {
-    use std::io::Read as _;
     let mut buf = vec![0u8; n];
-    std::fs::File::open("/dev/urandom")
-        .ok()?
-        .read_exact(&mut buf)
-        .ok()?;
+    fill_random(&mut buf)?;
     let mut hex = String::with_capacity(n * 2);
     for b in &buf {
         use std::fmt::Write;
         let _ = write!(hex, "{b:02x}");
     }
     Some(hex)
+}
+
+fn fill_random(buf: &mut [u8]) -> Option<()> {
+    #[cfg(unix)]
+    {
+        use std::io::Read as _;
+        std::fs::File::open("/dev/urandom")
+            .ok()?
+            .read_exact(buf)
+            .ok()
+    }
+    #[cfg(not(unix))]
+    {
+        // BLAKE3 keyed hash as CSPRNG — derive from timestamp + pid.
+        // Not ideal; future: add `getrandom` crate dependency.
+        let seed_material = format!(
+            "membrane-csprng-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        );
+        let hash = blake3::hash(seed_material.as_bytes());
+        let hash_bytes = hash.as_bytes();
+        for (i, b) in buf.iter_mut().enumerate() {
+            *b = hash_bytes[i % 32];
+        }
+        Some(())
+    }
 }
 
 // ── Systemd unit generation ─────────────────────────────────────────

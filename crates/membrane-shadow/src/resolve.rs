@@ -120,16 +120,29 @@ fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
     is_local_gate(ctx, target_gate)
 }
 
-/// Resolve a local UDS endpoint — check socket existence in priority order.
+/// Resolve a local IPC endpoint — platform-aware.
 ///
-/// Checks `api_socket` convention (e.g. `neural-api-default.sock` for biomeOS),
-/// primary binary socket, and XDG fallbacks. Returns the first existing socket,
-/// or the highest-priority candidate if none exist.
+/// On Unix: checks UDS socket existence in priority order (`api_socket`
+/// convention, primary binary, XDG fallbacks). Returns `Uds`.
+///
+/// On Windows: returns `NamedPipe` with the membrane pipe naming convention.
+///
+/// For services without a socket (TCP-only), returns `Tcp` on loopback.
 fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<TransportEndpoint> {
     if !svc.has_socket {
         return svc.port.map(|port| TransportEndpoint::Tcp {
             host: cellmembrane_types::service::BIND_LOOPBACK.into(),
             port,
+        });
+    }
+
+    if cfg!(windows) {
+        return Some(TransportEndpoint::NamedPipe {
+            pipe_name: format!(
+                "{}{}",
+                cellmembrane_types::transport::NAMED_PIPE_PREFIX,
+                svc.binary
+            ),
         });
     }
 

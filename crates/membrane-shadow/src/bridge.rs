@@ -17,10 +17,6 @@
 
 use crate::error::{Result, ShadowError};
 use std::path::PathBuf;
-#[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-#[cfg(unix)]
-use tokio::net::UnixStream;
 
 /// Default socket name for the Neural API (biomeOS convention).
 const NEURAL_API_SOCKET_NAME: &str = cellmembrane_types::service::NEURAL_API_SOCKET_NAME;
@@ -118,76 +114,28 @@ impl NeuralBridge {
         }
     }
 
-    /// Low-level JSON-RPC 2.0 call over UDS.
-    #[cfg(not(unix))]
-    async fn rpc_call(
-        &self,
-        _method: &str,
-        _params: serde_json::Value,
-    ) -> Result<serde_json::Value> {
-        Err(ShadowError::Parse(
-            "UDS not available on this platform".into(),
-        ))
-    }
-
-    /// Low-level JSON-RPC 2.0 call over UDS.
-    #[cfg(unix)]
+    /// Low-level JSON-RPC 2.0 call — delegates transport to `jsonrpc::call`.
+    ///
+    /// This eliminates the duplicate UDS client that previously lived here.
+    /// Transport is handled by the shared `jsonrpc` module which supports
+    /// UDS (Unix), Named Pipes (Windows, future), and TCP.
     async fn rpc_call(&self, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
-        let stream = UnixStream::connect(&self.socket_path)
-            .await
-            .map_err(ShadowError::Io)?;
+        let request = crate::jsonrpc::request_with_params(method, &params, 1);
+        let raw = crate::jsonrpc::call(&self.socket_path, &request).await?;
+        let response: serde_json::Value = serde_json::from_str(&raw)?;
 
-        let (reader, mut writer) = stream.into_split();
-
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": method,
-            "params": params,
-        });
-
-        let mut payload = serde_json::to_string(&request)?;
-        payload.push('\n');
-
-        writer
-            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-            .await
-            .map_err(ShadowError::Io)?;
-        writer
-            .write_all(payload.as_bytes())
-            .await
-            .map_err(ShadowError::Io)?;
-        writer.flush().await.map_err(ShadowError::Io)?;
-
-        let mut buf_reader = BufReader::new(reader);
-        let mut line = String::new();
-
-        let timeout = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            buf_reader.read_line(&mut line),
-        )
-        .await;
-
-        match timeout {
-            Ok(Ok(_)) => {
-                let response: serde_json::Value = serde_json::from_str(&line)?;
-
-                if let Some(error) = response.get("error") {
-                    let msg = error
-                        .get("message")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("unknown");
-                    return Err(ShadowError::Rpc(msg.to_owned()));
-                }
-
-                response
-                    .get("result")
-                    .cloned()
-                    .ok_or_else(|| ShadowError::Parse("rpc response missing result".into()))
-            }
-            Ok(Err(e)) => Err(ShadowError::Io(e)),
-            Err(_) => Err(ShadowError::Parse("rpc timeout (5s)".into())),
+        if let Some(error) = response.get("error") {
+            let msg = error
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("unknown");
+            return Err(ShadowError::Rpc(msg.to_owned()));
         }
+
+        response
+            .get("result")
+            .cloned()
+            .ok_or_else(|| ShadowError::Rpc("rpc response missing result".into()))
     }
 }
 

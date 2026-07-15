@@ -37,11 +37,26 @@ pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
 
 pub use depot::{StalenessEntry, StalenessReport};
 
-/// Gracefully stop a process: SIGTERM → grace period → SIGKILL.
+/// Gracefully stop a process: SIGTERM → grace period → SIGKILL (Unix),
+/// or `TerminateProcess` (Windows).
 ///
-/// Uses `/proc/{pid}/` existence check to avoid signaling stale PIDs,
-/// using `nix::sys::signal::kill` for native signal delivery.
+/// Platform-aware — OS Atheism Phase 2.
 pub(crate) async fn graceful_kill(pid: u32, grace_ms: u64) {
+    #[cfg(unix)]
+    {
+        graceful_kill_unix(pid, grace_ms).await;
+    }
+    #[cfg(not(unix))]
+    {
+        graceful_kill_bare(pid, grace_ms).await;
+    }
+}
+
+/// Unix: SIGTERM → grace → SIGKILL via `nix::sys::signal::kill`.
+///
+/// Uses `/proc/{pid}/` existence check to avoid signaling stale PIDs.
+#[cfg(unix)]
+async fn graceful_kill_unix(pid: u32, grace_ms: u64) {
     use nix::sys::signal::{Signal, kill};
     use nix::unistd::Pid;
 
@@ -57,6 +72,14 @@ pub(crate) async fn graceful_kill(pid: u32, grace_ms: u64) {
     if proc_path.exists() {
         let _ = kill(nix_pid, Signal::SIGKILL);
     }
+}
+
+/// Non-Unix: best-effort process kill via `std::process::Command("taskkill")`.
+#[cfg(not(unix))]
+async fn graceful_kill_bare(pid: u32, _grace_ms: u64) {
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
+        .output();
 }
 
 /// Compute BLAKE3 hash of a file, returning hex string.

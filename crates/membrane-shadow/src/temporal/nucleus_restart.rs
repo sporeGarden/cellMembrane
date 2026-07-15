@@ -92,8 +92,8 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             continue;
         }
 
-        let unit = format!("membrane-nucleus@{primal}.service");
-        if crate::gate::nucleus::systemctl_async(&["--user", "restart", &unit]).await {
+        let unit = format!("{primal}-membrane.service");
+        if crate::gate::nucleus::systemctl_async(&["restart", &unit]).await {
             restarted += 1;
         } else {
             failed += 1;

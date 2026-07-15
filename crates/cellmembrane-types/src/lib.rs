@@ -44,6 +44,7 @@ pub mod error;
 pub mod firewall;
 pub mod gateway;
 pub mod identity;
+pub mod process;
 pub mod provider;
 pub mod service;
 pub mod signal;
@@ -84,6 +85,7 @@ pub use topology::{
     TopologyMeta, ZoneStatus,
 };
 pub use signing::{DepotSignature, DepotTrustPolicy, SignatureAlgorithm, SignaturesFile};
+pub use process::{InitSystem, ServiceOutcome, ServiceStatus};
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 

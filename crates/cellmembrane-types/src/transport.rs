@@ -40,6 +40,16 @@ pub enum TransportEndpoint {
         port: u16,
     },
 
+    /// Named Pipe — same-host inter-primal communication on Windows.
+    ///
+    /// Wire-compatible with songBird's Windows transport. Pipe names follow
+    /// the convention `\\.\pipe\membrane-{binary}` (e.g. `\\.\pipe\membrane-beardog`).
+    #[serde(rename = "named_pipe")]
+    NamedPipe {
+        /// Windows Named Pipe path (e.g. `\\.\pipe\membrane-beardog`).
+        pipe_name: String,
+    },
+
     /// Mesh relay — routes through Songbird's relay infrastructure.
     #[serde(rename = "mesh_relay")]
     MeshRelay {
@@ -55,7 +65,7 @@ impl TransportEndpoint {
     #[must_use]
     pub fn is_local(&self) -> bool {
         match self {
-            Self::Uds { .. } => true,
+            Self::Uds { .. } | Self::NamedPipe { .. } => true,
             Self::Tcp { host, .. } => host == "127.0.0.1" || host == "::1" || host == "localhost",
             Self::MeshRelay { .. } => false,
         }
@@ -78,6 +88,7 @@ impl TransportEndpoint {
     pub const fn transport_name(&self) -> &'static str {
         match self {
             Self::Uds { .. } => "uds",
+            Self::NamedPipe { .. } => "named_pipe",
             Self::Tcp { .. } => "tcp",
             Self::MeshRelay { .. } => "mesh_relay",
         }
@@ -91,6 +102,7 @@ impl TransportEndpoint {
                 || format!("unix://{path}"),
                 |abstract_name| format!("unix-abstract://{abstract_name}"),
             ),
+            Self::NamedPipe { pipe_name } => format!("pipe://{pipe_name}"),
             Self::Tcp { host, port } => format!("tcp://{host}:{port}"),
             Self::MeshRelay {
                 peer_id,
@@ -115,6 +127,34 @@ impl fmt::Display for TransportEndpoint {
         write!(f, "{}", self.display_uri())
     }
 }
+
+impl TransportEndpoint {
+    /// Create a platform-appropriate local IPC endpoint for a primal.
+    ///
+    /// On Unix: returns `Uds { path: "{socket_base}/{binary}.sock" }`
+    /// On Windows: returns `NamedPipe { pipe_name: "\\.\pipe\membrane-{binary}" }`
+    #[must_use]
+    pub fn local_ipc(binary: &str, socket_base: &str) -> Self {
+        if cfg!(windows) {
+            Self::NamedPipe {
+                pipe_name: format!(r"\\.\pipe\membrane-{binary}"),
+            }
+        } else {
+            Self::Uds {
+                path: format!("{socket_base}/{binary}.sock"),
+            }
+        }
+    }
+
+    /// Whether this endpoint uses local IPC (UDS or Named Pipe).
+    #[must_use]
+    pub const fn is_local_ipc(&self) -> bool {
+        matches!(self, Self::Uds { .. } | Self::NamedPipe { .. })
+    }
+}
+
+/// Windows Named Pipe prefix for membrane services.
+pub const NAMED_PIPE_PREFIX: &str = r"\\.\pipe\membrane-";
 
 /// Environment variable name for transport endpoint injection.
 pub const ENV_TRANSPORT_ENDPOINT: &str = "TRANSPORT_ENDPOINT";
@@ -234,6 +274,11 @@ mod tests {
         };
         assert_eq!(uds.transport_name(), "uds");
 
+        let pipe = TransportEndpoint::NamedPipe {
+            pipe_name: r"\\.\pipe\membrane-beardog".into(),
+        };
+        assert_eq!(pipe.transport_name(), "named_pipe");
+
         let tcp = TransportEndpoint::Tcp {
             host: "h".into(),
             port: 1,
@@ -245,5 +290,50 @@ mod tests {
             capability: "c".into(),
         };
         assert_eq!(mesh.transport_name(), "mesh_relay");
+    }
+
+    #[test]
+    fn named_pipe_serde_roundtrip() {
+        let ep = TransportEndpoint::NamedPipe {
+            pipe_name: r"\\.\pipe\membrane-beardog".into(),
+        };
+        let json = serde_json::to_string(&ep).unwrap();
+        assert!(json.contains(r#""transport":"named_pipe""#));
+        let back: TransportEndpoint = serde_json::from_str(&json).unwrap();
+        assert_eq!(ep, back);
+    }
+
+    #[test]
+    fn named_pipe_is_local() {
+        let pipe = TransportEndpoint::NamedPipe {
+            pipe_name: r"\\.\pipe\membrane-songbird".into(),
+        };
+        assert!(pipe.is_local());
+        assert!(pipe.is_local_ipc());
+        assert!(!pipe.is_network());
+        assert!(!pipe.is_relayed());
+    }
+
+    #[test]
+    fn named_pipe_display_uri() {
+        let pipe = TransportEndpoint::NamedPipe {
+            pipe_name: r"\\.\pipe\membrane-beardog".into(),
+        };
+        assert_eq!(pipe.display_uri(), r"pipe://\\.\pipe\membrane-beardog");
+    }
+
+    #[test]
+    fn local_ipc_generates_correct_variant() {
+        let ep = TransportEndpoint::local_ipc("beardog", "/run/membrane");
+        if cfg!(windows) {
+            assert!(matches!(ep, TransportEndpoint::NamedPipe { .. }));
+        } else {
+            assert_eq!(
+                ep,
+                TransportEndpoint::Uds {
+                    path: "/run/membrane/beardog.sock".into()
+                }
+            );
+        }
     }
 }
