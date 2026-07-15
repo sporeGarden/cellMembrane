@@ -367,19 +367,23 @@ pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate
 
 /// `plasmid.depot_sync` — Sync inner membrane binaries to the WAN depot directory.
 ///
-/// After `plasmid.refresh` pushes binaries to the install dir (e.g. `/opt/membrane/`),
-/// the WAN depot directory (`/opt/ecoPrimals/plasmidBin/primals/{arch}/`) may be stale.
-/// This command ensures the depot serves the same binaries that are running:
+/// Sync depot binaries between local and remote.
 ///
-/// 1. Compare BLAKE3 hashes of install-dir vs depot-dir binaries (skip if identical)
-/// 2. Copy only divergent binaries (atomic: write .new then rename)
-/// 3. Verify post-copy with BLAKE3 to confirm integrity
-/// 4. Sync `checksums.toml` to the WAN depot root so remote gates verify correctly
+/// **Default mode** (no `--push`): SSH to the VPS and sync install-dir → depot-dir
+/// on the remote. Used by relay/gate nodes after `plasmid.refresh`.
 ///
-/// Reports: synced (changed), current (already matching), failed, verified.
+/// **Push mode** (`--push`): SCP binaries from the LOCAL depot to the REMOTE VPS
+/// depot. Used by builder nodes (e.g. sporeGate) after `plasmid.harvest`. This
+/// replaces the manual rsync workflow.
+///
+/// Both modes use BLAKE3 for diff detection and post-copy verification.
 pub async fn depot_sync(
     config: &crate::ShadowConfig,
+    push: bool,
 ) -> crate::error::Result<crate::ShadowOutcome> {
+    if push {
+        return depot_sync_push(config).await;
+    }
     let install_dir = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_INSTALL_BASE,
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
@@ -527,8 +531,25 @@ fn format_depot_sync_outcome(r: &DepotSyncResult) -> crate::ShadowOutcome {
 /// to the WAN depot path. Returns true if the primary checksums copy succeeded.
 async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &str) -> bool {
     let wan_depot = format!("{}/plasmidBin", config.vps_root);
+    let wan_checksums = format!(
+        "{wan_depot}/{}",
+        cellmembrane_types::service::CHECKSUMS_FILE
+    );
+
+    // Detect same-file (symlink) scenario: if src and dst resolve to the same
+    // inode, skip the copy. This happens on golgi when plasmidBin is symlinked.
+    let same_file_cmd = format!(
+        "[ \"{checksums_path}\" -ef \"{wan_checksums}\" ] && echo SAME || echo DIFF"
+    );
+    if let Ok((out, _)) = crate::ssh::exec_raw(config, &same_file_cmd).await {
+        if out.trim() == "SAME" {
+            tracing::debug!("WAN checksums sync: src=dst (symlink), skipping");
+            return true;
+        }
+    }
+
     let cmd = format!(
-        "cp -f {checksums_path} {wan_depot}/checksums.toml 2>/dev/null && echo OK || echo FAIL"
+        "cp -f {checksums_path} {wan_checksums} 2>/dev/null && echo OK || echo FAIL"
     );
     let Ok((out, _)) = crate::ssh::exec_raw(config, &cmd).await else {
         tracing::warn!("WAN checksums sync: SSH connection failed");
@@ -543,15 +564,167 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
         cellmembrane_types::service::CHECKSUMS_FILE,
         cellmembrane_types::service::SIGNATURES_FILE,
     );
-    let sigs_cmd = format!(
-        "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_depot}/{} 2>/dev/null",
-        cellmembrane_types::service::SIGNATURES_FILE,
+    let wan_sigs = format!(
+        "{wan_depot}/{}",
+        cellmembrane_types::service::SIGNATURES_FILE
     );
-    if let Err(e) = crate::ssh::exec_raw(config, &sigs_cmd).await {
-        tracing::debug!(error = %e, "WAN signatures.toml sync: SSH copy failed");
+    let sigs_same_cmd = format!(
+        "[ \"{sigs_src}\" -ef \"{wan_sigs}\" ] && echo SAME || echo DIFF"
+    );
+    let sigs_is_same = crate::ssh::exec_raw(config, &sigs_same_cmd)
+        .await
+        .is_ok_and(|(out, _)| out.trim() == "SAME");
+
+    if !sigs_is_same {
+        let sigs_cmd = format!(
+            "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_sigs} 2>/dev/null"
+        );
+        if let Err(e) = crate::ssh::exec_raw(config, &sigs_cmd).await {
+            tracing::debug!(error = %e, "WAN signatures.toml sync: SSH copy failed");
+        }
     }
 
     true
+}
+
+/// Push local depot binaries and metadata to the remote VPS depot via SCP.
+///
+/// For each architecture dir in `{local_depot}/primals/{arch}/`, pushes
+/// divergent binaries (BLAKE3 diff), then pushes metadata files
+/// (checksums.toml, provenance.toml, signatures.toml).
+async fn depot_sync_push(
+    config: &crate::ShadowConfig,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    let local_depot = harvest::resolve_depot(None)?;
+    let remote_depot = format!("{}/{}", config.vps_root, cellmembrane_types::service::PLASMID_BIN_DIR);
+
+    let primals_dir = local_depot.join("primals");
+    if !primals_dir.exists() {
+        return Ok(crate::ShadowOutcome {
+            ok: false,
+            message: format!("depot push: no primals/ dir at {}", local_depot.display()),
+            data: None,
+        });
+    }
+
+    let mut synced = 0usize;
+    let mut current = 0usize;
+    let mut failed = 0usize;
+    let mut arch_count = 0usize;
+
+    let arch_dirs: Vec<_> = std::fs::read_dir(&primals_dir)
+        .map_err(crate::error::ShadowError::Io)?
+        .filter_map(std::result::Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|ft| ft.is_dir()))
+        .collect();
+
+    for arch_entry in &arch_dirs {
+        let arch = arch_entry.file_name();
+        let arch_str = arch.to_string_lossy();
+        let local_arch_dir = arch_entry.path();
+        let remote_arch_dir = format!("{remote_depot}/primals/{arch_str}");
+
+        let ensure_dir = format!("mkdir -p {remote_arch_dir}");
+        if let Err(e) = crate::ssh::exec_raw(config, &ensure_dir).await {
+            tracing::warn!(arch = %arch_str, error = %e, "push: failed to create remote dir");
+            failed += 1;
+            continue;
+        }
+        arch_count += 1;
+
+        let bins: Vec<_> = std::fs::read_dir(&local_arch_dir)
+            .map_err(crate::error::ShadowError::Io)?
+            .filter_map(std::result::Result::ok)
+            .filter(|e| {
+                e.file_type().is_ok_and(|ft| ft.is_file())
+                    && !e.file_name().to_string_lossy().starts_with('.')
+            })
+            .collect();
+
+        for bin_entry in &bins {
+            let name = bin_entry.file_name();
+            let name_str = name.to_string_lossy();
+            let local_path = bin_entry.path();
+
+            let local_hash = compute_blake3_file_async(local_path.clone()).await;
+            let remote_path = format!("{remote_arch_dir}/{name_str}");
+            let hash_cmd = format!("b3sum {remote_path} 2>/dev/null | cut -d' ' -f1");
+            let remote_hash = crate::ssh::exec_raw(config, &hash_cmd)
+                .await
+                .map(|(h, _)| h.trim().to_string())
+                .unwrap_or_default();
+
+            if !local_hash.is_empty() && local_hash == remote_hash {
+                current += 1;
+                continue;
+            }
+
+            let remote_tmp = format!("{remote_arch_dir}/.{name_str}.new");
+            match crate::ssh::scp_to(config, &local_path.to_string_lossy(), &remote_tmp).await {
+                Ok(()) => {
+                    let mv_cmd = format!("chmod 755 {remote_tmp} && mv -f {remote_tmp} {remote_path}");
+                    if let Err(e) = crate::ssh::exec_raw(config, &mv_cmd).await {
+                        tracing::warn!(binary = %name_str, error = %e, "push: atomic rename failed");
+                        failed += 1;
+                    } else {
+                        synced += 1;
+                        tracing::info!(binary = %name_str, arch = %arch_str, "pushed to VPS depot");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(binary = %name_str, error = %e, "push: SCP failed");
+                    failed += 1;
+                }
+            }
+        }
+    }
+
+    let metadata_pushed = push_depot_metadata(config, &local_depot, &remote_depot).await;
+    let total = synced + current + failed;
+    let ok = failed == 0;
+
+    Ok(crate::ShadowOutcome {
+        ok,
+        message: format!(
+            "depot push: {synced} pushed, {current} current, {failed} failed \
+             (of {total}, {arch_count} arch) — metadata {}",
+            if metadata_pushed { "synced" } else { "partial" }
+        ),
+        data: Some(serde_json::json!({
+            "mode": "push",
+            "synced": synced,
+            "current": current,
+            "failed": failed,
+            "total": total,
+            "architectures": arch_count,
+            "metadata_pushed": metadata_pushed,
+        })),
+    })
+}
+
+/// Push depot metadata files (checksums, provenance, signatures) to the remote VPS.
+async fn push_depot_metadata(
+    config: &crate::ShadowConfig,
+    local_depot: &std::path::Path,
+    remote_depot: &str,
+) -> bool {
+    let mut all_ok = true;
+    for filename in [
+        cellmembrane_types::service::CHECKSUMS_FILE,
+        cellmembrane_types::service::PROVENANCE_FILE,
+        cellmembrane_types::service::SIGNATURES_FILE,
+    ] {
+        let local = local_depot.join(filename);
+        if !local.is_file() {
+            continue;
+        }
+        let remote = format!("{remote_depot}/{filename}");
+        if let Err(e) = crate::ssh::scp_to(config, &local.to_string_lossy(), &remote).await {
+            tracing::warn!(file = filename, error = %e, "metadata push failed");
+            all_ok = false;
+        }
+    }
+    all_ok
 }
 
 /// `plasmid.status` — Report depot freshness and upstream drift.

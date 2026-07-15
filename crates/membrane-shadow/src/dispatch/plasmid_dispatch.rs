@@ -78,7 +78,10 @@ pub(super) async fn dispatch_plasmid(
         }
         "plasmid.ndk.check" => Ok(plasmid::ndk_check()),
         "plasmid.trigger" => plasmid::trigger(config).await,
-        "plasmid.depot_sync" => plasmid::depot_sync(config).await,
+        "plasmid.depot_sync" => {
+            let push = args.contains(&"--push");
+            plasmid::depot_sync(config, push).await
+        }
         "plasmid.status" => plasmid::status().await,
         "plasmid.composition" => dispatch_composition(args),
         "plasmid.staleness" => dispatch_staleness(),

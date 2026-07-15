@@ -125,7 +125,7 @@ impl fmt::Display for TargetOs {
 pub enum CpuArch {
     /// x86-64 / AMD64.
     X86_64,
-    /// ARM 64-bit / AArch64.
+    /// ARM 64-bit / `AArch64`.
     Aarch64,
     /// RISC-V 64-bit (future).
     Riscv64,
@@ -224,15 +224,14 @@ impl Platform {
         let link = match os {
             TargetOs::Linux => LinkModel::MuslStatic,
             TargetOs::Windows => LinkModel::WindowsGnu,
-            TargetOs::MacOs => LinkModel::AppleDarwin,
+            TargetOs::MacOs | TargetOs::Ios => LinkModel::AppleDarwin,
             TargetOs::Android => LinkModel::AndroidNdk,
-            TargetOs::Ios => LinkModel::AppleDarwin,
             TargetOs::Wasm => LinkModel::WasmUnknown,
         };
         Self { os, arch, link }
     }
 
-    /// Construct a platform for GPU workloads (glibc, x86_64).
+    /// Construct a platform for GPU workloads (glibc, `x86_64`).
     #[must_use]
     pub const fn gpu() -> Self {
         Self {
@@ -244,11 +243,8 @@ impl Platform {
 
     /// Rust target triple string (e.g. `x86_64-unknown-linux-musl`).
     #[must_use]
-    pub fn triple(&self) -> &'static str {
+    pub const fn triple(&self) -> &'static str {
         match (self.arch, self.os, self.link) {
-            (CpuArch::X86_64, TargetOs::Linux, LinkModel::MuslStatic) => {
-                "x86_64-unknown-linux-musl"
-            }
             (CpuArch::X86_64, TargetOs::Linux, LinkModel::GnuDynamic) => {
                 "x86_64-unknown-linux-gnu"
             }

@@ -89,14 +89,14 @@ Plasmid (primal binary bootstrap):
                                    Fetch primal binaries with BLAKE3 verification
   plasmid.refresh [--primal NAME] [--source-dir DIR] [--dry-run]
                                    Push local binaries to VPS (atomic replace + restart)
-  plasmid.harvest [--primal NAME] [--all] [--depot DIR] [--target TRIPLE] [--force] [--dry-run]
+  plasmid.harvest [--primal NAME] [--all] [--local] [--depot DIR] [--target TRIPLE] [--force] [--dry-run]
                                    Build from source, checksum, stage to depot
   plasmid.pipeline [--primal NAME] [--now] [--dry-run]
                                    Zero-touch: harvest → refresh → alive (full cycle)
   plasmid.trigger                  Remotely trigger VPS pipeline via SSH (immediate kick)
   plasmid.build <primal>            guideStone-grade single-primal build (ELF validation, provenance)
   plasmid.ndk.check                Check NDK toolchain for aarch64-linux-android cross-compile
-  plasmid.depot_sync               Sync inner→outer membrane (BLAKE3 diff, atomic copy, checksums)
+  plasmid.depot_sync [--push]       Sync depot: install→depot (default) or local→VPS (--push)
   plasmid.status                   Report depot freshness and upstream drift
   plasmid.staleness                Detect stale primals from provenance (local, no network)
   plasmid.sandbox --primal NAME [--commit SHA] [--timeout SECS]
