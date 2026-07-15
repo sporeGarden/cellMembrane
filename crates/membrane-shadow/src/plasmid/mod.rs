@@ -233,6 +233,7 @@ pub async fn pipeline(
         dry_run,
         depot_dir: None,
         target: None,
+        local: false,
     };
 
     let harvest_outcome = harvest(&harvest_args).await?;
@@ -383,10 +384,7 @@ pub async fn depot_sync(
         cellmembrane_types::service::ENV_INSTALL_BASE,
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
-    let depot_root = format!(
-        "{}/plasmidBin/primals",
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
-    );
+    let depot_root = format!("{}/plasmidBin/primals", config.vps_root);
     let arch = detect_target_triple();
     let depot_dir = format!("{depot_root}/{arch}");
 
@@ -460,10 +458,9 @@ pub async fn depot_sync(
         );
     }
 
-    // Phase 2: Sync checksums.toml to the WAN depot root
     let checksums_src = format!(
         "{}/plasmidBin/{}",
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+        config.vps_root,
         cellmembrane_types::service::CHECKSUMS_FILE,
     );
     let checksums_synced = sync_checksums_to_wan(config, &checksums_src).await;
@@ -529,10 +526,7 @@ fn format_depot_sync_outcome(r: &DepotSyncResult) -> crate::ShadowOutcome {
 /// Copies checksums.toml and signatures.toml from the plasmidBin repo root
 /// to the WAN depot path. Returns true if the primary checksums copy succeeded.
 async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &str) -> bool {
-    let wan_depot = format!(
-        "{}/plasmidBin",
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
-    );
+    let wan_depot = format!("{}/plasmidBin", config.vps_root);
     let cmd = format!(
         "cp -f {checksums_path} {wan_depot}/checksums.toml 2>/dev/null && echo OK || echo FAIL"
     );

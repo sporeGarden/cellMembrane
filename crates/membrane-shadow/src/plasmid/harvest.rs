@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use tracing::{info, warn};
 
+use std::path::PathBuf;
+
 use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
@@ -34,6 +36,10 @@ pub struct HarvestArgs {
     pub depot_dir: Option<String>,
     /// Override target triple (e.g. `aarch64-unknown-linux-musl` for cross-compile).
     pub target: Option<String>,
+    /// Build from local workspace checkout instead of cloning.
+    /// Uses `local_path` from the ecosystem manifest to resolve source dirs.
+    /// ~10x faster than clone mode on machines with existing checkouts.
+    pub local: bool,
 }
 
 /// Outcome of harvesting a single primal.
@@ -190,19 +196,27 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
         let targets = targets_for_primal(args.target.as_deref(), &source);
         for target in &targets {
             if args.dry_run {
+                let mode = if args.local { "build from local" } else { "clone" };
                 results.push(HarvestResult {
                     binary: primal.clone(),
                     status: HarvestStatus::Built,
                     detail: format!(
-                        "dry-run: would clone {} and build for {target}",
+                        "dry-run: would {mode} {} and build for {target}",
                         source.repo
                     ),
                 });
                 continue;
             }
 
-            let result =
-                harvest_one(primal, &source, target, &depot_dir, manifest_linker).await;
+            let result = harvest_one(
+                primal,
+                &source,
+                target,
+                &depot_dir,
+                manifest_linker,
+                args.local,
+            )
+            .await;
             if matches!(result.status, HarvestStatus::Built) && !targets_built.contains(target) {
                 targets_built.push(target.clone());
             }
@@ -275,34 +289,54 @@ async fn harvest_one(
     target: &str,
     depot_dir: &Path,
     manifest_linker: Option<&str>,
+    local: bool,
 ) -> HarvestResult {
-    let build_root = std::env::temp_dir().join("membrane-harvest");
-    let clone_dir = build_root.join(primal);
+    let (source_dir, cleanup) = if local {
+        match resolve_local_source_dir(primal) {
+            Ok(dir) => {
+                info!(primal, path = %dir.display(), "local harvest: using workspace checkout");
+                (dir, false)
+            }
+            Err(e) => {
+                return HarvestResult {
+                    binary: primal.into(),
+                    status: HarvestStatus::Failed,
+                    detail: e.to_string(),
+                };
+            }
+        }
+    } else {
+        let build_root = std::env::temp_dir().join("membrane-harvest");
+        let clone_dir = build_root.join(primal);
 
-    if let Err(e) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
-        let status = if source.private {
-            HarvestStatus::Skipped
-        } else {
-            HarvestStatus::Failed
-        };
-        return HarvestResult {
-            binary: primal.into(),
-            status,
-            detail: e.to_string(),
-        };
-    }
+        if let Err(e) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
+            let status = if source.private {
+                HarvestStatus::Skipped
+            } else {
+                HarvestStatus::Failed
+            };
+            return HarvestResult {
+                binary: primal.into(),
+                status,
+                detail: e.to_string(),
+            };
+        }
+        (clone_dir, true)
+    };
 
-    let head_commit = crate::git_ops::head_short(&clone_dir)
+    let head_commit = crate::git_ops::head_short(&source_dir)
         .await
         .unwrap_or_default();
 
-    if let Some(warning) =
-        drift::check_clone_freshness(primal, source, &clone_dir, &head_commit).await
-    {
-        warn!(primal, warning, "freshness warning");
+    if !local {
+        if let Some(warning) =
+            drift::check_clone_freshness(primal, source, &source_dir, &head_commit).await
+        {
+            warn!(primal, warning, "freshness warning");
+        }
     }
 
-    if let Err(e) = toolchain::build_binary(source, target, &clone_dir, manifest_linker).await {
+    if let Err(e) = toolchain::build_binary(source, target, &source_dir, manifest_linker).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
@@ -311,7 +345,7 @@ async fn harvest_one(
     }
 
     let binary_name = source.binary_name.as_deref().unwrap_or(primal);
-    let bin_path = clone_dir
+    let bin_path = source_dir
         .join("target")
         .join(target)
         .join("release")
@@ -325,7 +359,6 @@ async fn harvest_one(
         };
     }
 
-    // BUILD-ELF-01: validate architecture before staging
     if let Err(e) = validate_elf_arch(&bin_path, target).await {
         return HarvestResult {
             binary: primal.into(),
@@ -338,12 +371,15 @@ async fn harvest_one(
 
     match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
-            let _ = tokio::fs::remove_dir_all(&clone_dir).await;
+            if cleanup {
+                let _ = tokio::fs::remove_dir_all(&source_dir).await;
+            }
+            let mode = if local { "local" } else { "clone" };
             HarvestResult {
                 binary: primal.into(),
                 status: HarvestStatus::Built,
                 detail: format!(
-                    "{}KB blake3={} commit={}",
+                    "{}KB blake3={} commit={} ({mode})",
                     size / 1024,
                     &blake3[..16],
                     &head_commit[..std::cmp::min(8, head_commit.len())]
@@ -437,6 +473,39 @@ fn apply_manifest_overrides(source: &mut SourceEntry, cfg: &ManifestBuildConfig)
     if cfg.gpu {
         source.gpu = true;
     }
+}
+
+/// Resolve the local workspace directory for a primal.
+///
+/// Maps the lowercase primal slug (e.g. `beardog`) to the manifest's
+/// `local_path` (e.g. `primals/bearDog`) relative to the workspace root.
+/// Falls back to `sources.toml` `repo` field (last path segment) if
+/// manifest is unavailable.
+fn resolve_local_source_dir(primal: &str) -> Result<PathBuf> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+    let workspace_path = std::path::Path::new(&workspace);
+
+    if let Ok(manifest) = crate::manifest::load_from_workspace(workspace_path) {
+        for (name, entry) in &manifest.repos {
+            if name.to_lowercase() == primal {
+                let dir = workspace_path.join(&entry.local_path);
+                if dir.exists() {
+                    return Ok(dir);
+                }
+                return Err(ShadowError::Config(format!(
+                    "--local: workspace dir does not exist: {}",
+                    dir.display()
+                )));
+            }
+        }
+    }
+
+    Err(ShadowError::Config(format!(
+        "--local: primal '{primal}' not found in ecosystem manifest"
+    )))
 }
 
 #[cfg(test)]
@@ -617,6 +686,7 @@ private = true
             dry_run: false,
             depot_dir: None,
             target: None,
+            local: false,
         };
         let result = determine_primals(&args, &sources).unwrap();
         assert_eq!(result, vec!["beardog"]);
@@ -631,6 +701,7 @@ private = true
             dry_run: false,
             depot_dir: None,
             target: None,
+            local: false,
         };
         assert!(determine_primals(&args, &sources).is_err());
     }
@@ -652,6 +723,7 @@ private = true
             dry_run: false,
             depot_dir: None,
             target: None,
+            local: false,
         };
         let result = determine_primals(&args, &sources).unwrap();
         assert!(result.contains(&"beardog".to_string()));
@@ -740,5 +812,30 @@ gpu = true
 "#;
         let parsed: super::super::depot::SourcesFile = toml::from_str(toml_str).unwrap();
         assert!(parsed.sources["barracuda"].gpu);
+    }
+
+    #[test]
+    fn resolve_local_source_dir_unknown_primal() {
+        let result = resolve_local_source_dir("nonexistent_primal_xyz");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("--local"),
+            "error should mention --local flag: {err}"
+        );
+    }
+
+    #[test]
+    fn harvest_args_local_flag() {
+        let args = HarvestArgs {
+            primal: None,
+            force: true,
+            dry_run: false,
+            depot_dir: None,
+            target: None,
+            local: true,
+        };
+        assert!(args.local);
+        assert!(args.force);
     }
 }

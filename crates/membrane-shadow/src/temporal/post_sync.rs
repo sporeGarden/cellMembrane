@@ -160,6 +160,7 @@ async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, Vec<S
         dry_run: false,
         depot_dir: None,
         target: None,
+        local: false,
     };
 
     let outcome = crate::plasmid::harvest(&harvest_args).await?;

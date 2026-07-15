@@ -124,12 +124,16 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
             .map_or_else(BTreeMap::new, |parsed| parsed.entries);
 
     for result in built {
-        if let Some(commit) = result.detail.split("commit=").nth(1) {
+        if let Some(after_commit) = result.detail.split("commit=").nth(1) {
+            let commit = after_commit
+                .split_whitespace()
+                .next()
+                .unwrap_or_else(|| after_commit.trim());
             existing_prov.insert(
                 result.binary.clone(),
                 ProvenanceEntry {
                     version: None,
-                    commit: Some(commit.trim().to_string()),
+                    commit: Some(commit.to_string()),
                     source: None,
                 },
             );
@@ -204,10 +208,95 @@ pub(crate) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
 
 pub(super) fn load_sources(depot_dir: &Path) -> Result<BTreeMap<String, SourceEntry>> {
     let path = depot_dir.join("sources.toml");
-    let content = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
 
-    let parsed: SourcesFile = toml::from_str(&content)?;
-    Ok(parsed.sources)
+    match std::fs::read_to_string(&path) {
+        Ok(content) => {
+            let parsed: SourcesFile = toml::from_str(&content)?;
+            Ok(parsed.sources)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::info!("sources.toml not found — auto-provisioning from ecosystem manifest");
+            provision_sources_from_manifest(depot_dir)
+        }
+        Err(e) => Err(ShadowError::Io(e)),
+    }
+}
+
+/// Auto-generate `sources.toml` from the ecosystem manifest.
+///
+/// Scans manifest `[repos.*]` entries and creates a source entry for each
+/// primal-category repo that exists in the service registry. Writes the
+/// generated file to the depot dir for persistence.
+fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, SourceEntry>> {
+    let workspace = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| crate::resolve_workspace_root().ok())
+        .unwrap_or_else(|| {
+            PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
+        });
+
+    let manifest = crate::manifest::load_from_workspace(&workspace).map_err(|e| {
+        ShadowError::Config(format!(
+            "sources.toml missing and manifest unavailable for auto-provision: {e}"
+        ))
+    })?;
+
+    let registry: Vec<&str> = super::nucleus_primals();
+    let mut sources = BTreeMap::new();
+    let mut toml_out = String::from(
+        "# Auto-provisioned from ecosystem manifest.\n\
+         # Edit to override repo URLs, build args, or GPU flags.\n\n",
+    );
+
+    for (name, entry) in &manifest.repos {
+        let slug = name.to_lowercase();
+        if !registry.contains(&slug.as_str()) {
+            continue;
+        }
+
+        let repo = if !entry.forgejo_repo.is_empty() {
+            entry.forgejo_repo.clone()
+        } else if !entry.github_repo.is_empty() {
+            entry.github_repo.clone()
+        } else {
+            format!("{}/{name}", entry.org)
+        };
+
+        let _ = writeln!(toml_out, "[sources.{slug}]");
+        let _ = writeln!(toml_out, "repo = \"{repo}\"");
+        if entry.gpu {
+            let _ = writeln!(toml_out, "gpu = true");
+        }
+        toml_out.push('\n');
+
+        sources.insert(
+            slug,
+            SourceEntry {
+                repo,
+                private: false,
+                build_args: None,
+                binary_name: None,
+                gpu: entry.gpu,
+            },
+        );
+    }
+
+    if sources.is_empty() {
+        return Err(ShadowError::Config(
+            "auto-provision: no primal repos found in manifest".into(),
+        ));
+    }
+
+    let path = depot_dir.join("sources.toml");
+    std::fs::write(&path, toml_out.as_bytes()).map_err(ShadowError::Io)?;
+    tracing::info!(
+        primals = sources.len(),
+        path = %path.display(),
+        "sources.toml auto-provisioned from ecosystem manifest"
+    );
+
+    Ok(sources)
 }
 
 /// Load build entries from the ecosystem manifest and enrich `SourceEntry` values.
@@ -484,6 +573,55 @@ mod tests {
     fn resolve_depot_fallback_path() {
         let result = resolve_depot(Some("/tmp/nonexistent_depot_xyz"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_sources_missing_file_triggers_provision() {
+        let tmp = std::env::temp_dir().join("sources_auto_prov_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let result = load_sources(&tmp);
+        // Without a manifest available, auto-provision falls back with a
+        // clear Config error (not an Io error for missing file).
+        match result {
+            Err(ShadowError::Config(msg)) => {
+                assert!(
+                    msg.contains("auto-provision"),
+                    "error should mention auto-provision: {msg}"
+                );
+            }
+            Ok(sources) => {
+                // If manifest IS available (dev machine), it should have
+                // written sources.toml and returned populated entries.
+                assert!(!sources.is_empty());
+                assert!(tmp.join("sources.toml").exists());
+                let content = std::fs::read_to_string(tmp.join("sources.toml")).unwrap();
+                assert!(content.contains("[sources."));
+                assert!(content.contains("Auto-provisioned"));
+            }
+            Err(other) => panic!("unexpected error variant: {other}"),
+        }
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn load_sources_existing_file_skips_provision() {
+        let tmp = std::env::temp_dir().join("sources_no_prov_test");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(
+            tmp.join("sources.toml"),
+            "[sources.beardog]\nrepo = \"ecoPrimals/bearDog\"\n",
+        )
+        .unwrap();
+
+        let sources = load_sources(&tmp).unwrap();
+        assert_eq!(sources.len(), 1);
+        assert!(sources.contains_key("beardog"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

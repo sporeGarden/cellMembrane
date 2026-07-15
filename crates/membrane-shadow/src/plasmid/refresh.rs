@@ -98,12 +98,8 @@ async fn sync_depot_metadata(config: &crate::ShadowConfig) {
     let Ok(local_depot) = super::harvest::resolve_depot(None) else {
         return;
     };
-    let default_remote_depot = format!(
-        "{}/plasmidBin",
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
-    );
     let remote_depot = std::env::var(cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT)
-        .unwrap_or(default_remote_depot);
+        .unwrap_or_else(|_| format!("{}/plasmidBin", config.vps_root));
 
     for filename in [
         cellmembrane_types::service::PROVENANCE_FILE,
@@ -131,10 +127,7 @@ async fn sync_depot_binaries(config: &crate::ShadowConfig) {
         cellmembrane_types::service::ENV_INSTALL_BASE,
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
-    let depot_root = format!(
-        "{}/plasmidBin/primals",
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT
-    );
+    let depot_root = format!("{}/plasmidBin/primals", config.vps_root);
     let arch = super::detect_target_triple();
     let depot_dir = format!("{depot_root}/{arch}");
 
