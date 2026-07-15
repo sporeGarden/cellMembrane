@@ -194,7 +194,17 @@ pub(crate) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
                 .unwrap_or_else(|| {
                     PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
                 });
-            eco_root.join(cellmembrane_types::service::INFRA_PLASMID_BIN)
+            let infra_depot =
+                eco_root.join(cellmembrane_types::service::INFRA_PLASMID_BIN);
+            if infra_depot.exists() {
+                return infra_depot;
+            }
+            let flat_depot =
+                eco_root.join(cellmembrane_types::service::PLASMID_BIN_DIR);
+            if flat_depot.exists() {
+                return flat_depot;
+            }
+            infra_depot
         },
     );
     if !path.exists() {
