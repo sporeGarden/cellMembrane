@@ -297,57 +297,30 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
 
     if let Some(topo_data) = topo {
         if let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane) {
-            let forgejo_gates = m.gates_for_role("forgejo");
-            if let Some((_, forgejo_profile)) = forgejo_gates.first() {
-                let forgejo_ip = forgejo_profile
-                    .wg_ip
-                    .as_deref()
-                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(forgejo_gates[0].0))
-                    .unwrap_or(inner_ip.as_str());
-                let forgejo_port = cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT;
-                vhosts.push(CaddyVhost {
-                    domain: "git.primals.eco".into(),
-                    upstream: format!("{forgejo_ip}:{forgejo_port}"),
-                    path: None,
-                    tls: true,
-                    extra_directives: vec![],
-                });
-            }
+            let role_vhosts: &[(&str, &str, u16)] = &[
+                ("forgejo", "git.primals.eco", cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT),
+                ("depot", "depot.primals.eco", cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT),
+                ("relay", "mesh.primal.eco", cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
+                ("footprint", cellmembrane_types::service::FOOTPRINT_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
+                ("tideglass", cellmembrane_types::service::TIDEGLASS_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
+            ];
 
-            let depot_gates = m.gates_for_role("depot");
-            if !depot_gates.is_empty() {
-                let depot_ip = depot_gates[0]
-                    .1
-                    .wg_ip
-                    .as_deref()
-                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(depot_gates[0].0))
-                    .unwrap_or(inner_ip.as_str());
-                let depot_port = cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT;
-                vhosts.push(CaddyVhost {
-                    domain: "depot.primals.eco".into(),
-                    upstream: format!("{depot_ip}:{depot_port}"),
-                    path: None,
-                    tls: true,
-                    extra_directives: vec![],
-                });
-            }
-
-            let relay_gates = m.gates_for_role("relay");
-            if !relay_gates.is_empty() {
-                let relay_ip = relay_gates[0]
-                    .1
-                    .wg_ip
-                    .as_deref()
-                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(relay_gates[0].0))
-                    .unwrap_or(inner_ip.as_str());
-                let fed_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
-                vhosts.push(CaddyVhost {
-                    domain: "mesh.primal.eco".into(),
-                    upstream: format!("{relay_ip}:{fed_port}"),
-                    path: None,
-                    tls: true,
-                    extra_directives: vec![],
-                });
+            for &(role, domain, port) in role_vhosts {
+                let gates = m.gates_for_role(role);
+                if let Some((gate_name_ref, profile)) = gates.first() {
+                    let ip = profile
+                        .wg_ip
+                        .as_deref()
+                        .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate_name_ref))
+                        .unwrap_or(inner_ip.as_str());
+                    vhosts.push(CaddyVhost {
+                        domain: domain.into(),
+                        upstream: format!("{ip}:{port}"),
+                        path: None,
+                        tls: true,
+                        extra_directives: vec![],
+                    });
+                }
             }
         }
     }

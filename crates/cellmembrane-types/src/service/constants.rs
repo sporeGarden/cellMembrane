@@ -444,6 +444,18 @@ pub const DEFAULT_ACME_EMAIL: &str = "acme@primals.eco";
 pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
     &["petaltongue", "nestgate", "songbird", "beardog"];
 
+// ── Composition domains ──────────────────────────────────────────────
+
+/// Default domain for footPrint composition.
+pub const FOOTPRINT_DOMAIN: &str = "footprint.primals.eco";
+/// Default domain for tideGlass composition.
+pub const TIDEGLASS_DOMAIN: &str = "tideglass.primals.eco";
+
+/// Default footPrint server bind (loopback, behind drawbridge).
+pub const DEFAULT_FOOTPRINT_BIND: &str = "127.0.0.1:8090";
+/// Default footPrint content port for health checks.
+pub const DEFAULT_FOOTPRINT_PORT: u16 = 8090;
+
 // ── Timestamp Formats ────────────────────────────────────────────────
 
 /// ISO 8601 UTC timestamp format — `2026-07-15T14:30:00Z`.

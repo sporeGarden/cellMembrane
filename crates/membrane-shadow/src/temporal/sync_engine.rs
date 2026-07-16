@@ -189,6 +189,20 @@ async fn try_pull_converge(
     if !git_ok(local_path, &["rebase", "--abort"]).await {
         tracing::debug!(repo = repo_path, "rebase abort cleanup failed");
     }
+
+    // CAC: if rebase conflicted but trees are actually identical, reset to
+    // remote — content identity supersedes temporal identity.
+    let remote_ref = format!("{leader}/{branch}");
+    if crate::git_ops::trees_match(local_path, &remote_ref).await {
+        info!(
+            repo = repo_path,
+            "CAC: trees identical despite divergent history — resetting to {leader}"
+        );
+        if git_ok(local_path, &["reset", "--hard", &remote_ref]).await {
+            return PullOutcome::Ok(leader.to_string());
+        }
+    }
+
     PullOutcome::Err(format!(
         "pull {leader} failed (ff-only — diverged, rebase conflicted)"
     ))
@@ -232,6 +246,12 @@ pub(super) async fn sync_diverge(
         .await;
     }
 
+    // CAC: before firing impulse or applying policy, check if local tree
+    // matches any remote tree. Content identity supersedes temporal identity.
+    if let Some(result) = try_local_tree_parity(local_path, repo_path, matrix).await {
+        return Ok(result);
+    }
+
     let repo_path_owned = repo_path.to_string();
 
     if let Some(m) = manifest {
@@ -272,6 +292,38 @@ pub(super) async fn sync_diverge(
         pulled_from: None,
         pushed_to: vec![],
     })
+}
+
+/// CAC: check if local HEAD tree matches any remote's tree. When content
+/// is identical but history diverges (Newton-Leibniz), reset to the
+/// remote and push to align history without losing content.
+async fn try_local_tree_parity(
+    local_path: &Path,
+    repo_path: &str,
+    matrix: &TemporalMatrix,
+) -> Option<TemporalSyncResult> {
+    let branch = &matrix.branch;
+
+    for pos in &matrix.positions {
+        let remote_ref = format!("{}/{branch}", pos.remote);
+        if crate::git_ops::trees_match(local_path, &remote_ref).await {
+            info!(
+                repo = repo_path,
+                remote = %pos.remote,
+                "CAC: local tree matches remote — Newton-Leibniz, resetting to remote"
+            );
+            if git_ok(local_path, &["reset", "--hard", &remote_ref]).await {
+                return Some(TemporalSyncResult {
+                    repo_path: repo_path.to_string(),
+                    ok: true,
+                    summary: format!("CAC tree-parity: reset to {}", pos.remote),
+                    pulled_from: Some(pos.remote.clone()),
+                    pushed_to: vec![],
+                });
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

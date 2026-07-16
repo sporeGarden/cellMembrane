@@ -127,47 +127,55 @@ pub(super) fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
 /// Generate default gateway routes based on a gate's roles.
 ///
 /// Pure function: maps role strings to default route configurations.
-/// Gates with `http` or `gateway` roles get the standard `JupyterHub` routes.
+/// Produces routes for `JupyterHub` (`lab`), `footPrint`, and `tideGlass`
+/// based on the gate's declared roles.
 #[must_use]
 pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -> Vec<GatewayRoute> {
     use cellmembrane_types::GateRole;
+
+    let timeout = cellmembrane_types::service::DEFAULT_GATEWAY_TIMEOUT_SECS;
+    let mut routes = Vec::new();
+
     let has_http_role = roles
         .iter()
         .any(|r| matches!(r, GateRole::Http | GateRole::Gateway));
 
-    if !has_http_role {
-        return Vec::new();
+    if has_http_role {
+        let host = "lab.primals.eco";
+        for prefix in &["/hub", "/user", "/api", "/services"] {
+            routes.push(GatewayRoute {
+                host: host.into(),
+                path_prefix: (*prefix).into(),
+                capability: "jupyter".into(),
+                timeout_secs: timeout,
+            });
+        }
     }
 
-    let timeout = cellmembrane_types::service::DEFAULT_GATEWAY_TIMEOUT_SECS;
-    let host = "lab.primals.eco";
+    let has_footprint = roles.iter().any(|r| matches!(r, GateRole::Other(s) if s == "footprint"));
+    if has_footprint {
+        let host = cellmembrane_types::service::FOOTPRINT_DOMAIN;
+        for (prefix, cap) in &[("/", "drawbridge"), ("/ws", "agent_bridge"), ("/api", "cas")] {
+            routes.push(GatewayRoute {
+                host: host.into(),
+                path_prefix: (*prefix).into(),
+                capability: (*cap).into(),
+                timeout_secs: timeout,
+            });
+        }
+    }
 
-    vec![
-        GatewayRoute {
-            host: host.into(),
-            path_prefix: "/hub".into(),
-            capability: "jupyter".into(),
+    let has_tideglass = roles.iter().any(|r| matches!(r, GateRole::Other(s) if s == "tideglass"));
+    if has_tideglass {
+        routes.push(GatewayRoute {
+            host: cellmembrane_types::service::TIDEGLASS_DOMAIN.into(),
+            path_prefix: "/".into(),
+            capability: "tideglass".into(),
             timeout_secs: timeout,
-        },
-        GatewayRoute {
-            host: host.into(),
-            path_prefix: "/user".into(),
-            capability: "jupyter".into(),
-            timeout_secs: timeout,
-        },
-        GatewayRoute {
-            host: host.into(),
-            path_prefix: "/api".into(),
-            capability: "jupyter".into(),
-            timeout_secs: timeout,
-        },
-        GatewayRoute {
-            host: host.into(),
-            path_prefix: "/services".into(),
-            capability: "jupyter".into(),
-            timeout_secs: timeout,
-        },
-    ]
+        });
+    }
+
+    routes
 }
 
 /// Generate a gateway config from the ecosystem manifest for a specific gate.
