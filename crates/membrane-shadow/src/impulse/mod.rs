@@ -21,11 +21,7 @@ mod primal;
 mod sync;
 mod types;
 
-pub use types::{
-    ImpulseAck, ImpulseContent, ImpulseFile, ImpulseFrom, ImpulseMeta, ImpulseOpMeta,
-    ImpulseSignature, ImpulseTo, ImpulseType, PostArgs, PotentialHealth, Priority, SyncDivergeArgs,
-    SyncImpulseFile, SyncPayload,
-};
+pub use types::{ImpulseType, PostArgs, Priority, SyncDivergeArgs};
 
 pub use lifecycle::{ack, archive, check, post, sense};
 pub use primal::discover_socket;

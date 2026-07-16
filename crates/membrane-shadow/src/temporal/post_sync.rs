@@ -207,7 +207,7 @@ pub(super) async fn run_post_cascade_sandbox(
     };
 
     let arch = crate::plasmid::detect_target_triple();
-    let bin_dir = depot_dir.join("primals").join(&arch);
+    let bin_dir = depot_dir.join("primals").join(arch);
 
     let mut passed: Vec<String> = Vec::new();
     let mut failed_names: Vec<String> = Vec::new();
@@ -481,7 +481,7 @@ pub(super) fn summarize_depot_freshness() -> String {
     );
 
     let arch = crate::plasmid::detect_target_triple();
-    let primals_dir = depot_dir.join("primals").join(&arch);
+    let primals_dir = depot_dir.join("primals").join(arch);
     if !primals_dir.is_dir() {
         return String::new();
     }

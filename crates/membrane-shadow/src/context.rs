@@ -408,7 +408,8 @@ pub async fn clear(
         let ctx_owned = ctx_dir.clone();
         cleared = tokio::task::spawn_blocking(move || clear_expired_braids(&ctx_owned))
             .await
-            .map_err(|_| ShadowError::Parse("clear task panicked".into()))??;
+            .map_err(|_| ShadowError::Io(std::io::Error::other("clear task panicked")))??
+;
     }
 
     if !cleared.is_empty() {

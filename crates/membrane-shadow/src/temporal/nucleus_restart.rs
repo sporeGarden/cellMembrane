@@ -20,7 +20,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             .join(cellmembrane_types::service::PLASMID_BIN_DIR)
         },
     );
-    let bin_dir = depot_dir.join("primals").join(&arch);
+    let bin_dir = depot_dir.join("primals").join(arch);
 
     let install_base = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_INSTALL_BASE,
@@ -42,7 +42,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
             continue;
         }
 
-        let depot_hash = match crate::plasmid::compute_blake3_file_async(depot_bin.clone()).await {
+        let depot_hash = match crate::plasmid::compute_blake3_file_async(&depot_bin).await {
             Ok(h) => h,
             Err(e) => {
                 tracing::warn!(primal, error = %e, "cascade-restart: cannot hash depot binary");
@@ -50,7 +50,7 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
                 continue;
             }
         };
-        let installed_hash = match crate::plasmid::compute_blake3_file_async(installed_bin.clone()).await {
+        let installed_hash = match crate::plasmid::compute_blake3_file_async(&installed_bin).await {
             Ok(h) => h,
             Err(e) => {
                 tracing::warn!(primal, error = %e, "cascade-restart: cannot hash installed binary");

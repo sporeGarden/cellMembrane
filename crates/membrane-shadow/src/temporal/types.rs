@@ -139,23 +139,6 @@ pub struct TemporalSyncResult {
     pub pushed_to: Vec<String>,
 }
 
-/// Aggregate result for a full temporal sync across multiple repos.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemporalReport {
-    /// Total repos checked.
-    pub total: u32,
-    /// Repos at parity.
-    pub parity: u32,
-    /// Repos successfully converged.
-    pub converged: u32,
-    /// Repos with divergence flagged for review.
-    pub diverged: u32,
-    /// Repos missing or not cloned.
-    pub missing: u32,
-    /// Per-repo results.
-    pub repos: Vec<TemporalMatrix>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,23 +368,4 @@ mod tests {
         assert_eq!(deser.pushed_to, vec!["origin"]);
     }
 
-    #[test]
-    fn temporal_report_roundtrip() {
-        let report = TemporalReport {
-            total: 10,
-            parity: 7,
-            converged: 2,
-            diverged: 1,
-            missing: 0,
-            repos: vec![],
-        };
-        let json = serde_json::to_string(&report).unwrap();
-        let deser: TemporalReport = serde_json::from_str(&json).unwrap();
-        assert_eq!(deser.total, 10);
-        assert_eq!(deser.parity, 7);
-        assert_eq!(deser.converged, 2);
-        assert_eq!(deser.diverged, 1);
-        assert_eq!(deser.missing, 0);
-        assert!(deser.repos.is_empty());
-    }
 }

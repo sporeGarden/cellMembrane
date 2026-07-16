@@ -171,34 +171,6 @@ pub async fn scp_to_host(
     }
 }
 
-/// Execute a command on a named gate, resolving the SSH target from the
-/// ecosystem manifest (host → `lan_ip` → `wg_ip` priority chain).
-///
-/// Falls back to the gate name as a hostname if the manifest is unavailable.
-pub async fn exec_on_gate(gate: &str, command: &str, timeout: u32) -> Result<(String, i32)> {
-    let (host, user) = resolve_gate_ssh(gate);
-    let dest = format!("{user}@{host}");
-    let output = run_ssh(&dest, timeout, command).await?;
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    Ok((stdout, exit_code(&output)))
-}
-
-/// Resolve the SSH target and user for a gate from the manifest.
-fn resolve_gate_ssh(gate: &str) -> (String, String) {
-    let workspace = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-    );
-    if let Ok(manifest) = crate::manifest::load_from_workspace(std::path::Path::new(&workspace)) {
-        let host = manifest
-            .ssh_target_for(gate)
-            .map_or_else(|| gate.to_string(), String::from);
-        let user = manifest.ssh_user_for(gate).to_string();
-        return (host, user);
-    }
-    (gate.into(), "root".into())
-}
-
 /// Fetch a remote file's contents via SSH `cat` (depot binary download).
 pub async fn cat_remote(host: &str, remote_path: &str, timeout: u32) -> Result<Vec<u8>> {
     let output = run_ssh(host, timeout, &format!("cat {remote_path}")).await?;
@@ -259,10 +231,4 @@ mod tests {
         assert!(config.ssh_timeout > 0, "timeout should be positive");
     }
 
-    #[test]
-    fn resolve_gate_ssh_falls_back_to_gate_name() {
-        let (host, user) = resolve_gate_ssh("nonexistent_gate_xyz");
-        assert_eq!(user, "root");
-        assert!(!host.is_empty());
-    }
 }

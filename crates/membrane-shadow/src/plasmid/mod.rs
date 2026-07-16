@@ -34,10 +34,9 @@ pub use build::BuildArgs;
 pub use checksum::fetch_wan_checksums;
 pub use fetch::*;
 pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
-pub use integrity::{IntegrityMismatch, IntegrityReport};
-pub use refresh::{RefreshArgs, RefreshResult, RefreshStatus, refresh};
+pub use refresh::{RefreshArgs, refresh};
 
-pub use depot::{StalenessEntry, StalenessReport};
+pub use depot::StalenessReport;
 pub use depot_sync::depot_sync;
 
 /// Gracefully stop a process: SIGTERM → grace period → SIGKILL (Unix),
@@ -92,8 +91,9 @@ pub(crate) fn compute_blake3_file(path: &std::path::Path) -> crate::error::Resul
 
 /// Async variant — runs the full-file BLAKE3 read on a blocking thread.
 pub(crate) async fn compute_blake3_file_async(
-    path: std::path::PathBuf,
+    path: impl AsRef<std::path::Path>,
 ) -> crate::error::Result<String> {
+    let path = path.as_ref().to_path_buf();
     tokio::task::spawn_blocking(move || depot::compute_blake3_file(&path))
         .await
         .map_err(|e| {
@@ -176,10 +176,8 @@ fn resolve_primals_from_manifest(gate: &str) -> Vec<String> {
 }
 
 /// Detect the local platform's default Rust target triple (musl static).
-pub(crate) fn detect_target_triple() -> String {
-    cellmembrane_types::TargetArch::detect_host()
-        .triple()
-        .to_string()
+pub(crate) const fn detect_target_triple() -> &'static str {
+    cellmembrane_types::TargetArch::detect_host().triple()
 }
 
 /// Check NDK toolchain availability for Android cross-compilation.
@@ -285,7 +283,7 @@ pub async fn pipeline(
 
     let arch = detect_target_triple();
     let depot_dir = depot::resolve_depot(None)?;
-    let bin_dir = depot_dir.join("primals").join(&arch);
+    let bin_dir = depot_dir.join("primals").join(arch);
 
     for entry in results.iter().filter(|r| matches!(r.status, HarvestStatus::Built)) {
         let binary_path = bin_dir.join(&entry.binary);

@@ -340,7 +340,7 @@ fn resolve_refresh_source(override_dir: Option<&str>) -> PathBuf {
     }
     let arch = detect_target_triple();
     if let Ok(depot) = super::depot::resolve_depot(None) {
-        let depot_primals = depot.join("primals").join(&arch);
+        let depot_primals = depot.join("primals").join(arch);
         if depot_primals.is_dir() {
             return depot_primals;
         }
@@ -359,7 +359,7 @@ fn check_checksum_coherence(primal: &str, actual_hash: &str) -> Option<String> {
     let table: toml::Table = content.parse().ok()?;
 
     let arch = detect_target_triple();
-    let entry = table.get(&arch)?.as_table()?.get(primal)?.as_table()?;
+    let entry = table.get(arch)?.as_table()?.get(primal)?.as_table()?;
     let expected_hash = entry.get("blake3")?.as_str()?;
 
     if expected_hash == actual_hash {

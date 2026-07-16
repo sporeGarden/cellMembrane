@@ -52,6 +52,7 @@ impl WebhookProvider {
     /// Checks for provider-specific signature headers and returns the
     /// provider + raw signature value.
     #[must_use]
+    #[allow(dead_code)]
     pub fn detect(headers: &[(String, String)]) -> Option<(Self, String)> {
         for (name, value) in headers {
             let lower = name.to_lowercase();
@@ -79,6 +80,7 @@ impl WebhookProvider {
 
 /// Forgejo push webhook payload (subset of fields we need).
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct PushEvent {
     /// Git ref that was pushed (e.g. `refs/heads/main`).
     #[serde(rename = "ref")]
@@ -98,6 +100,7 @@ pub struct PushEvent {
 
 /// Repository info from the webhook payload.
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct RepoPayload {
     /// Repository name (e.g. `biomeOS`).
     pub name: String,
@@ -119,6 +122,7 @@ pub struct PusherPayload {
 
 /// Individual commit data from the push.
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct CommitPayload {
     /// Full commit SHA.
     pub id: String,
@@ -169,7 +173,7 @@ pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Resu
     type HmacSha256 = Hmac<Sha256>;
 
     let mut mac =
-        HmacSha256::new_from_slice(secret).map_err(|e| ShadowError::Parse(e.to_string()))?;
+        HmacSha256::new_from_slice(secret).map_err(|e| ShadowError::Config(e.to_string()))?;
     mac.update(body);
     let result = mac.finalize().into_bytes();
 
@@ -181,7 +185,7 @@ pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Resu
     if constant_time_eq(expected.as_bytes(), signature_hex.as_bytes()) {
         Ok(())
     } else {
-        Err(ShadowError::Parse("webhook signature mismatch".into()))
+        Err(ShadowError::Config("webhook signature mismatch".into()))
     }
 }
 

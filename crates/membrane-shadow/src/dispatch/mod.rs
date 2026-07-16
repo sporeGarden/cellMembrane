@@ -179,8 +179,7 @@ async fn dispatch_webhook(
     match cmd {
         "webhook.test" => {
             let body = cli::require_arg(args, 0, "json_body")?;
-            let event: crate::webhook::PushEvent = serde_json::from_str(body)
-                .map_err(|e| ShadowError::Parse(format!("invalid push event JSON: {e}")))?;
+            let event: crate::webhook::PushEvent = serde_json::from_str(body).map_err(ShadowError::Json)?;
             let provider = parse_webhook_provider(args)?;
             crate::webhook::handle_push(&event, config, provider).await
         }

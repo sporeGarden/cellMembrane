@@ -15,6 +15,8 @@
 //! cellMembrane uses Tier 1 (Clear) for all local UDS IPC, since all
 //! connections are same-gate trusted paths over Unix domain sockets.
 
+#![allow(dead_code, clippy::trivially_copy_pass_by_ref)]
+
 /// Signal tier prefix bytes.
 pub mod signal {
     /// Clear signal — local same-gate IPC where the wire is trusted.

@@ -54,36 +54,36 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::redundant_pub_crate)]
 
-pub mod bridge;
-pub mod caddy;
-pub mod cli;
+pub(crate) mod bridge;
+pub(crate) mod caddy;
+pub(crate) mod cli;
 #[cfg(feature = "cloudflare")]
-pub mod cloudflare;
+pub(crate) mod cloudflare;
 pub mod config;
-pub mod context;
+pub(crate) mod context;
 pub mod dispatch;
 pub mod error;
 pub mod forgejo;
-pub mod freshness;
+pub(crate) mod freshness;
 pub mod gate;
-pub mod gateway;
-pub mod git_ops;
-pub mod identity;
-pub mod impulse;
-pub mod jsonrpc;
-pub mod manifest;
-pub mod plasmid;
+pub(crate) mod gateway;
+pub(crate) mod git_ops;
+pub(crate) mod identity;
+pub(crate) mod impulse;
+pub(crate) mod jsonrpc;
+pub(crate) mod manifest;
+pub(crate) mod plasmid;
 #[cfg(feature = "http")]
-pub mod provision;
-pub mod relay;
-pub mod resolve;
-pub mod ribocipher;
+pub(crate) mod provision;
+pub(crate) mod relay;
+pub(crate) mod resolve;
+pub(crate) mod ribocipher;
 pub mod service;
-pub mod sovereignty_ledger;
-pub mod ssh;
-pub mod temporal;
-pub mod topology;
-pub mod webhook;
+pub(crate) mod sovereignty_ledger;
+pub(crate) mod ssh;
+pub(crate) mod temporal;
+pub(crate) mod topology;
+pub(crate) mod webhook;
 
 pub use config::ShadowConfig;
 pub use error::{Result, ShadowError, ShadowOutcome};

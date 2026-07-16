@@ -141,7 +141,7 @@ pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -
         .any(|r| matches!(r, GateRole::Http | GateRole::Gateway));
 
     if has_http_role {
-        let host = "lab.primals.eco";
+        let host = cellmembrane_types::service::LAB_DOMAIN;
         for prefix in &["/hub", "/user", "/api", "/services"] {
             routes.push(GatewayRoute {
                 host: host.into(),
@@ -210,8 +210,7 @@ pub(crate) fn load_gateway_config(args: &[&str]) -> Result<GatewayConfig> {
         |p| (*p).to_string(),
     );
 
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| ShadowError::Config(format!("cannot read gateway config at {path}: {e}")))?;
+    let content = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
 
     toml::from_str(&content)
         .map_err(|e| ShadowError::Config(format!("invalid gateway config: {e}")))

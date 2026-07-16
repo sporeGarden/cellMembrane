@@ -43,7 +43,10 @@ pub struct BuildArgs {
 pub async fn build(args: &BuildArgs) -> Result<ShadowOutcome> {
     let depot_dir = resolve_depot(args.depot_dir.as_deref())?;
     let sources = load_sources(&depot_dir)?;
-    let target = args.target.clone().unwrap_or_else(detect_target_triple);
+    let target = args
+        .target
+        .clone()
+        .unwrap_or_else(|| detect_target_triple().to_string());
 
     let source = sources.get(&args.primal).ok_or_else(|| {
         ShadowError::Config(format!("primal '{}' not in sources.toml", args.primal))

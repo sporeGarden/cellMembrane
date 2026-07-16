@@ -54,6 +54,7 @@ impl std::str::FromStr for ImpulseType {
 /// Priority levels for impulses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[allow(clippy::enum_variant_names)]
 pub enum Priority {
     /// Normal workflow coordination.
     Routine,

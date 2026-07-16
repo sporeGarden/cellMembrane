@@ -45,9 +45,9 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let gate_name = super::resolve_local_gate_identity();
     let mut probes: Vec<StatusProbe> = Vec::new();
 
-    let arch_clone = arch.clone();
+    let arch_clone = arch;
     let (depot_ok, depot_detail) =
-        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(&arch_clone))
+        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(arch_clone))
             .await
             .unwrap_or_else(|_| (false, "depot verify task panicked".into()));
     probes.push(StatusProbe {
@@ -63,16 +63,16 @@ pub async fn status() -> crate::error::Result<GateStatus> {
         detail: mesh_detail,
     });
 
-    let (procs_ok, procs_detail) = health_sweep(&arch).await;
+    let (procs_ok, procs_detail) = health_sweep(arch).await;
     probes.push(StatusProbe {
         name: "primals.alive".into(),
         ok: procs_ok,
         detail: procs_detail,
     });
 
-    let arch_for_freshness = arch.clone();
+    let arch_for_freshness = arch;
     let (fresh_ok, fresh_detail) =
-        tokio::task::spawn_blocking(move || probe_depot_freshness(&arch_for_freshness))
+        tokio::task::spawn_blocking(move || probe_depot_freshness(arch_for_freshness))
             .await
             .unwrap_or_else(|_| (false, "freshness probe panicked".into()));
     probes.push(StatusProbe {
@@ -97,7 +97,7 @@ pub async fn status() -> crate::error::Result<GateStatus> {
 
     Ok(GateStatus {
         gate_name,
-        arch,
+        arch: arch.to_string(),
         probes,
         healthy,
     })

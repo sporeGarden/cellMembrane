@@ -456,6 +456,22 @@ pub const DEFAULT_FOOTPRINT_BIND: &str = "127.0.0.1:8090";
 /// Default footPrint content port for health checks.
 pub const DEFAULT_FOOTPRINT_PORT: u16 = 8090;
 
+// ── Domain names ─────────────────────────────────────────────────────
+
+/// Default git hosting domain.
+pub const GIT_DOMAIN: &str = "git.primals.eco";
+/// Default depot hosting domain.
+pub const DEPOT_DOMAIN: &str = "depot.primals.eco";
+/// Default mesh relay domain.
+pub const MESH_DOMAIN: &str = "mesh.primals.eco";
+/// Default lab/compute domain.
+pub const LAB_DOMAIN: &str = "lab.primals.eco";
+
+/// GitHub base URL for clone operations.
+pub const GITHUB_HOST: &str = "github.com";
+/// GitHub API base URL.
+pub const GITHUB_API: &str = "https://api.github.com";
+
 // ── Timestamp Formats ────────────────────────────────────────────────
 
 /// ISO 8601 UTC timestamp format — `2026-07-15T14:30:00Z`.

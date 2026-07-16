@@ -13,7 +13,7 @@
 
 pub mod dns;
 
-pub use dns::{DnsRecord, DnsRecordParams, dns_create, dns_delete, dns_list, dns_update};
+pub use dns::{DnsRecordParams, dns_create, dns_delete, dns_list, dns_update};
 
 use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};
@@ -403,6 +403,7 @@ fn extract_multi_flag<'a>(args: &[&'a str], flag: &str) -> Vec<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::dns::DnsRecord;
 
     #[test]
     fn extract_flag_finds_value() {

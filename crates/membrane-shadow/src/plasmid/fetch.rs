@@ -140,7 +140,7 @@ pub struct FetchSummary {
 pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<ShadowOutcome> {
     let arch = detect_target_triple();
     let dest_root = resolve_dest(args.dest.as_deref());
-    let bin_dir = dest_root.join("primals").join(&arch);
+    let bin_dir = dest_root.join("primals").join(arch);
     let tag = resolve_tag(args.source, args.release_tag.as_deref(), config).await?;
 
     let gate = crate::gate::resolve_local_gate_identity();
@@ -151,7 +151,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
     );
 
     if args.dry_run {
-        return Ok(format_dry_run(&primals, &arch, &tag, &bin_dir, args.source));
+        return Ok(format_dry_run(&primals, arch, &tag, &bin_dir, args.source));
     }
 
     tokio::fs::create_dir_all(&bin_dir)
@@ -167,13 +167,13 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         .await
         .unwrap_or_default();
     if checksums.is_empty() && args.source == FetchSource::Wan {
-        checksums = checksum::fetch_wan_checksums(&arch).await;
+        checksums = checksum::fetch_wan_checksums(arch).await;
         if !checksums.is_empty() {
             let dr = dest_root.clone();
-            let a = arch.clone();
+            let a = arch;
             let cs = checksums.clone();
             if let Err(e) =
-                tokio::task::spawn_blocking(move || checksum::persist_checksums(&dr, &a, &cs)).await
+                tokio::task::spawn_blocking(move || checksum::persist_checksums(&dr, a, &cs)).await
             {
                 tracing::warn!(error = %e, "persist_checksums task failed");
             }
@@ -211,7 +211,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 
     // ── Phase 3: download binaries (checksums now trusted) ───────────
     let mut results =
-        fetch_primals(&primals, &bin_dir, &arch, &tag, &checksums, args, config).await;
+        fetch_primals(&primals, &bin_dir, arch, &tag, &checksums, args, config).await;
 
     if should_fetch_gpu(&primals) {
         let gnu_results = fetch_gpu_primals(&primals, &dest_root, &tag, args, config).await;
@@ -220,7 +220,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
 
     Ok(format_fetch_outcome(
         args.source,
-        &arch,
+        arch,
         &tag,
         &bin_dir,
         &results,
@@ -314,7 +314,10 @@ async fn resolve_tag(
                 cellmembrane_types::service::ENV_GITHUB_ORG,
                 cellmembrane_types::service::DEFAULT_GITHUB_ORG,
             );
-            let url = format!("https://api.github.com/repos/{org}/plasmidBin/releases/latest");
+            let url = format!(
+                "{}/repos/{org}/plasmidBin/releases/latest",
+                cellmembrane_types::service::GITHUB_API
+            );
             fetch_release_tag(&url).await
         }
         FetchSource::Forgejo => {
@@ -337,11 +340,9 @@ async fn fetch_release_tag(url: &str) -> Result<String> {
         .get(url)
         .header("User-Agent", "membrane-shadow/0.1")
         .send()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("release API request failed: {e}")))?
+        .await?
         .json()
-        .await
-        .map_err(|e| ShadowError::Parse(format!("release API parse failed: {e}")))?;
+        .await?;
     Ok(resp.tag_name)
 }
 
@@ -353,7 +354,7 @@ async fn resolve_tag(
 ) -> Result<String> {
     explicit
         .map(ToString::to_string)
-        .ok_or_else(|| ShadowError::Parse("cannot resolve latest tag without http feature".into()))
+        .ok_or_else(|| ShadowError::Config("cannot resolve latest tag without http feature".into()))
 }
 
 use super::checksum;
@@ -434,7 +435,7 @@ async fn fetch_primals(
 
         if let Some(expected) = checksums.get(*primal) {
             let verified =
-                checksum::verify_blake3_async(local_path.clone(), expected.clone()).await;
+                checksum::verify_blake3_async(&local_path, expected).await;
             if !verified {
                 tracing::warn!(
                     primal = %primal,

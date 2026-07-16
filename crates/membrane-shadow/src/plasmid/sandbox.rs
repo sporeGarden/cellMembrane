@@ -342,7 +342,7 @@ fn resolve_dependency_binary_path(binary: &str) -> crate::Result<PathBuf> {
     // Second: check local depot
     if let Ok(depot) = crate::plasmid::depot::resolve_depot(None) {
         let arch = crate::plasmid::detect_target_triple();
-        let depot_bin = depot.join("primals").join(&arch).join(binary);
+        let depot_bin = depot.join("primals").join(arch).join(binary);
         if depot_bin.exists() {
             return Ok(depot_bin);
         }

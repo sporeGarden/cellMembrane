@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Wave lifecycle tracking — evolves raw `meta.wave` u32 into a typed state machine.
+//! Wave lifecycle tracking — reserved infrastructure for typed wave state.
+//!
+//! Evolves raw `meta.wave` u32 into a typed state machine with exit criteria,
+//! open/close timestamps, and rootPulse session linkage. Not yet wired into
+//! cascade or freshness flows — kept for future wave lifecycle integration.
+
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 

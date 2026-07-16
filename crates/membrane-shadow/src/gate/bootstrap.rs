@@ -95,9 +95,9 @@ pub async fn bootstrap(
 
     phases.push(timed_phase("depot.fetch", fetch_phase(config, transport, dry_run)).await);
 
-    let verify_arch = arch.clone();
+    let verify_arch = arch;
     let verify_result =
-        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(&verify_arch))
+        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(verify_arch))
             .await
             .unwrap_or_else(|_| (false, "spawn_blocking failed".into()));
     phases.push(BootstrapPhase {
@@ -113,27 +113,27 @@ pub async fn bootstrap(
     phases.push(
         timed_phase(
             "checksum.wan",
-            super::verify::verify_wan_checksums(&arch, dry_run),
+            super::verify::verify_wan_checksums(arch, dry_run),
         )
         .await,
     );
 
     phases.push(timed_phase("sign.verify", sign_verify_phase(dry_run)).await);
 
-    phases.push(timed_phase("sandbox.validate", sandbox_phase(&arch, dry_run)).await);
+    phases.push(timed_phase("sandbox.validate", sandbox_phase(arch, dry_run)).await);
 
-    let install_arch = arch.clone();
+    let install_arch = arch;
     phases.push(
         blocking_phase("install.link", move || {
-            install_phase(&install_arch, dry_run)
+            install_phase(install_arch, dry_run)
         })
         .await,
     );
 
-    let nucleus_arch = arch.clone();
+    let nucleus_arch = arch;
     phases.push(
         blocking_phase("nucleus.start", move || {
-            super::nucleus::nucleus_phase(&nucleus_arch, dry_run)
+            super::nucleus::nucleus_phase(nucleus_arch, dry_run)
         })
         .await,
     );
@@ -144,11 +144,11 @@ pub async fn bootstrap(
     phases.push(
         timed_phase(
             "mesh.configure",
-            super::mesh::mesh_phase(gate_name, &arch, dry_run),
+            super::mesh::mesh_phase(gate_name, arch, dry_run),
         )
         .await,
     );
-    phases.push(timed_phase("health.sweep", health_phase(&arch, dry_run)).await);
+    phases.push(timed_phase("health.sweep", health_phase(arch, dry_run)).await);
 
     if mobility.needs_reconnect_hook() {
         let mob_gate = gate_name.to_string();
@@ -160,17 +160,17 @@ pub async fn bootstrap(
     let all_pass = phases.iter().all(|p| p.ok);
 
     let emit_gate = gate_name.to_string();
-    let emit_arch = arch.clone();
+    let emit_arch = arch;
     phases.push(
         blocking_phase("deployment.emit", move || {
-            emit_deployment_toml(&emit_gate, &emit_arch, mobility, dry_run, all_pass)
+            emit_deployment_toml(&emit_gate, emit_arch, mobility, dry_run, all_pass)
         })
         .await,
     );
 
     Ok(BootstrapResult {
         gate_name: gate_name.to_string(),
-        arch,
+        arch: arch.to_string(),
         phases,
         all_pass,
     })

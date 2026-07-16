@@ -12,7 +12,7 @@
 //! - `check_installed_freshness()` — compares installed binary provenance against source.
 
 use crate::error::{Result, ShadowError};
-pub use crate::sovereignty_ledger::{SovereigntyCheck, rootpulse_commit, sovereignty_verify};
+pub use crate::sovereignty_ledger::{rootpulse_commit, sovereignty_verify};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -250,109 +250,6 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
     crate::atomic_write_async(&freshness_path, content.as_bytes())
         .await
         .map_err(ShadowError::Io)?;
-
-    Ok(())
-}
-
-// ── Legacy Compatibility ─────────────────────────────────────────────
-
-/// DEPRECATED: Publish `freshness.toml` directly.
-///
-/// Retained for backward compat during migration. New code should use
-/// `publish_gate_heads()` + `unify_freshness()`.
-pub async fn publish_freshness_toml(
-    root: &Path,
-    manifest: &crate::manifest::EcosystemManifest,
-    repos: &[(&str, &crate::manifest::RepoEntry)],
-) -> Result<()> {
-    let freshness_path = root
-        .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
-        .join(cellmembrane_types::service::FRESHNESS_FILE);
-
-    let mut heads = tokio::fs::read_to_string(&freshness_path)
-        .await
-        .ok()
-        .and_then(|c| toml::from_str::<FreshnessFile>(&c).ok())
-        .map_or_else(BTreeMap::new, |f| f.heads);
-
-    let wh_local = cellmembrane_types::service::INFRA_WATERING_HOLE;
-    for (name, entry) in repos {
-        if entry.local_path == wh_local || entry.local_path.ends_with("/wateringHole") {
-            continue;
-        }
-        let repo_dir = root.join(&entry.local_path);
-        if repo_dir.join(".git").exists() {
-            if let Ok(tree) = git_rev_parse_tree(&repo_dir).await {
-                heads.insert((*name).to_string(), tree);
-            }
-        }
-    }
-
-    let file = FreshnessFile {
-        wave: WaveSection {
-            id: manifest.meta.wave,
-            date: chrono_today(),
-            ssot: "specs/WATERFALL_TEMPORAL_SYNC.md".into(),
-            notes: "Auto-published by membrane temporal.cascade --publish-freshness".into(),
-            publisher: "membrane".into(),
-            posture: String::new(),
-        },
-        heads,
-    };
-
-    let body = toml::to_string_pretty(&file).map_err(ShadowError::Serialize)?;
-    let content = format!("{FRESHNESS_HEADER}\n{body}");
-    crate::atomic_write_async(&freshness_path, content.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
-
-    // Also write per-gate heads (dual-write during migration).
-    publish_gate_heads(root, repos).await?;
-
-    Ok(())
-}
-
-/// DEPRECATED: Auto-commit freshness.toml.
-///
-/// Now dual-writes: commits both `freshness.toml` (legacy) and `heads/<gate>.toml` (new).
-/// Once all consumers migrate, this becomes just `auto_commit_gate_heads`.
-pub async fn auto_commit_freshness(
-    root: &Path,
-    manifest: &crate::manifest::EcosystemManifest,
-    repos: &[(&str, &crate::manifest::RepoEntry)],
-) -> Result<()> {
-    let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
-    if !wh_dir.join(".git").exists() {
-        return Err(ShadowError::Config(
-            "wateringHole not a git repo — cannot auto-commit freshness".into(),
-        ));
-    }
-
-    let gate = resolve_gate_name(root).await;
-
-    pull_ff_only(&wh_dir).await;
-
-    publish_freshness_toml(root, manifest, repos).await?;
-
-    let heads_file = format!("heads/{gate}.toml");
-    if !crate::git_ops::git_success(&wh_dir, &["add", cellmembrane_types::service::FRESHNESS_FILE, &heads_file]).await {
-        return Ok(());
-    }
-
-    if crate::git_ops::git_success(&wh_dir, &["diff", "--cached", "--quiet"]).await {
-        return Ok(());
-    }
-
-    let msg = format!("freshness: auto-publish by {gate}");
-    crate::git_ops::run_git(&wh_dir, &["commit", "-m", &msg]).await?;
-
-    let push_result = crate::git_ops::push_all_remotes(&wh_dir).await;
-    if !push_result.failed.is_empty() {
-        warn!(
-            failed_remotes = %push_result.failed.join(", "),
-            "freshness push failed — will retry next cycle"
-        );
-    }
 
     Ok(())
 }

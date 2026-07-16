@@ -25,6 +25,7 @@ static LAST_FETCH_EPOCH: AtomicU64 = AtomicU64::new(0);
 
 /// Payload from a `depot.updated` mesh notification.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DepotUpdatedNotification {
     /// Names of primals that were rebuilt.
     pub primals_updated: Vec<String>,
@@ -34,8 +35,10 @@ pub struct DepotUpdatedNotification {
     pub builder: String,
 }
 
+#[allow(dead_code)]
 impl DepotUpdatedNotification {
     /// Parse from a `mesh.subscribe` params payload.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn from_json(payload: &serde_json::Value) -> Option<Self> {
         let primals = payload
             .get("primals_updated")

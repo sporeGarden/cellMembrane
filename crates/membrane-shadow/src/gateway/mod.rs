@@ -220,7 +220,7 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
     let arch = crate::plasmid::detect_target_triple();
 
     let depot_dir = crate::gate::resolve_plasmidbin_dir();
-    let bin_dir = depot_dir.join("primals").join(&arch);
+    let bin_dir = depot_dir.join("primals").join(arch);
 
     let mut checks: Vec<DeployCheck> = Vec::new();
 
@@ -405,7 +405,7 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
     let arch = crate::plasmid::detect_target_triple();
 
     let depot_dir = crate::gate::resolve_plasmidbin_dir();
-    let bin_dir = depot_dir.join("primals").join(&arch);
+    let bin_dir = depot_dir.join("primals").join(arch);
 
     let mut checks: Vec<DeployCheck> = Vec::new();
 

@@ -142,7 +142,7 @@ pub(super) async fn run_sandbox(
         },
     )
     .join("primals")
-    .join(&arch)
+    .join(arch)
     .join(primal_lower);
 
     if !depot_binary.exists() {

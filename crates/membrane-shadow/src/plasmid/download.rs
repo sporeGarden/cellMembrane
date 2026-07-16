@@ -21,8 +21,10 @@ pub(super) async fn download_asset(
                 cellmembrane_types::service::ENV_GITHUB_ORG,
                 cellmembrane_types::service::DEFAULT_GITHUB_ORG,
             );
-            let url =
-                format!("https://github.com/{org}/plasmidBin/releases/download/{tag}/{asset}");
+            let url = format!(
+                "https://{}/{org}/plasmidBin/releases/download/{tag}/{asset}",
+                cellmembrane_types::service::GITHUB_HOST
+            );
             download_via_http(&url, dest).await
         }
         FetchSource::Forgejo => {

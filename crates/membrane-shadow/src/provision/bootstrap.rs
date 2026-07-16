@@ -97,7 +97,7 @@ async fn setup_directories(ip: &str) -> Result<String> {
 async fn deploy_binaries(ip: &str, gate_name: &str) -> Result<String> {
     let depot_dir = crate::plasmid::depot::resolve_depot(None)?;
     let arch = crate::plasmid::detect_target_triple();
-    let bin_dir = depot_dir.join("primals").join(&arch);
+    let bin_dir = depot_dir.join("primals").join(arch);
 
     if !bin_dir.exists() {
         return Err(ShadowError::Config(format!(

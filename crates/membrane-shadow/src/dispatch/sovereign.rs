@@ -162,7 +162,7 @@ async fn run_sandbox_phase(
 ) -> Result<Option<ShadowOutcome>> {
     let arch = crate::plasmid::detect_target_triple();
     let depot_dir = crate::plasmid::depot::resolve_depot(None)?;
-    let binary_path = depot_dir.join("primals").join(&arch).join(primal_lower);
+    let binary_path = depot_dir.join("primals").join(arch).join(primal_lower);
 
     if !binary_path.exists() {
         return Ok(None);

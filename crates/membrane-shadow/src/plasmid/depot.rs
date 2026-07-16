@@ -407,7 +407,7 @@ pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> 
     let sources = load_sources(depot_dir)?;
     let provenance = load_provenance(depot_dir);
     let target = detect_target_triple();
-    let staging_dir = depot_dir.join("primals").join(&target);
+    let staging_dir = depot_dir.join("primals").join(target);
 
     let registry = super::nucleus_primals();
     let mut entries = Vec::with_capacity(registry.len());
@@ -516,7 +516,7 @@ mod tests {
         .unwrap();
 
         let target = detect_target_triple();
-        let staging = tmp.join("primals").join(&target);
+        let staging = tmp.join("primals").join(target);
         std::fs::create_dir_all(&staging).unwrap();
         std::fs::write(staging.join("beardog"), b"binary").unwrap();
 

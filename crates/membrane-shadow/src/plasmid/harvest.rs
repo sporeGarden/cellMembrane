@@ -133,13 +133,12 @@ fn targets_for_primal(cli_target: Option<&str>, source: &SourceEntry) -> Vec<Str
     if let Some(t) = cli_target {
         return vec![t.to_string()];
     }
-    let mut targets = vec![detect_target_triple()];
+    let host = detect_target_triple().to_string();
+    let mut targets = vec![host];
     if source.gpu && cfg!(target_arch = "x86_64") {
-        let gnu = cellmembrane_types::TargetArch::X86_64Gnu
-            .triple()
-            .to_string();
-        if !targets.contains(&gnu) {
-            targets.push(gnu);
+        let gnu = cellmembrane_types::TargetArch::X86_64Gnu.triple();
+        if !targets.iter().any(|t| t == gnu) {
+            targets.push(gnu.to_string());
         }
     }
     targets

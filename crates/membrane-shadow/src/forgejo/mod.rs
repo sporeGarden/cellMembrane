@@ -311,7 +311,7 @@ pub async fn token_list(config: &ShadowConfig) -> Result<Vec<TokenInfo>> {
             let id = parts[0]
                 .trim()
                 .parse()
-                .map_err(|e| ShadowError::Parse(format!("bad token id {:?}: {e}", parts[0])))?;
+                .map_err(|e| ShadowError::Ssh(format!("bad token id {:?}: {e}", parts[0])))?;
             tokens.push(TokenInfo {
                 id,
                 name: parts[1].trim().to_string(),
@@ -345,7 +345,7 @@ pub async fn token_create(config: &ShadowConfig, name: &str, scopes: &str) -> Re
     let output = ssh::exec(config, &cmd).await?;
     let token = output.trim().to_string();
     if token.is_empty() {
-        Err(ShadowError::Parse("empty token returned".into()))
+        Err(ShadowError::Ssh("empty token returned".into()))
     } else {
         Ok(token)
     }
@@ -371,7 +371,7 @@ pub async fn token_revoke(config: &ShadowConfig, token_id: u64) -> Result<()> {
     if remaining.trim() == "0" {
         Ok(())
     } else {
-        Err(ShadowError::Parse(format!(
+        Err(ShadowError::Ssh(format!(
             "token {token_id} still exists after delete"
         )))
     }
@@ -388,7 +388,7 @@ pub async fn version(config: &ShadowConfig) -> Result<String> {
     body["version"]
         .as_str()
         .map(String::from)
-        .ok_or_else(|| ShadowError::Parse("missing 'version' field in response".into()))
+        .ok_or_else(|| ShadowError::Config("missing 'version' field in response".into()))
 }
 
 #[cfg(test)]

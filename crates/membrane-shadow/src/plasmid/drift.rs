@@ -44,7 +44,11 @@ async fn fetch_head_commit(repo: &str, _depot_dir: &Path) -> Option<String> {
     );
 
     let forgejo = try_ls_remote_head(&format!("ssh://git@{forgejo_host}/{repo}.git")).await;
-    let github = try_ls_remote_head(&format!("https://github.com/{repo}.git")).await;
+    let github = try_ls_remote_head(&format!(
+        "https://{}/{repo}.git",
+        cellmembrane_types::service::GITHUB_HOST
+    ))
+    .await;
 
     forgejo.or(github)
 }
@@ -74,7 +78,11 @@ pub(super) async fn clone_source(
         cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR,
     );
     let forgejo_url = format!("ssh://git@{forgejo_host}/{}.git", source.repo);
-    let github_url = format!("https://github.com/{}.git", source.repo);
+    let github_url = format!(
+        "https://{}/{}.git",
+        cellmembrane_types::service::GITHUB_HOST,
+        source.repo
+    );
 
     if toolchain::try_clone(&forgejo_url, clone_dir).await {
         return Ok(());
@@ -107,7 +115,11 @@ pub(super) async fn check_clone_freshness(
         return Some("could not determine local HEAD".into());
     }
 
-    let github_url = format!("https://github.com/{}.git", source.repo);
+    let github_url = format!(
+        "https://{}/{}.git",
+        cellmembrane_types::service::GITHUB_HOST,
+        source.repo
+    );
     let output =
         crate::git_ops::git_output_opt(clone_dir, &["ls-remote", &github_url, "HEAD"]).await?;
 

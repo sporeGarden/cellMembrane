@@ -229,19 +229,6 @@ async fn count_divergent_remotes(
     count
 }
 
-/// Execute temporal sync on a single repo: pull from leader, push to followers.
-///
-/// Shadow for: `waterFall temporal.sync`
-///
-/// `push_target`: `"all"` pushes to every follower remote (legacy),
-/// `"forgejo"` pushes only to the forgejo remote (VPS mediator model).
-///
-/// Returns `Err` only on infrastructure failures. Divergence is reported
-/// as an `Ok` result with `ok: false` — the DAG is never force-mutated.
-pub async fn sync(workspace_root: &Path, repo_path: &str) -> Result<TemporalSyncResult> {
-    sync_with_target(workspace_root, repo_path, PushTarget::All).await
-}
-
 /// Temporal sync respecting the manifest's `push_target` setting.
 pub async fn sync_with_target(
     workspace_root: &Path,
@@ -302,31 +289,6 @@ pub async fn sync_with_policy(
             pushed_to: vec![],
         }),
     }
-}
-
-/// Check temporal position for multiple repos, returning an aggregate report.
-pub async fn check_all(workspace_root: &Path, repo_paths: &[&str]) -> Result<TemporalReport> {
-    let mut report = TemporalReport {
-        total: u32::try_from(repo_paths.len()).unwrap_or(u32::MAX),
-        parity: 0,
-        converged: 0,
-        diverged: 0,
-        missing: 0,
-        repos: Vec::with_capacity(repo_paths.len()),
-    };
-
-    for path in repo_paths {
-        let matrix = check(workspace_root, path).await?;
-        match matrix.classification {
-            SyncClassification::Parity => report.parity += 1,
-            SyncClassification::Converge => report.converged += 1,
-            SyncClassification::Diverge => report.diverged += 1,
-            SyncClassification::Missing | SyncClassification::NoRemote => report.missing += 1,
-        }
-        report.repos.push(matrix);
-    }
-
-    Ok(report)
 }
 
 /// Resolve workspace root. Delegates to [`crate::resolve_workspace_root`].

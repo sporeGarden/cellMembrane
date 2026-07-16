@@ -298,9 +298,9 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
     if let Some(topo_data) = topo {
         if let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane) {
             let role_vhosts: &[(&str, &str, u16)] = &[
-                ("forgejo", "git.primals.eco", cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT),
-                ("depot", "depot.primals.eco", cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT),
-                ("relay", "mesh.primal.eco", cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
+                ("forgejo", cellmembrane_types::service::GIT_DOMAIN, cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT),
+                ("depot", cellmembrane_types::service::DEPOT_DOMAIN, cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT),
+                ("relay", cellmembrane_types::service::MESH_DOMAIN, cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
                 ("footprint", cellmembrane_types::service::FOOTPRINT_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
                 ("tideglass", cellmembrane_types::service::TIDEGLASS_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
             ];

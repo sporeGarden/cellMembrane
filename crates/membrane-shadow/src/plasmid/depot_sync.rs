@@ -108,7 +108,7 @@ pub async fn depot_sync(
         missing,
         depot_dir,
         install_dir,
-        arch,
+        arch: arch.to_string(),
         checksums_synced,
     }))
 }
@@ -233,7 +233,7 @@ async fn push_single_binary(
     let name_str = name.to_string_lossy();
     let local_path = bin_entry.path();
 
-    let local_hash = match super::compute_blake3_file_async(local_path.clone()).await {
+    let local_hash = match super::compute_blake3_file_async(&local_path).await {
         Ok(h) => h,
         Err(e) => {
             tracing::warn!(binary = %name_str, error = %e, "push: cannot hash local binary");

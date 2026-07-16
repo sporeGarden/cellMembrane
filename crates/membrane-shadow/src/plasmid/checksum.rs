@@ -6,7 +6,7 @@
 //! and local checksum persistence.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 
@@ -25,10 +25,12 @@ pub(super) fn verify_blake3(path: &Path, expected: &str) -> bool {
     compute_blake3(path).is_ok_and(|actual| actual == expected)
 }
 
-pub(super) async fn verify_blake3_async(path: PathBuf, expected: String) -> bool {
+pub(super) async fn verify_blake3_async(path: impl AsRef<Path>, expected: &str) -> bool {
     if expected.is_empty() {
         return false;
     }
+    let path = path.as_ref().to_path_buf();
+    let expected = expected.to_string();
     tokio::task::spawn_blocking(move || {
         compute_blake3(&path).is_ok_and(|actual| actual == expected)
     })
@@ -121,7 +123,7 @@ pub(super) fn load_checksums(bin_dir: &Path, tag: &str) -> HashMap<String, Strin
     };
 
     let arch = detect_target_triple();
-    let arch_result = parse_checksums_toml(&contents, &arch);
+    let arch_result = parse_checksums_toml(&contents, arch);
     if !arch_result.is_empty() {
         return arch_result;
     }
