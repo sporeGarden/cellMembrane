@@ -94,13 +94,13 @@ pub(crate) fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<Tra
         return resolve_local_uds(ctx, svc);
     }
 
-    if let Some(ip) = &profile.wg_ip {
-        if let Some(port) = svc.port {
-            return Some(TransportEndpoint::Tcp {
-                host: ip.clone(),
-                port,
-            });
-        }
+    if let Some(ip) = &profile.wg_ip
+        && let Some(port) = svc.port
+    {
+        return Some(TransportEndpoint::Tcp {
+            host: ip.clone(),
+            port,
+        });
     }
 
     Some(resolve_mesh_relay(gate_name, capability))

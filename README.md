@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 143b) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 145a) |
 
 ---
 
@@ -60,16 +60,17 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 143b): ~9k lines types, ~35k lines shadow. All manifest fields
+Current state (Wave 145a): ~9k lines types, ~35k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-Deep debt sweep (140a–143b): visibility tightened, allocation hot paths optimized,
+Deep debt sweep (140a–145a): visibility tightened, allocation hot paths optimized,
 error taxonomy reclassified, domain constants centralized, CAC tree-parity checks,
 CSPRNG unified via `getrandom`, service filter registry-derived, `ProbeResult` typed
-gate probes, `build_err` consolidated, zero f64 casts in display formatting.
+gate probes, `build_err` consolidated, zero f64 casts in display formatting,
+nested `if let` → let-chains (Rust 2024 edition).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
@@ -162,7 +163,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 143b are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 145a are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |

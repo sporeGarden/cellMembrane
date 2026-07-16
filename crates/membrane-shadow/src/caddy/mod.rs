@@ -295,32 +295,32 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
         )));
     }
 
-    if let Some(topo_data) = topo {
-        if let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane) {
-            let role_vhosts: &[(&str, &str, u16)] = &[
-                ("forgejo", cellmembrane_types::service::GIT_DOMAIN, cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT),
-                ("depot", cellmembrane_types::service::DEPOT_DOMAIN, cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT),
-                ("relay", cellmembrane_types::service::MESH_DOMAIN, cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
-                ("footprint", cellmembrane_types::service::FOOTPRINT_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
-                ("tideglass", cellmembrane_types::service::TIDEGLASS_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
-            ];
+    if let Some(topo_data) = topo
+        && let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane)
+    {
+        let role_vhosts: &[(&str, &str, u16)] = &[
+            ("forgejo", cellmembrane_types::service::GIT_DOMAIN, cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT),
+            ("depot", cellmembrane_types::service::DEPOT_DOMAIN, cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT),
+            ("relay", cellmembrane_types::service::MESH_DOMAIN, cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
+            ("footprint", cellmembrane_types::service::FOOTPRINT_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
+            ("tideglass", cellmembrane_types::service::TIDEGLASS_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
+        ];
 
-            for &(role, domain, port) in role_vhosts {
-                let gates = m.gates_for_role(role);
-                if let Some((gate_name_ref, profile)) = gates.first() {
-                    let ip = profile
-                        .wg_ip
-                        .as_deref()
-                        .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate_name_ref))
-                        .unwrap_or(inner_ip.as_str());
-                    vhosts.push(CaddyVhost {
-                        domain: domain.into(),
-                        upstream: format!("{ip}:{port}"),
-                        path: None,
-                        tls: true,
-                        extra_directives: vec![],
-                    });
-                }
+        for &(role, domain, port) in role_vhosts {
+            let gates = m.gates_for_role(role);
+            if let Some((gate_name_ref, profile)) = gates.first() {
+                let ip = profile
+                    .wg_ip
+                    .as_deref()
+                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate_name_ref))
+                    .unwrap_or(inner_ip.as_str());
+                vhosts.push(CaddyVhost {
+                    domain: domain.into(),
+                    upstream: format!("{ip}:{port}"),
+                    path: None,
+                    tls: true,
+                    extra_directives: vec![],
+                });
             }
         }
     }

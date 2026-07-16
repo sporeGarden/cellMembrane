@@ -50,11 +50,11 @@ pub async fn load_remote_canaries() -> RemoteCanaryRegistry {
 /// Save the remote canary registry to disk.
 async fn save_remote_canaries(registry: &RemoteCanaryRegistry) {
     let path = remote_canaries_path();
-    if let Some(parent) = path.parent() {
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            tracing::warn!(path = %parent.display(), error = %e, "canary registry dir create failed");
-            return;
-        }
+    if let Some(parent) = path.parent()
+        && let Err(e) = tokio::fs::create_dir_all(parent).await
+    {
+        tracing::warn!(path = %parent.display(), error = %e, "canary registry dir create failed");
+        return;
     }
     match toml::to_string_pretty(registry) {
         Ok(content) => {

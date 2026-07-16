@@ -169,20 +169,20 @@ async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, Vec<S
 
     let (mut built, mut current, mut failures) = (0u32, 0u32, 0u32);
     let mut built_primals: Vec<String> = Vec::new();
-    if let Some(data) = &outcome.data {
-        if let Some(arr) = data.as_array() {
-            for entry in arr {
-                match entry.get("status").and_then(|s| s.as_str()) {
-                    Some("Built") => {
-                        built += 1;
-                        if let Some(name) = entry.get("binary").and_then(|b| b.as_str()) {
-                            built_primals.push(name.to_string());
-                        }
+    if let Some(data) = &outcome.data
+        && let Some(arr) = data.as_array()
+    {
+        for entry in arr {
+            match entry.get("status").and_then(|s| s.as_str()) {
+                Some("Built") => {
+                    built += 1;
+                    if let Some(name) = entry.get("binary").and_then(|b| b.as_str()) {
+                        built_primals.push(name.to_string());
                     }
-                    Some("Current") => current += 1,
-                    Some("Failed") => failures += 1,
-                    _ => {}
                 }
+                Some("Current") => current += 1,
+                Some("Failed") => failures += 1,
+                _ => {}
             }
         }
     }

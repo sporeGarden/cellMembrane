@@ -1,13 +1,19 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-16 (Wave 143b)
+**Last updated:** 2026-07-16 (Wave 145a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 145a (deep debt — let-chains modernization):**
+Nested `if let` patterns → Rust 2024 let-chains across 8 files (manifest, resolve, caddy,
+health, dispatch/data, post_sync, canary, canary_remote). Eliminates unnecessary nesting.
+Ecosystem: Phase 2 Transport 14/14 COMPLETE, CAC 6/6 COMPLETE.
+1,073 tests, 0 clippy warnings.
 
 **Wave 143b (deep debt — typed probes, CSPRNG, registry filter, dead code cleanup):**
 CSPRNG: platform-split `fill_random` (urandom + BLAKE3 fallback) → unified `getrandom` crate.

@@ -147,12 +147,11 @@ impl EcosystemManifest {
     #[must_use]
     #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn build_authorities(&self) -> Vec<String> {
-        if let Some(topo) = &self.topology {
-            if let Some(roles) = &topo.roles {
-                if !roles.build_authorities.is_empty() {
-                    return roles.build_authorities.clone();
-                }
-            }
+        if let Some(topo) = &self.topology
+            && let Some(roles) = &topo.roles
+            && !roles.build_authorities.is_empty()
+        {
+            return roles.build_authorities.clone();
         }
         self.gates
             .iter()

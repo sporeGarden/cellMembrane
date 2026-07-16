@@ -271,19 +271,19 @@ fn enrich_with_physical_topology(
     }
     if let Some(ref seg_id) = physical.segment_id {
         lines.push(format!("  segment:     {seg_id}"));
-        if let Some(ref seg) = physical.segment {
-            if let Some(subnet) = &seg.subnet {
-                lines.push(format!("  subnet:      {subnet}"));
-            }
+        if let Some(ref seg) = physical.segment
+            && let Some(subnet) = &seg.subnet
+        {
+            lines.push(format!("  subnet:      {subnet}"));
         }
     }
     for issue in &physical.issues {
         lines.push(format!("  ⚠ {issue}"));
     }
-    if let Ok(val) = serde_json::to_value(&physical) {
-        if let Some(obj) = data.as_object_mut() {
-            obj.insert("physical".into(), val);
-        }
+    if let Ok(val) = serde_json::to_value(&physical)
+        && let Some(obj) = data.as_object_mut()
+    {
+        obj.insert("physical".into(), val);
     }
 }
 
@@ -315,30 +315,29 @@ async fn topology_zones() -> crate::Result<ShadowOutcome> {
 
         let mut entry = serde_json::json!({ "gates": gates });
 
-        if let Some(ref map) = physical_map {
-            let physical = map.zones.iter().find(|(id, pzone)| {
+        if let Some(ref map) = physical_map
+            && let Some((id, pzone)) = map.zones.iter().find(|(id, pzone)| {
                 *id == zone_label || pzone.gates.iter().any(|g| gates.contains(g))
-            });
-            if let Some((id, pzone)) = physical {
-                use std::fmt::Write;
-                let _ = write!(
-                    line,
-                    "\n    hub: {} @ {} ({}G max, {} physical gates)",
-                    pzone.hub_device,
-                    pzone.site,
-                    pzone.max_speed_mbps / 1000,
-                    pzone.gates.len()
+            })
+        {
+            use std::fmt::Write;
+            let _ = write!(
+                line,
+                "\n    hub: {} @ {} ({}G max, {} physical gates)",
+                pzone.hub_device,
+                pzone.site,
+                pzone.max_speed_mbps / 1000,
+                pzone.gates.len()
+            );
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert("physical_zone_id".into(), serde_json::json!(id));
+                obj.insert("hub_device".into(), serde_json::json!(&pzone.hub_device));
+                obj.insert("site".into(), serde_json::json!(&pzone.site));
+                obj.insert(
+                    "max_speed_mbps".into(),
+                    serde_json::json!(pzone.max_speed_mbps),
                 );
-                if let Some(obj) = entry.as_object_mut() {
-                    obj.insert("physical_zone_id".into(), serde_json::json!(id));
-                    obj.insert("hub_device".into(), serde_json::json!(&pzone.hub_device));
-                    obj.insert("site".into(), serde_json::json!(&pzone.site));
-                    obj.insert(
-                        "max_speed_mbps".into(),
-                        serde_json::json!(pzone.max_speed_mbps),
-                    );
-                    obj.insert("physical_gates".into(), serde_json::json!(&pzone.gates));
-                }
+                obj.insert("physical_gates".into(), serde_json::json!(&pzone.gates));
             }
         }
 

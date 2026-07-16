@@ -223,17 +223,17 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
             continue;
         }
 
-        if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response) {
-                if json.get("result").is_some() {
-                    return true;
-                }
-                if json.get("error").is_some() {
-                    tracing::debug!(
-                        primal = %primal,
-                        "health: JSON-RPC responded with error — primal running but unhealthy"
-                    );
-                }
+        if let Ok(response) = uds_jsonrpc_call(socket_path, request).await
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&response)
+        {
+            if json.get("result").is_some() {
+                return true;
+            }
+            if json.get("error").is_some() {
+                tracing::debug!(
+                    primal = %primal,
+                    "health: JSON-RPC responded with error — primal running but unhealthy"
+                );
             }
         }
     }
@@ -284,12 +284,11 @@ fn probe_depot_freshness(arch: &str) -> super::ProbeResult {
         let path = bin_dir.join(primal);
         if path.is_file() {
             present += 1;
-            if let Ok(meta) = std::fs::metadata(&path) {
-                if let Ok(modified) = meta.modified() {
-                    if let Ok(age) = now.duration_since(modified) {
-                        oldest_age_secs = oldest_age_secs.max(age.as_secs());
-                    }
-                }
+            if let Ok(meta) = std::fs::metadata(&path)
+                && let Ok(modified) = meta.modified()
+                && let Ok(age) = now.duration_since(modified)
+            {
+                oldest_age_secs = oldest_age_secs.max(age.as_secs());
             }
         } else {
             missing += 1;
