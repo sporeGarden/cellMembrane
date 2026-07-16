@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 140a) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 142b) |
 
 ---
 
@@ -55,17 +55,19 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1074 tests — pedantic clippy clean
+cargo test                  # 1072 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 140a): ~8k lines types, ~33k lines shadow. All manifest fields
+Current state (Wave 142b): ~9k lines types, ~35k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
+Deep debt sweep (140a–142b): visibility tightened, allocation hot paths optimized,
+error taxonomy reclassified, domain constants centralized, CAC tree-parity checks.
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
@@ -158,7 +160,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 140a are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 142b are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -169,7 +171,7 @@ through Wave 140a are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 5-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1074 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1072 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()` | DONE |
@@ -346,11 +348,11 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,074 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,072 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1074 tests)
+cargo test                  # Full suite (1072 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

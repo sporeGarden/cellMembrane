@@ -1,8 +1,20 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-15 (Wave 140a)
+**Last updated:** 2026-07-16 (Wave 142b)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped
+**Wave 142b update (deep debt sweep — visibility, allocation, error taxonomy, domain centralization, CAC tree-parity):**
+Deep debt sweep (Waves 140a–142b). Visibility: 20 modules `pub`→`pub(crate)`, dead code
+removed (5 dead fns, 1 dead struct), future infra suppressed (ribocipher, manifest/wave).
+Allocation: `detect_target_triple()`→`const fn &'static str` (eliminates ~25 String allocs),
+`compute_blake3_file_async(impl AsRef<Path>)` (eliminates PathBuf clones),
+`verify_blake3_async(impl AsRef<Path>, &str)`. Error taxonomy: 8 `ShadowError::Parse`
+reclassified (webhook→Config, push-event JSON→Json, forgejo SSH→Ssh, task panic→Io,
+HTTP→Http, gateway IO→Io). Domain constants: `GIT_DOMAIN`, `DEPOT_DOMAIN`, `MESH_DOMAIN`,
+`LAB_DOMAIN`, `GITHUB_HOST`, `GITHUB_API` centralized; `mesh.primal.eco` typo fixed. CAC
+P1: `sync_diverge` checks local-vs-remote tree parity before impulse/policy (Newton-Leibniz).
+`try_pull_converge` checks trees_match after rebase conflict. Caddy blocks for footPrint +
+tideGlass wired from manifest roles. 1,072 tests.
 **Wave 140a update (deep debt sweep — constants, types, dependency evolution, OS Atheism Phase 2):**
 Deep debt sprint (Waves 137b–140a). Constants & dedup: `ISO8601_UTC`/`ISO8601_TZ` extracted (18
 format strings), `DEFAULT_HTTPS_PORT`/`DEFAULT_SHADOW_PORT` extracted. Dead code removed
