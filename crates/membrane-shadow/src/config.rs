@@ -9,7 +9,7 @@
 
 use crate::error::{Result, ShadowError};
 
-use cellmembrane_types::service::DEFAULT_SERVICE_FILTER;
+use cellmembrane_types::MembraneService;
 
 /// Shadow function configuration — all the context needed to reach the VPS.
 #[derive(Debug, Clone)]
@@ -62,7 +62,7 @@ impl Default for ShadowConfig {
             forgejo_data_dir: None,
             forgejo_work_dir: None,
             forgejo_admin_user: None,
-            service_filter: DEFAULT_SERVICE_FILTER.into(),
+            service_filter: MembraneService::build_service_filter(),
         }
     }
 }
@@ -75,6 +75,8 @@ impl ShadowConfig {
     /// 2. `~/.config/forgejo/token` file
     pub async fn from_env() -> Self {
         let toml_overrides = load_toml_overrides().await;
+
+        let registry_filter = MembraneService::build_service_filter();
 
         let mut cfg = Self {
             ssh_host: std::env::var(cellmembrane_types::service::ENV_SSH_HOST)
@@ -103,10 +105,8 @@ impl ShadowConfig {
             forgejo_admin_user: std::env::var(cellmembrane_types::service::ENV_FORGEJO_ADMIN_USER)
                 .ok()
                 .or(toml_overrides.forgejo_admin_user),
-            service_filter: cellmembrane_types::service::env_or(
-                cellmembrane_types::service::ENV_SERVICE_FILTER,
-                DEFAULT_SERVICE_FILTER,
-            ),
+            service_filter: std::env::var(cellmembrane_types::service::ENV_SERVICE_FILTER)
+                .unwrap_or(registry_filter),
         };
 
         cfg.forgejo_token = resolve_token().await;
@@ -293,11 +293,27 @@ forgejo_base_url = "https://git.primals.eco"
     }
 
     #[test]
-    fn default_service_filter_includes_expected() {
-        assert!(DEFAULT_SERVICE_FILTER.contains("membrane"));
-        assert!(DEFAULT_SERVICE_FILTER.contains("forgejo"));
-        assert!(DEFAULT_SERVICE_FILTER.contains("caddy"));
-        assert!(DEFAULT_SERVICE_FILTER.contains("songbird"));
-        assert!(DEFAULT_SERVICE_FILTER.contains("beardog"));
+    fn registry_derived_filter_includes_all_services() {
+        let filter = MembraneService::build_service_filter();
+        for svc in MembraneService::all() {
+            assert!(
+                filter.contains(svc.binary),
+                "registry filter missing service: {}",
+                svc.binary,
+            );
+        }
+        for extra in cellmembrane_types::service::INFRA_SERVICE_FILTER_EXTRAS {
+            assert!(
+                filter.contains(extra),
+                "registry filter missing infra extra: {extra}",
+            );
+        }
+    }
+
+    #[test]
+    fn default_config_uses_registry_filter() {
+        let cfg = ShadowConfig::default();
+        let registry = MembraneService::build_service_filter();
+        assert_eq!(cfg.service_filter, registry);
     }
 }

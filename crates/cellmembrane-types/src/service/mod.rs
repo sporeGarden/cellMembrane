@@ -471,4 +471,21 @@ impl MembraneService {
             .filter(|s| s.is_primal)
             .collect()
     }
+
+    /// Build a systemd service filter regex (ERE) from the registry.
+    ///
+    /// Collects all unique binary names from the registry plus non-registry
+    /// infrastructure services (forgejo, fail2ban). The result is suitable
+    /// for `grep -E` filtering of `systemctl list-units`.
+    #[must_use]
+    pub fn build_service_filter() -> String {
+        let mut parts: Vec<&str> = ALL_SERVICES.iter().map(|s| s.binary).collect();
+        for extra in constants::INFRA_SERVICE_FILTER_EXTRAS {
+            if !parts.contains(extra) {
+                parts.push(extra);
+            }
+        }
+        parts.dedup();
+        parts.join("|")
+    }
 }

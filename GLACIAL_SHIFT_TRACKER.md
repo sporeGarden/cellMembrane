@@ -1,554 +1,74 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-16 (Wave 142b)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped
-**Wave 142b update (deep debt sweep — visibility, allocation, error taxonomy, domain centralization, CAC tree-parity):**
-Deep debt sweep (Waves 140a–142b). Visibility: 20 modules `pub`→`pub(crate)`, dead code
-removed (5 dead fns, 1 dead struct), future infra suppressed (ribocipher, manifest/wave).
-Allocation: `detect_target_triple()`→`const fn &'static str` (eliminates ~25 String allocs),
-`compute_blake3_file_async(impl AsRef<Path>)` (eliminates PathBuf clones),
-`verify_blake3_async(impl AsRef<Path>, &str)`. Error taxonomy: 8 `ShadowError::Parse`
-reclassified (webhook→Config, push-event JSON→Json, forgejo SSH→Ssh, task panic→Io,
-HTTP→Http, gateway IO→Io). Domain constants: `GIT_DOMAIN`, `DEPOT_DOMAIN`, `MESH_DOMAIN`,
-`LAB_DOMAIN`, `GITHUB_HOST`, `GITHUB_API` centralized; `mesh.primal.eco` typo fixed. CAC
-P1: `sync_diverge` checks local-vs-remote tree parity before impulse/policy (Newton-Leibniz).
-`try_pull_converge` checks trees_match after rebase conflict. Caddy blocks for footPrint +
-tideGlass wired from manifest roles. 1,072 tests.
-**Wave 140a update (deep debt sweep — constants, types, dependency evolution, OS Atheism Phase 2):**
-Deep debt sprint (Waves 137b–140a). Constants & dedup: `ISO8601_UTC`/`ISO8601_TZ` extracted (18
-format strings), `DEFAULT_HTTPS_PORT`/`DEFAULT_SHADOW_PORT` extracted. Dead code removed
-(`git_rev_parse_head`). `unreachable!()` → `.expect()` in HMAC. `FromStr` for
-`MembraneComposition`, `WebhookProvider`. JSON substring probes → `serde_json` structural
-checks (7 sites: health, sovereignty, mesh, canary, sandbox). `nix` crate eliminated —
-`graceful_kill` uses `std::process::Command("kill")`. Smart refactor: `plasmid/mod.rs`
-875→514L (`depot_sync.rs` extracted), `plasmid/harvest.rs` 841→763L (`harvest_manifest.rs`
-extracted). OS Atheism Phase 2: `TransportEndpoint::NamedPipe`, `InitSystem::detect()`,
+**Last updated:** 2026-07-16 (Wave 143b)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, ALL 8 GLACIAL CRITERIA CLEAR
+**Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
+
+---
+
+## Recent Waves
+
+**Wave 142b (deep debt sweep — visibility, allocation, error taxonomy, domain centralization, CAC tree-parity):**
+Visibility: 20 modules `pub`→`pub(crate)`, dead code removed (5 dead fns, 1 dead struct).
+Allocation: `detect_target_triple()`→`const fn &'static str` (~25 allocs eliminated),
+`compute_blake3_file_async(impl AsRef<Path>)`, `verify_blake3_async(impl AsRef<Path>, &str)`.
+Error taxonomy: 8 `ShadowError::Parse` reclassified. Domain constants: `GIT_DOMAIN`,
+`DEPOT_DOMAIN`, `MESH_DOMAIN`, `LAB_DOMAIN`, `GITHUB_HOST`, `GITHUB_API` centralized.
+CAC P1: `sync_diverge` checks tree parity before impulse/policy (Newton-Leibniz).
+`try_pull_converge` checks trees_match after rebase conflict. Caddy blocks for
+footPrint + tideGlass wired from manifest roles. 1,072 tests, 0 clippy.
+
+**Wave 140a (deep debt — constants, types, dependency evolution, OS Atheism Phase 2):**
+Constants & dedup: `ISO8601_UTC`/`ISO8601_TZ` (18 format strings),
+`DEFAULT_HTTPS_PORT`/`DEFAULT_SHADOW_PORT`. `FromStr` for `MembraneComposition`,
+`WebhookProvider`. JSON substring probes → `serde_json` structural checks (7 sites).
+`nix` crate eliminated. Smart refactor: `plasmid/mod.rs` 875→514L, `harvest.rs` 841→763L.
+OS Atheism Phase 2: `TransportEndpoint::NamedPipe`, `InitSystem::detect()`,
 platform-aware CSPRNG/chmod. Cascade hang fix (`BranchCheckedOut`, reconcile timeout).
-`harvest --local`, `depot_sync --push`, `sources.toml` auto-provision. Error taxonomy
-cleanup. `PermissionsExt` cross-platform guards. 1,074 tests.
-**Wave 134a update (deep debt sweep — refactor + idiom + manifest-driven evolution):**
-Deep debt sweep across cellMembrane codebase:
-1. `manifest/mod.rs` refactored 905L→693L: serde types extracted to `manifest/types.rs` (286L).
-2. `Box::leak` memory-leak anti-pattern eliminated in `dispatch/relay_dispatch.rs` —
-   `resolve_all_repo_paths()` returns `Vec<String>` instead of leaking `&'static str`.
-3. `type Err = String` replaced with typed parse errors: `ArchParseError` (arch.rs),
-   `ProviderParseError` (provision/mod.rs). Idiomatic `thiserror` derives.
-4. `Vec<&String>` in `dispatch/gate.rs` → `Vec<&str>` via `.map(String::as_str)`.
-5. Gateway deploy check: hardcoded "songbird"/"beardog" binary names replaced with
-   `MembraneService::gateway_primals()` — registry-driven, capability-based.
-6. `save_remote_canaries`: silent `let _ =` on write failures replaced with `tracing::error`.
-7. `GPU_PRIMALS` const documented as compile-time fallback; new `gpu_primals()` method on
-   `EcosystemManifest` reads manifest `gpu = true` field for runtime discovery.
-8. `cytoplasm.rs` `KNOWN_MESH_GATES`, `KNOWN_GATES`, `mesh_address()` documented as
-   compile-time bootstrap fallbacks; manifest-driven discovery is the preferred path.
-**Wave 134a update (CI-DIV-01/02/03 — manifest build config absorption):**
-CI-DIV-01/02/03 absorbed: `RepoEntry` gains `package`, `linker`, `gpu` fields.
-`ecosystem_manifest.toml` is now the single source of truth for per-primal build config:
-biomeOS `package = "biomeos-unibin"` (CI-DIV-01), skunkBat `package = "skunk-bat-server"`
-(CI-DIV-02), nestGate `linker = "ld.lld"` (CI-DIV-03), squirrel `package = "squirrel"`,
-barraCuda/coralReef `gpu = true`. `ManifestBuildConfig` struct + `build_config_for()` method
-for case-insensitive primal lookup. `plasmid.harvest` loads manifest configs, overlays onto
-`SourceEntry` via `apply_manifest_overrides()`, and passes `manifest_linker` to
-`toolchain::build_binary()`. Manifest linker injected as `CARGO_TARGET_{TARGET}_LINKER` env
-var, taking precedence over default linker selection. `manifest.validate` extended with
-empty-package, empty-linker, and gpu-on-non-primal checks.
-**Wave 133c update (VPS-NUCLEUS — sporePrint deployment tooling):**
-sporePrint NUCLEUS deployment: `gate/sporeprint.rs` (295L) with `SporePrintDeployParams`,
-`generate_petaltongue_unit`, `generate_nestgate_unit`, `generate_beardog_acme_unit`,
-`generate_sporeprint_units` (all 4), `SporePrintUnits` with `.iter()` and `.filenames()`.
-New dispatch: `gateway.sporeprint.units` generates all 4 systemd units for a target gate
-with configurable `--domain`. `gateway.sporeprint.check` validates 4-binary depot presence,
-manifest/gate profile, sporePrint site/public dir, and SSH target reachability.
-Constants: `DEFAULT_PETALTONGUE_BIND`, `SPOREPRINT_CONTENT_DIR`, `ENV_ACME_DOMAIN`,
-`DEFAULT_ACME_EMAIL`, `SPOREPRINT_NUCLEUS_BINARIES`. `nucleus.rs` refactored 1019L → 738L.
-956 tests.
-**Wave 133a update (CI-DIV-08 + SP-DIV-04 — manifest validation + Zola rebuild):**
-CI-DIV-08: `EcosystemManifest::validate()` adds post-parse schema validation — checks
-version non-empty, `total_repos` count match, repo `org`/`local_path` non-empty,
-duplicate `local_path` detection, gate→repo cross-reference integrity. New `manifest.validate`
-dispatch command with structured JSON output. Extracted to `manifest/validate.rs` (212L).
-SP-DIV-04: Post-cascade Zola rebuild hook — when `MEMBRANE_ZOLA_AUTO_BUILD=1` and sporePrint
-is pulled during cascade, automatically runs `zola build` in the sporePrint directory.
-Graceful degradation: skips if zola binary not installed, no config.toml, or repo not in
-manifest. Constants: `SPOREPRINT_REPO`, `ENV_ZOLA_AUTO_BUILD`. 943 tests.
-**Wave 133a update (CI-DIV-07 fix — freshness commit cycle):**
-`auto_commit_unified_freshness()` closes the gap where `unify_freshness()` wrote
-`freshness.toml` locally but never committed or pushed it. The designated publisher
-(golgi quorum timer) now runs unify → git add → commit → push_all_remotes in one
-atomic cycle. `temporal.unify-freshness` dispatch gains `--no-commit` flag for
-local-only regeneration. Dead `read_freshness_wave_id_async` removed. `GateHeadsFile`
-and `FreshnessFile` roundtrip tests added. 933 tests.
-**Wave 132d update (Manifest + Topology + Gateway Deployment):**
-`GateProfile` absorbs upstream manifest fields: `gate_class`, `tether_role`, `adb_ports`,
-`nucleus_status`, `bond_types`. `KNOWN_GATES` constant introduced as superset of
-`KNOWN_MESH_GATES` — includes non-WG gates (grapheneGate). `AffinityTable` expanded with
-`portable_adb` (0.95), `portable_wifi`, `portable_cellular`, `remote_contract`. Service filter
-includes `songbird`/`beardog` (both running as systemd units on production gates). Affinity
-parsing bug fixed: replaced broken `from_str(&v.to_string())` with `try_deserialize`.
-Gateway deployment tooling: `gateway.env` (outputs deployment env vars), `gateway.units`
-(generates songBird + bearDog systemd units), `gateway.retire-caddy` (shadow validate →
-disable Caddy). `SONGBIRD_PROXY_ROUTES` bridge functions (`to_songbird_proxy_routes` /
-`parse_songbird_proxy_routes`). `TlsGatewayConfig::validate()`. `GatewayUnitParams` +
-`generate_songbird_unit` / `generate_beardog_unit`. `default_routes_for_roles` pure extraction.
-Caddy module deprecated (Wave 132). 3 dep updates (arrayvec, rustc-hash, rustls-pki-types).
-`GateTransport::is_tethered()`/`is_local()` methods. TOML roundtrip tests for gateway configs.
-`gateway.deploy.check` pre-deployment readiness. `to_songbird_routes_toml` config file gen.
-Dep updates (rand 0.10, getrandom 0.4, quinn-proto).
-Bidirectional relay: `relay.absorb()` reverse sync (GitHub→Forgejo), `relay.parity` divergence detection.
-`mesh_address` golgiBody alias fix. 926 tests.
-**Wave 132c update (Gateway Types + Shadow Validation):**
-Tower HTTP gateway types added to `cellmembrane-types::gateway` module — typed reverse proxy
-config (`GatewayRoute`, `GatewayConfig`, `TlsGatewayConfig`), shadow validation types
-(`ShadowComparison`, `ShadowReport`, `ProbeResult`), gateway health probes (`GatewayHealth`,
-`CertExpiry`, `BackendStatus`). Dispatch module `membrane-shadow::gateway` wired with 5
-commands: `gateway.health`, `gateway.routes`, `gateway.shadow`, `gateway.config.validate`,
-`gateway.config.generate`. Gateway constants added (`DEFAULT_GATEWAY_BIND`, `ENV_GATEWAY_BIND`,
-`DEFAULT_SONGBIRD_SOCKET`, `DEFAULT_ACME_DIRECTORY`, etc.). Cloudflare test coverage expanded:
-`format_cf_errors` (3 tests), `CfResponse::into_result` (3 tests), `into_result_or_default`
-(2 tests). All pure functions `const fn` where possible. 886 tests, zero warnings.
-**Wave 127 update (env_or Rollout + Test Expansion + Topology Cutover):**
-env_or helper rolled out to 39 remaining call sites across 20 files — nearly all raw
-`std::env::var` boilerplate eliminated. Pure function extraction: `is_porcelain_dirty`,
-`is_discardable_xy` (sync_engine), `commits_match` (drift), `parse_health_count` (verify),
-`parse_cert_fields` (tls). Porcelain trim bug fix: `trim()` → `trim_end()` preserves XY
-status codes in git status parsing. Network topology cutover: sporeGate moved from `.1`
-(edge router) to `.3` (compute peer); Flint 2 H1 is now the edge router at `.1`. All
-cellMembrane transport code is topology-agnostic (reads `/proc/net/route`, uses WG overlay,
-no hardcoded gateway assumptions). LAN DNS service discovery: `LAN_DNS_DOMAIN` constant
-(`primals.local`), `lan_dns_name()` helper, `lan_ip` manifest field + `lan_ip_for()`.
-Manifest updated: sporeGate kderm_role `plasma_membrane` → `peptidoglycan`, dhcp role
-removed, `lan_ip = "192.168.4.3"` added. SSH builder abstraction, systemctl
-helper, manifest-first mesh resolution, topology.resolve lan_ip+dns_name.
-Manifest-first SSH resolution: `ssh_target_for()`, `ssh_user_for()`, `exec_on_gate()`.
-Async `systemctl_async`, `git_global_config_is_set`. 28 deps updated.
-`KNOWN_MESH_GATES` constant, `dispatch/data.rs` first test coverage,
-pure function extraction (`format_mesh_line`, `build_mesh_data`).
-848 tests, zero warnings.
-**Wave 125–126 update (Consolidation + Typed Enums + Test Expansion):**
-git_ops consolidation — 9 scattered git shell-outs routed through `git_ops.rs` (`git_clone`,
-`pull_ff_only`, `resolve_head_full`, `run_git` pub). BLAKE3 canonical path (depot delegates
-to checksum). 5 stale constants purged. `env_or(key, default)` helper rolled out to 8+
-modules (sandbox, canary, provision, manifest, relay, post_sync, nucleus_restart, bootstrap,
-sovereignty). `_pub` wrapper smell eliminated. UDS probe wrappers deleted. `DivergeType` +
-`SuggestedAction` typed enums in impulse/policy.rs. Magic `:7700` → `DEFAULT_FEDERATION_PORT`.
-Raw `"HOME"` → `ENV_HOME`. First test coverage on dispatch/gate.rs and sovereignty.rs.
-810 tests, zero clippy/doc warnings.
-**Wave 124 update (Deep Debt — pepti Decommission + Typed Plasmid Errors + Hardcode Sweep):**
-pepti fully decommissioned from live mesh registries (`mesh_address()`, `topology.mesh`, dispatch
-namespace). `Result<_, String>` evolved to `ShadowError::Build` across 11 plasmid function
-signatures (sandbox, canary, toolchain, drift, harvest). `resolve_federation_peer()` de-hardcoded
-(was `/home/sporegate/...` fallback → `DEFAULT_ECOPRIMALS_ROOT` + `DEFAULT_VPS_MESH_PEER`).
-`canary_remote.rs` socket path env-configurable. `ENV_VALIDATE_SSH_HOST` replaces legacy
-`PEPTI_SSH_HOST`. Stale pepti references cleaned from relay, mirrors, dispatch comments.
-788 tests, zero clippy/doc warnings.
-**Wave 123+ update (Deep Debt — Typed RPC Errors + Visibility + Smart Refactors):**
-`ShadowError::Rpc` typed variant replaces all `Result<_, String>` in JSON-RPC transport
-(7 async fns, 5 caller sites). Visibility tightened: 15 functions `pub` → `pub(crate)` across
-cli, topology, freshness, resolve modules. `manifest.rs` smart refactored (780L → 706L mod.rs
-+ 142L wave.rs). `topology.endpoint <role>` single-arg dispatch shortcut. `ironGate` added to
-`BOOTSTRAP_GATES` (5-node bootstrap complete). Webhook test coverage (+11), dispatch capability
-tests (+6), WaveState lifecycle tests (+5). 791 tests, zero clippy/doc warnings.
-**Wave 123 update (Deep Evolution — Wire Format + Sovereignty + Quorum):**
-`ServiceCapability::wire_name()` fixes mesh relay routing bug (Debug format → serde snake_case).
-`parse_verify_response()` pure function for sovereignty ledger with 7-branch test coverage.
-TCP transport graduated — `call_tcp()` riboCipher-framed over WireGuard mesh. Quorum Phase 1:
-`gate.quorum` installs systemd cascade timer. Role-to-capability mapping consolidated.
-Error variant semantic fix (`Ssh` → `Parse` for UDS failures). Fragile string detection →
-structured JSON field check. 769 tests, zero clippy/doc warnings.
-**Wave 121 update (Transport Evolution + Dual-Target Depot):** `TargetArch` enum typed
-target triples. Dual-target depot (musl + gnu for GPU primals). PAT deprecated. Transport
-endpoint resolver: `(gate, capability)` → `Uds|Tcp|MeshRelay`. `call_via_relay()` routes
-through songBird. `topology.endpoint` CLI. `MeshRelay` variant graduated to operational.
-Webhook `classify_push` bug fix (harvest vs cascade precedence). 5-node mesh (ironGate .7).
-751 tests, zero warnings.
-**Wave 120 update (Deployment Isomorphism — Identity-Based Resolution):** `topology.service`
-identity-based service discovery. Manifest-authoritative `wg_ip` + `roles` on `GateProfile`.
-`wireguard.generate` and `caddy.generate` produce configs from manifest. `topology.roles` +
-`topology.mesh` manifest-aware. `gate.validate` generic composition trust barrier validation
-(evolved from `pepti.validate`). `wireguard.*` dispatch routing fixed. pepti decommissioned.
-Dependency evolution: `toml` 0.8→1.x, `nix` 0.29→0.31. Manifest-first federation
-peer resolution. `to_nftables_script` chain helpers. Deep debt: `.leak()` memory debt
-eliminated (owned `String` gate identity), `HEALTH_REQUEST` const centralized, corrupt
-TOML parse now warns instead of silently resetting, `CanaryStalenessReport` disambiguation,
-`FirewallProtocol` derives `Ord`, mesh response parsing deduped. Build/harvest pipeline
-unified: `clone_source`, `stage_to_depot`, `get_head` deduped into single implementations.
-Service port constants added (`DEFAULT_FORGEJO_HTTP_PORT`, `DEFAULT_DEPOT_HTTP_PORT`).
-BLAKE3 hash failure uses sentinel instead of empty string. 731 tests, zero clippy.
-**Wave 119+ update (Native Detection + Error Normalization):** Shell-outs evolved to native
-Rust: `ss` → `/proc/net/{tcp,udp}`, `ip link/addr` → sysfs + `/proc/net/route`, `systemctl
-is-active` → cgroup detection. `ShadowError::Parse` normalized to `Config`/`Ssh`/`Io` across
-29 files (22 genuine `Parse` remain). `.expect()` → `let-else + unreachable!()` in ribocipher.
-`PLASMID_BIN_DIR` constant eliminates 8 hardcoded literals. 711 tests, zero clippy.
-**Wave 116–118 update (Deep Debt + Topology Convergence):** Webhook cascade wiring,
-rootpulse sovereignty pipeline, SSH/git_ops consolidation, manifest-driven cascade repos,
-identity unification, hardcoded path constants. 680 tests. Fixed P0 topology dispatch
-collision. 620 tests → 680 → 711 → 729.
-**Wave 116 update (Gate Enrollment Pipeline):** Fresh binary rebuilt from `11a7c68` with
-ARP probe fix (uses detected LAN interface, not loopback). `InterfaceRole` Display impl
-for clean preflight output. Gate enrollment pipeline validated: `gate.preflight`,
-`firewall.generate --plasma-membrane`, `gate.bootstrap --dry-run` all operational.
-eastGate enrollment BLOCKED on SSH key authorization (operator action). 498 tests.
-**Wave 115 update (Sovereign Mesh & Gate Hardening):** `gate.bootstrap` per-phase
-timeouts (120s) + `identity.git` phase (detects missing git config + SSH keys).
-`depot.integrity` command (generate/verify BLAKE3 checksums). Smart refactor:
-`bootstrap.rs` 861L → 555L via `gate/nucleus.rs` + `gate/mesh.rs`. All sync phases
-evolved to `spawn_blocking`. Zero `as` casts, zero `.expect()` in production.
-`option_if_let_else` promoted to warn. SSH user and Caddy endpoint env-driven.
-55 new tests (416 → 471). All deps pure Rust (ring tracked in deny.toml).
-**Wave 113 update (Deep Debt + Zero-Copy):** Arc manifest in cascade, Cow relay
-defaults, safe casts (TryFrom), idiomatic error handling, SPDX headers, cargo-deny CI.
-**Wave 111 update (riboCipher + Deep Debt):** riboCipher Transport Signal Standard
-complete (mito-tier HKDF-SHA256 + HMAC tag generation/verification). All outbound UDS
-connections prepend clear signal `[0xEC, 0x01]`. `dispatch/infra.rs` smart refactored
-(762L → 264L remote VPS API + 518L gate.rs local self-management). Error propagation
-modernized. Neural API constants shared via types crate. Freshness auto-publish
-race-fix (wave-ID guard prevents stale overwrites). 391 tests, zero clippy.
-**Wave 111 update (Gate Expansion):** `gate.bootstrap` sandbox integration. CASCADE-STALE-RECOVERY
-(auto-stash + ff-only + pop). PARTIAL-FETCH-RESUME (atomic `.tmp` → rename, retry with backoff).
-Pure Rust ELF validation. Hardcoded ports → named constants. 391 tests, zero clippy.
-**Wave 110+ update:** Primal composition grade + sandbox/canary pipeline achieved.
-`ServiceCapability` enum — capability-based service discovery replaces all hardcoded primal
-names. `temporal/resolve.rs` extracted (authority-first push + agentic divergence resolution).
-`plasmid/toolchain.rs` extracted (ELF validation + NDK). **Sandbox NUCLEUS**: ephemeral
-isolated validation before binary promotion (spin-up → UDS JSON-RPC probe → teardown).
-**Canary pool**: previous-good binaries retired to `/opt/membrane/canary/`, health-watched,
-available as failover targets. Atomic blue/green promotion with canary retirement wired
-into cascade-restart. `service/registry.rs` extracted (pure data, smart refactor).
-All deployment paths env-configurable (`MEMBRANE_CONFIG_DIR`, `MEMBRANE_SOCKET_BASE`,
-`VPS_MEMBRANE_BIN_DIR`, `MEMBRANE_SOVEREIGN_REMOTE`, `NM_DISPATCHER_DIR`).
-DRY socket resolution (bootstrap reuses health's). Stream 5 `agentic_resolve` DONE. Zero
-production unwrap/expect, zero TODO/FIXME/HACK, zero #[allow], zero unsafe (forbid), zero
-mocks in prod, all deps pure Rust. 365 tests, zero clippy.
-**Wave 110 update:** Deep debt evolution — native UDS probes, gate/ modular split,
-dual-checksum verification, cascade-restart, agentic resolver, agnostic config.
-Stream 2 (Build Pipeline) 6/6 DONE. northGate + westGate profiles registered.
-**Wave 109 update:** guideStone convergence — `plasmid.build` (Rust build pipeline),
-`gate.profile`, `deployment.toml` emission, JSON-RPC health probes, BUILD-ELF-01,
-HARVEST-NAME-01, GATE-PROFILE-01. Three-tier context architecture shipped.
-**Wave 107 update:** Post-stadial tooling evolution complete. `gate.status` (local health
-probe), `gate.bootstrap --dry-run`, source divergence fix, checksum coherence detection,
-WAN checksums (zero-git verification), atomic publish (harvest auto-commits checksums.toml).
-Zero development debt: all files <800L. Remaining items are purely operational.
-**Wave 106 update:** Cross-topology validation. gate.bootstrap SHIPPED + VALIDATED on
-strandGate + ironGate. Cascade auto-fetch. NUCLEUS supervision (biomeOS v4.17). 3-gate
-mesh collective (eastGate ↔ golgiBody ↔ ironGate). Deterministic deployment standard
-codified (6 invariants). TCP-only fallback shipped. Zero P1.
-**Wave 74 update:** ironGate **JOINED MESH** as 3rd plasmodium gate. BearDog + Songbird running locally
-with SONGBIRD_PEERS pointing to eastGate + strandGate. `discovery.peers` shows both peers,
-`mesh.health_check` all_healthy. `capability.call` cross-gate validated (Songbird fix `d6a6f714`
-landed — TCP→HTTP POST for JSON-RPC). Deep debt sprint: all `#[allow]` eliminated from production,
-`HardeningConfig` evolved to `HardeningStep` enum, `plasmid.rs::fetch()` decomposed. Zero clippy.
-**Wave 73 update:** westGate onboarding prep (manifest entry, GATE_SETUP_STANDARD updated). ironGate
-mesh join documented (SONGBIRD_PEERS config, capability symlinks, startup sequence, verification).
-strandGate deploy graph upgraded to `strand_heavy_compute.toml` (10 primals). Live mesh validated
-by eastGate (discovery.peers + mesh.health_check 2-gate PASS). `capability.call` cross-gate blocked
-on Songbird remote dispatch fix (raw TCP → HTTP POST). ironGate = 3rd plasmodium gate after fix lands.
-**Wave 71 update:** Legacy `cascade()` removed (all callers migrated to `cascade_with_opts`). New commands:
-`relay.status`, `gate.health`, `content.verify`. S3 content cutover documented — VPS READY, awaiting
-DNS flip only. 210 tests. Zero clippy (pedantic+nursery).
-**Wave 69+ update:** Deep debt evolution — all `#[allow(clippy::too_many_lines)]` eliminated from codebase.
-`plasmid.rs::fetch()` decomposed into staged pipeline. `temporal/mod.rs` extracted 4 helpers (sync_converge,
-sync_diverge, resolve_tree_parity, count_divergent_remotes). `cascade.rs` evolved: `CascadeMode` enum
-replaces 3 bools, `CascadeOpts` struct, extracted process_repo/clone_repo/check_repo/sync_repo.
-`freshness.rs` dead_code wired (binary_blake3 + installed_at now in report). `FetchSource` Display impl.
-NUCLEUS tests relocated from coverage.rs (903L→743L) to composition.rs (canonical home). All files <800L.
-Zero clippy (pedantic+nursery). 209 tests.
-**Wave 69 update:** Sovereignty graduation sprint — membrane binary deployed to VPS (6.1M musl static,
-`/usr/local/bin/membrane`). Full K-Derm relay validated in Rust (relay.run, relay.mediate, relay.ship all
-operational, bash scripts archived). S4 auth formal 7-day gate ACTIVATED (`BEARDOG_AUTH_MODE=enforced`,
-monitoring timer at 15min intervals). Disk cleanup 69%→60% (old kernels, journals, apt lists, locales
-removed). Workspace resolution evolved to recognize sparse VPS deployments (`infra/` marker). Relay ship
-bug fixed (git remote get-url stdout leaking into variable). All primal binaries in `/opt/membrane/`
-recovered and validated. S1 TLS infrastructure verified ready for NS cutover (registrar action pending).
-Family seeds confirmed deployed (`/etc/membrane/family/`). Provenance sidecar written for membrane binary.
-**Wave 68 update:** Graduated composition evolution — Neural Bridge wired into dispatch (try-primal-first
-for gate.*, service.*, repo.*, mirror.*, token.* commands). gate.pull/check evolved to use Rust membrane
-binary on VPS. PushResult struct replaces silent push failures. #[must_use] sweep (12 functions, 7 modules).
-resolve_workspace_root() promoted to crate-level. forgejo_work_dir config chain. 209 tests. Zero clippy.
-**Wave 67+ update:** Cascade evolution sprint — dispatch.rs split into 5 domain submodules (all <340L).
-Tree-parity divergence auto-resolution (SyncAction::TreeParity). `--publish-freshness` wired into cascade.
-`post_sync_diverge()` + graduated merge strategies (merge-ff, merge-rebase, impulse-only). Impulse ack
-safety evolved (separate ack files prevent rebase loss). Binary freshness tracking (`--check-installed`).
-All hardcoded paths evolved to capability-based discovery (ServicePaths, CredentialPaths). rsync eliminated
-(SSH+cat). 207 tests. Zero clippy warnings. S1 TLS graduated OPERATIONAL (13+ days clean).
-**Wave 66 update:** Deep debt evolution sprint — eliminated 3 external tool dependencies
-(socat→native UnixStream, curl→reqwest, b3sum→blake3 crate). Removed deprecated signal.rs.
-K-Derm relay chain fully in Rust (relay.rs: mediate + ship_extracellular + run). Real BLAKE3
-checksums.toml verification. FromStr trait for FetchSource. Hardcoded paths parameterized
-(relay SSH script, temporal clone URL uses manifest). 204 tests. Bash scripts archived
-(forgejo_sync.sh, forgejo_pull_mirror.sh → superseded by membrane CLI).
-**Wave 60 update:** golgiBody Phase A complete — VPS Forgejo live at `git.primals.eco`, 34 repos seeded,
-eastGate WaterFall shadow validated (33/36 pull clean from sovereign Forgejo). VPS knot-dns zone updated
-with `lab` and `git` A records. Caddyfile lab routes fixed (dead proxy → 503 + static file_server).
-`cascade-pull.sh` fixed for non-default remote branch resolution. 2 repos need ironGate action
-(rustChip seeding, toadStool branch rename). Cloudflare tunnel orphaned but kept for JupyterHub until BTSP relay.
-**Wave 59 update:** NUCLEUS composition tier (13 primals, 17 services) typed into service registry.
-6 new services: toadStool, barraCuda, coralReef, biomeOS, squirrel, petalTongue. All UDS-only.
-`membrane.toml` evolved to `composition = "nucleus"`. 175 tests. Spring overlay readiness proven.
-primalSpring Wave 59 corrections applied: S2 DNS = "DEPLOYED", S4 CI = GitHub Actions gap.
-**Wave 57 update:** Deep debt sprint — `clippy::pedantic` + `nursery` enforced (zero warnings),
-typed `ConfigError` via `thiserror`, `DeployPaths` configurable paths, `iter_binaries()` zero-copy,
-`#[must_use]` + `const fn` across all pure functions, scyBorg triple license, `cargo-deny` ecoBin
-ban list, coverage **77% → 96%** (160 tests). Zero TODOs, zero unsafe, zero C deps. Audit-ready.
-**Wave 56 update:** primalSpring Wave 56 VPS deployment standard consumed. `TransportMode::UdsOnly`
-typed into service registry. `deploy_membrane.sh` evolved with `--uds-only` flag for `nucleus_launcher`
-integration and `spring-overlay` mode for cell graph deployment. Three-step VPS deploy flow documented.
-`membrane.toml` → `transport = "uds_only"`. Zero clippy warnings, all tests pass.
-**Wave 55 update:** primalSpring audit (NC-3) identified stale docs — ops docs now synced to
-Nest Atomic reality. `membrane.toml` → `composition = "nest"`, signal channel enabled.
-K-Derm boundary published. knot-dns running with DNSSEC — registrar NS cutover remaining.
-**Wave 51 update:** Deep debt sprint across all 3 owned repos (cellMembrane, benchScale, agentReagents).
-benchScale + agentReagents converged from `sort-after/` into canonical `infra/` locations.
-K-Derm diderm topology wired into benchScale. postPrimordial compliance enforced.
-**Wave 50 update:** GitHub Actions incident (May 26) proved external CI is unacceptable.
-Self-hosted runner deployed on ironGate. plasmidbin validate 98/98 PASS locally.
+`harvest --local`, `depot_sync --push`, `sources.toml` auto-provision. 1,074 tests.
 
 ---
 
 ## Stadial Entry Criteria
 
-All six criteria must be satisfied before glacial shift.
+All criteria satisfied — stadial-ready.
 
-| # | Criterion | Status | cellMembrane Role | Blocker Owner |
-|---|-----------|--------|-------------------|---------------|
-| 1 | All 4 sovereignty shadows cut over (7-day gates) | S1 **OPERATIONAL** (13d clean), S2 LIVE, S3 LIVE, S4 formal gate pending | Operate shadow infrastructure | Shared |
-| 2 | Multi-gate LAN mesh operational (3+ gates in Plasmodium) | **OPERATIONAL** — 3-gate plasmodium (eastGate + strandGate + ironGate), discovery.peers + mesh.health_check PASS | Provide TURN rendezvous | Gate teams |
-| 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38, 2026-05-22) — 21/0/1 darkforest, 10/10 trio | Operate Nest Atomic | **RESOLVED** |
-| 4 | Remote covalent node (flockGate) validated over WAN | flockGate not deployed | Provide WAN rendezvous | Shared |
-| 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** with DNSSEC — zone has lab/git/membrane A records, NS cutover pending (registrar) | Complete registrar NS record change | **cellMembrane** |
-| 6 | Cloudflare/cloudflared removed from production path | S1 not cut over, tunnel orphaned (git route superseded by VPS Caddy) | Caddy → BearDog ACME cutover | Shared |
-
----
-
-## Resolved Blockers
-
-### ~~Blocker 1: Nest Expansion on VPS (Criterion #3)~~ — RESOLVED
-
-**Deployed:** Wave 38 (2026-05-22) via `deploy_membrane.sh deploy --composition nest --validate`
-
-| Service | Port | Version | Status |
-|---------|------|---------|--------|
-| nestgate-membrane | :9500 | v2.1.0 | RUNNING |
-| rhizocrypt-membrane | :9602 | v0.14.0 | RUNNING |
-| loamspine-membrane | :9700 | v0.9.16 | RUNNING |
-| sweetgrass-membrane | :9850 | v0.7.34 | RUNNING |
-
-**Validation:** darkforest 21/0/1, provenance trio 10/10, shadow orchestrator 6/6.
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | All 4 sovereignty shadows cut over (7-day gates) | S1 **OPERATIONAL**, S2 LIVE, S3 LIVE, S4 **GRADUATED** |
+| 2 | Multi-gate LAN mesh (3+ gates) | **OPERATIONAL** — 5-node WG mesh |
+| 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38) |
+| 4 | Remote covalent node (WAN) | **flockGate LIVE** (16 bonds) |
+| 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** — NS cutover pending (registrar) |
+| 6 | Cloudflare removed from production path | Tunnel orphaned — Caddy + LE sole TLS |
 
 ---
 
-## Remaining Blockers — cellMembrane Action Items
+## Remaining Blocker — NS Cutover (Criterion #5)
 
-### Blocker: Sovereign DNS — NS Cutover to Primary (Criterion #5)
-
-**What:** Complete the registrar NS record change to make knot-dns primary for `primals.eco`.
-
-**Current state:** knot-dns is **running** on the VPS with DNSSEC (H2-17 complete). Zone file
-configured, UFW :53 open. Remaining step is the registrar NS delegation update.
-
-**Checklist:**
-- [x] knot-dns installed and running on VPS
-- [x] Zone file configured for `primals.eco`
-- [x] DNSSEC enabled
-- [x] UFW port :53 tcp/udp open
-- [ ] Registrar NS record update (secondary → primary cutover)
-- [ ] Validate resolution: `dig @$VPS_IP primals.eco`
-- [ ] 7-day monitoring period before declaring S2 closed
-
-**Dependencies:**
-- ICANN registrar cooperation (permanently external)
-- Current commercial DNS must remain available during transition
-
-### ~~Blocker: Deploy biomeOS to VPS (P0)~~ — RESOLVED
-
-**Deployed:** Wave 59 (2026-05-28). Full NUCLEUS composition (13 primals) running on VPS.
-biomeOS v0.1.0 active, all primals healthy via UDS sockets. See VPS_STATE.md for live status.
-
-### Observation: CI Sovereignty Gap (S4)
-
-**Noted by primalSpring Wave 59:** Git hosting is Forgejo-primary but CI/CD
-is still GitHub Actions. This is a glacial gate **observation**, not a stadial
-blocker. Options: Forgejo Actions, self-hosted runners on LAN gates.
+knot-dns **running** on VPS with DNSSEC. Zone configured, UFW :53 open.
+Remaining step: registrar NS delegation update (permanently external dependency).
 
 ---
 
-## Supporting Work (Not Direct Blockers)
+## Sovereignty Shadow Status
 
-### Self-Hosted GitHub Actions Runners (Wave 50)
-
-GitHub Actions incident on May 26 proved external CI dependency is unacceptable.
-Self-hosted runners on LAN gates provide free minutes and local toolchains. However,
-the same incident revealed a deeper issue: GitHub's job dispatch plane is also
-degraded during outages — self-hosted runners can't receive jobs even when online.
-True CI sovereignty requires Forgejo Actions to own the dispatch plane.
-
-**Status:** ironGate runner **ONLINE** at org level (v2.334.0). Serves all ecoPrimals repos.
-All 5 plasmidBin workflows evolved to sovereign-first `runs-on` strategy. `validate.yml`
-uses raw git checkout — zero marketplace action dependency, survives codeload outages.
-
-**Handoff:** `infra/wateringHole/handoffs/archive/CELLMEMBRANE_SELF_HOSTED_RUNNERS_WAVE50_MAY26_2026.md`
-
-**Acceptance:**
-- [x] ironGate runner online (org-level): `irongate-runner online self-hosted,Linux,X64,x86_64,irongate,lan`
-- [x] `plasmidbin validate .` passes on ironGate: **98/98 PASS**
-- [x] Static musl binary builds: x86_64 + aarch64 cross-compile verified
-- [x] All 5 workflows sovereign-first (self-hosted default, `USE_GITHUB_HOSTED` override)
-- [x] validate.yml raw git checkout (no `uses: actions/checkout@v4` dependency)
-- [ ] Dispatch completes on self-hosted runner (blocked by GitHub incident — dispatch plane degraded)
-- [ ] 2nd runner online (eastGate or southGate)
-- [ ] Forgejo Actions evaluated as dispatch plane replacement
-
-### cellMembrane Formalization + K-Derm Topology (Wave 50)
-
-cellMembrane formalized from operational docs + bash into a typed Rust system.
-5 spec documents define the architecture, composition model, fieldMouse contract,
-multi-membrane deployment, and K-Derm cell envelope topology. `cellmembrane-types`
-crate provides typed config parsing, firewall derivation, envelope topology, and
-validation — **160 tests** across 8 domain test modules, **zero clippy warnings**
-(pedantic + nursery), **95.8% line coverage** (llvm-cov).
-
-Gap analysis against `darkforest_membrane.sh` (MEM-01..17) and `s_membrane_composition.rs`
-(Pillar 4 telemetry) closed 5 gaps: journald persistence, credential file inventory,
-binary integrity, RustDesk key paths, telemetry/shadow config.
-
-K-Derm topology models inner/outer membrane sync as monoderm/diderm cell envelopes
-with absolute layer naming (cytoplasm → plasma membrane → periplasm → outer membrane
-→ extracellular), bonding per layer (organo-metallo-salt model), and channel protein
-specificity. Parallels K-NOME methodology.
-
-Quality evolution: static service registry (zero allocation, no `Box::leak`),
-typed `ShadowMode` enum (replaced stringly-typed), capability-derived boundary
-policies (layers declare bonds, policies assemble from capabilities), all clippy
-warnings resolved, `default_true` deduplicated, tests smart-refactored by domain.
-
-**Handoff:** `infra/wateringHole/handoffs/archive/CELLMEMBRANE_FORMALIZATION_WAVE50_MAY26_2026.md`
-
-**Deliverables:**
-- [x] `specs/CELLMEMBRANE_ARCHITECTURE.md` — 3-channel model, crypto layers, firewall policy, K-Derm section
-- [x] `specs/MEMBRANE_COMPOSITION_MODEL.md` — relay → rustdesk → tower → nest ladder
-- [x] `specs/FIELDMOUSE_CONTRACT.md` — third-party deployment contract
-- [x] `specs/MULTI_MEMBRANE_DEPLOYMENT.md` — provider abstraction, multi-region
-- [x] `specs/K_DERM_TOPOLOGY.md` — monoderm/diderm, periplasm, bonding, channel proteins, vesicle transport
-- [x] `crates/cellmembrane-types/` — Rust types, serde, validation (160 tests, 8 modules, 95.8% coverage)
-- [x] `membrane.toml` — reference config for live VPS deployment
-- [x] Gap closure: 5 Dark Forest audit gaps closed in types
-- [x] Debt resolution: static registry, typed ShadowMode, capability-based derivation, clippy-clean
-
-### benchScale + agentReagents Ownership Convergence (Wave 51)
-
-Mature Rust repos (benchScale ~22k LOC, agentReagents ~7.9k LOC) moved from
-`sort-after/` to canonical `infra/` locations. Slim bash scaffold predecessors
-archived to `infra/*-slim-archive/`. Both repos aligned on dependencies
-(`thiserror` 2.0, `serde_yaml` 0.10, `clap` 4.5), postPrimordial compliance
-enforced (binary resolution from `plasmidBin`, not local builds).
-
-K-Derm diderm topology wired as benchScale YAML (`topologies/nucleus/kderm_diderm_membrane.yaml`)
-with 5 nodes, boundary crossing validation, and a parsing test.
-
-**Deliverables:**
-- [x] benchScale + agentReagents converged to `infra/` (308 + 113 tests pass)
-- [x] Dependency alignment across both repos
-- [x] postPrimordial compliance: binary deploy paths, `PLASMID_BIN` env, `fetch.sh` fallback
-- [x] K-Derm diderm topology YAML + parsing test
-- [x] Archive cleanup: `archive/`, `scripts/legacy/`, `templates/archive/` removed from working tree (preserved in git history)
-
-### Deep Debt Sprint — All 3 Repos (Wave 51)
-
-Systematic deep debt resolution targeting modern idiomatic Rust across all
-owned repos. Audit identified and resolved:
-
-**cellMembrane:** `FirewallRule.comment` String → `&'static str` (zero allocation),
-supplementary ports in service registry (hbbs 21115, caddy 80), output-only types
-drop `Deserialize`, `push_port_rules()` helper eliminates repetition.
-
-**agentReagents:** 10 `println!` → structured `tracing::info!`, `PciAttachMode`
-enum replaces stringly-typed attach mode, unused imports cleaned, 26 `missing_docs`
-warnings resolved on verification types.
-
-**benchScale:** `constants::deploy` + `constants::libvirt_defaults` modules with
-env var discovery (`BENCHSCALE_DEPLOY_DIR`, `BENCHSCALE_LIBVIRT_NETWORK`), all
-hardcoded `/opt/biomeos/bin` and `"default"` network references centralized,
-9 `println!` → tracing, unsafe FFI `dhcp_leases.rs` evolved to safe `Option<&CStr>`
-API, call sites no longer touch raw pointers.
-
-**Handoff:** `infra/wateringHole/handoffs/archive/CELLMEMBRANE_DEEP_DEBT_WAVE51_MAY26_2026.md`
-
-### Wave 56: VPS Deployment Standard Absorption
-
-primalSpring shipped the VPS deployment standard (Waves 55b–56): `nucleus_launcher --uds-only`,
-cell graph `vps_standard` tagging, env var centralization, 12 primordial script archival.
-
-**cellMembrane response:**
-- [x] `TransportMode` enum (`UdsOnly`, `TcpDefault`, `TcpOptIn`) added to service registry
-- [x] All NUCLEUS primals marked `vps_transport: TransportMode::UdsOnly`
-- [x] `HealthCheckMethod::SocketExists` added for UDS socket file existence checks
-- [x] `deploy_membrane.sh` → `--uds-only` flag for nucleus composition
-- [x] `deploy_membrane.sh` → `spring-overlay` mode for cell graph deployment
-- [x] `membrane.toml` → `transport = "uds_only"`
-- [x] `CompositionSpec::uds_socket_paths()` and `tcp_ports_uds_mode()` helpers
-- [x] Stale Channel 1/3 `[future]` comments fixed to `[ACTIVE]` in deploy script
-- [x] VPS deployment standard documented in RUNBOOKS, VPS_STATE
-- [ ] `nucleus_launcher` binary available in plasmidBin releases (upstream dependency)
-- [ ] Test `biomeos deploy` with live cell graph against VPS NUCLEUS (operational)
-
-### NC-3.2: K-Derm Boundary Publication (Wave 55)
-
-`membrane.toml` updated from `composition = "tower"` to `composition = "nest"`, signal
-channel enabled (knot-dns :53 with DNSSEC). K-Derm diderm boundary now published.
-primalSpring `s_kderm_boundary` live validation can activate against this config.
-
-**Deliverables:**
-- [x] `membrane.toml` → `composition = "nest"`, `topology = "diderm"`
-- [x] Signal channel enabled: `knot-dns` :53, `dnssec = true`
-- [x] Integration tests updated: `parse_reference_membrane_toml` expects `Nest`, signal `enabled = true`
-- [x] 93/93 tests pass, 0 clippy warnings
-
-### NC-3.4: Forgejo Releases (Criteria #6 enabler)
-
-Sovereign binary distribution channel alongside GitHub Releases. plasmidBin `auto-harvest.yml`
-updated with Forgejo support (Wave 55). `provenance.toml` Layer 2 records forge identity.
-
-**Status:** plasmidBin shipped Forgejo hooks — coordination with cellMembrane Forgejo instance for first sovereign release pending.
-
-### NC-3.5: sporePrint Living Content
-
-Sovereign content hosting via NestGate `content.put`. Blocked on BearDog `auth.issue_session`
-scope expansion for `content.*`. When unblocked: `publish_sporeprint.sh` → NestGate → sovereign content.
-
-**Status:** BLOCKED on BearDog scope expansion.
-
-### Multi-Gate LAN Mesh (Criteria #2, #4)
-
-Gate teams deploying NUCLEUS compositions on LAN. cellMembrane provides TURN rendezvous via Songbird :3478. At least one remote covalent node (flockGate) must validate over WAN for criterion #4.
-
-**cellMembrane readiness:** TURN relay operational. **3-gate plasmodium mesh OPERATIONAL** (Wave 74):
-eastGate + strandGate + ironGate. `discovery.peers` + `mesh.health_check` validated.
-Forgejo inner membrane mirror healthy (25 native pull mirrors + 6 timer-synced, all current).
-
----
-
-## Sovereignty Shadow Cutover Progress
-
-| Track | Sovereign | Shadow | 7-Day Gate | Status |
-|-------|-----------|--------|------------|--------|
-| S1 TLS | Caddy + LE | Cloudflare (INACTIVE) | p95 ≤ 1.5× commercial | **OPERATIONAL** — 13+ days clean, Caddy sole TLS provider |
-| S2 NAT | Songbird :3478 | cloudflared | 100% reachable | **LIVE — tracking 7-day window** |
-| S3 Content | NestGate + petalTongue | GitHub Pages | TTFB parity | **VPS READY** — awaiting DNS flip (Caddyfile configured, 67ms TTFB) |
-| S4 Auth | BearDog BTSP | OAuth2/PAM (disabled) | p95 < 50ms | **ENFORCED** — 7-day formal gate active |
-
-**Cutover sequence:** S2 → S3 → S4 → S1 (S1 last because it requires Cloudflare removal)
+| Track | Sovereign | Shadow | Status |
+|-------|-----------|--------|--------|
+| S1 TLS | Caddy + LE | Cloudflare (INACTIVE) | **OPERATIONAL** — sole TLS provider |
+| S2 NAT | Songbird :3478 | cloudflared | **LIVE** |
+| S3 Content | NestGate + petalTongue | GitHub Pages | **LIVE** (68ms TTFB) |
+| S4 Auth | BearDog BTSP | OAuth2/PAM (disabled) | **GRADUATED** |
 
 ---
 
 ## Dark Forest Compliance
 
-All deployments must satisfy five pillars before stadial entry.
-
-| Pillar | Requirement | Current Status |
-|--------|-------------|----------------|
-| 1. Zero metadata leakage | Stripped binaries, no hostnames embedded | PASS |
-| 2. Zero port exposure | UDS default, TCP opt-in, composition-aware UFW | PASS |
-| 3. Songbird sole network surface | All external traffic through Songbird | PASS |
-| 4. BTSP crypto integrity | 13/13 primals, ChaCha20-Poly1305 | PASS |
-| 5. Enclave computing | Dual-tower ionic pattern | PASS (Tower + Nest Atomic) |
+| Pillar | Requirement | Status |
+|--------|-------------|--------|
+| 1 | Zero metadata leakage (stripped binaries) | PASS |
+| 2 | Zero port exposure (UDS default, composition-aware UFW) | PASS |
+| 3 | Songbird sole network surface | PASS |
+| 4 | BTSP crypto integrity (13/13 primals) | PASS |
+| 5 | Enclave computing (dual-tower ionic pattern) | PASS |

@@ -333,8 +333,15 @@ pub const DEFAULT_FORGEJO_ADMIN_USER: &str = "admin";
 /// Default push remotes for K-Derm relay chain operations.
 pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
 /// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
+///
+/// Prefer `MembraneService::build_service_filter()` for a registry-derived
+/// filter that tracks new services automatically.
 pub const DEFAULT_SERVICE_FILTER: &str =
     "membrane|forgejo|caddy|songbird|beardog|knot|hbb|fail2ban";
+
+/// Infrastructure services included in the service filter that are NOT in the
+/// membrane service registry (external daemons managed alongside the membrane).
+pub const INFRA_SERVICE_FILTER_EXTRAS: &[&str] = &["forgejo", "fail2ban"];
 
 // ── LAN service discovery ────────────────────────────────────────────
 

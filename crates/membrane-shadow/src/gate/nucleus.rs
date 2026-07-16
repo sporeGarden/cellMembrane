@@ -198,48 +198,18 @@ fn set_restricted_permissions(path: &std::path::Path) {
 
 /// Generate `n` cryptographically random bytes and return as hex string.
 ///
-/// Platform-aware — uses `/dev/urandom` on Unix, `BCryptGenRandom` on
-/// Windows (via BLAKE3's keyed hash as entropy expander when OS RNG
-/// is unavailable).
+/// Platform-aware — uses `getrandom` crate which delegates to the OS
+/// CSPRNG on all platforms (`urandom` on Linux, `BCryptGenRandom` on Windows,
+/// `SecRandomCopyBytes` on macOS/iOS, etc.).
 fn csprng_hex(n: usize) -> Option<String> {
     let mut buf = vec![0u8; n];
-    fill_random(&mut buf)?;
+    getrandom::getrandom(&mut buf).ok()?;
     let mut hex = String::with_capacity(n * 2);
     for b in &buf {
         use std::fmt::Write;
         let _ = write!(hex, "{b:02x}");
     }
     Some(hex)
-}
-
-fn fill_random(buf: &mut [u8]) -> Option<()> {
-    #[cfg(unix)]
-    {
-        use std::io::Read as _;
-        std::fs::File::open("/dev/urandom")
-            .ok()?
-            .read_exact(buf)
-            .ok()
-    }
-    #[cfg(not(unix))]
-    {
-        // BLAKE3 keyed hash as CSPRNG — derive from timestamp + pid.
-        // Not ideal; future: add `getrandom` crate dependency.
-        let seed_material = format!(
-            "membrane-csprng-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        );
-        let hash = blake3::hash(seed_material.as_bytes());
-        let hash_bytes = hash.as_bytes();
-        for (i, b) in buf.iter_mut().enumerate() {
-            *b = hash_bytes[i % 32];
-        }
-        Some(())
-    }
 }
 
 // ── Systemd unit generation ─────────────────────────────────────────
