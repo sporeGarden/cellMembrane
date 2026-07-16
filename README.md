@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 142b) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 143b) |
 
 ---
 
@@ -60,14 +60,16 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 142b): ~9k lines types, ~35k lines shadow. All manifest fields
+Current state (Wave 143b): ~9k lines types, ~35k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-Deep debt sweep (140a–142b): visibility tightened, allocation hot paths optimized,
-error taxonomy reclassified, domain constants centralized, CAC tree-parity checks.
+Deep debt sweep (140a–143b): visibility tightened, allocation hot paths optimized,
+error taxonomy reclassified, domain constants centralized, CAC tree-parity checks,
+CSPRNG unified via `getrandom`, service filter registry-derived, `ProbeResult` typed
+gate probes, `build_err` consolidated, zero f64 casts in display formatting.
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
@@ -160,7 +162,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 142b are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 143b are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -174,7 +176,7 @@ through Wave 142b are **DONE**. Full wave-by-wave audit trail is preserved in
 | Code quality | 1073 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
-| Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()` | DONE |
+| Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
 
 ---
 
@@ -338,7 +340,7 @@ gardens/cellMembrane/
           wave.rs             # WaveState lifecycle + ExitCriterion
         sovereignty_ledger.rs # rootpulse sovereignty ledger
   specs/                      # Formal architecture specs (6 documents)
-  config/                     # capability_registry.toml
+  config/                     # capability_registry.toml (specification artifact)
   deploy/                     # Systemd units, hooks, provisioning
   experiments/                # Validated experiment records (fossil record)
   .forgejo/workflows/ci.yml   # Forgejo CI pipeline

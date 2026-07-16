@@ -9,6 +9,17 @@
 
 ## Recent Waves
 
+**Wave 143b (deep debt — typed probes, CSPRNG, registry filter, dead code cleanup):**
+CSPRNG: platform-split `fill_random` (urandom + BLAKE3 fallback) → unified `getrandom` crate.
+Service filter: hardcoded regex → `MembraneService::build_service_filter()` (registry-derived).
+`ProbeResult` struct replacing 9 `(bool, String)` tuples across gate health/verify/nucleus/mesh.
+`Priority::Priority` → `Priority::Urgent` (serde alias preserves wire compat).
+`format_bytes` f64 casts → integer-only math with half-up rounding.
+`DepotUpdatedNotification` `pub`→`pub(crate)`, `from_json` returns `Self` (not `Option`).
+Duplicate `build_err` helpers consolidated (3 files → direct `ShadowError::Build`).
+Dead code `#[allow]` attributes replaced with `reason` annotations throughout.
+1,073 tests, 0 clippy warnings.
+
 **Wave 142b (deep debt sweep — visibility, allocation, error taxonomy, domain centralization, CAC tree-parity):**
 Visibility: 20 modules `pub`→`pub(crate)`, dead code removed (5 dead fns, 1 dead struct).
 Allocation: `detect_target_triple()`→`const fn &'static str` (~25 allocs eliminated),

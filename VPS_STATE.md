@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-07-16 (Wave 142b)
+**Last updated:** 2026-07-16 (Wave 143b)
 **Deployed composition:** Full NUCLEUS (Wave 61→118) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust `membrane` binary
@@ -143,13 +143,13 @@
 | `/etc/membrane/Caddyfile` | Channel 3 Caddy config (SSOT: `plasmidBin/membrane/Caddyfile`) |
 | `/etc/membrane/family/` | MitoBeacon seeds: `.beacon.seed`, `family.key`, `nodes/*.lineage.seed` |
 | `/opt/ecoPrimals/` | Standard ecoPrimals workspace (17 repos from Forgejo) |
-| `/opt/ecoPrimals/infra/plasmidBin/` | Deployment tooling (fetch.sh, nucleus_launcher.sh, start_primal.sh) |
+| `/opt/ecoPrimals/infra/plasmidBin/` | Binary depot + checksums (legacy shell scripts superseded by `membrane` CLI) |
 | `/opt/ecoPrimals/infra/wateringHole/` | Ecosystem standards + membrane temporal.cascade |
 | `/opt/ecoPrimals/primals/` | 13 primal source repos (cloned from sovereign Forgejo) |
 | `/opt/ecoPrimals/gardens/` | cellMembrane + projectNUCLEUS |
-| `/opt/membrane/nucleus_launcher.sh` | Symlink → plasmidBin launcher |
-| `/opt/membrane/start_primal.sh` | Symlink → plasmidBin start script |
-| `/opt/membrane/fetch.sh` | Symlink → plasmidBin binary fetch |
+| `/opt/membrane/nucleus_launcher.sh` | Legacy symlink (superseded by `membrane gate.bootstrap`) |
+| `/opt/membrane/start_primal.sh` | Legacy symlink (superseded by `membrane gate.bootstrap`) |
+| `/opt/membrane/fetch.sh` | Legacy symlink (superseded by `membrane plasmid.fetch`) |
 | `/run/membrane/` | Unix domain sockets (BearDog, Songbird, SkunkBat) |
 | `/var/cache/membrane/nestgate/` | sporePrint content cache (19 MB synced from NestGate) |
 | `/var/cache/membrane/lab/` | Static lab page root (intra layer — ecosystem dashboard) |
@@ -195,12 +195,12 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Dark Forest audit (Nest) | 21 PASS, 0 FAIL, 1 SKIP (MEM-09 b3sum) | 2026-05-22 |
 | Provenance trio pipeline | 10/10 PASS | 2026-05-22 |
 | Shadow orchestrator | 6/6 PASS | 2026-05-22 |
-| `deploy_membrane.sh status` | All 19 services RUNNING | 2026-05-28 |
+| `membrane gate.status` (was `deploy_membrane.sh status`) | All 19 services RUNNING | 2026-05-28 |
 | `membrane temporal.cascade` | 17/17 repos synced from sovereign Forgejo | 2026-06-02 |
-| `nucleus_launcher.sh --seed-only` | 13/13 primals registered in Songbird | 2026-05-29 |
+| `membrane gate.bootstrap` (was `nucleus_launcher.sh`) | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellMembrane workspace) | 1072 PASS, 0 FAIL, 0 clippy | 2026-07-16 |
+| `cargo test` (cellMembrane workspace) | 1073 PASS, 0 FAIL, 0 clippy | 2026-07-16 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 
