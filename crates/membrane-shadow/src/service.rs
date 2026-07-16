@@ -125,21 +125,28 @@ pub async fn logs(config: &ShadowConfig, unit: &str, lines: u32) -> Result<Strin
     .await
 }
 
-// Precision loss is acceptable here — values are for human-readable display only.
-#[allow(clippy::cast_precision_loss)]
 fn format_bytes(bytes: u64) -> String {
     const KIB: u64 = 1024;
     const MIB: u64 = KIB * 1024;
     const GIB: u64 = MIB * 1024;
 
-    if bytes >= GIB {
-        format!("{:.1}Gi", bytes as f64 / GIB as f64)
+    let (unit, divisor) = if bytes >= GIB {
+        ("Gi", GIB)
     } else if bytes >= MIB {
-        format!("{:.1}Mi", bytes as f64 / MIB as f64)
+        ("Mi", MIB)
     } else if bytes >= KIB {
-        format!("{:.1}Ki", bytes as f64 / KIB as f64)
+        ("Ki", KIB)
     } else {
-        format!("{bytes}B")
+        return format!("{bytes}B");
+    };
+
+    let whole = bytes / divisor;
+    let frac = ((bytes % divisor) * 10 + divisor / 2) / divisor;
+
+    if frac >= 10 {
+        format!("{}.0{unit}", whole + 1)
+    } else {
+        format!("{whole}.{frac}{unit}")
     }
 }
 

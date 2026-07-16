@@ -52,7 +52,7 @@ impl WebhookProvider {
     /// Checks for provider-specific signature headers and returns the
     /// provider + raw signature value.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "wired when HTTP webhook endpoint is activated")]
     pub fn detect(headers: &[(String, String)]) -> Option<(Self, String)> {
         for (name, value) in headers {
             let lower = name.to_lowercase();
@@ -80,12 +80,12 @@ impl WebhookProvider {
 
 /// Forgejo push webhook payload (subset of fields we need).
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 pub struct PushEvent {
     /// Git ref that was pushed (e.g. `refs/heads/main`).
     #[serde(rename = "ref")]
     pub git_ref: String,
     /// Commit SHA before the push.
+    #[allow(dead_code, reason = "serde-populated — needed for delta analysis")]
     pub before: String,
     /// Commit SHA after the push.
     pub after: String,
@@ -95,18 +95,20 @@ pub struct PushEvent {
     pub pusher: PusherPayload,
     /// Commits included in this push.
     #[serde(default)]
+    #[allow(dead_code, reason = "serde-populated — needed for commit-level cascade")]
     pub commits: Vec<CommitPayload>,
 }
 
 /// Repository info from the webhook payload.
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 pub struct RepoPayload {
     /// Repository name (e.g. `biomeOS`).
     pub name: String,
     /// Full path including org (e.g. `ecoPrimals/biomeOS`).
+    #[allow(dead_code, reason = "serde-populated — needed for cross-org routing")]
     pub full_name: String,
     /// Clone URL (SSH preferred for our infra).
+    #[allow(dead_code, reason = "serde-populated — needed for clone-based harvest")]
     pub ssh_url: String,
     /// Default branch name.
     pub default_branch: String,
@@ -122,7 +124,7 @@ pub struct PusherPayload {
 
 /// Individual commit data from the push.
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
+#[allow(dead_code, reason = "serde-populated — parsed for commit-level cascade analysis")]
 pub struct CommitPayload {
     /// Full commit SHA.
     pub id: String,

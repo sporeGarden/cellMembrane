@@ -46,40 +46,22 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let mut probes: Vec<StatusProbe> = Vec::new();
 
     let arch_clone = arch;
-    let (depot_ok, depot_detail) =
-        tokio::task::spawn_blocking(move || super::verify::verify_local_depot(arch_clone))
-            .await
-            .unwrap_or_else(|_| (false, "depot verify task panicked".into()));
-    probes.push(StatusProbe {
-        name: "depot.integrity".into(),
-        ok: depot_ok,
-        detail: depot_detail,
-    });
+    let depot = tokio::task::spawn_blocking(move || super::verify::verify_local_depot(arch_clone))
+        .await
+        .unwrap_or_else(|_| super::ProbeResult::fail("depot verify task panicked"));
+    probes.push(StatusProbe { name: "depot.integrity".into(), ok: depot.ok, detail: depot.detail });
 
-    let (mesh_ok, mesh_detail) = probe_mesh_status().await;
-    probes.push(StatusProbe {
-        name: "mesh.reachability".into(),
-        ok: mesh_ok,
-        detail: mesh_detail,
-    });
+    let mesh = probe_mesh_status().await;
+    probes.push(StatusProbe { name: "mesh.reachability".into(), ok: mesh.ok, detail: mesh.detail });
 
-    let (procs_ok, procs_detail) = health_sweep(arch).await;
-    probes.push(StatusProbe {
-        name: "primals.alive".into(),
-        ok: procs_ok,
-        detail: procs_detail,
-    });
+    let procs = health_sweep(arch).await;
+    probes.push(StatusProbe { name: "primals.alive".into(), ok: procs.ok, detail: procs.detail });
 
     let arch_for_freshness = arch;
-    let (fresh_ok, fresh_detail) =
-        tokio::task::spawn_blocking(move || probe_depot_freshness(arch_for_freshness))
-            .await
-            .unwrap_or_else(|_| (false, "freshness probe panicked".into()));
-    probes.push(StatusProbe {
-        name: "depot.freshness".into(),
-        ok: fresh_ok,
-        detail: fresh_detail,
-    });
+    let fresh = tokio::task::spawn_blocking(move || probe_depot_freshness(arch_for_freshness))
+        .await
+        .unwrap_or_else(|_| super::ProbeResult::fail("freshness probe panicked"));
+    probes.push(StatusProbe { name: "depot.freshness".into(), ok: fresh.ok, detail: fresh.detail });
 
     let sovereignty_probes = super::sovereignty::probe_sovereignty().await;
     probes.extend(sovereignty_probes);
@@ -104,7 +86,7 @@ pub async fn status() -> crate::error::Result<GateStatus> {
 }
 
 /// Probe mesh status via neuralAPI-routed `capability.call` with fallback to direct UDS.
-async fn probe_mesh_status() -> (bool, String) {
+async fn probe_mesh_status() -> super::ProbeResult {
     if let Ok(Some(result)) =
         crate::bridge::try_bridge("mesh_relay", "mesh.status", serde_json::json!({})).await
     {
@@ -114,7 +96,7 @@ async fn probe_mesh_status() -> (bool, String) {
     let socket_path = resolve_mesh_relay_socket();
 
     if !Path::new(&socket_path).exists() {
-        return (false, "mesh relay socket not found".into());
+        return super::ProbeResult::fail("mesh relay socket not found");
     }
 
     let request = serde_json::json!({
@@ -126,11 +108,11 @@ async fn probe_mesh_status() -> (bool, String) {
 
     match uds_jsonrpc_call(&socket_path, &request.to_string()).await {
         Ok(response) => parse_mesh_response(&response),
-        Err(e) => (false, e.to_string()),
+        Err(e) => super::ProbeResult::fail(e.to_string()),
     }
 }
 
-fn parse_mesh_json(result: &serde_json::Value) -> (bool, String) {
+fn parse_mesh_json(result: &serde_json::Value) -> super::ProbeResult {
     let peers = result
         .get("reachable_peers")
         .or_else(|| result.get("peers"))
@@ -155,15 +137,16 @@ fn parse_mesh_json(result: &serde_json::Value) -> (bool, String) {
         format!("{peers} peers, {reachable} reachable")
     };
 
-    (reachable > 0 || peers > 0 || federation, detail)
+    let ok = reachable > 0 || peers > 0 || federation;
+    super::ProbeResult { ok, detail }
 }
 
-fn parse_mesh_response(response: &str) -> (bool, String) {
+fn parse_mesh_response(response: &str) -> super::ProbeResult {
     let Ok(json) = serde_json::from_str::<serde_json::Value>(response.trim()) else {
         if response.contains("\"result\"") {
-            return (true, "mesh responding".into());
+            return super::ProbeResult::pass("mesh responding");
         }
-        return (false, format!("unexpected: {}", response.trim()));
+        return super::ProbeResult::fail(format!("unexpected: {}", response.trim()));
     };
 
     if let Some(err) = json.get("error") {
@@ -171,18 +154,18 @@ fn parse_mesh_response(response: &str) -> (bool, String) {
             .get("message")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("unknown error");
-        return (false, format!("mesh error: {msg}"));
+        return super::ProbeResult::fail(format!("mesh error: {msg}"));
     }
 
     json.get("result")
-        .map_or_else(|| (false, "no result field".into()), parse_mesh_json)
+        .map_or_else(|| super::ProbeResult::fail("no result field"), parse_mesh_json)
 }
 
 /// Health sweep: probe each primal via JSON-RPC, fall back to process detection.
 ///
 /// Scoped to the local gate's composition profile when available, otherwise
 /// checks all nucleus primals.
-pub(crate) async fn health_sweep(arch: &str) -> (bool, String) {
+pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
@@ -216,7 +199,7 @@ pub(crate) async fn health_sweep(arch: &str) -> (bool, String) {
 
     let total = alive + dead;
     let ok = dead == 0;
-    (ok, format!("{alive}/{total} primals alive"))
+    super::ProbeResult { ok, detail: format!("{alive}/{total} primals alive") }
 }
 
 /// Probe a primal via neuralAPI `capability.call` with fallback to direct UDS JSON-RPC.
@@ -281,12 +264,12 @@ fn probe_primal_pgrep(primal: &str) -> bool {
     false
 }
 
-fn probe_depot_freshness(arch: &str) -> (bool, String) {
+fn probe_depot_freshness(arch: &str) -> super::ProbeResult {
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
     if !bin_dir.is_dir() {
-        return (false, format!("depot dir missing: {}", bin_dir.display()));
+        return super::ProbeResult::fail(format!("depot dir missing: {}", bin_dir.display()));
     }
 
     let gate = super::resolve_local_gate_identity();
@@ -328,7 +311,7 @@ fn probe_depot_freshness(arch: &str) -> (bool, String) {
         String::new()
     };
 
-    (ok, format!("{present}/{total} binaries present{age_str}"))
+    super::ProbeResult { ok, detail: format!("{present}/{total} binaries present{age_str}") }
 }
 
 /// VCS parity probe: check that origin and forgejo are at the same commit for
@@ -572,10 +555,10 @@ mod tests {
             "reachable": 2,
             "relay_enabled": false
         });
-        let (ok, detail) = parse_mesh_json(&result);
-        assert!(ok);
-        assert!(detail.contains("3 peers"));
-        assert!(detail.contains("2 reachable"));
+        let probe = parse_mesh_json(&result);
+        assert!(probe.ok);
+        assert!(probe.detail.contains("3 peers"));
+        assert!(probe.detail.contains("2 reachable"));
     }
 
     #[test]
@@ -584,17 +567,17 @@ mod tests {
             "relay_enabled": true,
             "reachable_peers": 0
         });
-        let (ok, detail) = parse_mesh_json(&result);
-        assert!(ok, "hub should be OK even with zero peers");
-        assert!(detail.contains("hub listening"));
+        let probe = parse_mesh_json(&result);
+        assert!(probe.ok, "hub should be OK even with zero peers");
+        assert!(probe.detail.contains("hub listening"));
     }
 
     #[test]
     fn parse_mesh_json_zero_everything() {
         let result = serde_json::json!({});
-        let (ok, detail) = parse_mesh_json(&result);
-        assert!(!ok);
-        assert!(detail.contains("0 peers"));
+        let probe = parse_mesh_json(&result);
+        assert!(!probe.ok);
+        assert!(probe.detail.contains("0 peers"));
     }
 
     #[test]
@@ -603,43 +586,43 @@ mod tests {
             "peers": ["gate1", "gate2"],
             "reachable": 1
         });
-        let (ok, detail) = parse_mesh_json(&result);
-        assert!(ok);
-        assert!(detail.contains("2 peers"));
+        let probe = parse_mesh_json(&result);
+        assert!(probe.ok);
+        assert!(probe.detail.contains("2 peers"));
     }
 
     #[test]
     fn parse_mesh_response_valid_jsonrpc() {
         let resp = r#"{"jsonrpc":"2.0","result":{"peers":4,"reachable":3},"id":1}"#;
-        let (ok, detail) = parse_mesh_response(resp);
-        assert!(ok);
-        assert!(detail.contains("4 peers"));
-        assert!(detail.contains("3 reachable"));
+        let probe = parse_mesh_response(resp);
+        assert!(probe.ok);
+        assert!(probe.detail.contains("4 peers"));
+        assert!(probe.detail.contains("3 reachable"));
     }
 
     #[test]
     fn parse_mesh_response_error() {
         let resp =
             r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"method not found"},"id":1}"#;
-        let (ok, detail) = parse_mesh_response(resp);
-        assert!(!ok);
-        assert!(detail.contains("method not found"));
+        let probe = parse_mesh_response(resp);
+        assert!(!probe.ok);
+        assert!(probe.detail.contains("method not found"));
     }
 
     #[test]
     fn parse_mesh_response_malformed_with_result_keyword() {
         let resp = r#"not json but has "result" in it"#;
-        let (ok, detail) = parse_mesh_response(resp);
-        assert!(ok);
-        assert_eq!(detail, "mesh responding");
+        let probe = parse_mesh_response(resp);
+        assert!(probe.ok);
+        assert_eq!(probe.detail, "mesh responding");
     }
 
     #[test]
     fn parse_mesh_response_malformed_no_result() {
         let resp = "garbage data";
-        let (ok, detail) = parse_mesh_response(resp);
-        assert!(!ok);
-        assert!(detail.contains("unexpected"));
+        let probe = parse_mesh_response(resp);
+        assert!(!probe.ok);
+        assert!(probe.detail.contains("unexpected"));
     }
 
     #[test]

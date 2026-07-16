@@ -9,7 +9,7 @@ use tracing::warn;
 
 /// Verify local depot binaries against the git-tracked `checksums.toml`.
 #[must_use]
-pub(crate) fn verify_local_depot(arch: &str) -> (bool, String) {
+pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
     #[derive(serde::Deserialize)]
     struct ChecksumFile {
         #[serde(flatten)]
@@ -35,26 +35,25 @@ pub(crate) fn verify_local_depot(arch: &str) -> (bool, String) {
         if ws_path.exists() {
             ws_path
         } else {
-            return (
-                false,
-                "checksums.toml not found in depot or workspace".into(),
+            return super::ProbeResult::fail(
+                "checksums.toml not found in depot or workspace",
             );
         }
     } else {
-        return (false, "checksums.toml not found".into());
+        return super::ProbeResult::fail("checksums.toml not found");
     };
 
     let Ok(content) = std::fs::read_to_string(&checksums_path) else {
-        return (false, "cannot read checksums.toml".into());
+        return super::ProbeResult::fail("cannot read checksums.toml");
     };
 
     let parsed = match toml::from_str::<ChecksumFile>(&content) {
         Ok(p) => p,
-        Err(e) => return (false, format!("checksums.toml parse error: {e}")),
+        Err(e) => return super::ProbeResult::fail(format!("checksums.toml parse error: {e}")),
     };
 
     let Some(entries) = parsed.targets.get(arch) else {
-        return (false, format!("no [{arch}] section in checksums.toml"));
+        return super::ProbeResult::fail(format!("no [{arch}] section in checksums.toml"));
     };
 
     let mut verified = 0u32;
@@ -83,10 +82,10 @@ pub(crate) fn verify_local_depot(arch: &str) -> (bool, String) {
     }
 
     let ok = failed == 0 && missing == 0;
-    (
+    super::ProbeResult {
         ok,
-        format!("{verified} verified, {failed} hash mismatch, {missing} missing"),
-    )
+        detail: format!("{verified} verified, {failed} hash mismatch, {missing} missing"),
+    }
 }
 
 /// Cross-verify local binaries against the WAN-served checksums.toml.

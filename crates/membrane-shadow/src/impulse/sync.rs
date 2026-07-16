@@ -68,7 +68,7 @@ pub async fn post_sync_diverge(
         impulse: ImpulseMeta {
             id: impulse_id.clone(),
             impulse_type: ImpulseType::Sync,
-            priority: Priority::Priority,
+            priority: Priority::Urgent,
             wave,
         },
         from: ImpulseFrom {
@@ -232,7 +232,7 @@ mod tests {
         match result {
             Ok(impulse) => {
                 assert_eq!(impulse.impulse.impulse_type, ImpulseType::Sync);
-                assert_eq!(impulse.impulse.priority, Priority::Priority);
+                assert_eq!(impulse.impulse.priority, Priority::Urgent);
                 assert_eq!(impulse.from.gate, "testGate");
                 assert!(impulse.content.subject.contains("DIVERGE"));
                 assert!(impulse.content.subject.contains("cellMembrane"));

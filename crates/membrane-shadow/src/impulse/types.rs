@@ -54,12 +54,12 @@ impl std::str::FromStr for ImpulseType {
 /// Priority levels for impulses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-#[allow(clippy::enum_variant_names)]
 pub enum Priority {
     /// Normal workflow coordination.
     Routine,
     /// Time-sensitive, blocking other work.
-    Priority,
+    #[serde(alias = "priority")]
+    Urgent,
     /// Critical — requires immediate attention.
     Flash,
 }
@@ -68,7 +68,7 @@ impl std::fmt::Display for Priority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Routine => write!(f, "routine"),
-            Self::Priority => write!(f, "PRIORITY"),
+            Self::Urgent => write!(f, "URGENT"),
             Self::Flash => write!(f, "FLASH"),
         }
     }
@@ -80,10 +80,10 @@ impl std::str::FromStr for Priority {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "routine" => Ok(Self::Routine),
-            "priority" => Ok(Self::Priority),
+            "priority" | "urgent" => Ok(Self::Urgent),
             "flash" => Ok(Self::Flash),
             _ => Err(format!(
-                "unknown priority: {s} (expected: routine|priority|flash)"
+                "unknown priority: {s} (expected: routine|urgent|flash)"
             )),
         }
     }
@@ -338,14 +338,15 @@ mod tests {
     #[test]
     fn priority_display() {
         assert_eq!(Priority::Routine.to_string(), "routine");
-        assert_eq!(Priority::Priority.to_string(), "PRIORITY");
+        assert_eq!(Priority::Urgent.to_string(), "URGENT");
         assert_eq!(Priority::Flash.to_string(), "FLASH");
     }
 
     #[test]
     fn priority_from_str() {
         assert_eq!("routine".parse::<Priority>().unwrap(), Priority::Routine);
-        assert_eq!("priority".parse::<Priority>().unwrap(), Priority::Priority);
+        assert_eq!("priority".parse::<Priority>().unwrap(), Priority::Urgent);
+        assert_eq!("urgent".parse::<Priority>().unwrap(), Priority::Urgent);
         assert_eq!("flash".parse::<Priority>().unwrap(), Priority::Flash);
         assert!("invalid".parse::<Priority>().is_err());
     }

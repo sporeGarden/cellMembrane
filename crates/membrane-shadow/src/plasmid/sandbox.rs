@@ -9,9 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-const fn build_err(msg: String) -> crate::error::ShadowError {
-    crate::error::ShadowError::Build(msg)
-}
+use crate::error::ShadowError;
 
 /// Saturating conversion from `Duration` millis to `u64`.
 fn millis_u64(d: Duration) -> u64 {
@@ -90,10 +88,10 @@ pub(crate) async fn spin_up_with_deps(
 
     tokio::fs::create_dir_all(&socket_dir)
         .await
-        .map_err(|e| build_err(format!("create sandbox socket dir: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("create sandbox socket dir: {e}")))?;
     tokio::fs::create_dir_all(&bin_dir)
         .await
-        .map_err(|e| build_err(format!("create sandbox bin dir: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("create sandbox bin dir: {e}")))?;
 
     let commit_short = if args.commit.len() >= 8 {
         &args.commit[..8]
@@ -108,14 +106,14 @@ pub(crate) async fn spin_up_with_deps(
 
     tokio::fs::copy(&args.binary_path, &sandbox_binary)
         .await
-        .map_err(|e| build_err(format!("stage sandbox binary: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("stage sandbox binary: {e}")))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         tokio::fs::set_permissions(&sandbox_binary, std::fs::Permissions::from_mode(0o755))
             .await
-            .map_err(|e| build_err(format!("chmod sandbox binary: {e}")))?;
+            .map_err(|e| ShadowError::Build(format!("chmod sandbox binary: {e}")))?;
     }
 
     let mut cmd = tokio::process::Command::new(&sandbox_binary);
@@ -130,7 +128,7 @@ pub(crate) async fn spin_up_with_deps(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| build_err(format!("spawn sandbox {}: {e}", args.primal)))?;
+        .map_err(|e| ShadowError::Build(format!("spawn sandbox {}: {e}", args.primal)))?;
 
     let pid = child.id();
 
@@ -358,7 +356,7 @@ fn resolve_dependency_binary_path(binary: &str) -> crate::Result<PathBuf> {
         }
     }
 
-    Err(build_err(format!(
+    Err(ShadowError::Build(format!(
         "dependency binary '{binary}' not found in production, depot, or local"
     )))
 }
@@ -392,7 +390,7 @@ pub(crate) async fn validate_and_promote(
     let new_path = production_path.with_extension("new");
     tokio::fs::copy(&args.binary_path, &new_path)
         .await
-        .map_err(|e| build_err(format!("copy to production staging: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("copy to production staging: {e}")))?;
 
     // Preserve the old binary path for canary retirement
     let old_binary = if production_path.exists() {
@@ -417,7 +415,7 @@ pub(crate) async fn validate_and_promote(
 
     tokio::fs::rename(&new_path, production_path)
         .await
-        .map_err(|e| build_err(format!("atomic promote rename: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("atomic promote rename: {e}")))?;
 
     Ok((result, old_binary))
 }

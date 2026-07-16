@@ -71,7 +71,7 @@ impl EcosystemManifest {
 
     /// Get local paths for a gate's repos (what cascade-pull iterates).
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn gate_local_paths(&self, gate: &str) -> Vec<&str> {
         self.gate_repos(gate)
             .into_iter()
@@ -90,7 +90,7 @@ impl EcosystemManifest {
 
     /// Get repos filtered by membrane sync mode.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn repos_by_membrane(
         &self,
         membrane: cellmembrane_types::MembraneSyncMode,
@@ -112,7 +112,7 @@ impl EcosystemManifest {
 
     /// Build a GitHub clone URL for a repo.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn github_clone_url(entry: &RepoEntry) -> String {
         format!(
             "https://{}/{}.git",
@@ -129,7 +129,7 @@ impl EcosystemManifest {
 
     /// Look up a build entry by primal slug (e.g. `"beardog"`).
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn build_entry(&self, slug: &str) -> Option<&BuildEntry> {
         self.build.get(slug)
     }
@@ -137,7 +137,7 @@ impl EcosystemManifest {
     /// Get the `cargo build` package argument for a primal.
     /// Returns `Some("--package <pkg>")` for workspace primals, `None` otherwise.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn build_package_arg(&self, slug: &str) -> Option<&str> {
         self.build.get(slug).map(|b| b.package.as_str())
     }
@@ -145,7 +145,7 @@ impl EcosystemManifest {
     /// Return the ordered list of build-authority gates from `[topology.roles]`.
     /// Falls back to scanning `[gates.*]` for `build_authority = true`.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn build_authorities(&self) -> Vec<String> {
         if let Some(topo) = &self.topology {
             if let Some(roles) = &topo.roles {
@@ -163,7 +163,7 @@ impl EcosystemManifest {
 
     /// Check whether a specific gate is a build authority.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn is_build_authority(&self, gate: &str) -> bool {
         self.build_authorities().iter().any(|g| g == gate)
     }
@@ -193,7 +193,7 @@ impl EcosystemManifest {
     /// Returns the `lan_ip` field if set, enabling direct TCP resolution on
     /// the local subnet without DNS or `WireGuard` overlay.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn lan_ip_for(&self, gate: &str) -> Option<&str> {
         self.gates.get(gate).and_then(|p| p.lan_ip.as_deref())
     }
@@ -214,7 +214,7 @@ impl EcosystemManifest {
 
     /// Resolve the SSH user for a gate (defaults to `"root"`).
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "manifest API — wired by tests, ready for consumers")]
     pub fn ssh_user_for(&self, gate: &str) -> &str {
         self.gates
             .get(gate)

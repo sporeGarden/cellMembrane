@@ -26,7 +26,7 @@ pub(crate) async fn systemctl_async(args: &[&str]) -> bool {
 }
 
 /// Start all NUCLEUS primals — generate secrets, write systemd units, enable+start.
-pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
+pub(super) fn start_nucleus_primals(arch: &str) -> super::ProbeResult {
     let config_dir = generate_secrets_env();
 
     let install_base = super::resolve_install_base();
@@ -55,9 +55,8 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     let Some(crypto_svc) = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     ) else {
-        return (
-            false,
-            "CryptoSigner capability not found in service registry".into(),
+        return super::ProbeResult::fail(
+            "CryptoSigner capability not found in service registry",
         );
     };
     let security_socket = paths.socket_path(crypto_svc).unwrap_or_else(|| {
@@ -123,11 +122,11 @@ pub(super) fn start_nucleus_primals(arch: &str) -> (bool, String) {
     }
 
     if installed == 0 && failed == 0 {
-        return (true, "no primal binaries found in depot — skipped".into());
+        return super::ProbeResult::pass("no primal binaries found in depot — skipped");
     }
 
     let ok = failed == 0 && installed > 0;
-    (ok, format!("{installed} units installed, {failed} failed"))
+    super::ProbeResult { ok, detail: format!("{installed} units installed, {failed} failed") }
 }
 
 /// Construct the nucleus startup phase.
@@ -139,11 +138,11 @@ pub(super) fn nucleus_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
             detail: "dry-run: would start NUCLEUS primals".into(),
         };
     }
-    let (ok, detail) = start_nucleus_primals(arch);
+    let probe = start_nucleus_primals(arch);
     BootstrapPhase {
         name: "nucleus.start".into(),
-        ok,
-        detail,
+        ok: probe.ok,
+        detail: probe.detail,
     }
 }
 

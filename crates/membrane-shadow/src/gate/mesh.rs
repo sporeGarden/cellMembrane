@@ -77,11 +77,11 @@ pub(super) async fn mesh_phase(gate_name: &str, arch: &str, dry_run: bool) -> Bo
             detail: format!("dry-run: would mesh.init {peer_info} as {gate_name}"),
         };
     }
-    let (ok, detail) = configure_mesh(gate_name, arch, &profile).await;
+    let probe = configure_mesh(gate_name, arch, &profile).await;
     BootstrapPhase {
         name: "mesh.configure".into(),
-        ok,
-        detail,
+        ok: probe.ok,
+        detail: probe.detail,
     }
 }
 
@@ -95,7 +95,7 @@ async fn configure_mesh(
     gate_name: &str,
     arch: &str,
     profile: &GateManifestProfile,
-) -> (bool, String) {
+) -> super::ProbeResult {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
@@ -104,7 +104,7 @@ async fn configure_mesh(
     let relay_bin = dest_root.join("primals").join(arch).join(relay_binary);
 
     if !relay_bin.exists() {
-        return (false, format!("{relay_binary} binary not found"));
+        return super::ProbeResult::fail(format!("{relay_binary} binary not found"));
     }
 
     let socket_dir = super::health::resolve_biomeos_socket_dir();
@@ -121,12 +121,9 @@ async fn configure_mesh(
     }
 
     if !std::path::Path::new(&socket_path).exists() {
-        return (
-            false,
-            format!(
-                "{relay_binary} socket not found at {socket_path} — start {relay_binary} first"
-            ),
-        );
+        return super::ProbeResult::fail(format!(
+            "{relay_binary} socket not found at {socket_path} — start {relay_binary} first"
+        ));
     }
 
     let vps_peer = resolve_primary_peer(profile.mesh_peer.as_deref());
@@ -155,21 +152,17 @@ async fn configure_mesh(
             let has_result = serde_json::from_str::<serde_json::Value>(&response)
                 .is_ok_and(|j| j.get("result").is_some() || j.get("ok").is_some());
             if has_result {
-                (
-                    true,
-                    format!("mesh.init sent ({peer_count} peers) as {gate_name}"),
-                )
+                super::ProbeResult::pass(format!(
+                    "mesh.init sent ({peer_count} peers) as {gate_name}"
+                ))
             } else {
-                (
-                    true,
-                    format!(
-                        "mesh.init sent ({peer_count} peers, response: {})",
-                        response.trim()
-                    ),
-                )
+                super::ProbeResult::pass(format!(
+                    "mesh.init sent ({peer_count} peers, response: {})",
+                    response.trim()
+                ))
             }
         }
-        Err(e) => (false, format!("mesh.init failed: {e}")),
+        Err(e) => super::ProbeResult::fail(format!("mesh.init failed: {e}")),
     }
 }
 

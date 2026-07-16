@@ -25,21 +25,19 @@ static LAST_FETCH_EPOCH: AtomicU64 = AtomicU64::new(0);
 
 /// Payload from a `depot.updated` mesh notification.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct DepotUpdatedNotification {
+pub(crate) struct DepotUpdatedNotification {
     /// Names of primals that were rebuilt.
     pub primals_updated: Vec<String>,
     /// BLAKE3 hash of the depot's `checksums.toml` after the build.
+    #[allow(dead_code, reason = "parsed for future checksum-gated fetch")]
     pub manifest_hash: Option<String>,
     /// Gate identity of the builder that produced the update.
     pub builder: String,
 }
 
-#[allow(dead_code)]
 impl DepotUpdatedNotification {
     /// Parse from a `mesh.subscribe` params payload.
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn from_json(payload: &serde_json::Value) -> Option<Self> {
+    pub fn from_json(payload: &serde_json::Value) -> Self {
         let primals = payload
             .get("primals_updated")
             .and_then(serde_json::Value::as_array)
@@ -60,11 +58,11 @@ impl DepotUpdatedNotification {
             .unwrap_or("unknown")
             .to_string();
 
-        Some(Self {
+        Self {
             primals_updated: primals,
             manifest_hash,
             builder,
-        })
+        }
     }
 }
 
@@ -150,7 +148,7 @@ mod tests {
             "manifest_hash": "abc123",
             "builder": "sporeGate"
         });
-        let notif = DepotUpdatedNotification::from_json(&payload).unwrap();
+        let notif = DepotUpdatedNotification::from_json(&payload);
         assert_eq!(notif.primals_updated, vec!["beardog", "songbird"]);
         assert_eq!(notif.manifest_hash.as_deref(), Some("abc123"));
         assert_eq!(notif.builder, "sporeGate");
@@ -159,7 +157,7 @@ mod tests {
     #[test]
     fn parse_depot_updated_minimal() {
         let payload = serde_json::json!({});
-        let notif = DepotUpdatedNotification::from_json(&payload).unwrap();
+        let notif = DepotUpdatedNotification::from_json(&payload);
         assert!(notif.primals_updated.is_empty());
         assert!(notif.manifest_hash.is_none());
         assert_eq!(notif.builder, "unknown");

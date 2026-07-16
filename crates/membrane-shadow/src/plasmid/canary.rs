@@ -12,9 +12,7 @@
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
-const fn build_err(msg: String) -> crate::error::ShadowError {
-    crate::error::ShadowError::Build(msg)
-}
+use crate::error::ShadowError;
 
 use cellmembrane_types::service::{
     DEFAULT_CANARY_BIN_DIR, DEFAULT_CANARY_SOCKET_DIR, ENV_CANARY_BIN_DIR, ENV_CANARY_SOCKET_DIR,
@@ -78,10 +76,10 @@ pub(crate) async fn retire_to_canary(
 
     tokio::fs::create_dir_all(&socket_dir)
         .await
-        .map_err(|e| build_err(format!("create canary socket dir: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("create canary socket dir: {e}")))?;
     tokio::fs::create_dir_all(&bin_dir)
         .await
-        .map_err(|e| build_err(format!("create canary bin dir: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("create canary bin dir: {e}")))?;
 
     // Kill any existing canary for this primal
     let mut pool = load_pool().await;
@@ -101,14 +99,14 @@ pub(crate) async fn retire_to_canary(
     // Stage binary to canary directory
     tokio::fs::copy(old_binary, &canary_binary)
         .await
-        .map_err(|e| build_err(format!("stage canary binary: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("stage canary binary: {e}")))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         tokio::fs::set_permissions(&canary_binary, std::fs::Permissions::from_mode(0o755))
             .await
-            .map_err(|e| build_err(format!("chmod canary binary: {e}")))?;
+            .map_err(|e| ShadowError::Build(format!("chmod canary binary: {e}")))?;
     }
 
     // Start canary on isolated socket
@@ -120,7 +118,7 @@ pub(crate) async fn retire_to_canary(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| build_err(format!("spawn canary {primal}: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("spawn canary {primal}: {e}")))?;
 
     let slot = CanarySlot {
         primal: primal.to_string(),
@@ -298,11 +296,11 @@ pub(crate) async fn promote_canary(primal: &str, production_path: &Path) -> crat
         .slots
         .iter()
         .find(|s| s.primal == primal)
-        .ok_or_else(|| build_err(format!("no canary found for {primal}")))?
+        .ok_or_else(|| ShadowError::Build(format!("no canary found for {primal}")))?
         .clone();
 
     if !slot.binary_path.exists() {
-        return Err(build_err(format!(
+        return Err(ShadowError::Build(format!(
             "canary binary missing: {}",
             slot.binary_path.display()
         )));
@@ -312,10 +310,10 @@ pub(crate) async fn promote_canary(primal: &str, production_path: &Path) -> crat
     let staging = production_path.with_extension("new");
     tokio::fs::copy(&slot.binary_path, &staging)
         .await
-        .map_err(|e| build_err(format!("copy canary to production staging: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("copy canary to production staging: {e}")))?;
     tokio::fs::rename(&staging, production_path)
         .await
-        .map_err(|e| build_err(format!("atomic canary promote: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("atomic canary promote: {e}")))?;
 
     // Kill the canary instance (it's now production)
     kill_canary(&slot).await;

@@ -10,9 +10,7 @@ use std::path::Path;
 use super::harvest::SourceEntry;
 use tracing::warn;
 
-const fn build_err(msg: String) -> crate::error::ShadowError {
-    crate::error::ShadowError::Build(msg)
-}
+use crate::error::ShadowError;
 
 /// Android NDK target triple for native grapheneGate binaries.
 pub const ANDROID_TARGET: &str = "aarch64-linux-android";
@@ -82,10 +80,10 @@ fn has_dt_needed(data: &[u8], ph_off: usize, ph_ent_size: usize, ph_num: usize) 
 pub(super) async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::Result<()> {
     let data = tokio::fs::read(bin_path)
         .await
-        .map_err(|e| build_err(format!("BUILD-ELF-01: cannot read binary: {e}")))?;
+        .map_err(|e| ShadowError::Build(format!("BUILD-ELF-01: cannot read binary: {e}")))?;
 
     if data.len() < 64 || data[..4] != ELF_MAGIC {
-        return Err(build_err(format!(
+        return Err(ShadowError::Build(format!(
             "BUILD-ELF-01: not a valid ELF binary: {}",
             bin_path.display()
         )));
@@ -102,7 +100,7 @@ pub(super) async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::R
     };
 
     if e_machine != expected_machine {
-        return Err(build_err(format!(
+        return Err(ShadowError::Build(format!(
             "BUILD-ELF-01: arch mismatch — expected {arch_name} (0x{expected_machine:02X}) \
              for target '{target}', got e_machine=0x{e_machine:02X}"
         )));
@@ -114,7 +112,7 @@ pub(super) async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::R
         let ph_off = usize::try_from(u64::from_le_bytes(
             data[32..40].try_into().unwrap_or([0; 8]),
         ))
-        .map_err(|_| build_err("BUILD-ELF-01: phoff exceeds addressable range".into()))?;
+        .map_err(|_| ShadowError::Build("BUILD-ELF-01: phoff exceeds addressable range".into()))?;
         let ph_ent_size = usize::from(u16::from_le_bytes([data[54], data[55]]));
         let ph_num = usize::from(u16::from_le_bytes([data[56], data[57]]));
 
@@ -125,7 +123,7 @@ pub(super) async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::R
         });
 
         if has_interp && has_dt_needed(&data, ph_off, ph_ent_size, ph_num) {
-            return Err(build_err(
+            return Err(ShadowError::Build(
                 "BUILD-ELF-01: musl binary has PT_INTERP + DT_NEEDED — appears dynamically linked"
                     .into(),
             ));
@@ -237,7 +235,7 @@ pub(super) async fn build_binary(
                 cmd.env("ANDROID_NDK_HOME", &ndk_home);
             }
         } else {
-            return Err(build_err(format!(
+            return Err(ShadowError::Build(format!(
                 "NDK linker not found for {target}. Set {ENV_ANDROID_NDK_HOME} \
                  to the NDK root (e.g. /opt/android-ndk-r26d)"
             )));
@@ -259,9 +257,9 @@ pub(super) async fn build_binary(
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr);
             let tail: String = stderr.lines().rev().take(5).collect::<Vec<_>>().join("\n");
-            Err(build_err(format!("cargo build failed:\n{tail}")))
+            Err(ShadowError::Build(format!("cargo build failed:\n{tail}")))
         }
-        Err(e) => Err(build_err(format!("cargo build spawn failed: {e}"))),
+        Err(e) => Err(ShadowError::Build(format!("cargo build spawn failed: {e}"))),
     }
 }
 

@@ -96,17 +96,17 @@ pub async fn bootstrap(
     phases.push(timed_phase("depot.fetch", fetch_phase(config, transport, dry_run)).await);
 
     let verify_arch = arch;
-    let verify_result =
+    let verify_probe =
         tokio::task::spawn_blocking(move || super::verify::verify_local_depot(verify_arch))
             .await
-            .unwrap_or_else(|_| (false, "spawn_blocking failed".into()));
+            .unwrap_or_else(|_| super::ProbeResult::fail("spawn_blocking failed"));
     phases.push(BootstrapPhase {
         name: "checksum.git".into(),
-        ok: verify_result.0,
+        ok: verify_probe.ok,
         detail: if dry_run {
-            format!("dry-run: would verify — current: {}", verify_result.1)
+            format!("dry-run: would verify — current: {}", verify_probe.detail)
         } else {
-            verify_result.1
+            verify_probe.detail
         },
     });
 
@@ -361,30 +361,29 @@ fn install_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
 
 async fn sign_verify_phase(dry_run: bool) -> BootstrapPhase {
     let depot = super::local::resolve_plasmidbin_dir();
-    let (ok, detail) = tokio::task::spawn_blocking(move || {
+    let probe = tokio::task::spawn_blocking(move || {
         let valid = crate::plasmid::signing::verify_depot_with_policy(
             &depot,
             cellmembrane_types::DepotTrustPolicy::RequireSigned,
         );
         if valid {
-            (true, "Ed25519 signature verified".into())
+            super::ProbeResult::pass("Ed25519 signature verified")
         } else {
-            (
-                false,
-                "Ed25519 signature verification FAILED — depot unsigned or tampered".into(),
+            super::ProbeResult::fail(
+                "Ed25519 signature verification FAILED — depot unsigned or tampered",
             )
         }
     })
     .await
-    .unwrap_or_else(|_| (false, "spawn_blocking failed".into()));
+    .unwrap_or_else(|_| super::ProbeResult::fail("spawn_blocking failed"));
 
     BootstrapPhase {
         name: "sign.verify".into(),
-        ok: if dry_run { true } else { ok },
+        ok: if dry_run { true } else { probe.ok },
         detail: if dry_run {
-            format!("dry-run: would verify — current: {detail}")
+            format!("dry-run: would verify — current: {}", probe.detail)
         } else {
-            detail
+            probe.detail
         },
     }
 }
@@ -413,7 +412,7 @@ async fn fetch_phase(
         dest: None,
         trust_policy: cellmembrane_types::DepotTrustPolicy::RequireSigned,
     };
-    let (ok, detail) = match crate::plasmid::fetch(config, &fetch_args).await {
+    let probe = match crate::plasmid::fetch(config, &fetch_args).await {
         Ok(outcome) => {
             let downloaded = outcome
                 .data
@@ -427,17 +426,17 @@ async fn fetch_phase(
                 .and_then(|d| d.get("failed"))
                 .and_then(serde_json::Value::as_u64)
                 .unwrap_or(0);
-            (
-                failed == 0,
-                format!("{downloaded} downloaded, {failed} failed (via {source})"),
-            )
+            super::ProbeResult {
+                ok: failed == 0,
+                detail: format!("{downloaded} downloaded, {failed} failed (via {source})"),
+            }
         }
-        Err(e) => (false, format!("fetch error: {e}")),
+        Err(e) => super::ProbeResult::fail(format!("fetch error: {e}")),
     };
     BootstrapPhase {
         name: "depot.fetch".into(),
-        ok,
-        detail,
+        ok: probe.ok,
+        detail: probe.detail,
     }
 }
 
@@ -518,11 +517,11 @@ async fn health_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
             detail: "dry-run: would probe all NUCLEUS primals".into(),
         };
     }
-    let (ok, detail) = super::health::health_sweep(arch).await;
+    let probe = super::health::health_sweep(arch).await;
     BootstrapPhase {
         name: "health.sweep".into(),
-        ok,
-        detail,
+        ok: probe.ok,
+        detail: probe.detail,
     }
 }
 

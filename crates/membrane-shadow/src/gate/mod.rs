@@ -25,6 +25,22 @@ pub mod verify;
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
 pub use health::{GateStatus, StatusProbe, status};
 
+/// Outcome of a gate subsystem probe — typed replacement for `(bool, String)` tuples.
+pub(crate) struct ProbeResult {
+    pub ok: bool,
+    pub detail: String,
+}
+
+impl ProbeResult {
+    pub fn pass(detail: impl Into<String>) -> Self {
+        Self { ok: true, detail: detail.into() }
+    }
+
+    pub fn fail(detail: impl Into<String>) -> Self {
+        Self { ok: false, detail: detail.into() }
+    }
+}
+
 use local::resolve_install_base;
 pub use local::resolve_local_gate_identity;
 pub(crate) use local::resolve_plasmidbin_dir;
