@@ -11,6 +11,7 @@
 //!   - `gate.provision` → cloud droplet provisioning (fieldMouse canary)
 
 pub mod bootstrap;
+pub(crate) mod enroll;
 pub mod health;
 mod interface;
 mod local;
@@ -23,6 +24,7 @@ pub(crate) mod sovereignty;
 pub mod verify;
 
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
+pub use enroll::{EnrollResult, enroll};
 pub use health::{GateStatus, StatusProbe, status};
 
 /// Outcome of a gate subsystem probe — typed replacement for `(bool, String)` tuples.

@@ -1,13 +1,21 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-16 (Wave 145a)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 5-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-17 (Wave 147a)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment, ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 147a (gate.enroll — automated mesh enrollment):**
+New `gate.enroll` command: WG keygen, wg-quick config render from manifest,
+mesh connectivity verify, Forgejo SSH verify, Forgejo-first git remote config.
+Implements the enrollment standard from northGate AAR — `origin` = Forgejo (sovereign),
+`github` = GitHub (mirror). 6-gate mesh live (northGate 10.13.37.8 enrolled).
+8 new tests (manifest→WG config, self-exclusion, URL format, rendered output, dry-run).
+1,081 tests, 0 clippy warnings.
 
 **Wave 145a (deep debt — let-chains modernization):**
 Nested `if let` patterns → Rust 2024 let-chains across 8 files (manifest, resolve, caddy,
@@ -54,7 +62,7 @@ All criteria satisfied — stadial-ready.
 | # | Criterion | Status |
 |---|-----------|--------|
 | 1 | All 4 sovereignty shadows cut over (7-day gates) | S1 **OPERATIONAL**, S2 LIVE, S3 LIVE, S4 **GRADUATED** |
-| 2 | Multi-gate LAN mesh (3+ gates) | **OPERATIONAL** — 5-node WG mesh |
+| 2 | Multi-gate LAN mesh (3+ gates) | **OPERATIONAL** — 6-node WG mesh |
 | 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38) |
 | 4 | Remote covalent node (WAN) | **flockGate LIVE** (16 bonds) |
 | 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** — NS cutover pending (registrar) |

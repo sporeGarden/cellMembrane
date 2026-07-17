@@ -80,6 +80,7 @@ pub(super) async fn dispatch(
             );
             Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
         }
+        "gate.enroll" => dispatch_enroll(args).await,
         "gate.status" => dispatch_status().await,
         "gate.profile" => {
             let gate_name = args.first().ok_or_else(|| {
@@ -106,6 +107,29 @@ pub(super) async fn dispatch(
         "gate.provision.verify" => super::provision_dispatch::dispatch_provision_verify(args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
     }
+}
+
+// ── Enrollment ──────────────────────────────────────────────────────
+
+async fn dispatch_enroll(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let dry_run = args.contains(&"--dry-run");
+    let positional: Vec<&&str> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    let gate_name = positional
+        .first()
+        .map_or_else(crate::gate::resolve_local_gate_identity, |&&s| {
+            s.to_string()
+        });
+
+    let result = gate::enroll(&gate_name, dry_run).await?;
+    let pass_count = result.phases.iter().filter(|p| p.ok).count();
+    let total = result.phases.len();
+    let msg = format!(
+        "enroll {}: {pass_count}/{total} phases passed{}{}",
+        result.gate_name,
+        if result.all_pass { " — ENROLLED" } else { "" },
+        if dry_run { " (dry-run)" } else { "" },
+    );
+    Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
 }
 
 // ── Quorum cascade timer ─────────────────────────────────────────────

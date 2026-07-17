@@ -8,8 +8,8 @@
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
-| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 145a) |
+| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 6-gate mesh |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 147a) |
 
 ---
 
@@ -55,18 +55,20 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1073 tests — pedantic clippy clean
+cargo test                  # 1081 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 145a): ~9k lines types, ~35k lines shadow. All manifest fields
+Current state (Wave 147a): ~9k lines types, ~36k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-Deep debt sweep (140a–145a): visibility tightened, allocation hot paths optimized,
+Wave 147a: `gate.enroll` automated mesh enrollment (WG keygen, config render,
+mesh verify, Forgejo SSH verify, Forgejo-first git remote config).
+Deep debt sweep (140a–147a): visibility tightened, allocation hot paths optimized,
 error taxonomy reclassified, domain constants centralized, CAC tree-parity checks,
 CSPRNG unified via `getrandom`, service filter registry-derived, `ProbeResult` typed
 gate probes, `build_err` consolidated, zero f64 casts in display formatting,
@@ -91,7 +93,8 @@ Typed Rust CLI for sovereign VPS control — replaces all bash sync/relay script
 
 ```bash
 membrane gate.status                      # Local gate health (native UDS probes + depot + mesh)
-membrane gate.bootstrap <name> [--dry-run] [--mobile]  # Profile-driven enrollment (7 phases)
+membrane gate.enroll <name> [--dry-run]    # Mesh enrollment (WG keys, config, remotes)
+membrane gate.bootstrap <name> [--dry-run] [--mobile]  # Profile-driven deployment (7 phases)
 membrane gate.profile <name>              # Read gate profile from ecosystem_manifest.toml
 membrane gate.quorum [--interval 15] [--generate]      # Install autonomous cascade timer (Quorum P1)
 membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
@@ -163,7 +166,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 145a are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 147a are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -171,10 +174,10 @@ through Wave 145a are **DONE**. Full wave-by-wave audit trail is preserved in
 | Infrastructure | exim4/droplet-agent purged, fail2ban, UFW, SSH key-only, journald persistence | DONE |
 | TLS | Caddy + Let's Encrypt sovereign TLS, Cloudflare removed | DONE |
 | Dark Forest | 21/21 PASS, 5-pillar compliance, stripped static ELF binaries | DONE |
-| NUCLEUS | 13/13 primals ALIVE, 5-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
+| NUCLEUS | 13/13 primals ALIVE, 6-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1073 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1081 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -297,7 +300,8 @@ gardens/cellMembrane/
           relay_dispatch.rs   # relay.run/mediate/ship dispatch
           sovereign.rs        # sovereignty + sovereign deploy dispatch
         gate/                 # Gate operations (modular)
-          bootstrap.rs        # Local enrollment (per-phase timeouts, spawn_blocking)
+          bootstrap.rs        # Local deployment (per-phase timeouts, spawn_blocking)
+          enroll.rs           # Mesh enrollment (WG keygen, config, Forgejo-first remotes)
           health.rs           # Native async UDS probes + rootpulse + status
           verify.rs           # Dual checksum verification (git + WAN)
           mesh.rs             # Mesh peer configuration (transport, songbird UDS)
@@ -351,11 +355,11 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,073 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
+1,081 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1073 tests)
+cargo test                  # Full suite (1081 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```
