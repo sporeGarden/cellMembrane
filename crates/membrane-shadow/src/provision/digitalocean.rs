@@ -25,9 +25,7 @@ fn resolve_token() -> Result<String> {
 }
 
 fn client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?)
+    crate::http_client(std::time::Duration::from_secs(30))
 }
 
 #[derive(Debug, Serialize)]

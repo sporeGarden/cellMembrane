@@ -27,10 +27,7 @@ pub async fn rootpulse_commit(
         )
     })?;
 
-    let session_id = format!(
-        "wave-{wave_id}-cascade-{}",
-        chrono::Utc::now().format("%Y%m%dT%H%M%S")
-    );
+    let session_id = format!("wave-{wave_id}-cascade-{}", crate::utc_now_compact());
     let agent_did = format!("did:primal:cellMembrane:{gate}");
 
     let params = serde_json::json!({
@@ -237,7 +234,7 @@ mod tests {
         let session = format!(
             "wave-{}-cascade-{}",
             116,
-            chrono::Utc::now().format("%Y%m%dT%H%M%S")
+            crate::utc_now_compact()
         );
         assert!(session.starts_with("wave-116-cascade-"));
         assert!(session.len() > 25);

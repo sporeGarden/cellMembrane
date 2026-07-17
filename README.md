@@ -55,7 +55,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1083 tests — pedantic clippy clean
+cargo test                  # 1089 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -70,6 +70,8 @@ Wave 147a: `gate.enroll` automated mesh enrollment (WG keygen, config render,
 mesh verify, Forgejo SSH verify, Forgejo-first git remote config).
 Wave 147b: `hub.peer` phase — hub-side peer addition via SSH + `wg set`.
 WG helpers extracted to `gate/wg.rs` (smart refactor, both files <500L).
+Timestamp formatting centralized (12 inline `chrono::` sites → 4 shared helpers).
+HTTP client construction centralized (8 builder sites → 2 shared helpers).
 Deep debt sweep (140a–147a): visibility tightened, allocation hot paths optimized,
 error taxonomy reclassified, domain constants centralized, CAC tree-parity checks,
 CSPRNG unified via `getrandom`, service filter registry-derived, `ProbeResult` typed
@@ -179,7 +181,7 @@ through Wave 147b are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 6-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1083 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1089 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -357,11 +359,11 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,083 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,089 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1083 tests)
+cargo test                  # Full suite (1089 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

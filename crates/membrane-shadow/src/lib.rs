@@ -169,6 +169,64 @@ pub fn atomic_write(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
     })
 }
 
+// ── Timestamp helpers ────────────────────────────────────────────────
+
+/// Current UTC time formatted as ISO 8601 (e.g. `2026-07-17T13:45:00Z`).
+#[must_use]
+pub fn utc_now_iso8601() -> String {
+    chrono::Utc::now()
+        .format(cellmembrane_types::service::ISO8601_UTC)
+        .to_string()
+}
+
+/// Current UTC date as `YYYY-MM-DD`.
+#[must_use]
+pub fn utc_today() -> String {
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
+}
+
+/// Current UTC time as RFC 3339 (e.g. `2026-07-17T13:45:00.123+00:00`).
+#[must_use]
+pub fn utc_now_rfc3339() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+/// Compact UTC timestamp for session IDs (e.g. `20260717T134500`).
+#[must_use]
+pub fn utc_now_compact() -> String {
+    chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string()
+}
+
+// ── HTTP client ──────────────────────────────────────────────────────
+
+/// Build a `reqwest::Client` with a timeout.
+///
+/// All HTTP-using code should route through this to ensure consistent
+/// TLS backend (rustls) and timeout policy.
+#[cfg(feature = "http")]
+pub fn http_client(timeout: std::time::Duration) -> error::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .map_err(|e| error::ShadowError::Config(format!("HTTP client: {e}")))
+}
+
+/// Build a `reqwest::Client` that accepts invalid TLS certs.
+///
+/// Only for loopback/localhost testing — never WAN traffic.
+#[cfg(feature = "http")]
+pub fn http_client_insecure(
+    timeout: std::time::Duration,
+) -> error::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(timeout)
+        .build()
+        .map_err(|e| error::ShadowError::Config(format!("HTTP client (insecure): {e}")))
+}
+
+// ── Atomic I/O ───────────────────────────────────────────────────────
+
 /// Async variant of [`atomic_write`] using `tokio::fs` for non-blocking I/O.
 ///
 /// Preferred in all `async fn` contexts to avoid stalling the executor.
@@ -236,5 +294,49 @@ mod tests {
             result.is_ok(),
             "should find workspace from CWD within ecoPrimals"
         );
+    }
+
+    #[test]
+    fn utc_now_iso8601_format() {
+        let ts = utc_now_iso8601();
+        assert!(ts.ends_with('Z'), "should end with Z: {ts}");
+        assert!(ts.contains('T'), "should contain T separator: {ts}");
+        assert_eq!(ts.len(), 20, "YYYY-MM-DDTHH:MM:SSZ = 20 chars: {ts}");
+    }
+
+    #[test]
+    fn utc_today_format() {
+        let d = utc_today();
+        assert_eq!(d.len(), 10, "YYYY-MM-DD = 10 chars: {d}");
+        assert_eq!(&d[4..5], "-");
+        assert_eq!(&d[7..8], "-");
+    }
+
+    #[test]
+    fn utc_now_rfc3339_format() {
+        let ts = utc_now_rfc3339();
+        assert!(ts.contains('T'), "should contain T separator: {ts}");
+        assert!(ts.contains('+') || ts.contains('Z'), "should have offset: {ts}");
+    }
+
+    #[test]
+    fn utc_now_compact_format() {
+        let ts = utc_now_compact();
+        assert_eq!(ts.len(), 15, "YYYYMMDDTHHmmss = 15 chars: {ts}");
+        assert_eq!(&ts[8..9], "T");
+    }
+
+    #[cfg(feature = "http")]
+    #[test]
+    fn http_client_builds_successfully() {
+        let client = http_client(std::time::Duration::from_secs(5));
+        assert!(client.is_ok());
+    }
+
+    #[cfg(feature = "http")]
+    #[test]
+    fn http_client_insecure_builds_successfully() {
+        let client = http_client_insecure(std::time::Duration::from_secs(5));
+        assert!(client.is_ok());
     }
 }

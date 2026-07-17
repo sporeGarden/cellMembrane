@@ -34,7 +34,7 @@ fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
         checksums_blake3,
         signature: sign_result.signature,
         signer_gate: gate,
-        signed_at: chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string(),
+        signed_at: crate::utc_now_iso8601(),
     };
 
     Some(sig)
@@ -168,10 +168,7 @@ pub(super) async fn fetch_wan_signatures() -> SignaturesFile {
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
     let url = format!("{base_url}/{}", cellmembrane_types::service::SIGNATURES_FILE);
 
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-    else {
+    let Ok(client) = crate::http_client(std::time::Duration::from_secs(10)) else {
         tracing::debug!("WAN signatures: failed to build HTTP client");
         return SignaturesFile::default();
     };

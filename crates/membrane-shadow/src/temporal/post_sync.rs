@@ -548,7 +548,7 @@ pub(crate) fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &s
          gate = \"{gate}\"\n\
          session = \"{session_id}\"\n\
          timestamp = \"{}\"\n",
-        chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC)
+        crate::utc_now_iso8601()
     );
     if let Err(e) = std::fs::write(&state_path, &content) {
         tracing::warn!(

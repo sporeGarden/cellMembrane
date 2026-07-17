@@ -78,7 +78,7 @@ fn update_checksums(
         }
     }
 
-    let now = chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string();
+    let now = crate::utc_now_iso8601();
     let mut out = format!("# plasmidBin checksums — BLAKE3\n# Generated: {now}\n\n");
     for (tgt, entries) in &all_targets {
         let _ = writeln!(out, "[{tgt}]");
@@ -106,7 +106,7 @@ fn update_checksums(
 
 async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result<()> {
     let provenance_path = depot_dir.join(cellmembrane_types::service::PROVENANCE_FILE);
-    let now = chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string();
+    let now = crate::utc_now_iso8601();
     let header_target = detect_target_triple();
 
     let mut prov_out = format!(

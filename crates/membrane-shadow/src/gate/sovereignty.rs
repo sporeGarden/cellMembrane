@@ -40,9 +40,7 @@ async fn probe_s1_tls() -> StatusProbe {
     let start = std::time::Instant::now();
 
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
+        crate::http_client(std::time::Duration::from_secs(5))
             .map_err(|e| format!("client: {e}"))?
             .head(&url)
             .send()
@@ -140,9 +138,7 @@ async fn probe_s3_content() -> StatusProbe {
     let start = std::time::Instant::now();
 
     let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
+        crate::http_client(std::time::Duration::from_secs(5))
             .map_err(|e| format!("client: {e}"))?
             .head(&url)
             .send()

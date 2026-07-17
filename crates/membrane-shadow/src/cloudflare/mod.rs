@@ -53,10 +53,7 @@ impl CloudflareConfig {
     }
 
     fn client() -> Result<reqwest::Client> {
-        reqwest::Client::builder()
-            .timeout(API_TIMEOUT)
-            .build()
-            .map_err(|e| ShadowError::Config(format!("HTTP client build: {e}")))
+        crate::http_client(API_TIMEOUT)
     }
 
     fn auth_header(&self) -> (&str, String) {

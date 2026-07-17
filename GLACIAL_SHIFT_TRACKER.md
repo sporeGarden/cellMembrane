@@ -14,7 +14,12 @@ New `hub.peer` phase in `gate.enroll`: reads local WG pubkey, resolves hub
 gate from manifest, SSHs to hub to run `wg set wg0 peer <pubkey> allowed-ips`.
 Eliminates the manual SSH step for hub-side enrollment. WG helpers extracted
 from `enroll.rs` into `gate/wg.rs` (smart refactor: enroll 503L, wg 370L).
-Const assertion for SSH timeout bounds. 1,083 tests, 0 clippy warnings.
+Const assertion for SSH timeout bounds.
+Timestamp dedup: 12 inline `chrono::Utc::now()` sites → 4 centralized helpers
+(`utc_now_iso8601`, `utc_today`, `utc_now_rfc3339`, `utc_now_compact`).
+HTTP client dedup: 8 `reqwest::Client::builder()` sites → 2 centralized
+helpers (`http_client`, `http_client_insecure`).
+1,089 tests, 0 clippy warnings.
 
 **Wave 147a (gate.enroll — automated mesh enrollment):**
 New `gate.enroll` command: WG keygen, wg-quick config render from manifest,

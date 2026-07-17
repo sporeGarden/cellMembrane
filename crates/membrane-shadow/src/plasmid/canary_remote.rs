@@ -82,7 +82,7 @@ pub async fn register_remote_canary(
         ip: ip.to_string(),
         droplet_id,
         primals,
-        registered_at: chrono::Utc::now().to_rfc3339(),
+        registered_at: crate::utc_now_rfc3339(),
     });
     save_remote_canaries(&registry).await;
 }

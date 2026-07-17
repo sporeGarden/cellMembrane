@@ -45,10 +45,7 @@ pub async fn fetch_wan_checksums(arch: &str) -> HashMap<String, String> {
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
     let url = format!("{base_url}/{}", cellmembrane_types::service::CHECKSUMS_FILE);
 
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-    else {
+    let Ok(client) = crate::http_client(std::time::Duration::from_secs(15)) else {
         return HashMap::new();
     };
 

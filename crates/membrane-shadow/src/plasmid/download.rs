@@ -66,12 +66,9 @@ async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
 
 #[cfg(feature = "http")]
 async fn download_via_http(url: &str, dest: &Path) -> bool {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_FETCH_TIMEOUT_SECS,
-        ))
-        .build()
-    else {
+    let Ok(client) = crate::http_client(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_FETCH_TIMEOUT_SECS,
+    )) else {
         return false;
     };
 

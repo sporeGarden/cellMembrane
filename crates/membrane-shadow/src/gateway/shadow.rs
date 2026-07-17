@@ -80,11 +80,7 @@ async fn run_shadow_comparisons(
 
 /// Probe a single HTTPS endpoint, returning timing + status.
 async fn probe_endpoint(url: &str) -> ProbeResult {
-    let client = match reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-    {
+    let client = match crate::http_client_insecure(std::time::Duration::from_secs(10)) {
         Ok(c) => c,
         Err(e) => return ProbeResult::err(format!("client build: {e}")),
     };

@@ -133,7 +133,7 @@ pub async fn publish_gate_heads(
     let file = GateHeadsFile {
         meta: GateHeadsMeta {
             gate: gate.clone(),
-            updated: chrono_now_utc(),
+            updated: crate::utc_now_iso8601(),
         },
         heads,
     };
@@ -214,7 +214,7 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
         .unwrap_or_else(|| WaveFile {
             wave: WaveSection {
                 id: 0,
-                date: chrono_today(),
+                date: crate::utc_today(),
                 ssot: String::new(),
                 notes: "wave.toml not found".into(),
                 publisher: String::new(),
@@ -373,16 +373,6 @@ pub(crate) fn check_installed_freshness() -> Result<String> {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-/// Get today's date as YYYY-MM-DD.
-fn chrono_today() -> String {
-    chrono::Utc::now().format("%Y-%m-%d").to_string()
-}
-
-/// Get current UTC timestamp as ISO 8601.
-fn chrono_now_utc() -> String {
-    chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string()
-}
-
 /// Provenance sidecar written by `plasmidbin install`.
 #[derive(Debug, serde::Deserialize)]
 struct ProvenanceSidecar {
@@ -437,8 +427,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chrono_today_format() {
-        let today = chrono_today();
+    fn utc_today_format() {
+        let today = crate::utc_today();
         assert_eq!(today.len(), 10);
         assert_eq!(&today[4..5], "-");
         assert_eq!(&today[7..8], "-");

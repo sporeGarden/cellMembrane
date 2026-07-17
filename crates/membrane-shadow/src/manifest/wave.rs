@@ -51,7 +51,7 @@ impl WaveState {
     pub fn open(id: u32) -> Self {
         Self {
             id,
-            opened: Some(chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string()),
+            opened: Some(crate::utc_now_iso8601()),
             closed: None,
             exit_criteria: Vec::new(),
             last_rootpulse_session: None,
@@ -78,7 +78,7 @@ impl WaveState {
 
     /// Mark the wave as closed with the current timestamp.
     pub fn close(&mut self) {
-        self.closed = Some(chrono::Utc::now().format(cellmembrane_types::service::ISO8601_UTC).to_string());
+        self.closed = Some(crate::utc_now_iso8601());
     }
 
     /// Record a rootpulse session.

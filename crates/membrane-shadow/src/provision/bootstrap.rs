@@ -538,7 +538,7 @@ pub(super) async fn write_gate_identity(
     gate_name: &str,
     profile: &str,
 ) -> Result<String> {
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = crate::utc_now_rfc3339();
     let script = format!(
         r#"
 mkdir -p /etc/membrane

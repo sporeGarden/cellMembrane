@@ -125,7 +125,7 @@ pub(crate) async fn retire_to_canary(
         binary_path: canary_binary,
         socket_path,
         commit: commit.to_string(),
-        promoted_at: chrono::Utc::now().to_rfc3339(),
+        promoted_at: crate::utc_now_rfc3339(),
         pid: child.id(),
     };
 
@@ -488,7 +488,7 @@ mod tests {
             binary_path: PathBuf::from("/opt/membrane/canary/beardog"),
             socket_path: PathBuf::from("/run/membrane/canary/beardog.sock"),
             commit: "fresh123".into(),
-            promoted_at: chrono::Utc::now().to_rfc3339(),
+            promoted_at: crate::utc_now_rfc3339(),
             pid: None,
         };
         assert!(!is_stale(&fresh_slot));
