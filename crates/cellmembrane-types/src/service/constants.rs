@@ -455,10 +455,14 @@ pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
 
 // ── Composition domains ──────────────────────────────────────────────
 
+/// Root domain for the sovereign membrane surface.
+pub const SURFACE_DOMAIN: &str = "primals.eco";
 /// Default domain for footPrint composition.
 pub const FOOTPRINT_DOMAIN: &str = "footprint.primals.eco";
 /// Default domain for tideGlass composition.
 pub const TIDEGLASS_DOMAIN: &str = "tideglass.primals.eco";
+/// Path prefix for esotericWebb on the root domain.
+pub const ESOTERICWEBB_PATH: &str = "/webb/";
 
 /// Default footPrint server bind (loopback, behind drawbridge).
 pub const DEFAULT_FOOTPRINT_BIND: &str = "127.0.0.1:8090";

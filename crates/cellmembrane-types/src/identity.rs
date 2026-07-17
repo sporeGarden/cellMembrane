@@ -146,6 +146,8 @@ pub enum GateRole {
     FootPrint,
     /// tideGlass composition host.
     TideGlass,
+    /// esotericWebb composition host.
+    EsotericWebb,
     /// Forward-compatible catch-all for unknown role strings.
     Other(String),
 }
@@ -197,6 +199,7 @@ impl From<&str> for GateRole {
             "dns_primary" => Self::DnsPrimary,
             "footprint" => Self::FootPrint,
             "tideglass" => Self::TideGlass,
+            "esotericwebb" => Self::EsotericWebb,
             other => Self::Other(other.to_string()),
         }
     }
@@ -220,7 +223,8 @@ impl GateRole {
             | Self::Http
             | Self::Gateway
             | Self::FootPrint
-            | Self::TideGlass => Some(ServiceCapability::ContentServing),
+            | Self::TideGlass
+            | Self::EsotericWebb => Some(ServiceCapability::ContentServing),
             Self::Observability | Self::Metrics => Some(ServiceCapability::Observability),
             Self::Compute | Self::Build | Self::BuildHub => {
                 Some(ServiceCapability::ComputeOrchestration)
@@ -288,6 +292,7 @@ impl fmt::Display for GateRole {
             Self::DnsPrimary => write!(f, "dns_primary"),
             Self::FootPrint => write!(f, "footprint"),
             Self::TideGlass => write!(f, "tideglass"),
+            Self::EsotericWebb => write!(f, "esotericwebb"),
             Self::Other(s) => write!(f, "{s}"),
         }
     }

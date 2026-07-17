@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# footprint-server.service — footPrint composition server on sporeGate
+#
+# Runs the footPrint API server behind songBird's drawbridge.
+# Caddy routes: /api/* → :8090, /ws → petalTongue :8080, static → petalTongue :8080.
+#
+# Usage: sudo systemctl enable --now footprint-server
+# Deploy: membrane plasmid.deploy --binary footprint-server --gate sporeGate
+[Unit]
+Description=footPrint Composition Server
+After=songbird-federation.service membrane-nucleus.target
+Wants=songbird-federation.service
+ConditionPathExists=/opt/membrane/footprint-server
+
+[Service]
+Type=simple
+UMask=0002
+ExecStart=/opt/membrane/footprint-server server --socket /run/membrane/footprint-server.sock
+Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
+Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
+Environment=BIOMEOS_SOCKET_DIR=/run/membrane
+Environment=FOOTPRINT_BIND=127.0.0.1:8090
+Environment=HOME=/root
+Restart=always
+RestartSec=3
+RuntimeDirectory=membrane
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=footprint-server
+
+[Install]
+WantedBy=membrane-nucleus.target

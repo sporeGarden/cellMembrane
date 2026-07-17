@@ -175,6 +175,16 @@ pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -
         });
     }
 
+    let has_webb = roles.iter().any(|r| matches!(r, GateRole::EsotericWebb));
+    if has_webb {
+        routes.push(GatewayRoute {
+            host: cellmembrane_types::service::SURFACE_DOMAIN.into(),
+            path_prefix: cellmembrane_types::service::ESOTERICWEBB_PATH.into(),
+            capability: "esotericwebb".into(),
+            timeout_secs: timeout,
+        });
+    }
+
     routes
 }
 
@@ -410,6 +420,25 @@ mod tests {
         let typed = GateRole::from("tideglass");
         assert!(matches!(typed, GateRole::TideGlass));
         assert_eq!(typed.to_string(), "tideglass");
+    }
+
+    #[test]
+    fn esotericwebb_role_typed() {
+        use cellmembrane_types::GateRole;
+        let typed = GateRole::from("esotericwebb");
+        assert!(matches!(typed, GateRole::EsotericWebb));
+        assert_eq!(typed.to_string(), "esotericwebb");
+    }
+
+    #[test]
+    fn default_routes_for_esotericwebb_role() {
+        use cellmembrane_types::GateRole;
+        let roles = vec![GateRole::EsotericWebb];
+        let routes = default_routes_for_roles(&roles);
+        assert_eq!(routes.len(), 1);
+        assert_eq!(routes[0].host, cellmembrane_types::service::SURFACE_DOMAIN);
+        assert_eq!(routes[0].path_prefix, cellmembrane_types::service::ESOTERICWEBB_PATH);
+        assert_eq!(routes[0].capability, "esotericwebb");
     }
 
     #[test]

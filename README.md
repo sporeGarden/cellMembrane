@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 6-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 147c) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 147e) |
 
 ---
 
@@ -60,7 +60,7 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 147c): ~9k lines types, ~36k lines shadow. All manifest fields
+Current state (Wave 147e): ~9k lines types, ~36k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
@@ -72,6 +72,9 @@ Wave 147b: `hub.peer` phase — hub-side peer addition via SSH + `wg set`.
 WG helpers extracted to `gate/wg.rs` (smart refactor, both files <500L).
 Wave 147c: Caddy blocks for footPrint API endpoints (sub-route handle blocks).
 `GateRole::FootPrint`/`TideGlass` promoted to typed variants (no more stringly-typed).
+Wave 147e: `ZoneLabel::House1` variant (unblocks cascade). `GateRole::EsotericWebb`
+typed. Caddy block for `primals.eco/webb/`. NUCLEUS service units for footPrint + Webb.
+northGate added to mesh registry (10.13.37.8).
 Timestamp formatting centralized (12 inline `chrono::` sites → 4 shared helpers).
 HTTP client construction centralized (8 builder sites → 2 shared helpers).
 Deep debt sweep (140a–147a): visibility tightened, allocation hot paths optimized,
@@ -172,7 +175,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 147c are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 147e are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -361,7 +364,7 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,096 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,100 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash

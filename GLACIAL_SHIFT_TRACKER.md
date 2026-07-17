@@ -1,13 +1,23 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-17 (Wave 147c)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, footPrint Caddy blocks + typed composition roles, ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-17 (Wave 147e)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, composition Caddy blocks + typed roles + NUCLEUS service units, ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 147e (zone fix + esotericWebb Caddy + composition service units):**
+`ZoneLabel::House1` variant: unblocks cascade for northGate (manifest `zone = "house1"`
+was silently falling to `Unassigned`). northGate added to `KNOWN_MESH_GATES`,
+`KNOWN_GATES`, and `mesh_address` registry (10.13.37.8). House1 requires WG overlay.
+`GateRole::EsotericWebb` typed variant. Caddy block for `primals.eco/webb/*` via
+sub-route on root domain. NUCLEUS service units: `footprint-server.service` (sporeGate)
+and `esotericwebb-server.service` (flockGate). `SURFACE_DOMAIN` + `ESOTERICWEBB_PATH`
+constants. Gateway `default_routes_for_roles` updated for esotericWebb.
+1,100 tests, 0 clippy warnings.
 
 **Wave 147c (footPrint Caddy blocks + typed composition roles):**
 Caddy blocks for footPrint API endpoints: `CaddySubRoute` type + `handle` block

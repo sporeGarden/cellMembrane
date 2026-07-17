@@ -356,6 +356,21 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
                 sub_routes: vec![],
             });
         }
+
+        if let Some((gate_name_ref, profile)) = m.gates_for_role("esotericwebb").first() {
+            let ip = resolve_upstream_ip(gate_name_ref, profile, inner_ip);
+            vhosts.push(CaddyVhost {
+                domain: service::SURFACE_DOMAIN.into(),
+                upstream: String::new(),
+                path: None,
+                tls: true,
+                extra_directives: vec![],
+                sub_routes: vec![CaddySubRoute {
+                    path_prefix: format!("{}*", service::ESOTERICWEBB_PATH),
+                    upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                }],
+            });
+        }
     }
 
     if vhosts.is_empty() {

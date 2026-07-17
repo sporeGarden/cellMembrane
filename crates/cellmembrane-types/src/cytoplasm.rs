@@ -24,6 +24,8 @@ use std::fmt;
 pub enum ZoneLabel {
     /// Hub 1: CRS310 backbone, sporeGate plasma membrane, 10G fabric.
     Backbone,
+    /// House 1: Primary residence, northGate compute.
+    House1,
     /// Hub 2: Omada `SX3008F` (standalone L2), Flint 2 `WiFi`, house 2 gates.
     House2,
     /// Hub 3: Garage, planned compute + outdoor `WiFi`.
@@ -41,6 +43,7 @@ impl ZoneLabel {
     pub fn from_manifest(s: &str) -> Self {
         match s {
             "backbone" => Self::Backbone,
+            "house1" => Self::House1,
             "house2" => Self::House2,
             "garage" => Self::Garage,
             "wan" => Self::Wan,
@@ -69,7 +72,8 @@ impl ZoneLabel {
     #[must_use]
     pub fn for_gate(gate_name: &str) -> Self {
         match gate_name {
-            "eastGate" | "sporeGate" | "northGate" | "ironGate" => Self::Backbone,
+            "eastGate" | "sporeGate" | "ironGate" => Self::Backbone,
+            "northGate" => Self::House1,
             "strandGate" | "southGate" | "swiftGate" | "fieldGate" => Self::House2,
             "golgi" | "pepti" | "flockGate" => Self::Wan,
             _ => Self::Unassigned,
@@ -81,6 +85,7 @@ impl ZoneLabel {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Backbone => "backbone",
+            Self::House1 => "house1",
             Self::House2 => "house2",
             Self::Garage => "garage",
             Self::Wan => "wan",
@@ -97,7 +102,7 @@ impl ZoneLabel {
     /// Whether gates in this zone require `WireGuard` overlay for inter-zone traffic.
     #[must_use]
     pub const fn requires_overlay(self) -> bool {
-        matches!(self, Self::Wan | Self::Garage)
+        matches!(self, Self::Wan | Self::Garage | Self::House1)
     }
 }
 
@@ -144,7 +149,7 @@ pub fn mesh_address_from_topology(
 /// Used as a fallback when the ecosystem manifest is unavailable.
 /// Once assigned, an address is permanent — add new gates here when
 /// they join the mesh.
-pub const KNOWN_MESH_GATES: &[&str] = &["golgi", "sporeGate", "eastGate", "flockGate", "ironGate"];
+pub const KNOWN_MESH_GATES: &[&str] = &["golgi", "sporeGate", "eastGate", "flockGate", "ironGate", "northGate"];
 
 /// All known active gates in the ecosystem (superset of [`KNOWN_MESH_GATES`]).
 ///
@@ -156,6 +161,7 @@ pub const KNOWN_GATES: &[&str] = &[
     "eastGate",
     "flockGate",
     "ironGate",
+    "northGate",
     "grapheneGate",
 ];
 
@@ -173,6 +179,7 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
         "eastGate" => Some("10.13.37.5"),
         "flockGate" => Some("10.13.37.6"),
         "ironGate" => Some("10.13.37.7"),
+        "northGate" => Some("10.13.37.8"),
         _ => None,
     }
 }
@@ -185,8 +192,12 @@ mod tests {
     fn zone_for_gate_backbone() {
         assert_eq!(ZoneLabel::for_gate("eastGate"), ZoneLabel::Backbone);
         assert_eq!(ZoneLabel::for_gate("sporeGate"), ZoneLabel::Backbone);
-        assert_eq!(ZoneLabel::for_gate("northGate"), ZoneLabel::Backbone);
         assert_eq!(ZoneLabel::for_gate("ironGate"), ZoneLabel::Backbone);
+    }
+
+    #[test]
+    fn zone_for_gate_house1() {
+        assert_eq!(ZoneLabel::for_gate("northGate"), ZoneLabel::House1);
     }
 
     #[test]
@@ -211,6 +222,7 @@ mod tests {
     #[test]
     fn zone_from_manifest_string() {
         assert_eq!(ZoneLabel::from_manifest("backbone"), ZoneLabel::Backbone);
+        assert_eq!(ZoneLabel::from_manifest("house1"), ZoneLabel::House1);
         assert_eq!(ZoneLabel::from_manifest("house2"), ZoneLabel::House2);
         assert_eq!(ZoneLabel::from_manifest("garage"), ZoneLabel::Garage);
         assert_eq!(ZoneLabel::from_manifest("wan"), ZoneLabel::Wan);
@@ -228,8 +240,10 @@ mod tests {
     fn zone_l2_and_overlay() {
         assert!(ZoneLabel::Backbone.has_l2_backbone());
         assert!(!ZoneLabel::Wan.has_l2_backbone());
+        assert!(!ZoneLabel::House1.has_l2_backbone());
         assert!(ZoneLabel::Wan.requires_overlay());
         assert!(ZoneLabel::Garage.requires_overlay());
+        assert!(ZoneLabel::House1.requires_overlay());
         assert!(!ZoneLabel::Backbone.requires_overlay());
         assert!(!ZoneLabel::House2.requires_overlay());
     }
@@ -259,8 +273,12 @@ mod tests {
     }
 
     #[test]
+    fn mesh_address_northgate() {
+        assert_eq!(mesh_address("northGate"), Some("10.13.37.8"));
+    }
+
+    #[test]
     fn mesh_address_unpeered_returns_none() {
-        assert_eq!(mesh_address("northGate"), None);
         assert_eq!(mesh_address("newGate"), None);
     }
 
