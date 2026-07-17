@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 147b (hub.peer hub-side peer addition, gate.enroll 6-phase enrollment, 6-gate mesh live + 1083 tests, 2026-07-17)
+**Last validated:** Wave 147b (hub.peer hub-side peer addition, gate.enroll 6-phase enrollment, 6-gate mesh live + 1089 tests, 2026-07-17)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 6-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate), capability-based registry, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), typed build/plasmid errors, git_ops consolidation, env_or helper (39 sites), typed divergence enums, pure function extraction (5 fns), topology-agnostic transport, SSH builder abstraction, systemctl helpers (sync+async), manifest-first mesh + SSH resolution, LAN DNS discovery, `exec_on_gate`, `KNOWN_MESH_GATES` constant, Tower HTTP gateway types + shadow validation dispatch, `KNOWN_GATES` (6 gates incl. grapheneGate), `AffinityTable` expanded, `SONGBIRD_PROXY_ROUTES` bridge, gateway deployment commands (env/units/retire-caddy), systemd unit generators (songBird + bearDog)
 
 ---
@@ -10,7 +10,7 @@
 
 - SSH access to the cellMembrane VPS (ed25519 key, multi-gate managed)
 - `membrane` CLI binary built (`cargo build --release -p membrane-shadow`)
-- Access to encrypted credential blob (via `share_credentials.sh`)
+- Access to encrypted credential blob (managed via bearDog HSM)
 - `plasmidBin` accessible at `../../infra/plasmidBin`
 
 ## NUCLEUS Verification (Current)

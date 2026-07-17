@@ -1,6 +1,6 @@
 # cellMembrane CI — Forgejo Actions dispatch plane
 # Runs on push to main and on pull requests.
-# Runner: self-hosted (peptidoglycan or gate with Rust toolchain).
+# Runner: self-hosted (gate with Rust toolchain, typically sporeGate).
 
 name: CI
 

@@ -8,7 +8,7 @@
 **WAN depot:** `https://membrane.primals.eco/depot/` — 13 binaries + checksums.toml over HTTPS (zero SSH for WAN gates)
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 **Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02, S4 GRADUATED)
-**Mesh:** 5-node WireGuard (golgi 10.13.37.1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7) + songbird:7700 federation
+**Mesh:** 6-node WireGuard (golgi 10.13.37.1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7, northGate .8) + songbird:7700 federation
 **Disk:** 60% (cleaned Wave 69)
 **Caddy:** sovereign TLS on `membrane.primals.eco` (Let's Encrypt E8) + `/depot/` file_server
 **Sandbox:** `/opt/membrane/sandbox/` + `/run/membrane/sandbox/` — ephemeral UDS validation (systemd `membrane-sandbox@`)

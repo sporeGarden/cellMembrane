@@ -4,7 +4,7 @@
 #
 # Architecture (Wave 92): VPS does NOT build from source.
 # Binaries flow: gate build → depot (plasmidBin/) → this service deploys.
-# Harvest happens on gates or peptidoglycan, not here.
+# Harvest happens on builder gates (sporeGate), not here.
 [Unit]
 Description=Plasmid Pipeline — deploy binaries from depot to install base
 After=network-online.target

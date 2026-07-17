@@ -1,9 +1,8 @@
 # cellMembrane reference configuration
-# Wave 120: sole VPS + identity-based service discovery + config generation
-# golgi (sole VPS): Forgejo, WG hub, relay, depot, NUCLEUS 18 svc, sovereign CI
-# WireGuard mesh: 4-node (golgi .1, sporeGate .2, eastGate .5, flockGate .6)
-# pepti decommissioned (Wave 120) — build role absorbed by sporeGate sovereign CI
-# golgiBody-ext consolidated into golgi (Wave 120)
+# Wave 147b: sole VPS + identity-based service discovery + config generation
+# golgi (sole VPS): Forgejo, WG hub, relay, depot, NUCLEUS 13 primals, sovereign CI
+# WireGuard mesh: 6-node (golgi .1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7, northGate .8)
+# gate.enroll automates mesh enrollment; pepti decommissioned (Wave 120)
 
 [membrane]
 name = "membrane-relay"
