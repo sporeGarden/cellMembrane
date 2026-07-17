@@ -1,13 +1,20 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-17 (Wave 147a)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment, ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-17 (Wave 147b)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 147b (hub.peer — hub-side peer addition + WG refactor):**
+New `hub.peer` phase in `gate.enroll`: reads local WG pubkey, resolves hub
+gate from manifest, SSHs to hub to run `wg set wg0 peer <pubkey> allowed-ips`.
+Eliminates the manual SSH step for hub-side enrollment. WG helpers extracted
+from `enroll.rs` into `gate/wg.rs` (smart refactor: enroll 503L, wg 370L).
+Const assertion for SSH timeout bounds. 1,083 tests, 0 clippy warnings.
 
 **Wave 147a (gate.enroll — automated mesh enrollment):**
 New `gate.enroll` command: WG keygen, wg-quick config render from manifest,

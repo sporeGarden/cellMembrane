@@ -17,6 +17,7 @@ mod interface;
 mod local;
 mod mesh;
 pub(crate) mod nucleus;
+mod wg;
 pub mod preflight;
 pub(crate) mod systemd_units;
 pub(crate) mod sporeprint;

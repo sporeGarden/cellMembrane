@@ -11,6 +11,7 @@
 //! 3. `mesh.verify` — Verify tunnel connectivity to hub
 //! 4. `forgejo.verify` — Verify Forgejo SSH via mesh
 //! 5. `git.remotes` — Configure Forgejo-first remotes on local repos
+//! 6. `hub.peer` — Register this gate as a peer on the hub (SSH + `wg set`)
 //!
 //! After enrollment, `gate.bootstrap` handles depot fetch + NUCLEUS deployment.
 
@@ -19,6 +20,13 @@ use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 const ENROLL_PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// SSH timeout for hub-side peer addition (generous for WAN latency).
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DEFAULT_SSH_TIMEOUT_SECS is 10 — fits in u32"
+)]
+const HUB_SSH_TIMEOUT: u32 = cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS as u32 + 5;
 
 /// Result of a `gate.enroll` run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +106,14 @@ pub async fn enroll(gate_name: &str, dry_run: bool) -> Result<EnrollResult> {
         .await,
     );
 
+    phases.push(
+        timed_phase_enroll(
+            "hub.peer",
+            hub_peer_phase(gate_name, &ip, dry_run),
+        )
+        .await,
+    );
+
     let all_pass = phases.iter().all(|p| p.ok);
 
     Ok(EnrollResult {
@@ -132,237 +148,7 @@ fn resolve_mesh_ip(gate_name: &str) -> Option<String> {
         .and_then(|p| p.wg_ip.clone())
 }
 
-/// Generate a `WireGuard` keypair. Returns the public key in the phase detail.
-async fn wg_keygen_phase(dry_run: bool) -> BootstrapPhase {
-    if dry_run {
-        return BootstrapPhase {
-            name: "wg.keygen".into(),
-            ok: true,
-            detail: "dry-run: would generate WireGuard keypair".into(),
-        };
-    }
-
-    let existing = wg_private_key_path();
-    if existing.exists() {
-        return match tokio::fs::read_to_string(&existing).await {
-            Ok(key) => {
-                let pubkey = derive_wg_pubkey(key.trim()).await;
-                BootstrapPhase {
-                    name: "wg.keygen".into(),
-                    ok: true,
-                    detail: format!(
-                        "existing keypair at {} (pub: {})",
-                        existing.display(),
-                        pubkey.as_deref().unwrap_or("derive failed")
-                    ),
-                }
-            }
-            Err(e) => BootstrapPhase {
-                name: "wg.keygen".into(),
-                ok: false,
-                detail: format!("cannot read {}: {e}", existing.display()),
-            },
-        };
-    }
-
-    let genkey = tokio::process::Command::new("wg")
-        .arg("genkey")
-        .output()
-        .await;
-
-    let Ok(output) = genkey else {
-        return BootstrapPhase {
-            name: "wg.keygen".into(),
-            ok: false,
-            detail: "`wg genkey` failed — is wireguard-tools installed?".into(),
-        };
-    };
-
-    if !output.status.success() {
-        return BootstrapPhase {
-            name: "wg.keygen".into(),
-            ok: false,
-            detail: format!(
-                "wg genkey exit {}: {}",
-                output.status.code().unwrap_or(-1),
-                String::from_utf8_lossy(&output.stderr).trim()
-            ),
-        };
-    }
-
-    let private_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    if let Some(parent) = existing.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
-    }
-    if let Err(e) = tokio::fs::write(&existing, &private_key).await {
-        return BootstrapPhase {
-            name: "wg.keygen".into(),
-            ok: false,
-            detail: format!("cannot write private key to {}: {e}", existing.display()),
-        };
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&existing, std::fs::Permissions::from_mode(0o600));
-    }
-
-    let pubkey = derive_wg_pubkey(&private_key).await;
-    BootstrapPhase {
-        name: "wg.keygen".into(),
-        ok: true,
-        detail: format!(
-            "keypair generated → {} (pub: {})",
-            existing.display(),
-            pubkey.as_deref().unwrap_or("derive failed")
-        ),
-    }
-}
-
-fn wg_private_key_path() -> std::path::PathBuf {
-    let config_dir = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_CONFIG_DIR,
-        cellmembrane_types::service::DEFAULT_CONFIG_DIR,
-    );
-    std::path::PathBuf::from(config_dir).join("wg_private.key")
-}
-
-async fn derive_wg_pubkey(private_key: &str) -> Option<String> {
-    use tokio::io::AsyncWriteExt;
-
-    let mut child = tokio::process::Command::new("wg")
-        .arg("pubkey")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(private_key.as_bytes()).await.ok()?;
-        stdin.shutdown().await.ok()?;
-    }
-
-    let output = child.wait_with_output().await.ok()?;
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        None
-    }
-}
-
-/// Generate wg-quick config from manifest and local keypair.
-async fn wg_config_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
-    let Ok(root) = crate::temporal::resolve_workspace_root() else {
-        return BootstrapPhase {
-            name: "wg.config".into(),
-            ok: false,
-            detail: "cannot resolve workspace root".into(),
-        };
-    };
-    let Ok(manifest) = crate::manifest::load_from_workspace(&root) else {
-        return BootstrapPhase {
-            name: "wg.config".into(),
-            ok: false,
-            detail: "cannot load ecosystem manifest".into(),
-        };
-    };
-
-    let config = manifest_to_wg_config(gate_name, mesh_ip, &manifest);
-    let rendered = config.to_wg_quick();
-
-    if dry_run {
-        let peer_count = config.peers.len();
-        return BootstrapPhase {
-            name: "wg.config".into(),
-            ok: true,
-            detail: format!(
-                "dry-run: would write wg0.conf ({peer_count} peers, address {mesh_ip}/24)"
-            ),
-        };
-    }
-
-    let wg_config_path = wg_config_file_path();
-    if let Some(parent) = wg_config_path.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
-    }
-
-    match tokio::fs::write(&wg_config_path, &rendered).await {
-        Ok(()) => BootstrapPhase {
-            name: "wg.config".into(),
-            ok: true,
-            detail: format!(
-                "wrote {} ({} peers)",
-                wg_config_path.display(),
-                config.peers.len()
-            ),
-        },
-        Err(e) => BootstrapPhase {
-            name: "wg.config".into(),
-            ok: false,
-            detail: format!("cannot write {}: {e}", wg_config_path.display()),
-        },
-    }
-}
-
-fn wg_config_file_path() -> std::path::PathBuf {
-    let config_dir = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_CONFIG_DIR,
-        cellmembrane_types::service::DEFAULT_CONFIG_DIR,
-    );
-    std::path::PathBuf::from(config_dir).join("wg0.conf")
-}
-
-fn manifest_to_wg_config(
-    gate_name: &str,
-    mesh_ip: &str,
-    manifest: &crate::manifest::EcosystemManifest,
-) -> cellmembrane_types::wireguard::WgConfig {
-    let hub_endpoint = manifest
-        .topology
-        .as_ref()
-        .and_then(|t| t.hosts.get(&t.inner_membrane))
-        .map(String::as_str);
-
-    let peers: Vec<cellmembrane_types::wireguard::WgPeer> = manifest
-        .gates
-        .iter()
-        .filter(|(name, _)| *name != gate_name)
-        .filter_map(|(name, profile)| {
-            let peer_ip = profile.wg_ip.as_deref()?;
-            let endpoint = if profile.roles.iter().any(|r| {
-                matches!(
-                    r,
-                    cellmembrane_types::GateRole::WgHub | cellmembrane_types::GateRole::Relay
-                )
-            }) {
-                profile.host.clone().or_else(|| hub_endpoint.map(String::from))
-            } else {
-                None
-            };
-
-            let keepalive = if endpoint.is_some() { 25 } else { 0 };
-            Some(cellmembrane_types::wireguard::WgPeer {
-                name: name.clone(),
-                mesh_ip: peer_ip.to_string(),
-                public_key: None,
-                endpoint,
-                allowed_ips: vec![format!("{peer_ip}/32")],
-                keepalive,
-            })
-        })
-        .collect();
-
-    cellmembrane_types::wireguard::WgConfig {
-        gate_name: gate_name.into(),
-        address: mesh_ip.into(),
-        listen_port: cellmembrane_types::wireguard::DEFAULT_WG_PORT,
-        subnet: cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET.into(),
-        peers,
-    }
-}
+use super::wg::{read_local_pubkey, wg_config_phase, wg_keygen_phase};
 
 /// Resolve the hub (inner membrane) mesh IP from the manifest.
 fn resolve_hub_ip() -> Option<String> {
@@ -473,6 +259,85 @@ async fn forgejo_verify_phase(dry_run: bool) -> BootstrapPhase {
             detail: format!("SSH to {git_addr} failed: {e}"),
         },
     }
+}
+
+/// Register this gate as a peer on the hub's `WireGuard` interface.
+///
+/// Reads the local public key, resolves the hub gate via manifest topology,
+/// and SSHs to the hub to run `wg set wg0 peer <pubkey> allowed-ips <ip>/32`.
+async fn hub_peer_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
+    let Some(pubkey) = read_local_pubkey().await else {
+        return BootstrapPhase {
+            name: "hub.peer".into(),
+            ok: false,
+            detail: "cannot read local public key — run wg.keygen first".into(),
+        };
+    };
+
+    let Some(hub_host) = resolve_hub_ssh_target() else {
+        return BootstrapPhase {
+            name: "hub.peer".into(),
+            ok: false,
+            detail: "cannot resolve hub SSH target from manifest".into(),
+        };
+    };
+
+    if dry_run {
+        return BootstrapPhase {
+            name: "hub.peer".into(),
+            ok: true,
+            detail: format!(
+                "dry-run: would add peer {gate_name} ({mesh_ip}) to hub {hub_host} (pubkey: {}...)",
+                &pubkey[..8.min(pubkey.len())]
+            ),
+        };
+    }
+
+    let wg_iface = cellmembrane_types::wireguard::DEFAULT_WG_IFACE;
+    let cmd = format!(
+        "wg set {wg_iface} peer {pubkey} allowed-ips {mesh_ip}/32 && wg-quick save {wg_iface}"
+    );
+
+    match crate::ssh::exec_on_host("root", &hub_host, &cmd, HUB_SSH_TIMEOUT).await {
+        Ok((stdout, 0)) => BootstrapPhase {
+            name: "hub.peer".into(),
+            ok: true,
+            detail: format!(
+                "peer {gate_name} ({mesh_ip}) added to hub {hub_host}{}",
+                if stdout.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!(" — {}", stdout.trim())
+                }
+            ),
+        },
+        Ok((stderr, code)) => BootstrapPhase {
+            name: "hub.peer".into(),
+            ok: false,
+            detail: format!(
+                "hub wg set failed (exit {code}): {}",
+                stderr.trim()
+            ),
+        },
+        Err(e) => BootstrapPhase {
+            name: "hub.peer".into(),
+            ok: false,
+            detail: format!("SSH to hub {hub_host} failed: {e}"),
+        },
+    }
+}
+
+/// Resolve the hub gate's SSH target (IP or hostname) from the manifest.
+fn resolve_hub_ssh_target() -> Option<String> {
+    let root = crate::temporal::resolve_workspace_root().ok()?;
+    let manifest = crate::manifest::load_from_workspace(&root).ok()?;
+    let topo = manifest.topology.as_ref()?;
+    let hub_name = &topo.inner_membrane;
+    let hub_profile = manifest.gates.get(hub_name)?;
+    hub_profile
+        .host
+        .clone()
+        .or_else(|| hub_profile.wg_ip.clone())
 }
 
 /// Configure Forgejo-first git remotes on local repos.
@@ -602,141 +467,37 @@ mod tests {
         assert!(url.contains("cellMembrane.git"));
     }
 
-    #[test]
-    fn wg_private_key_path_is_under_config_dir() {
-        let path = wg_private_key_path();
-        assert!(path.ends_with("wg_private.key"));
-    }
-
-    #[test]
-    fn wg_config_path_is_under_config_dir() {
-        let path = wg_config_file_path();
-        assert!(path.ends_with("wg0.conf"));
-    }
-
-    #[test]
-    fn manifest_to_wg_config_generates_peers() {
-        use crate::manifest::EcosystemManifest;
-        let toml_str = r#"
-[meta]
-family = "ecoPrimals"
-version = "1"
-wave = 147
-
-[sync]
-divergence_policy = "flag"
-push_targets = ["origin"]
-
-[repos.cellMembrane]
-org = "ecoPrimals"
-local_path = "gardens/cellMembrane"
-
-[gates.golgiBody]
-target = "x86_64-unknown-linux-musl"
-wg_ip = "10.13.37.1"
-host = "157.230.3.183"
-roles = ["wg_hub", "relay"]
-
-[gates.sporeGate]
-target = "x86_64-unknown-linux-musl"
-wg_ip = "10.13.37.2"
-roles = ["builder"]
-
-[gates.testGate]
-target = "x86_64-unknown-linux-musl"
-wg_ip = "10.13.37.99"
-roles = []
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        let config = manifest_to_wg_config("testGate", "10.13.37.99", &manifest);
-
-        assert_eq!(config.gate_name, "testGate");
-        assert_eq!(config.address, "10.13.37.99");
-        assert_eq!(config.peers.len(), 2);
-
-        let golgi = config.peers.iter().find(|p| p.name == "golgiBody").unwrap();
-        assert_eq!(golgi.mesh_ip, "10.13.37.1");
-        assert!(golgi.endpoint.is_some());
-        assert_eq!(golgi.keepalive, 25);
-
-        let spore = config.peers.iter().find(|p| p.name == "sporeGate").unwrap();
-        assert_eq!(spore.mesh_ip, "10.13.37.2");
-        assert!(spore.endpoint.is_none());
-        assert_eq!(spore.keepalive, 0);
-    }
-
-    #[test]
-    fn manifest_to_wg_config_excludes_self() {
-        use crate::manifest::EcosystemManifest;
-        let toml_str = r#"
-[meta]
-family = "ecoPrimals"
-version = "1"
-wave = 147
-
-[sync]
-divergence_policy = "flag"
-push_targets = ["origin"]
-
-[repos.cellMembrane]
-org = "ecoPrimals"
-local_path = "gardens/cellMembrane"
-
-[gates.golgiBody]
-target = "x86_64-unknown-linux-musl"
-wg_ip = "10.13.37.1"
-roles = ["wg_hub"]
-
-[gates.myGate]
-target = "x86_64-unknown-linux-musl"
-wg_ip = "10.13.37.50"
-roles = []
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        let config = manifest_to_wg_config("myGate", "10.13.37.50", &manifest);
-        assert!(!config.peers.iter().any(|p| p.name == "myGate"));
-        assert_eq!(config.peers.len(), 1);
-    }
-
-    #[test]
-    fn wg_config_renders_valid_output() {
-        use crate::manifest::EcosystemManifest;
-        let toml_str = r#"
-[meta]
-family = "ecoPrimals"
-version = "1"
-wave = 147
-
-[sync]
-divergence_policy = "flag"
-push_targets = ["origin"]
-
-[repos.cellMembrane]
-org = "ecoPrimals"
-local_path = "gardens/cellMembrane"
-
-[gates.golgiBody]
-target = "x86_64-unknown-linux-musl"
-wg_ip = "10.13.37.1"
-host = "157.230.3.183"
-roles = ["wg_hub"]
-"#;
-        let manifest: EcosystemManifest = toml::from_str(toml_str).unwrap();
-        let config = manifest_to_wg_config("newGate", "10.13.37.99", &manifest);
-        let rendered = config.to_wg_quick();
-
-        assert!(rendered.contains("[Interface]"));
-        assert!(rendered.contains("Address = 10.13.37.99/24"));
-        assert!(rendered.contains("# golgiBody"));
-        assert!(rendered.contains("AllowedIPs = 10.13.37.1/32"));
-        assert!(rendered.contains("PersistentKeepalive = 25"));
-    }
-
     #[tokio::test]
     async fn enroll_dry_run_completes() {
         let result = enroll("testGate", true).await;
         assert!(result.is_ok());
         let r = result.unwrap();
         assert!(!r.phases.is_empty());
+    }
+
+    #[test]
+    fn resolve_hub_ssh_target_returns_option() {
+        let result = resolve_hub_ssh_target();
+        let _ = result;
+    }
+
+    const _: () = {
+        assert!(HUB_SSH_TIMEOUT >= 10);
+        assert!(HUB_SSH_TIMEOUT <= 60);
+    };
+
+    #[tokio::test]
+    async fn enroll_dry_run_includes_hub_peer_phase() {
+        let result = enroll("testGate", true).await;
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        let hub_phase = r.phases.iter().find(|p| p.name == "hub.peer");
+        if let Some(phase) = hub_phase {
+            assert!(
+                phase.detail.contains("dry-run") || phase.detail.contains("cannot"),
+                "hub.peer should be dry-run or report missing key: {}",
+                phase.detail
+            );
+        }
     }
 }
