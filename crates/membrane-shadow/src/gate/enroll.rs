@@ -364,9 +364,18 @@ fn manifest_to_wg_config(
     }
 }
 
+/// Resolve the hub (inner membrane) mesh IP from the manifest.
+fn resolve_hub_ip() -> Option<String> {
+    let root = crate::temporal::resolve_workspace_root().ok()?;
+    let manifest = crate::manifest::load_from_workspace(&root).ok()?;
+    let topo = manifest.topology.as_ref()?;
+    let hub_name = &topo.inner_membrane;
+    manifest.gates.get(hub_name).and_then(|p| p.wg_ip.clone())
+}
+
 /// Verify mesh connectivity by pinging the hub gateway.
 async fn mesh_verify_phase(mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
-    let hub_ip = "10.13.37.1";
+    let hub_ip = resolve_hub_ip().unwrap_or_else(|| "10.13.37.1".into());
 
     if dry_run {
         return BootstrapPhase {
@@ -377,7 +386,7 @@ async fn mesh_verify_phase(mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
     }
 
     let ping_result = tokio::process::Command::new("ping")
-        .args(["-c", "3", "-W", "5", hub_ip])
+        .args(["-c", "3", "-W", "5", &hub_ip])
         .output()
         .await;
 
@@ -485,20 +494,6 @@ async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         };
     };
 
-    let git_addr = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_FORGEJO_GIT_ADDR,
-        cellmembrane_types::service::DEFAULT_FORGEJO_GIT_ADDR,
-    );
-    let forgejo_org = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_FORGEJO_ORG,
-        cellmembrane_types::service::DEFAULT_FORGEJO_ORG,
-    );
-
-    let github_org = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_GITHUB_ORG,
-        cellmembrane_types::service::DEFAULT_GITHUB_ORG,
-    );
-
     let _ = gate_name;
 
     let mut configured = 0u32;
@@ -512,8 +507,8 @@ async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
             continue;
         }
 
-        let forgejo_url = format!("ssh://git@{git_addr}/{forgejo_org}/{repo_name}.git");
-        let github_url = format!("git@github.com:{github_org}/{repo_name}.git");
+        let forgejo_url = forgejo_clone_url(repo_name);
+        let github_url = github_clone_url(repo_name);
 
         if dry_run {
             configured += 1;
@@ -523,7 +518,7 @@ async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         let origin_ok =
             set_remote_url(&repo_dir, "origin", &forgejo_url).await;
         let github_ok =
-            ensure_remote(&repo_dir, "github", &github_url).await;
+            set_remote_url(&repo_dir, "github", &github_url).await;
 
         if origin_ok && github_ok {
             configured += 1;
@@ -563,14 +558,9 @@ async fn set_remote_url(repo_dir: &std::path::Path, remote: &str, url: &str) -> 
     }
 }
 
-/// Ensure a remote exists. If it exists with a different URL, update it.
-async fn ensure_remote(repo_dir: &std::path::Path, remote: &str, url: &str) -> bool {
-    set_remote_url(repo_dir, remote, url).await
-}
 
 /// Build the Forgejo SSH clone URL for a given repo.
 #[must_use]
-#[allow(dead_code, reason = "enrollment API — wired by tests, consumed by git.remotes phase")]
 pub fn forgejo_clone_url(repo_name: &str) -> String {
     let git_addr = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_FORGEJO_GIT_ADDR,
@@ -585,7 +575,6 @@ pub fn forgejo_clone_url(repo_name: &str) -> String {
 
 /// Build the GitHub SSH clone URL for a given repo.
 #[must_use]
-#[allow(dead_code, reason = "enrollment API — wired by tests, consumed by git.remotes phase")]
 pub fn github_clone_url(repo_name: &str) -> String {
     let org = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_GITHUB_ORG,

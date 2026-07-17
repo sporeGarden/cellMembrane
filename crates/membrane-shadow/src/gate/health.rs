@@ -255,10 +255,10 @@ fn probe_primal_pgrep(primal: &str) -> bool {
             continue;
         }
         let comm_path = entry.path().join("comm");
-        if let Ok(comm) = std::fs::read_to_string(&comm_path) {
-            if comm.trim() == primal {
-                return true;
-            }
+        if let Ok(comm) = std::fs::read_to_string(&comm_path)
+            && comm.trim() == primal
+        {
+            return true;
         }
     }
     false

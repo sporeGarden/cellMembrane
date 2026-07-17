@@ -216,31 +216,32 @@ fn parse_sync_output(output: &str) -> SyncResult {
             result.gate = rest.trim().to_string();
         }
 
-        if trimmed.starts_with("Repos:") {
-            if let Some(n) = trimmed.split_whitespace().nth(1) {
-                result.total = n.parse().unwrap_or(0);
-            }
+        if trimmed.starts_with("Repos:")
+            && let Some(n) = trimmed.split_whitespace().nth(1)
+        {
+            result.total = n.parse().unwrap_or(0);
         }
-        if trimmed.contains("In sync:") || trimmed.contains("Parity:") {
-            let n_pos = if trimmed.contains("In sync:") { 2 } else { 1 };
-            if let Some(n) = trimmed.split_whitespace().nth(n_pos) {
-                result.synced = n.parse().unwrap_or(0);
-            }
+        if (trimmed.contains("In sync:") || trimmed.contains("Parity:"))
+            && let Some(n) = trimmed
+                .split_whitespace()
+                .nth(if trimmed.contains("In sync:") { 2 } else { 1 })
+        {
+            result.synced = n.parse().unwrap_or(0);
         }
-        if trimmed.starts_with("Drifted:") || trimmed.starts_with("Diverge:") {
-            if let Some(n) = trimmed.split_whitespace().nth(1) {
-                result.drifted = n.parse().unwrap_or(0);
-            }
+        if (trimmed.starts_with("Drifted:") || trimmed.starts_with("Diverge:"))
+            && let Some(n) = trimmed.split_whitespace().nth(1)
+        {
+            result.drifted = n.parse().unwrap_or(0);
         }
-        if trimmed.starts_with("Not cloned:") {
-            if let Some(n) = trimmed.split_whitespace().nth(2) {
-                result.missing = n.parse().unwrap_or(0);
-            }
+        if trimmed.starts_with("Not cloned:")
+            && let Some(n) = trimmed.split_whitespace().nth(2)
+        {
+            result.missing = n.parse().unwrap_or(0);
         }
-        if trimmed.starts_with("Pulled:") || trimmed.starts_with("Synced:") {
-            if let Some(n) = trimmed.split_whitespace().nth(1) {
-                result.synced = n.parse().unwrap_or(0);
-            }
+        if (trimmed.starts_with("Pulled:") || trimmed.starts_with("Synced:"))
+            && let Some(n) = trimmed.split_whitespace().nth(1)
+        {
+            result.synced = n.parse().unwrap_or(0);
         }
     }
 
