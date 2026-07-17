@@ -142,6 +142,10 @@ pub enum GateRole {
     Ci,
     /// Primary DNS server.
     DnsPrimary,
+    /// footPrint composition host.
+    FootPrint,
+    /// tideGlass composition host.
+    TideGlass,
     /// Forward-compatible catch-all for unknown role strings.
     Other(String),
 }
@@ -191,6 +195,8 @@ impl From<&str> for GateRole {
             "gateway" => Self::Gateway,
             "ci" => Self::Ci,
             "dns_primary" => Self::DnsPrimary,
+            "footprint" => Self::FootPrint,
+            "tideglass" => Self::TideGlass,
             other => Self::Other(other.to_string()),
         }
     }
@@ -208,9 +214,13 @@ impl GateRole {
             Self::Relay | Self::MeshRelay => Some(ServiceCapability::MeshRelay),
             Self::Turn | Self::Stun => Some(ServiceCapability::TurnServer),
             Self::Security | Self::Crypto | Self::Auth => Some(ServiceCapability::CryptoSigner),
-            Self::Content | Self::Forgejo | Self::Depot | Self::Http | Self::Gateway => {
-                Some(ServiceCapability::ContentServing)
-            }
+            Self::Content
+            | Self::Forgejo
+            | Self::Depot
+            | Self::Http
+            | Self::Gateway
+            | Self::FootPrint
+            | Self::TideGlass => Some(ServiceCapability::ContentServing),
             Self::Observability | Self::Metrics => Some(ServiceCapability::Observability),
             Self::Compute | Self::Build | Self::BuildHub => {
                 Some(ServiceCapability::ComputeOrchestration)
@@ -276,6 +286,8 @@ impl fmt::Display for GateRole {
             Self::Gateway => write!(f, "gateway"),
             Self::Ci => write!(f, "ci"),
             Self::DnsPrimary => write!(f, "dns_primary"),
+            Self::FootPrint => write!(f, "footprint"),
+            Self::TideGlass => write!(f, "tideglass"),
             Self::Other(s) => write!(f, "{s}"),
         }
     }

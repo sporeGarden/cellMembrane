@@ -264,7 +264,8 @@ pub async fn dispatch(
 // ── Manifest-driven Caddyfile generation ────────────────────────────
 
 async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> {
-    use cellmembrane_types::caddy::{CaddyConfig, CaddyVhost};
+    use cellmembrane_types::caddy::{CaddyConfig, CaddySubRoute, CaddyVhost};
+    use cellmembrane_types::service;
 
     let root = crate::temporal::resolve_workspace_root()?;
     let m = crate::manifest::load_from_workspace_async(&root).await?;
@@ -298,30 +299,62 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
     if let Some(topo_data) = topo
         && let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane)
     {
-        let role_vhosts: &[(&str, &str, u16)] = &[
-            ("forgejo", cellmembrane_types::service::GIT_DOMAIN, cellmembrane_types::service::DEFAULT_FORGEJO_HTTP_PORT),
-            ("depot", cellmembrane_types::service::DEPOT_DOMAIN, cellmembrane_types::service::DEFAULT_DEPOT_HTTP_PORT),
-            ("relay", cellmembrane_types::service::MESH_DOMAIN, cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
-            ("footprint", cellmembrane_types::service::FOOTPRINT_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
-            ("tideglass", cellmembrane_types::service::TIDEGLASS_DOMAIN, cellmembrane_types::service::DEFAULT_FOOTPRINT_PORT),
+        let simple_vhosts: &[(&str, &str, u16)] = &[
+            ("forgejo", service::GIT_DOMAIN, service::DEFAULT_FORGEJO_HTTP_PORT),
+            ("depot", service::DEPOT_DOMAIN, service::DEFAULT_DEPOT_HTTP_PORT),
+            ("relay", service::MESH_DOMAIN, service::DEFAULT_FEDERATION_PORT),
         ];
 
-        for &(role, domain, port) in role_vhosts {
+        for &(role, domain, port) in simple_vhosts {
             let gates = m.gates_for_role(role);
             if let Some((gate_name_ref, profile)) = gates.first() {
-                let ip = profile
-                    .wg_ip
-                    .as_deref()
-                    .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate_name_ref))
-                    .unwrap_or(inner_ip.as_str());
+                let ip = resolve_upstream_ip(gate_name_ref, profile, inner_ip);
                 vhosts.push(CaddyVhost {
                     domain: domain.into(),
                     upstream: format!("{ip}:{port}"),
                     path: None,
                     tls: true,
                     extra_directives: vec![],
+                    sub_routes: vec![],
                 });
             }
+        }
+
+        if let Some((gate_name_ref, profile)) = m.gates_for_role("footprint").first() {
+            let ip = resolve_upstream_ip(gate_name_ref, profile, inner_ip);
+            vhosts.push(CaddyVhost {
+                domain: service::FOOTPRINT_DOMAIN.into(),
+                upstream: String::new(),
+                path: None,
+                tls: true,
+                extra_directives: vec![],
+                sub_routes: vec![
+                    CaddySubRoute {
+                        path_prefix: "/api/*".into(),
+                        upstream: format!("{ip}:{}", service::DEFAULT_FOOTPRINT_PORT),
+                    },
+                    CaddySubRoute {
+                        path_prefix: "/ws".into(),
+                        upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                    },
+                    CaddySubRoute {
+                        path_prefix: String::new(),
+                        upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                    },
+                ],
+            });
+        }
+
+        if let Some((gate_name_ref, profile)) = m.gates_for_role("tideglass").first() {
+            let ip = resolve_upstream_ip(gate_name_ref, profile, inner_ip);
+            vhosts.push(CaddyVhost {
+                domain: service::TIDEGLASS_DOMAIN.into(),
+                upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                path: None,
+                tls: true,
+                extra_directives: vec![],
+                sub_routes: vec![],
+            });
         }
     }
 
@@ -341,6 +374,18 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
     let data = serde_json::to_value(&config)?;
 
     Ok(crate::ShadowOutcome::ok_with(output, data))
+}
+
+fn resolve_upstream_ip<'a>(
+    gate_name_ref: &str,
+    profile: &'a crate::manifest::GateProfile,
+    fallback: &'a str,
+) -> &'a str {
+    profile
+        .wg_ip
+        .as_deref()
+        .or_else(|| cellmembrane_types::cytoplasm::mesh_address(gate_name_ref))
+        .unwrap_or(fallback)
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

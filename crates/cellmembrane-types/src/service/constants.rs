@@ -434,6 +434,8 @@ pub const ENV_ZOLA_AUTO_BUILD: &str = "MEMBRANE_ZOLA_AUTO_BUILD";
 
 /// Default petalTongue content-serving bind address (loopback only, behind bearDog).
 pub const DEFAULT_PETALTONGUE_BIND: &str = "127.0.0.1:8080";
+/// Default petalTongue content-serving port.
+pub const DEFAULT_PETALTONGUE_PORT: u16 = 8080;
 
 /// Environment variable to override petalTongue bind address.
 pub const ENV_PETALTONGUE_BIND: &str = "PETALTONGUE_BIND";

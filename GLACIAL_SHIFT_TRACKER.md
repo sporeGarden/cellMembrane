@@ -1,13 +1,23 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-17 (Wave 147b)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-17 (Wave 147c)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, footPrint Caddy blocks + typed composition roles, ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 147c (footPrint Caddy blocks + typed composition roles):**
+Caddy blocks for footPrint API endpoints: `CaddySubRoute` type + `handle` block
+rendering. `footprint.primals.eco` routes `/api/*` → footPrint server (8090),
+`/ws` → petalTongue WS (8080), catch-all → petalTongue static (8080).
+`GateRole::FootPrint` and `GateRole::TideGlass` promoted from `Other(String)` to
+typed variants — eliminates stringly-typed matching in gateway config and Caddy
+generation. Gateway `default_routes_for_roles` updated. `DEFAULT_PETALTONGUE_PORT`
+constant added. tideGlass Caddy upstream corrected to petalTongue port.
+1,096 tests, 0 clippy warnings.
 
 **Wave 147b (hub.peer — hub-side peer addition + WG refactor):**
 New `hub.peer` phase in `gate.enroll`: reads local WG pubkey, resolves hub

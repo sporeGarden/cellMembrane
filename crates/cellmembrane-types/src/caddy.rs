@@ -26,12 +26,22 @@ const SECURITY_HEADER_BLOCK: &str = "\
     \x20       -Server\n\
     \x20   }";
 
+/// A path-based sub-route within a Caddy vhost (renders as a `handle` block).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaddySubRoute {
+    /// Path matcher (e.g. `"/api/*"`, `"/ws"`). Empty = catch-all.
+    pub path_prefix: String,
+    /// Reverse proxy upstream for this sub-route.
+    pub upstream: String,
+}
+
 /// A single Caddy vhost block — one domain/service mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CaddyVhost {
     /// Domain name (e.g. `"primals.eco"`, `"git.primals.eco"`).
     pub domain: String,
     /// Reverse proxy upstream (e.g. `"10.13.37.1:3000"`).
+    /// Used when `sub_routes` is empty; ignored when sub-routes are present.
     pub upstream: String,
     /// Optional path prefix for proxied routes (default: all paths).
     pub path: Option<String>,
@@ -39,6 +49,11 @@ pub struct CaddyVhost {
     pub tls: bool,
     /// Optional additional Caddy directives (header manipulation, etc.).
     pub extra_directives: Vec<String>,
+    /// Path-based sub-routes within this domain (renders as `handle` blocks).
+    /// When non-empty, the top-level `upstream`/`path` are ignored in favor
+    /// of the sub-routes. More-specific paths must come first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sub_routes: Vec<CaddySubRoute>,
 }
 
 /// Full Caddyfile configuration for a gate.
@@ -79,7 +94,17 @@ impl CaddyConfig {
         for vhost in &self.vhosts {
             let _ = writeln!(out, "{} {{", vhost.domain);
 
-            if let Some(path) = &vhost.path {
+            if !vhost.sub_routes.is_empty() {
+                for sub in &vhost.sub_routes {
+                    if sub.path_prefix.is_empty() {
+                        let _ = writeln!(out, "    handle {{");
+                    } else {
+                        let _ = writeln!(out, "    handle {} {{", sub.path_prefix);
+                    }
+                    let _ = writeln!(out, "        reverse_proxy {}", sub.upstream);
+                    let _ = writeln!(out, "    }}");
+                }
+            } else if let Some(path) = &vhost.path {
                 let _ = writeln!(out, "    reverse_proxy {path} {}", vhost.upstream);
             } else {
                 let _ = writeln!(out, "    reverse_proxy {}", vhost.upstream);
@@ -126,6 +151,7 @@ mod tests {
                     path: None,
                     tls: true,
                     extra_directives: vec![],
+                    sub_routes: vec![],
                 },
                 CaddyVhost {
                     domain: "git.primals.eco".into(),
@@ -133,6 +159,7 @@ mod tests {
                     path: None,
                     tls: true,
                     extra_directives: vec!["header X-Frame-Options DENY".into()],
+                    sub_routes: vec![],
                 },
                 CaddyVhost {
                     domain: "depot.primals.eco".into(),
@@ -140,6 +167,7 @@ mod tests {
                     path: Some("/depot/*".into()),
                     tls: true,
                     extra_directives: vec![],
+                    sub_routes: vec![],
                 },
             ],
         }
@@ -186,6 +214,7 @@ mod tests {
                 path: None,
                 tls: false,
                 extra_directives: vec![],
+                sub_routes: vec![],
             }],
         };
         let output = conf.to_caddyfile();
@@ -229,6 +258,7 @@ mod tests {
                 path: None,
                 tls: false,
                 extra_directives: vec![],
+                sub_routes: vec![],
             }],
         };
         let output = conf.to_caddyfile();
@@ -245,5 +275,81 @@ mod tests {
         let output = conf.to_caddyfile();
         assert!(!output.contains("email"));
         assert!(!output.contains('{'));
+    }
+
+    #[test]
+    fn sub_routes_render_handle_blocks() {
+        let conf = CaddyConfig {
+            gate_name: "test".into(),
+            acme_email: None,
+            vhosts: vec![CaddyVhost {
+                domain: "footprint.primals.eco".into(),
+                upstream: String::new(),
+                path: None,
+                tls: true,
+                extra_directives: vec![],
+                sub_routes: vec![
+                    CaddySubRoute {
+                        path_prefix: "/api/*".into(),
+                        upstream: "10.13.37.1:8090".into(),
+                    },
+                    CaddySubRoute {
+                        path_prefix: "/ws".into(),
+                        upstream: "10.13.37.1:8080".into(),
+                    },
+                    CaddySubRoute {
+                        path_prefix: String::new(),
+                        upstream: "10.13.37.1:8080".into(),
+                    },
+                ],
+            }],
+        };
+        let output = conf.to_caddyfile();
+        assert!(output.contains("footprint.primals.eco {"), "domain block");
+        assert!(output.contains("handle /api/* {"), "/api handle block");
+        assert!(output.contains("reverse_proxy 10.13.37.1:8090"), "API upstream");
+        assert!(output.contains("handle /ws {"), "/ws handle block");
+        assert!(output.contains("handle {"), "catch-all handle block");
+        assert!(output.contains("reverse_proxy 10.13.37.1:8080"), "petalTongue upstream");
+        assert!(output.contains("Strict-Transport-Security"), "security headers");
+    }
+
+    #[test]
+    fn sub_routes_skip_serialization_when_empty() {
+        let vhost = CaddyVhost {
+            domain: "test.primals.eco".into(),
+            upstream: "127.0.0.1:8080".into(),
+            path: None,
+            tls: true,
+            extra_directives: vec![],
+            sub_routes: vec![],
+        };
+        let json = serde_json::to_string(&vhost).unwrap();
+        assert!(!json.contains("sub_routes"), "empty sub_routes omitted from JSON");
+    }
+
+    #[test]
+    fn sub_routes_serde_roundtrip() {
+        let vhost = CaddyVhost {
+            domain: "footprint.primals.eco".into(),
+            upstream: String::new(),
+            path: None,
+            tls: true,
+            extra_directives: vec![],
+            sub_routes: vec![
+                CaddySubRoute {
+                    path_prefix: "/api/*".into(),
+                    upstream: "10.13.37.1:8090".into(),
+                },
+                CaddySubRoute {
+                    path_prefix: String::new(),
+                    upstream: "10.13.37.1:8080".into(),
+                },
+            ],
+        };
+        let json = serde_json::to_string(&vhost).unwrap();
+        let parsed: CaddyVhost = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.sub_routes.len(), 2);
+        assert_eq!(parsed.sub_routes[0].path_prefix, "/api/*");
     }
 }

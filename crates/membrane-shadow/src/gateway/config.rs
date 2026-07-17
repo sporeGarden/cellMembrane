@@ -152,10 +152,10 @@ pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -
         }
     }
 
-    let has_footprint = roles.iter().any(|r| matches!(r, GateRole::Other(s) if s == "footprint"));
+    let has_footprint = roles.iter().any(|r| matches!(r, GateRole::FootPrint));
     if has_footprint {
         let host = cellmembrane_types::service::FOOTPRINT_DOMAIN;
-        for (prefix, cap) in &[("/", "drawbridge"), ("/ws", "agent_bridge"), ("/api", "cas")] {
+        for (prefix, cap) in &[("/api", "cas"), ("/ws", "agent_bridge"), ("/", "drawbridge")] {
             routes.push(GatewayRoute {
                 host: host.into(),
                 path_prefix: (*prefix).into(),
@@ -165,7 +165,7 @@ pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -
         }
     }
 
-    let has_tideglass = roles.iter().any(|r| matches!(r, GateRole::Other(s) if s == "tideglass"));
+    let has_tideglass = roles.iter().any(|r| matches!(r, GateRole::TideGlass));
     if has_tideglass {
         routes.push(GatewayRoute {
             host: cellmembrane_types::service::TIDEGLASS_DOMAIN.into(),
@@ -372,6 +372,44 @@ mod tests {
     fn default_routes_empty_roles() {
         let routes = default_routes_for_roles(&[]);
         assert!(routes.is_empty());
+    }
+
+    #[test]
+    fn default_routes_for_footprint_role() {
+        use cellmembrane_types::GateRole;
+        let roles = vec![GateRole::FootPrint];
+        let routes = default_routes_for_roles(&roles);
+        assert_eq!(routes.len(), 3, "footprint: /api, /ws, catch-all");
+        assert!(routes.iter().any(|r| r.path_prefix == "/api" && r.capability == "cas"));
+        assert!(routes.iter().any(|r| r.path_prefix == "/ws" && r.capability == "agent_bridge"));
+        assert!(routes.iter().any(|r| r.path_prefix == "/" && r.capability == "drawbridge"));
+        assert!(routes.iter().all(|r| r.host == cellmembrane_types::service::FOOTPRINT_DOMAIN));
+    }
+
+    #[test]
+    fn default_routes_for_tideglass_role() {
+        use cellmembrane_types::GateRole;
+        let roles = vec![GateRole::TideGlass];
+        let routes = default_routes_for_roles(&roles);
+        assert_eq!(routes.len(), 1);
+        assert_eq!(routes[0].host, cellmembrane_types::service::TIDEGLASS_DOMAIN);
+        assert_eq!(routes[0].capability, "tideglass");
+    }
+
+    #[test]
+    fn footprint_role_typed_not_stringly() {
+        use cellmembrane_types::GateRole;
+        let typed = GateRole::from("footprint");
+        assert!(matches!(typed, GateRole::FootPrint));
+        assert_eq!(typed.to_string(), "footprint");
+    }
+
+    #[test]
+    fn tideglass_role_typed_not_stringly() {
+        use cellmembrane_types::GateRole;
+        let typed = GateRole::from("tideglass");
+        assert!(matches!(typed, GateRole::TideGlass));
+        assert_eq!(typed.to_string(), "tideglass");
     }
 
     #[test]
