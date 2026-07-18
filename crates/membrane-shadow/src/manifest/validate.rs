@@ -71,12 +71,16 @@ impl EcosystemManifest {
         for (name, entry) in &self.repos {
             if let Some(pkg) = &entry.package {
                 if pkg.is_empty() {
-                    issues.push(format!("repos.{name}: package is empty (omit or set a value)"));
+                    issues.push(format!(
+                        "repos.{name}: package is empty (omit or set a value)"
+                    ));
                 }
             }
             if let Some(linker) = &entry.linker {
                 if linker.is_empty() {
-                    issues.push(format!("repos.{name}: linker is empty (omit or set a value)"));
+                    issues.push(format!(
+                        "repos.{name}: linker is empty (omit or set a value)"
+                    ));
                 }
             }
             if entry.gpu && entry.category != cellmembrane_types::RepoCategory::Primal {
@@ -187,9 +191,11 @@ local_path = "primals/broken"
 "#;
         let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
         let issues = m.validate();
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("repos.broken: org is empty")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("repos.broken: org is empty"))
+        );
     }
 
     #[test]
@@ -226,9 +232,11 @@ package = ""
 "#;
         let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
         let issues = m.validate();
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("repos.biomeOS: package is empty")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("repos.biomeOS: package is empty"))
+        );
     }
 
     #[test]
@@ -245,9 +253,11 @@ linker = ""
 "#;
         let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
         let issues = m.validate();
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("repos.nestGate: linker is empty")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("repos.nestGate: linker is empty"))
+        );
     }
 
     #[test]
@@ -265,9 +275,7 @@ gpu = true
 "#;
         let m: EcosystemManifest = toml::from_str(toml_str).unwrap();
         let issues = m.validate();
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("gpu=true but category")));
+        assert!(issues.iter().any(|i| i.contains("gpu=true but category")));
     }
 
     #[test]

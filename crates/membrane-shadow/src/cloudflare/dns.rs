@@ -2,7 +2,9 @@
 
 //! Cloudflare DNS record operations — list, create, update, delete.
 
-use super::{CF_API_BASE, CfResponse, CloudflareConfig, cf_parse_err, cf_request_err, resolve_zone_id};
+use super::{
+    CF_API_BASE, CfResponse, CloudflareConfig, cf_parse_err, cf_request_err, resolve_zone_id,
+};
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 

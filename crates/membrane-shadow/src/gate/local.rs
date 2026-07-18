@@ -64,18 +64,29 @@ pub fn resolve_plasmidbin_dir() -> PathBuf {
     );
 
     let infra_depot = PathBuf::from(&eco_root).join(cellmembrane_types::service::INFRA_PLASMID_BIN);
-    if infra_depot.join(cellmembrane_types::service::CHECKSUMS_FILE).exists() || infra_depot.join("primals").is_dir() {
+    if infra_depot
+        .join(cellmembrane_types::service::CHECKSUMS_FILE)
+        .exists()
+        || infra_depot.join("primals").is_dir()
+    {
         return infra_depot;
     }
 
     let flat_depot = PathBuf::from(&eco_root).join(cellmembrane_types::service::PLASMID_BIN_DIR);
-    if flat_depot.join(cellmembrane_types::service::CHECKSUMS_FILE).exists() || flat_depot.join("primals").is_dir() {
+    if flat_depot
+        .join(cellmembrane_types::service::CHECKSUMS_FILE)
+        .exists()
+        || flat_depot.join("primals").is_dir()
+    {
         return flat_depot;
     }
 
     if let Ok(root) = crate::resolve_workspace_root() {
         let ws_depot = root.join(cellmembrane_types::service::PLASMID_BIN_DIR);
-        if ws_depot.join(cellmembrane_types::service::CHECKSUMS_FILE).exists() {
+        if ws_depot
+            .join(cellmembrane_types::service::CHECKSUMS_FILE)
+            .exists()
+        {
             return ws_depot;
         }
     }

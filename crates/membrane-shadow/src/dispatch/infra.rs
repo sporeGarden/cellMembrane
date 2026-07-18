@@ -330,7 +330,11 @@ mod tests {
     #[test]
     fn template_generates_valid_systemd_unit() {
         let result = dispatch_service_template("beardog");
-        assert!(result.ok, "beardog template should succeed: {}", result.message);
+        assert!(
+            result.ok,
+            "beardog template should succeed: {}",
+            result.message
+        );
         assert!(result.message.contains("[Unit]"));
         assert!(result.message.contains("[Service]"));
         assert!(result.message.contains("[Install]"));

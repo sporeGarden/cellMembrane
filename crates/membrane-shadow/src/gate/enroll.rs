@@ -69,50 +69,18 @@ pub async fn enroll(gate_name: &str, dry_run: bool) -> Result<EnrollResult> {
         });
     }
 
-    phases.push(
-        timed_phase_enroll("wg.keygen", wg_keygen_phase(dry_run)).await,
-    );
+    phases.push(timed_phase_enroll("wg.keygen", wg_keygen_phase(dry_run)).await);
 
     let ip = mesh_ip.clone().unwrap_or_default();
-    phases.push(
-        timed_phase_enroll(
-            "wg.config",
-            wg_config_phase(gate_name, &ip, dry_run),
-        )
-        .await,
-    );
+    phases.push(timed_phase_enroll("wg.config", wg_config_phase(gate_name, &ip, dry_run)).await);
 
-    phases.push(
-        timed_phase_enroll(
-            "mesh.verify",
-            mesh_verify_phase(&ip, dry_run),
-        )
-        .await,
-    );
+    phases.push(timed_phase_enroll("mesh.verify", mesh_verify_phase(&ip, dry_run)).await);
 
-    phases.push(
-        timed_phase_enroll(
-            "forgejo.verify",
-            forgejo_verify_phase(dry_run),
-        )
-        .await,
-    );
+    phases.push(timed_phase_enroll("forgejo.verify", forgejo_verify_phase(dry_run)).await);
 
-    phases.push(
-        timed_phase_enroll(
-            "git.remotes",
-            git_remotes_phase(gate_name, dry_run),
-        )
-        .await,
-    );
+    phases.push(timed_phase_enroll("git.remotes", git_remotes_phase(gate_name, dry_run)).await);
 
-    phases.push(
-        timed_phase_enroll(
-            "hub.peer",
-            hub_peer_phase(gate_name, &ip, dry_run),
-        )
-        .await,
-    );
+    phases.push(timed_phase_enroll("hub.peer", hub_peer_phase(gate_name, &ip, dry_run)).await);
 
     let all_pass = phases.iter().all(|p| p.ok);
 
@@ -142,10 +110,7 @@ where
 fn resolve_mesh_ip(gate_name: &str) -> Option<String> {
     let root = crate::temporal::resolve_workspace_root().ok()?;
     let manifest = crate::manifest::load_from_workspace(&root).ok()?;
-    manifest
-        .gates
-        .get(gate_name)
-        .and_then(|p| p.wg_ip.clone())
+    manifest.gates.get(gate_name).and_then(|p| p.wg_ip.clone())
 }
 
 use super::wg::{read_local_pubkey, wg_config_phase, wg_keygen_phase};
@@ -213,15 +178,16 @@ async fn forgejo_verify_phase(dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let (host, port) = git_addr
-        .split_once(':')
-        .unwrap_or((&git_addr, "22"));
+    let (host, port) = git_addr.split_once(':').unwrap_or((&git_addr, "22"));
 
     let ssh_result = tokio::process::Command::new("ssh")
         .args([
-            "-o", "StrictHostKeyChecking=accept-new",
-            "-o", "ConnectTimeout=10",
-            "-p", port,
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=10",
+            "-p",
+            port,
             &format!("git@{host}"),
             "help",
         ])
@@ -314,10 +280,7 @@ async fn hub_peer_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> Bootst
         Ok((stderr, code)) => BootstrapPhase {
             name: "hub.peer".into(),
             ok: false,
-            detail: format!(
-                "hub wg set failed (exit {code}): {}",
-                stderr.trim()
-            ),
+            detail: format!("hub wg set failed (exit {code}): {}", stderr.trim()),
         },
         Err(e) => BootstrapPhase {
             name: "hub.peer".into(),
@@ -380,10 +343,8 @@ async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
             continue;
         }
 
-        let origin_ok =
-            set_remote_url(&repo_dir, "origin", &forgejo_url).await;
-        let github_ok =
-            set_remote_url(&repo_dir, "github", &github_url).await;
+        let origin_ok = set_remote_url(&repo_dir, "origin", &forgejo_url).await;
+        let github_ok = set_remote_url(&repo_dir, "github", &github_url).await;
 
         if origin_ok && github_ok {
             configured += 1;
@@ -393,7 +354,11 @@ async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
     }
 
     let total = configured + skipped + errors;
-    let prefix = if dry_run { "dry-run: would configure" } else { "configured" };
+    let prefix = if dry_run {
+        "dry-run: would configure"
+    } else {
+        "configured"
+    };
 
     BootstrapPhase {
         name: "git.remotes".into(),
@@ -422,7 +387,6 @@ async fn set_remote_url(repo_dir: &std::path::Path, remote: &str, url: &str) -> 
         crate::git_ops::git_success(repo_dir, &["remote", "add", remote, url]).await
     }
 }
-
 
 /// Build the Forgejo SSH clone URL for a given repo.
 #[must_use]

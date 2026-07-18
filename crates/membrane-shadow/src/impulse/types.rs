@@ -328,9 +328,18 @@ mod tests {
     #[test]
     fn impulse_type_from_str() {
         assert_eq!("frago".parse::<ImpulseType>().unwrap(), ImpulseType::Frago);
-        assert_eq!("status".parse::<ImpulseType>().unwrap(), ImpulseType::Status);
-        assert_eq!("request".parse::<ImpulseType>().unwrap(), ImpulseType::Request);
-        assert_eq!("announce".parse::<ImpulseType>().unwrap(), ImpulseType::Announce);
+        assert_eq!(
+            "status".parse::<ImpulseType>().unwrap(),
+            ImpulseType::Status
+        );
+        assert_eq!(
+            "request".parse::<ImpulseType>().unwrap(),
+            ImpulseType::Request
+        );
+        assert_eq!(
+            "announce".parse::<ImpulseType>().unwrap(),
+            ImpulseType::Announce
+        );
         assert_eq!("sync".parse::<ImpulseType>().unwrap(), ImpulseType::Sync);
         assert!("invalid".parse::<ImpulseType>().is_err());
     }

@@ -266,13 +266,13 @@ fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
     type HmacSha256 = Hmac<Sha256>;
 
     // Extract: PRK = HMAC-SHA256(salt, IKM)
-    let mut extract_mac = HmacSha256::new_from_slice(salt)
-        .expect("HMAC-SHA256 accepts any key length");
+    let mut extract_mac =
+        HmacSha256::new_from_slice(salt).expect("HMAC-SHA256 accepts any key length");
     extract_mac.update(ikm);
     let prk = extract_mac.finalize().into_bytes();
 
-    let mut expand_mac = HmacSha256::new_from_slice(&prk)
-        .expect("HMAC-SHA256 accepts any key length");
+    let mut expand_mac =
+        HmacSha256::new_from_slice(&prk).expect("HMAC-SHA256 accepts any key length");
     expand_mac.update(info);
     expand_mac.update(&[0x01]);
     let okm = expand_mac.finalize().into_bytes();
@@ -291,8 +291,7 @@ fn mito_hmac_tag(mito_key: &[u8; 32], protocol_type: u8) -> [u8; 4] {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(mito_key)
-        .expect("HMAC-SHA256 accepts any key length");
+    let mut mac = HmacSha256::new_from_slice(mito_key).expect("HMAC-SHA256 accepts any key length");
     mac.update(&[protocol_type]);
     let result = mac.finalize().into_bytes();
 

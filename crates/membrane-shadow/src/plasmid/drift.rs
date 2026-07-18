@@ -152,7 +152,10 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
         cellmembrane_types::service::CHECKSUMS_FILE,
         cellmembrane_types::service::PROVENANCE_FILE,
     ];
-    if depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE).exists() {
+    if depot_dir
+        .join(cellmembrane_types::service::SIGNATURES_FILE)
+        .exists()
+    {
         add_args.push(cellmembrane_types::service::SIGNATURES_FILE);
     }
     if !crate::git_ops::git_success(depot_dir, &add_args).await {
@@ -165,7 +168,10 @@ pub(super) async fn publish_depot_checksums(depot_dir: &Path) {
         return;
     }
 
-    let signed_label = if depot_dir.join(cellmembrane_types::service::SIGNATURES_FILE).exists() {
+    let signed_label = if depot_dir
+        .join(cellmembrane_types::service::SIGNATURES_FILE)
+        .exists()
+    {
         " + signatures"
     } else {
         ""

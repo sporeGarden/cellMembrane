@@ -195,7 +195,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
         let targets = targets_for_primal(args.target.as_deref(), &source);
         for target in &targets {
             if args.dry_run {
-                let mode = if args.local { "build from local" } else { "clone" };
+                let mode = if args.local {
+                    "build from local"
+                } else {
+                    "clone"
+                };
                 results.push(HarvestResult {
                     binary: primal.clone(),
                     status: HarvestStatus::Built,
@@ -229,10 +233,7 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             .filter(|r| matches!(r.status, HarvestStatus::Built))
             .collect();
         if !built.is_empty() {
-            let built_names: Vec<String> = built
-                .iter()
-                .map(|r| r.binary.clone())
-                .collect();
+            let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
 
             for target in &targets_built {
                 let arch_results: Vec<&HarvestResult> = built

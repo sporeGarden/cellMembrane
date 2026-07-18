@@ -367,5 +367,4 @@ mod tests {
         assert_eq!(deser.pulled_from.as_deref(), Some("forgejo"));
         assert_eq!(deser.pushed_to, vec!["origin"]);
     }
-
 }

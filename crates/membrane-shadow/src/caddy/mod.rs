@@ -300,9 +300,21 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
         && let Some(inner_ip) = topo_data.hosts.get(&topo_data.inner_membrane)
     {
         let simple_vhosts: &[(&str, &str, u16)] = &[
-            ("forgejo", service::GIT_DOMAIN, service::DEFAULT_FORGEJO_HTTP_PORT),
-            ("depot", service::DEPOT_DOMAIN, service::DEFAULT_DEPOT_HTTP_PORT),
-            ("relay", service::MESH_DOMAIN, service::DEFAULT_FEDERATION_PORT),
+            (
+                "forgejo",
+                service::GIT_DOMAIN,
+                service::DEFAULT_FORGEJO_HTTP_PORT,
+            ),
+            (
+                "depot",
+                service::DEPOT_DOMAIN,
+                service::DEFAULT_DEPOT_HTTP_PORT,
+            ),
+            (
+                "relay",
+                service::MESH_DOMAIN,
+                service::DEFAULT_FEDERATION_PORT,
+            ),
         ];
 
         for &(role, domain, port) in simple_vhosts {

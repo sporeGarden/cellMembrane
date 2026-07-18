@@ -144,7 +144,9 @@ pub(crate) fn resolve_gate_primals(gate: &str) -> Vec<String> {
     static CACHE: OnceLock<Mutex<BTreeMap<String, Vec<String>>>> = OnceLock::new();
 
     let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let guard = cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     if let Some(primals) = guard.get(gate) {
         return primals.clone();
@@ -153,7 +155,9 @@ pub(crate) fn resolve_gate_primals(gate: &str) -> Vec<String> {
 
     let primals = resolve_primals_from_manifest(gate);
 
-    let mut guard = cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.entry(gate.to_string()).or_insert(primals).clone()
 }
 
@@ -285,7 +289,10 @@ pub async fn pipeline(
     let depot_dir = depot::resolve_depot(None)?;
     let bin_dir = depot_dir.join("primals").join(arch);
 
-    for entry in results.iter().filter(|r| matches!(r.status, HarvestStatus::Built)) {
+    for entry in results
+        .iter()
+        .filter(|r| matches!(r.status, HarvestStatus::Built))
+    {
         let binary_path = bin_dir.join(&entry.binary);
         if !binary_path.exists() {
             continue;

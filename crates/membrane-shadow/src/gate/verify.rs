@@ -26,7 +26,10 @@ pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
     let dest_root = resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
-    let checksums_path = if dest_root.join(cellmembrane_types::service::CHECKSUMS_FILE).exists() {
+    let checksums_path = if dest_root
+        .join(cellmembrane_types::service::CHECKSUMS_FILE)
+        .exists()
+    {
         dest_root.join(cellmembrane_types::service::CHECKSUMS_FILE)
     } else if let Ok(workspace) = crate::temporal::resolve_workspace_root() {
         let ws_path = workspace
@@ -35,9 +38,7 @@ pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
         if ws_path.exists() {
             ws_path
         } else {
-            return super::ProbeResult::fail(
-                "checksums.toml not found in depot or workspace",
-            );
+            return super::ProbeResult::fail("checksums.toml not found in depot or workspace");
         }
     } else {
         return super::ProbeResult::fail("checksums.toml not found");

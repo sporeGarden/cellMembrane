@@ -166,7 +166,10 @@ fn load_signatures(path: &Path) -> SignaturesFile {
 pub(super) async fn fetch_wan_signatures() -> SignaturesFile {
     let base_url = std::env::var(cellmembrane_types::service::ENV_WAN_DEPOT_URL)
         .unwrap_or_else(|_| cellmembrane_types::service::DEFAULT_WAN_DEPOT_URL.to_string());
-    let url = format!("{base_url}/{}", cellmembrane_types::service::SIGNATURES_FILE);
+    let url = format!(
+        "{base_url}/{}",
+        cellmembrane_types::service::SIGNATURES_FILE
+    );
 
     let Ok(client) = crate::http_client(std::time::Duration::from_secs(10)) else {
         tracing::debug!("WAN signatures: failed to build HTTP client");
@@ -231,9 +234,7 @@ fn verify_ed25519(message: &str, signature_hex: &str, public_key_hex: &str) -> b
     };
     let signature = Signature::from_bytes(&sig_array);
 
-    verifying_key
-        .verify(message.as_bytes(), &signature)
-        .is_ok()
+    verifying_key.verify(message.as_bytes(), &signature).is_ok()
 }
 
 struct SignResult {
@@ -276,8 +277,12 @@ fn request_beardog_sign(data: &str) -> Option<SignResult> {
 
         let pk_b64 = result.get("public_key")?.as_str()?;
         let sig_b64 = result.get("signature")?.as_str()?;
-        let pk_bytes = base64::engine::general_purpose::STANDARD.decode(pk_b64).ok()?;
-        let sig_bytes = base64::engine::general_purpose::STANDARD.decode(sig_b64).ok()?;
+        let pk_bytes = base64::engine::general_purpose::STANDARD
+            .decode(pk_b64)
+            .ok()?;
+        let sig_bytes = base64::engine::general_purpose::STANDARD
+            .decode(sig_b64)
+            .ok()?;
 
         Some(SignResult {
             public_key: hex::encode(pk_bytes),
@@ -287,8 +292,9 @@ fn request_beardog_sign(data: &str) -> Option<SignResult> {
 }
 
 fn signer_socket_name() -> String {
-    let binary =
-        cellmembrane_types::MembraneService::binary_for(cellmembrane_types::ServiceCapability::CryptoSigner);
+    let binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
     format!("{binary}.sock")
 }
 
@@ -441,7 +447,10 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         std::fs::write(tmp.join("checksums.toml"), "# test").unwrap();
 
-        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::IntegrityOnly));
+        assert!(verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::IntegrityOnly
+        ));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -479,8 +488,7 @@ mod tests {
     fn make_signed_depot(depot: &Path) -> DepotSignature {
         use ed25519_dalek::{Signer, SigningKey};
 
-        let checksums_content =
-            "# test checksums\n[x86_64-unknown-linux-musl]\nbeardog = { blake3 = \"abc\", size = 1024 }\n";
+        let checksums_content = "# test checksums\n[x86_64-unknown-linux-musl]\nbeardog = { blake3 = \"abc\", size = 1024 }\n";
         std::fs::write(
             depot.join(cellmembrane_types::service::CHECKSUMS_FILE),
             checksums_content,
@@ -525,9 +533,18 @@ mod tests {
 
         let _sig = make_signed_depot(&tmp);
 
-        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::RequireSigned));
-        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::VerifyIfPresent));
-        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::IntegrityOnly));
+        assert!(verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::RequireSigned
+        ));
+        assert!(verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::VerifyIfPresent
+        ));
+        assert!(verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::IntegrityOnly
+        ));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -546,9 +563,18 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!verify_depot_with_policy(&tmp, DepotTrustPolicy::RequireSigned));
-        assert!(!verify_depot_with_policy(&tmp, DepotTrustPolicy::VerifyIfPresent));
-        assert!(verify_depot_with_policy(&tmp, DepotTrustPolicy::IntegrityOnly));
+        assert!(!verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::RequireSigned
+        ));
+        assert!(!verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::VerifyIfPresent
+        ));
+        assert!(verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::IntegrityOnly
+        ));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -593,7 +619,10 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!verify_depot_with_policy(&tmp, DepotTrustPolicy::RequireSigned));
+        assert!(!verify_depot_with_policy(
+            &tmp,
+            DepotTrustPolicy::RequireSigned
+        ));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

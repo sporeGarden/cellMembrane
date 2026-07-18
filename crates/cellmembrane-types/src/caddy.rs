@@ -262,7 +262,10 @@ mod tests {
             }],
         };
         let output = conf.to_caddyfile();
-        assert!(!output.contains("Strict-Transport-Security"), "no HSTS on plain HTTP");
+        assert!(
+            !output.contains("Strict-Transport-Security"),
+            "no HSTS on plain HTTP"
+        );
     }
 
     #[test]
@@ -307,11 +310,20 @@ mod tests {
         let output = conf.to_caddyfile();
         assert!(output.contains("footprint.primals.eco {"), "domain block");
         assert!(output.contains("handle /api/* {"), "/api handle block");
-        assert!(output.contains("reverse_proxy 10.13.37.1:8090"), "API upstream");
+        assert!(
+            output.contains("reverse_proxy 10.13.37.1:8090"),
+            "API upstream"
+        );
         assert!(output.contains("handle /ws {"), "/ws handle block");
         assert!(output.contains("handle {"), "catch-all handle block");
-        assert!(output.contains("reverse_proxy 10.13.37.1:8080"), "petalTongue upstream");
-        assert!(output.contains("Strict-Transport-Security"), "security headers");
+        assert!(
+            output.contains("reverse_proxy 10.13.37.1:8080"),
+            "petalTongue upstream"
+        );
+        assert!(
+            output.contains("Strict-Transport-Security"),
+            "security headers"
+        );
     }
 
     #[test]
@@ -325,7 +337,10 @@ mod tests {
             sub_routes: vec![],
         };
         let json = serde_json::to_string(&vhost).unwrap();
-        assert!(!json.contains("sub_routes"), "empty sub_routes omitted from JSON");
+        assert!(
+            !json.contains("sub_routes"),
+            "empty sub_routes omitted from JSON"
+        );
     }
 
     #[test]

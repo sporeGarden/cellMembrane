@@ -38,14 +38,10 @@ pub(crate) fn parse_impulse_post_args<'a>(
         .ok_or_else(|| ShadowError::Config("--subject required".into()))?;
 
     let type_str = extract_flag_value(args, "--type").unwrap_or("status");
-    let impulse_type: impulse::ImpulseType = type_str
-        .parse()
-        .map_err(ShadowError::Config)?;
+    let impulse_type: impulse::ImpulseType = type_str.parse().map_err(ShadowError::Config)?;
 
     let priority_str = extract_flag_value(args, "--priority").unwrap_or("routine");
-    let priority: impulse::Priority = priority_str
-        .parse()
-        .map_err(ShadowError::Config)?;
+    let priority: impulse::Priority = priority_str.parse().map_err(ShadowError::Config)?;
 
     let to_gates: Vec<&str> = to_str.split(',').collect();
 
@@ -70,9 +66,7 @@ pub(crate) fn parse_context_weave_args<'a>(
         .ok_or_else(|| ShadowError::Config("--summary required".into()))?;
 
     let status_str = extract_flag_value(args, "--status").unwrap_or("active");
-    let status: context::FocusStatus = status_str
-        .parse()
-        .map_err(ShadowError::Config)?;
+    let status: context::FocusStatus = status_str.parse().map_err(ShadowError::Config)?;
 
     let ttl_str = extract_flag_value(args, "--ttl").unwrap_or("48");
     let ttl_hours: u32 = ttl_str.parse().unwrap_or(48);

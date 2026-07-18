@@ -103,7 +103,10 @@ fn try_forward_to_gates(impulse: &ImpulseFile, payload: &str) {
                 .build();
             match rt {
                 Ok(rt) => {
-                    if rt.block_on(crate::jsonrpc::call_endpoint(&ep, &req)).is_err() {
+                    if rt
+                        .block_on(crate::jsonrpc::call_endpoint(&ep, &req))
+                        .is_err()
+                    {
                         tracing::debug!(target_gate = %target, "impulse relay: delivery failed");
                     }
                 }
@@ -120,7 +123,10 @@ fn try_forward_to_gates(impulse: &ImpulseFile, payload: &str) {
 }
 
 #[must_use]
-pub(super) fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Option<ImpulseSignature> {
+pub(super) fn try_sign_impulse(
+    _workspace_root: &Path,
+    impulse_id: &str,
+) -> Option<ImpulseSignature> {
     #[cfg(not(unix))]
     {
         let _ = impulse_id;
@@ -147,7 +153,9 @@ pub(super) fn try_sign_impulse(_workspace_root: &Path, impulse_id: &str) -> Opti
             algorithm: "ed25519".to_string(),
             public_key: result.get("public_key")?.as_str()?.to_string(),
             value: result.get("signature")?.as_str()?.to_string(),
-            signed_at: Local::now().format(cellmembrane_types::service::ISO8601_TZ).to_string(),
+            signed_at: Local::now()
+                .format(cellmembrane_types::service::ISO8601_TZ)
+                .to_string(),
         })
     }
 }

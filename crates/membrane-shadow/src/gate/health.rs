@@ -49,19 +49,35 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let depot = tokio::task::spawn_blocking(move || super::verify::verify_local_depot(arch_clone))
         .await
         .unwrap_or_else(|_| super::ProbeResult::fail("depot verify task panicked"));
-    probes.push(StatusProbe { name: "depot.integrity".into(), ok: depot.ok, detail: depot.detail });
+    probes.push(StatusProbe {
+        name: "depot.integrity".into(),
+        ok: depot.ok,
+        detail: depot.detail,
+    });
 
     let mesh = probe_mesh_status().await;
-    probes.push(StatusProbe { name: "mesh.reachability".into(), ok: mesh.ok, detail: mesh.detail });
+    probes.push(StatusProbe {
+        name: "mesh.reachability".into(),
+        ok: mesh.ok,
+        detail: mesh.detail,
+    });
 
     let procs = health_sweep(arch).await;
-    probes.push(StatusProbe { name: "primals.alive".into(), ok: procs.ok, detail: procs.detail });
+    probes.push(StatusProbe {
+        name: "primals.alive".into(),
+        ok: procs.ok,
+        detail: procs.detail,
+    });
 
     let arch_for_freshness = arch;
     let fresh = tokio::task::spawn_blocking(move || probe_depot_freshness(arch_for_freshness))
         .await
         .unwrap_or_else(|_| super::ProbeResult::fail("freshness probe panicked"));
-    probes.push(StatusProbe { name: "depot.freshness".into(), ok: fresh.ok, detail: fresh.detail });
+    probes.push(StatusProbe {
+        name: "depot.freshness".into(),
+        ok: fresh.ok,
+        detail: fresh.detail,
+    });
 
     let sovereignty_probes = super::sovereignty::probe_sovereignty().await;
     probes.extend(sovereignty_probes);
@@ -157,8 +173,10 @@ fn parse_mesh_response(response: &str) -> super::ProbeResult {
         return super::ProbeResult::fail(format!("mesh error: {msg}"));
     }
 
-    json.get("result")
-        .map_or_else(|| super::ProbeResult::fail("no result field"), parse_mesh_json)
+    json.get("result").map_or_else(
+        || super::ProbeResult::fail("no result field"),
+        parse_mesh_json,
+    )
 }
 
 /// Health sweep: probe each primal via JSON-RPC, fall back to process detection.
@@ -199,7 +217,10 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
 
     let total = alive + dead;
     let ok = dead == 0;
-    super::ProbeResult { ok, detail: format!("{alive}/{total} primals alive") }
+    super::ProbeResult {
+        ok,
+        detail: format!("{alive}/{total} primals alive"),
+    }
 }
 
 /// Probe a primal via neuralAPI `capability.call` with fallback to direct UDS JSON-RPC.
@@ -310,7 +331,10 @@ fn probe_depot_freshness(arch: &str) -> super::ProbeResult {
         String::new()
     };
 
-    super::ProbeResult { ok, detail: format!("{present}/{total} binaries present{age_str}") }
+    super::ProbeResult {
+        ok,
+        detail: format!("{present}/{total} binaries present{age_str}"),
+    }
 }
 
 /// VCS parity probe: check that origin and forgejo are at the same commit for
@@ -471,7 +495,10 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
     let gate = super::resolve_local_gate_identity();
 
     let profile = manifest.gates.get(&gate)?;
-    let is_tls_gate = profile.roles.iter().any(cellmembrane_types::GateRole::is_tls);
+    let is_tls_gate = profile
+        .roles
+        .iter()
+        .any(cellmembrane_types::GateRole::is_tls);
     if !is_tls_gate {
         return None;
     }
@@ -524,10 +551,7 @@ fn check_cert_days(domain: &str) -> i64 {
         "echo | openssl s_client -connect {domain}:443 -servername {domain} 2>/dev/null \
          | openssl x509 -noout -enddate 2>/dev/null"
     );
-    let Ok(result) = std::process::Command::new("sh")
-        .args(["-c", &cmd])
-        .output()
-    else {
+    let Ok(result) = std::process::Command::new("sh").args(["-c", &cmd]).output() else {
         return -1;
     };
     if !result.status.success() {

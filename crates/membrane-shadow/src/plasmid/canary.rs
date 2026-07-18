@@ -289,7 +289,10 @@ pub(crate) async fn failover_targets() -> Vec<FailoverTarget> {
 /// Promote a canary back to production (rollback scenario).
 ///
 /// Copies the canary binary to the production path and returns the slot.
-pub(crate) async fn promote_canary(primal: &str, production_path: &Path) -> crate::Result<CanarySlot> {
+pub(crate) async fn promote_canary(
+    primal: &str,
+    production_path: &Path,
+) -> crate::Result<CanarySlot> {
     let pool = load_pool().await;
 
     let slot = pool
@@ -394,8 +397,10 @@ async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
     }
 
     match crate::jsonrpc::call(&slot.socket_path, request).await {
-        Ok(response) if serde_json::from_str::<serde_json::Value>(&response)
-            .is_ok_and(|j| j.get("status").is_some() || j.get("result").is_some()) => {
+        Ok(response)
+            if serde_json::from_str::<serde_json::Value>(&response)
+                .is_ok_and(|j| j.get("status").is_some() || j.get("result").is_some()) =>
+        {
             CanaryHealth {
                 primal: slot.primal.clone(),
                 commit: slot.commit.clone(),

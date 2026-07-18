@@ -174,7 +174,10 @@ mod tests {
 
     #[test]
     fn default_trust_policy_is_verify_if_present() {
-        assert_eq!(DepotTrustPolicy::default(), DepotTrustPolicy::VerifyIfPresent);
+        assert_eq!(
+            DepotTrustPolicy::default(),
+            DepotTrustPolicy::VerifyIfPresent
+        );
     }
 
     #[test]

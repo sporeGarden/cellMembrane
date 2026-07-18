@@ -215,9 +215,7 @@ pub fn http_client(timeout: std::time::Duration) -> error::Result<reqwest::Clien
 ///
 /// Only for loopback/localhost testing — never WAN traffic.
 #[cfg(feature = "http")]
-pub fn http_client_insecure(
-    timeout: std::time::Duration,
-) -> error::Result<reqwest::Client> {
+pub fn http_client_insecure(timeout: std::time::Duration) -> error::Result<reqwest::Client> {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .timeout(timeout)
@@ -316,7 +314,10 @@ mod tests {
     fn utc_now_rfc3339_format() {
         let ts = utc_now_rfc3339();
         assert!(ts.contains('T'), "should contain T separator: {ts}");
-        assert!(ts.contains('+') || ts.contains('Z'), "should have offset: {ts}");
+        assert!(
+            ts.contains('+') || ts.contains('Z'),
+            "should have offset: {ts}"
+        );
     }
 
     #[test]

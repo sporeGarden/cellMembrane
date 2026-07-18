@@ -218,7 +218,10 @@ pub(super) fn manifest_to_wg_config(
                     cellmembrane_types::GateRole::WgHub | cellmembrane_types::GateRole::Relay
                 )
             }) {
-                profile.host.clone().or_else(|| hub_endpoint.map(String::from))
+                profile
+                    .host
+                    .clone()
+                    .or_else(|| hub_endpoint.map(String::from))
             } else {
                 None
             };

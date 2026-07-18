@@ -41,7 +41,9 @@ impl std::str::FromStr for WebhookProvider {
         match s {
             "github" => Ok(Self::GitHub),
             "forgejo" => Ok(Self::Forgejo),
-            _ => Err(format!("unknown webhook provider: {s} (expected: forgejo|github)")),
+            _ => Err(format!(
+                "unknown webhook provider: {s} (expected: forgejo|github)"
+            )),
         }
     }
 }
@@ -95,7 +97,10 @@ pub struct PushEvent {
     pub pusher: PusherPayload,
     /// Commits included in this push.
     #[serde(default)]
-    #[allow(dead_code, reason = "serde-populated — needed for commit-level cascade")]
+    #[allow(
+        dead_code,
+        reason = "serde-populated — needed for commit-level cascade"
+    )]
     pub commits: Vec<CommitPayload>,
 }
 
@@ -124,7 +129,10 @@ pub struct PusherPayload {
 
 /// Individual commit data from the push.
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code, reason = "serde-populated — parsed for commit-level cascade analysis")]
+#[allow(
+    dead_code,
+    reason = "serde-populated — parsed for commit-level cascade analysis"
+)]
 pub struct CommitPayload {
     /// Full commit SHA.
     pub id: String,

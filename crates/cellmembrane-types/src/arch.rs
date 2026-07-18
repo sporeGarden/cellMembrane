@@ -245,25 +245,15 @@ impl Platform {
     #[must_use]
     pub const fn triple(&self) -> &'static str {
         match (self.arch, self.os, self.link) {
-            (CpuArch::X86_64, TargetOs::Linux, LinkModel::GnuDynamic) => {
-                "x86_64-unknown-linux-gnu"
-            }
+            (CpuArch::X86_64, TargetOs::Linux, LinkModel::GnuDynamic) => "x86_64-unknown-linux-gnu",
             (CpuArch::Aarch64, TargetOs::Linux, LinkModel::MuslStatic) => {
                 "aarch64-unknown-linux-musl"
             }
-            (CpuArch::X86_64, TargetOs::Windows, LinkModel::WindowsGnu) => {
-                "x86_64-pc-windows-gnu"
-            }
+            (CpuArch::X86_64, TargetOs::Windows, LinkModel::WindowsGnu) => "x86_64-pc-windows-gnu",
             (CpuArch::X86_64, TargetOs::Windows, LinkModel::Msvc) => "x86_64-pc-windows-msvc",
-            (CpuArch::X86_64, TargetOs::MacOs, LinkModel::AppleDarwin) => {
-                "x86_64-apple-darwin"
-            }
-            (CpuArch::Aarch64, TargetOs::MacOs, LinkModel::AppleDarwin) => {
-                "aarch64-apple-darwin"
-            }
-            (CpuArch::Aarch64, TargetOs::Android, LinkModel::AndroidNdk) => {
-                "aarch64-linux-android"
-            }
+            (CpuArch::X86_64, TargetOs::MacOs, LinkModel::AppleDarwin) => "x86_64-apple-darwin",
+            (CpuArch::Aarch64, TargetOs::MacOs, LinkModel::AppleDarwin) => "aarch64-apple-darwin",
+            (CpuArch::Aarch64, TargetOs::Android, LinkModel::AndroidNdk) => "aarch64-linux-android",
             (CpuArch::Wasm32, _, LinkModel::WasmUnknown) => "wasm32-unknown-unknown",
             _ => "x86_64-unknown-linux-musl",
         }
@@ -593,15 +583,9 @@ mod tests {
 
     #[test]
     fn platform_short_names() {
-        assert_eq!(
-            "windows".parse::<Platform>().unwrap().os,
-            TargetOs::Windows
-        );
+        assert_eq!("windows".parse::<Platform>().unwrap().os, TargetOs::Windows);
         assert_eq!("macos".parse::<Platform>().unwrap().os, TargetOs::MacOs);
-        assert_eq!(
-            "android".parse::<Platform>().unwrap().os,
-            TargetOs::Android
-        );
+        assert_eq!("android".parse::<Platform>().unwrap().os, TargetOs::Android);
         assert_eq!("wasm".parse::<Platform>().unwrap().arch, CpuArch::Wasm32);
     }
 

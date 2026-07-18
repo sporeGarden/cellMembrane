@@ -71,11 +71,13 @@ pub use gateway::{
     ShadowComparison, ShadowReport, TlsGatewayConfig,
 };
 pub use identity::{BindMode, GateMobility, GateRole, MembraneIdentity};
+pub use process::{InitSystem, ServiceOutcome, ServiceStatus};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
     binary_integrity_for,
 };
+pub use signing::{DepotSignature, DepotTrustPolicy, SignatureAlgorithm, SignaturesFile};
 pub use sync::{
     CascadeSource, DivergencePolicy, GateTransport, MembraneSyncMode, PushTarget, RepoCategory,
     SyncPriority,
@@ -84,8 +86,6 @@ pub use topology::{
     AffinityTable, BackboneLink, NetworkSegment, PhysicalZone, ResolvedTopology, TopologyMap,
     TopologyMeta, ZoneStatus,
 };
-pub use signing::{DepotSignature, DepotTrustPolicy, SignatureAlgorithm, SignaturesFile};
-pub use process::{InitSystem, ServiceOutcome, ServiceStatus};
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 

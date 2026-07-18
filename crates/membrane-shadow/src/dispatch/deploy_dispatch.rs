@@ -14,32 +14,30 @@
 //! - `deploy.resurrect <primal> [--gate <gate>]`
 //! - `lifecycle.status [--gate <gate>] [--primal <primal>]`
 
+use crate::ShadowOutcome;
 use crate::bridge;
 use crate::cli;
-use crate::ShadowOutcome;
 
 const NEURAL_API_REQUIRED: &str =
     "Neural API unavailable — deploy commands require biomeOS on the target gate";
 
-pub(super) async fn dispatch_deploy(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_deploy(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
         "deploy.composition" => deploy_composition(args).await,
         "deploy.graph" => deploy_graph(args).await,
         "deploy.resurrect" => deploy_resurrect(args).await,
-        _ => Ok(ShadowOutcome::fail(format!("unknown deploy command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown deploy command: {cmd}"
+        ))),
     }
 }
 
-pub(super) async fn dispatch_lifecycle(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
         "lifecycle.status" => lifecycle_status(args).await,
-        _ => Ok(ShadowOutcome::fail(format!("unknown lifecycle command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown lifecycle command: {cmd}"
+        ))),
     }
 }
 
@@ -62,7 +60,11 @@ async fn deploy_composition(args: &[&str]) -> crate::Result<ShadowOutcome> {
     route_to_gate(gate, "composition", "deploy", params)
         .await?
         .map_or_else(
-            || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
+            || {
+                Ok(ShadowOutcome::fail(format!(
+                    "{NEURAL_API_REQUIRED} ({gate})"
+                )))
+            },
             |value| Ok(format_deploy_result("deploy.composition", gate, &value)),
         )
 }
@@ -88,7 +90,11 @@ async fn deploy_graph(args: &[&str]) -> crate::Result<ShadowOutcome> {
     route_to_gate(gate, "graph", "execute", params)
         .await?
         .map_or_else(
-            || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
+            || {
+                Ok(ShadowOutcome::fail(format!(
+                    "{NEURAL_API_REQUIRED} ({gate})"
+                )))
+            },
             |value| Ok(format_deploy_result("deploy.graph", gate, &value)),
         )
 }
@@ -110,7 +116,11 @@ async fn deploy_resurrect(args: &[&str]) -> crate::Result<ShadowOutcome> {
     route_to_gate(gate, "lifecycle", "resurrect", params)
         .await?
         .map_or_else(
-            || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
+            || {
+                Ok(ShadowOutcome::fail(format!(
+                    "{NEURAL_API_REQUIRED} ({gate})"
+                )))
+            },
             |value| {
                 let status = value
                     .get("status")
@@ -141,7 +151,11 @@ async fn lifecycle_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
     route_to_gate(gate, "lifecycle", "status", params)
         .await?
         .map_or_else(
-            || Ok(ShadowOutcome::fail(format!("{NEURAL_API_REQUIRED} ({gate})"))),
+            || {
+                Ok(ShadowOutcome::fail(format!(
+                    "{NEURAL_API_REQUIRED} ({gate})"
+                )))
+            },
             |value| Ok(format_lifecycle_status(gate, primal_filter, &value)),
         )
 }
@@ -200,27 +214,18 @@ async fn route_to_gate(
 fn local_gate_name() -> &'static str {
     static GATE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     GATE.get_or_init(|| {
-        std::env::var("GATE_NAME").unwrap_or_else(|_| {
-            crate::gate::resolve_local_gate_identity()
-        })
+        std::env::var("GATE_NAME").unwrap_or_else(|_| crate::gate::resolve_local_gate_identity())
     })
 }
 
 // ── Formatting ──────────────────────────────────────────────────────
 
-fn format_deploy_result(
-    cmd: &str,
-    gate: &str,
-    value: &serde_json::Value,
-) -> ShadowOutcome {
+fn format_deploy_result(cmd: &str, gate: &str, value: &serde_json::Value) -> ShadowOutcome {
     let status = value
         .get("status")
         .and_then(|s| s.as_str())
         .unwrap_or("completed");
-    let detail = value
-        .get("detail")
-        .and_then(|d| d.as_str())
-        .unwrap_or("");
+    let detail = value.get("detail").and_then(|d| d.as_str()).unwrap_or("");
 
     let mut lines = vec![format!("{cmd} → {gate}: {status}")];
     if !detail.is_empty() {
@@ -313,7 +318,9 @@ mod tests {
             .enable_all()
             .build()
             .unwrap();
-        let result = rt.block_on(dispatch_lifecycle("lifecycle.unknown", &[])).unwrap();
+        let result = rt
+            .block_on(dispatch_lifecycle("lifecycle.unknown", &[]))
+            .unwrap();
         assert!(!result.ok, "unknown lifecycle command should fail");
     }
 
@@ -382,19 +389,25 @@ mod tests {
                 }
             }
             Err(e) => {
-                assert!(
-                    e.is_rpc_error(),
-                    "only RPC errors should propagate: {e}"
-                );
+                assert!(e.is_rpc_error(), "only RPC errors should propagate: {e}");
             }
         }
     }
 
     #[test]
     fn extract_key_value_params_parses_pairs() {
-        let args = ["--param", "SESSION_ID=abc", "--dry-run", "--param", "WAVE=137"];
+        let args = [
+            "--param",
+            "SESSION_ID=abc",
+            "--dry-run",
+            "--param",
+            "WAVE=137",
+        ];
         let params = extract_key_value_params(&args);
-        assert_eq!(params.get("SESSION_ID").and_then(|v| v.as_str()), Some("abc"));
+        assert_eq!(
+            params.get("SESSION_ID").and_then(|v| v.as_str()),
+            Some("abc")
+        );
         assert_eq!(params.get("WAVE").and_then(|v| v.as_str()), Some("137"));
     }
 

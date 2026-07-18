@@ -25,9 +25,10 @@ use crate::{ShadowConfig, ShadowOutcome};
 
 /// Resolve gate name from CLI args, falling back to local gate identity.
 fn resolve_gate_arg(args: &[&str]) -> String {
-    args.first().map_or_else(crate::gate::resolve_local_gate_identity, |s| {
-        (*s).to_owned()
-    })
+    args.first()
+        .map_or_else(crate::gate::resolve_local_gate_identity, |s| {
+            (*s).to_owned()
+        })
 }
 
 use config::{
@@ -62,7 +63,8 @@ async fn dispatch_health(_config: &ShadowConfig) -> Result<ShadowOutcome> {
         cellmembrane_types::service::DEFAULT_GATEWAY_BIND,
     );
 
-    let tls_port = parse_port(&gateway_bind).unwrap_or(cellmembrane_types::service::DEFAULT_HTTPS_PORT);
+    let tls_port =
+        parse_port(&gateway_bind).unwrap_or(cellmembrane_types::service::DEFAULT_HTTPS_PORT);
     let tls_listening = port_is_listening(tls_port).await;
 
     let songbird_socket = cellmembrane_types::service::env_or(
@@ -274,9 +276,15 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
         name: "songbird reachable".into(),
         ok: songbird_running,
         detail: if songbird_running {
-            format!("TCP :{} open", cellmembrane_types::service::DEFAULT_FEDERATION_PORT)
+            format!(
+                "TCP :{} open",
+                cellmembrane_types::service::DEFAULT_FEDERATION_PORT
+            )
         } else {
-            format!("TCP :{} closed", cellmembrane_types::service::DEFAULT_FEDERATION_PORT)
+            format!(
+                "TCP :{} closed",
+                cellmembrane_types::service::DEFAULT_FEDERATION_PORT
+            )
         },
     });
 
@@ -369,8 +377,8 @@ fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
         cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
         "primals.eco",
     );
-    let domain = crate::cli::extract_flag_value(args, "--domain")
-        .unwrap_or(resolved_domain.as_str());
+    let domain =
+        crate::cli::extract_flag_value(args, "--domain").unwrap_or(resolved_domain.as_str());
 
     let params = crate::gate::sporeprint::SporePrintDeployParams::new(gate_name, domain);
     let units = crate::gate::sporeprint::generate_sporeprint_units(&params);
@@ -423,9 +431,9 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
     }
 
     let root = crate::temporal::resolve_workspace_root().ok();
-    let manifest_ok = root.as_ref().is_some_and(|r| {
-        crate::manifest::EcosystemManifest::find_in_workspace(r).is_some()
-    });
+    let manifest_ok = root
+        .as_ref()
+        .is_some_and(|r| crate::manifest::EcosystemManifest::find_in_workspace(r).is_some());
     checks.push(DeployCheck {
         name: "ecosystem manifest".into(),
         ok: manifest_ok,
@@ -476,9 +484,7 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
             },
         });
 
-        let ssh_target = manifest
-            .as_ref()
-            .and_then(|m| m.ssh_target_for(gate_name));
+        let ssh_target = manifest.as_ref().and_then(|m| m.ssh_target_for(gate_name));
         checks.push(DeployCheck {
             name: format!("{gate_name} SSH target"),
             ok: ssh_target.is_some(),
@@ -498,9 +504,8 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
         })
         .collect();
 
-    let summary = format!(
-        "sporePrint NUCLEUS deploy check: {passed}/{total} pass ({gate_name}, {arch})"
-    );
+    let summary =
+        format!("sporePrint NUCLEUS deploy check: {passed}/{total} pass ({gate_name}, {arch})");
 
     if all_pass {
         ShadowOutcome::ok(summary).tap_lines(&lines)
@@ -611,4 +616,3 @@ mod tests {
         assert_eq!(json["ok"], true);
     }
 }
-

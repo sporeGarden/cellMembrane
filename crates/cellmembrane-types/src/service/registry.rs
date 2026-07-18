@@ -44,7 +44,11 @@ const SONGBIRD: MembraneService = MembraneService {
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     system_install_path: None,
-    extra_ports: &[(DEFAULT_FEDERATION_PORT, Protocol::Tcp, "songbird-federation")],
+    extra_ports: &[(
+        DEFAULT_FEDERATION_PORT,
+        Protocol::Tcp,
+        "songbird-federation",
+    )],
     min_composition: MembraneComposition::Relay,
     vps_transport: TransportMode::TcpOptIn,
     capabilities: &[ServiceCapability::MeshRelay, ServiceCapability::TurnServer],

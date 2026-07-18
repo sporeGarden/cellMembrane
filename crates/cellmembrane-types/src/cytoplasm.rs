@@ -149,7 +149,14 @@ pub fn mesh_address_from_topology(
 /// Used as a fallback when the ecosystem manifest is unavailable.
 /// Once assigned, an address is permanent — add new gates here when
 /// they join the mesh.
-pub const KNOWN_MESH_GATES: &[&str] = &["golgi", "sporeGate", "eastGate", "flockGate", "ironGate", "northGate"];
+pub const KNOWN_MESH_GATES: &[&str] = &[
+    "golgi",
+    "sporeGate",
+    "eastGate",
+    "flockGate",
+    "ironGate",
+    "northGate",
+];
 
 /// All known active gates in the ecosystem (superset of [`KNOWN_MESH_GATES`]).
 ///

@@ -625,7 +625,9 @@ async fn check_content_health(root: &std::path::Path, lines: &mut Vec<String>) {
 
     let index = public_dir.join("index.html");
     if !index.exists() {
-        lines.push("  [content] WARNING: sporePrint public/ missing index.html — root will 404".into());
+        lines.push(
+            "  [content] WARNING: sporePrint public/ missing index.html — root will 404".into(),
+        );
         return;
     }
 

@@ -196,13 +196,11 @@ pub(crate) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
                 .unwrap_or_else(|| {
                     PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
                 });
-            let infra_depot =
-                eco_root.join(cellmembrane_types::service::INFRA_PLASMID_BIN);
+            let infra_depot = eco_root.join(cellmembrane_types::service::INFRA_PLASMID_BIN);
             if infra_depot.exists() {
                 return infra_depot;
             }
-            let flat_depot =
-                eco_root.join(cellmembrane_types::service::PLASMID_BIN_DIR);
+            let flat_depot = eco_root.join(cellmembrane_types::service::PLASMID_BIN_DIR);
             if flat_depot.exists() {
                 return flat_depot;
             }
@@ -244,9 +242,7 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
         .ok()
         .map(PathBuf::from)
         .or_else(|| crate::resolve_workspace_root().ok())
-        .unwrap_or_else(|| {
-            PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
-        });
+        .unwrap_or_else(|| PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT));
 
     let manifest = crate::manifest::load_from_workspace(&workspace).map_err(|e| {
         ShadowError::Config(format!(
@@ -317,16 +313,12 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
 /// fields override whatever `sources.toml` had (or didn't have). This is the
 /// convergence path: manifest is authoritative for *how* to build, while
 /// `sources.toml` remains authoritative for *where* to fetch releases.
-pub(super) fn enrich_sources_from_manifest(
-    sources: &mut BTreeMap<String, SourceEntry>,
-) {
+pub(super) fn enrich_sources_from_manifest(sources: &mut BTreeMap<String, SourceEntry>) {
     let workspace = std::env::var(cellmembrane_types::service::ENV_ECOPRIMALS_ROOT)
         .ok()
         .map(PathBuf::from)
         .or_else(|| crate::resolve_workspace_root().ok())
-        .unwrap_or_else(|| {
-            PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT)
-        });
+        .unwrap_or_else(|| PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT));
 
     let Ok(manifest) = crate::manifest::load_from_workspace(&workspace) else {
         return;

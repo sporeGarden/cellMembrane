@@ -57,9 +57,7 @@ fn has_dt_needed(data: &[u8], ph_off: usize, ph_ent_size: usize, ph_num: usize) 
         let dyn_end = dyn_off.saturating_add(dyn_size).min(data.len());
         let mut pos = dyn_off;
         while pos + ELF64_DYN_SIZE <= dyn_end {
-            let d_tag = u64::from_le_bytes(
-                data[pos..pos + 8].try_into().unwrap_or([0; 8]),
-            );
+            let d_tag = u64::from_le_bytes(data[pos..pos + 8].try_into().unwrap_or([0; 8]));
             if d_tag == DT_NULL {
                 break;
             }

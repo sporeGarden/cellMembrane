@@ -28,14 +28,19 @@ pub async fn post_sync_diverge(
     let repo_name = args.repo_path.rsplit('/').next().unwrap_or(&args.repo_path);
 
     if let Some(existing) = find_content_equivalent(workspace_root, repo_name).await {
-        tracing::debug!(repo = repo_name, "CAC dedup: content-equivalent impulse exists, skipping");
+        tracing::debug!(
+            repo = repo_name,
+            "CAC dedup: content-equivalent impulse exists, skipping"
+        );
         return Ok(existing);
     }
 
     let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
-    let ts_iso = now.format(cellmembrane_types::service::ISO8601_TZ).to_string();
+    let ts_iso = now
+        .format(cellmembrane_types::service::ISO8601_TZ)
+        .to_string();
 
     let mut remotes_map = std::collections::BTreeMap::new();
     let mut ahead_map = std::collections::BTreeMap::new();

@@ -93,7 +93,8 @@ pub(super) fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> 
     if expires.is_empty() {
         return false;
     }
-    chrono::DateTime::parse_from_str(expires, cellmembrane_types::service::ISO8601_TZ).is_ok_and(|exp| now > &exp)
+    chrono::DateTime::parse_from_str(expires, cellmembrane_types::service::ISO8601_TZ)
+        .is_ok_and(|exp| now > &exp)
 }
 
 #[cfg(test)]
@@ -103,7 +104,10 @@ pub(super) fn is_fully_acked(impulse: &ImpulseFile) -> bool {
 
 /// Check if impulse is fully acked, considering both inline acks and external ack files.
 #[must_use]
-pub(super) fn is_fully_acked_with_externals(impulse: &ImpulseFile, external_acks: &[ImpulseAck]) -> bool {
+pub(super) fn is_fully_acked_with_externals(
+    impulse: &ImpulseFile,
+    external_acks: &[ImpulseAck],
+) -> bool {
     if !impulse.meta.ack_required || impulse.to.gates.is_empty() {
         return false;
     }

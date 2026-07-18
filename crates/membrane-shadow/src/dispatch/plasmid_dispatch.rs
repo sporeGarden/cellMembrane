@@ -376,10 +376,18 @@ fn dispatch_composition(args: &[&str]) -> crate::Result<ShadowOutcome> {
 
     if let Some(name) = profile_name {
         return manifest.composition(name).map_or_else(
-            || Ok(ShadowOutcome::fail(format!("composition '{name}' not found in manifest"))),
+            || {
+                Ok(ShadowOutcome::fail(format!(
+                    "composition '{name}' not found in manifest"
+                )))
+            },
             |profile| {
                 Ok(ShadowOutcome::ok_with(
-                    format!("{name}: {} — {} primals", profile.description, profile.primals.len()),
+                    format!(
+                        "{name}: {} — {} primals",
+                        profile.description,
+                        profile.primals.len()
+                    ),
                     serde_json::json!({
                         "name": name,
                         "description": &profile.description,

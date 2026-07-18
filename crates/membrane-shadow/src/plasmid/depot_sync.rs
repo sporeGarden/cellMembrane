@@ -167,9 +167,8 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
         cellmembrane_types::service::CHECKSUMS_FILE
     );
 
-    let same_file_cmd = format!(
-        "[ \"{checksums_path}\" -ef \"{wan_checksums}\" ] && echo SAME || echo DIFF"
-    );
+    let same_file_cmd =
+        format!("[ \"{checksums_path}\" -ef \"{wan_checksums}\" ] && echo SAME || echo DIFF");
     if let Ok((out, _)) = crate::ssh::exec_raw(config, &same_file_cmd).await {
         if out.trim() == "SAME" {
             tracing::debug!("WAN checksums sync: src=dst (symlink), skipping");
@@ -177,9 +176,7 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
         }
     }
 
-    let cmd = format!(
-        "cp -f {checksums_path} {wan_checksums} 2>/dev/null && echo OK || echo FAIL"
-    );
+    let cmd = format!("cp -f {checksums_path} {wan_checksums} 2>/dev/null && echo OK || echo FAIL");
     let Ok((out, _)) = crate::ssh::exec_raw(config, &cmd).await else {
         tracing::warn!("WAN checksums sync: SSH connection failed");
         return false;
@@ -197,17 +194,13 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
         "{wan_depot}/{}",
         cellmembrane_types::service::SIGNATURES_FILE
     );
-    let sigs_same_cmd = format!(
-        "[ \"{sigs_src}\" -ef \"{wan_sigs}\" ] && echo SAME || echo DIFF"
-    );
+    let sigs_same_cmd = format!("[ \"{sigs_src}\" -ef \"{wan_sigs}\" ] && echo SAME || echo DIFF");
     let sigs_is_same = crate::ssh::exec_raw(config, &sigs_same_cmd)
         .await
         .is_ok_and(|(out, _)| out.trim() == "SAME");
 
     if !sigs_is_same {
-        let sigs_cmd = format!(
-            "[ -f {sigs_src} ] && cp -f {sigs_src} {wan_sigs} 2>/dev/null"
-        );
+        let sigs_cmd = format!("[ -f {sigs_src} ] && cp -f {sigs_src} {wan_sigs} 2>/dev/null");
         if let Err(e) = crate::ssh::exec_raw(config, &sigs_cmd).await {
             tracing::debug!(error = %e, "WAN signatures.toml sync: SSH copy failed");
         }
@@ -254,8 +247,7 @@ async fn push_single_binary(
     let remote_tmp = format!("{remote_arch_dir}/.{name_str}.new");
     match crate::ssh::scp_to(config, &local_path.to_string_lossy(), &remote_tmp).await {
         Ok(()) => {
-            let mv_cmd =
-                format!("chmod 755 {remote_tmp} && mv -f {remote_tmp} {remote_path}");
+            let mv_cmd = format!("chmod 755 {remote_tmp} && mv -f {remote_tmp} {remote_path}");
             if let Err(e) = crate::ssh::exec_raw(config, &mv_cmd).await {
                 tracing::warn!(binary = %name_str, error = %e, "push: atomic rename failed");
                 PushBinaryResult::Failed
@@ -275,7 +267,11 @@ async fn depot_sync_push(
     config: &crate::ShadowConfig,
 ) -> crate::error::Result<crate::ShadowOutcome> {
     let local_depot = super::harvest::resolve_depot(None)?;
-    let remote_depot = format!("{}/{}", config.vps_root, cellmembrane_types::service::PLASMID_BIN_DIR);
+    let remote_depot = format!(
+        "{}/{}",
+        config.vps_root,
+        cellmembrane_types::service::PLASMID_BIN_DIR
+    );
 
     let primals_dir = local_depot.join("primals");
     if !primals_dir.exists() {

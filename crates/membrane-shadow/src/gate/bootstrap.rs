@@ -123,12 +123,7 @@ pub async fn bootstrap(
     phases.push(timed_phase("sandbox.validate", sandbox_phase(arch, dry_run)).await);
 
     let install_arch = arch;
-    phases.push(
-        blocking_phase("install.link", move || {
-            install_phase(install_arch, dry_run)
-        })
-        .await,
-    );
+    phases.push(blocking_phase("install.link", move || install_phase(install_arch, dry_run)).await);
 
     let nucleus_arch = arch;
     phases.push(
@@ -297,9 +292,7 @@ fn link_or_copy_binary(src: &std::path::Path, dest: &std::path::Path) -> bool {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Err(e) =
-                std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755))
-            {
+            if let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755)) {
                 tracing::warn!(error = %e, path = %dest.display(), "chmod 755 failed");
             }
         }

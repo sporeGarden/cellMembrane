@@ -17,12 +17,12 @@ mod interface;
 mod local;
 mod mesh;
 pub(crate) mod nucleus;
-mod wg;
 pub mod preflight;
-pub(crate) mod systemd_units;
-pub(crate) mod sporeprint;
 pub(crate) mod sovereignty;
+pub(crate) mod sporeprint;
+pub(crate) mod systemd_units;
 pub mod verify;
+mod wg;
 
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
 pub use enroll::{EnrollResult, enroll};
@@ -36,11 +36,17 @@ pub(crate) struct ProbeResult {
 
 impl ProbeResult {
     pub fn pass(detail: impl Into<String>) -> Self {
-        Self { ok: true, detail: detail.into() }
+        Self {
+            ok: true,
+            detail: detail.into(),
+        }
     }
 
     pub fn fail(detail: impl Into<String>) -> Self {
-        Self { ok: false, detail: detail.into() }
+        Self {
+            ok: false,
+            detail: detail.into(),
+        }
     }
 }
 

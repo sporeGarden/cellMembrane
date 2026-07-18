@@ -146,7 +146,8 @@ fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let gate_name = crate::gate::resolve_local_gate_identity();
 
     if args.contains(&"--generate") {
-        let (service, timer) = crate::gate::systemd_units::generate_cascade_timer(interval, &gate_name);
+        let (service, timer) =
+            crate::gate::systemd_units::generate_cascade_timer(interval, &gate_name);
         let data = serde_json::json!({
             "service": service,
             "timer": timer,
@@ -247,8 +248,12 @@ fn dispatch_profile(gate_name: &str) -> crate::Result<ShadowOutcome> {
         "gate.profile: {gate_name}\n  target: {}\n  mobility: {}\n  bind_mode: {}\n  \
          composition: {}\n  transport: {}\n  mesh_peer: {}\n  repos: {}",
         profile.target.as_deref().unwrap_or("(default)"),
-        profile.mobility.map_or_else(|| "fixed".to_string(), |m| m.to_string()),
-        profile.bind_mode.map_or_else(|| "auto".to_string(), |b| b.to_string()),
+        profile
+            .mobility
+            .map_or_else(|| "fixed".to_string(), |m| m.to_string()),
+        profile
+            .bind_mode
+            .map_or_else(|| "auto".to_string(), |b| b.to_string()),
         profile.composition.as_deref().unwrap_or("full"),
         profile
             .transport
@@ -461,9 +466,7 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let format = cli::extract_flag_value(args, "--format").unwrap_or("nftables");
 
     let is_plasma_membrane = args.contains(&"--plasma-membrane")
-        || profile.is_some_and(|p| {
-            p.roles.contains(&cellmembrane_types::GateRole::NatFirewall)
-        });
+        || profile.is_some_and(|p| p.roles.contains(&cellmembrane_types::GateRole::NatFirewall));
 
     let nft_config = if is_plasma_membrane {
         let wan = cli::extract_flag_value(args, "--wan")
@@ -483,13 +486,10 @@ fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
             gate_name: gate_name.into(),
             enable_nat: !args.contains(&"--no-nat"),
             enable_dhcp: !args.contains(&"--no-dhcp")
-                && profile.is_some_and(|p| {
-                    p.roles.contains(&cellmembrane_types::GateRole::Dhcp)
-                }),
+                && profile.is_some_and(|p| p.roles.contains(&cellmembrane_types::GateRole::Dhcp)),
             trust_lan_input: args.contains(&"--trust-lan")
-                || profile.is_some_and(|p| {
-                    p.roles.contains(&cellmembrane_types::GateRole::NatFirewall)
-                }),
+                || profile
+                    .is_some_and(|p| p.roles.contains(&cellmembrane_types::GateRole::NatFirewall)),
             wireguard_interface: cli::extract_flag_value(args, "--wg-iface")
                 .map(Into::into)
                 .or_else(|| if has_wg { Some("wg0".into()) } else { None }),
@@ -533,14 +533,11 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
     let subnet = cli::extract_flag_value(args, "--subnet")
         .unwrap_or(cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET);
 
-    let local_ip = m
-        .mesh_ip_for(&gate_name)
-        .map(String::from)
-        .ok_or_else(|| {
-            crate::error::ShadowError::Config(format!(
-                "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
-            ))
-        })?;
+    let local_ip = m.mesh_ip_for(&gate_name).map(String::from).ok_or_else(|| {
+        crate::error::ShadowError::Config(format!(
+            "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
+        ))
+    })?;
 
     let keepalive: u16 = cli::extract_flag_value(args, "--keepalive")
         .and_then(|k| k.parse().ok())
@@ -566,9 +563,7 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
             continue;
         };
 
-        let is_hub = profile
-            .roles
-            .contains(&cellmembrane_types::GateRole::WgHub);
+        let is_hub = profile.roles.contains(&cellmembrane_types::GateRole::WgHub);
 
         let endpoint = profile
             .wan_endpoint

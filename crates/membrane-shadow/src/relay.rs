@@ -510,8 +510,7 @@ pub async fn check_parity(config: &RelayConfig, repo_paths: &[&str]) -> Vec<Pari
         if !crate::git_ops::git_success(&local_path, &["fetch", github, "main", "--quiet"]).await {
             tracing::warn!(repo = %local_path.display(), remote = %github, "fetch failed");
         }
-        if !crate::git_ops::git_success(&local_path, &["fetch", forgejo, "main", "--quiet"]).await
-        {
+        if !crate::git_ops::git_success(&local_path, &["fetch", forgejo, "main", "--quiet"]).await {
             tracing::warn!(repo = %local_path.display(), remote = %forgejo, "fetch failed");
         }
 

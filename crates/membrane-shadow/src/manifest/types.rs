@@ -198,7 +198,6 @@ pub struct RepoEntry {
     pub exclude_remotes: Vec<String>,
 
     // ── Build configuration (CI-DIV-01/02/03 absorption) ──────────
-
     /// Cargo package name when the workspace binary differs from the repo name.
     /// Passed as `cargo build -p <package>`. E.g. biomeOS → `"biomeos-unibin"`.
     #[serde(default)]

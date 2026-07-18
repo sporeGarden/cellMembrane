@@ -230,5 +230,4 @@ mod tests {
         let config = ShadowConfig::default();
         assert!(config.ssh_timeout > 0, "timeout should be positive");
     }
-
 }

@@ -278,10 +278,17 @@ mod tests {
 
     #[tokio::test]
     async fn try_bridge_nonexistent_service() {
-        let result =
-            try_bridge("nonexistent_service_12345", "fake.method", serde_json::json!({})).await;
+        let result = try_bridge(
+            "nonexistent_service_12345",
+            "fake.method",
+            serde_json::json!({}),
+        )
+        .await;
         if let Ok(Some(val)) = &result {
-            assert!(val.is_object(), "unexpected result from nonexistent service");
+            assert!(
+                val.is_object(),
+                "unexpected result from nonexistent service"
+            );
         }
     }
 }

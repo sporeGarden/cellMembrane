@@ -62,11 +62,9 @@ async fn dispatch_content_rebuild(args: &[&str]) -> crate::Result<ShadowOutcome>
                 "content.rebuild: FAIL — {first_line}"
             )))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            Ok(ShadowOutcome::fail(
-                "content.rebuild: zola binary not found — install with: cargo install zola"
-            ))
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ShadowOutcome::fail(
+            "content.rebuild: zola binary not found — install with: cargo install zola",
+        )),
         Err(e) => Ok(ShadowOutcome::fail(format!(
             "content.rebuild: execution error — {e}"
         ))),

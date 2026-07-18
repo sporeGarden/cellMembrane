@@ -153,12 +153,7 @@ async fn try_push(repo_dir: &Path, remote: &str) -> TryPushResult {
 /// Bounded by `GIT_OP_TIMEOUT` to prevent indefinite hangs when the remote
 /// is unreachable or pathologically slow.
 async fn reconcile_and_push(repo_dir: &Path, remote: &str) -> bool {
-    match tokio::time::timeout(
-        GIT_OP_TIMEOUT,
-        reconcile_and_push_inner(repo_dir, remote),
-    )
-    .await
-    {
+    match tokio::time::timeout(GIT_OP_TIMEOUT, reconcile_and_push_inner(repo_dir, remote)).await {
         std::result::Result::Ok(ok) => ok,
         Err(_elapsed) => {
             tracing::warn!(
@@ -373,7 +368,8 @@ fn is_non_fast_forward(stderr: &str) -> bool {
 /// force-with-lease in this case.
 pub async fn trees_match(repo_path: &Path, remote_ref: &str) -> bool {
     let local_tree = git_output_opt(repo_path, &["rev-parse", "HEAD^{tree}"]).await;
-    let remote_tree = git_output_opt(repo_path, &["rev-parse", &format!("{remote_ref}^{{tree}}")]).await;
+    let remote_tree =
+        git_output_opt(repo_path, &["rev-parse", &format!("{remote_ref}^{{tree}}")]).await;
 
     match (local_tree, remote_tree) {
         (Some(l), Some(r)) => l.trim() == r.trim() && !l.trim().is_empty(),
@@ -540,12 +536,8 @@ mod tests {
 
     #[test]
     fn shallow_rejection_detected() {
-        assert!(is_shallow_rejection(
-            "error: shallow update not allowed"
-        ));
-        assert!(is_shallow_rejection(
-            "fatal: pack has unresolved deltas"
-        ));
+        assert!(is_shallow_rejection("error: shallow update not allowed"));
+        assert!(is_shallow_rejection("fatal: pack has unresolved deltas"));
         assert!(is_shallow_rejection(
             "error: missing tree 0000000000000000000000000000000000000000"
         ));
@@ -629,8 +621,7 @@ mod tests {
     async fn classified_push_returns_failed_for_bogus_remote() {
         let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let workspace = crate_dir.parent().unwrap().parent().unwrap();
-        let outcome =
-            git_push_classified(workspace, &["push", "nonexistent-remote", "main"]).await;
+        let outcome = git_push_classified(workspace, &["push", "nonexistent-remote", "main"]).await;
         assert_eq!(outcome, PushOutcome::Failed);
     }
 }

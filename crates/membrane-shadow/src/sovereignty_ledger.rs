@@ -231,11 +231,7 @@ mod tests {
 
     #[test]
     fn session_id_format() {
-        let session = format!(
-            "wave-{}-cascade-{}",
-            116,
-            crate::utc_now_compact()
-        );
+        let session = format!("wave-{}-cascade-{}", 116, crate::utc_now_compact());
         assert!(session.starts_with("wave-116-cascade-"));
         assert!(session.len() > 25);
     }

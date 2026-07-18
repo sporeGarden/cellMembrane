@@ -139,7 +139,10 @@ pub async fn publish_gate_heads(
     };
 
     let body = toml::to_string_pretty(&file).map_err(ShadowError::Serialize)?;
-    let content = format!("{GATE_HEADS_HEADER}# Gate: {gate} | Updated: {}\n\n{body}", file.meta.updated);
+    let content = format!(
+        "{GATE_HEADS_HEADER}# Gate: {gate} | Updated: {}\n\n{body}",
+        file.meta.updated
+    );
     let heads_path = heads_dir.join(format!("{gate}.toml"));
     crate::atomic_write_async(&heads_path, content.as_bytes())
         .await
@@ -260,7 +263,8 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
 /// If FF fails, just skip (push will fail and retry next cycle).
 async fn pull_ff_only(wh_dir: &Path) {
     for remote in cellmembrane_types::service::DEFAULT_PUSH_REMOTES {
-        let result = crate::git_ops::git_output(wh_dir, &["pull", "--ff-only", remote, "main"]).await;
+        let result =
+            crate::git_ops::git_output(wh_dir, &["pull", "--ff-only", remote, "main"]).await;
         if let Err(e) = result {
             let msg = e.to_string();
             if !msg.contains("Already up to date") {

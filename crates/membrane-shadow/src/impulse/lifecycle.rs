@@ -22,7 +22,9 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     let gate_id = identity::resolve_async(workspace_root).await?;
     let now = Local::now();
     let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
-    let ts_iso = now.format(cellmembrane_types::service::ISO8601_TZ).to_string();
+    let ts_iso = now
+        .format(cellmembrane_types::service::ISO8601_TZ)
+        .to_string();
 
     let slug = args
         .subject
@@ -233,7 +235,9 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
 
     let ack_entry = ImpulseAck {
         gate: gate_id.name.clone(),
-        timestamp: Utc::now().format(cellmembrane_types::service::ISO8601_TZ).to_string(),
+        timestamp: Utc::now()
+            .format(cellmembrane_types::service::ISO8601_TZ)
+            .to_string(),
         note: note.to_string(),
     };
 
@@ -327,8 +331,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
         archive_expired_impulses(&active, &archive_dir, &ws_root, &now)
     })
     .await
-    .map_err(|_| ShadowError::Io(std::io::Error::other("archive task panicked")))??
-;
+    .map_err(|_| ShadowError::Io(std::io::Error::other("archive task panicked")))??;
 
     if !archived.is_empty() {
         let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);

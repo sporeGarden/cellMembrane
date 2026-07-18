@@ -399,8 +399,8 @@ fn extract_multi_flag<'a>(args: &[&'a str], flag: &str) -> Vec<&'a str> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::dns::DnsRecord;
+    use super::*;
 
     #[test]
     fn extract_flag_finds_value() {

@@ -2,9 +2,9 @@
 
 //! Sign domain dispatch — depot signing activation, verification, and status.
 
+use crate::ShadowOutcome;
 use crate::cli;
 use crate::error::ShadowError;
-use crate::ShadowOutcome;
 
 pub(super) fn dispatch_sign(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
@@ -26,8 +26,7 @@ pub(super) fn dispatch_sign(cmd: &str, args: &[&str]) -> crate::Result<ShadowOut
 ///   membrane sign.activate --depot /path     # sign specific depot
 ///   membrane sign.activate --dry-run         # preflight only (no signing)
 fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
-    let depot_dir =
-        crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
+    let depot_dir = crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
     let dry_run = args.contains(&"--dry-run");
 
     let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
@@ -46,7 +45,11 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
             format!(
                 "sign.activate preflight: depot={}, checksums=OK, bearDog={}",
                 depot_dir.display(),
-                if socket_available { "REACHABLE" } else { "UNAVAILABLE" }
+                if socket_available {
+                    "REACHABLE"
+                } else {
+                    "UNAVAILABLE"
+                }
             ),
             serde_json::json!({
                 "depot": depot_dir.display().to_string(),
@@ -92,8 +95,7 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
 ///   membrane sign.verify --policy integrity-only     # skip sig verification
 ///   membrane sign.verify --depot /path               # specific depot
 fn dispatch_verify(args: &[&str]) -> crate::Result<ShadowOutcome> {
-    let depot_dir =
-        crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
+    let depot_dir = crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
 
     let policy = match cli::extract_flag_value(args, "--policy") {
         Some("require-signed" | "require_signed") => {
@@ -144,8 +146,7 @@ fn dispatch_verify(args: &[&str]) -> crate::Result<ShadowOutcome> {
 ///   membrane sign.status                # default depot
 ///   membrane sign.status --depot /path  # specific depot
 fn dispatch_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
-    let depot_dir =
-        crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
+    let depot_dir = crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
 
     let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
     let checksums_exist = checksums_path.exists();
@@ -173,7 +174,11 @@ fn dispatch_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
         format!(
             "depot: {} — no signatures (checksums={}, bearDog={})",
             depot_dir.display(),
-            if checksums_exist { "present" } else { "MISSING" },
+            if checksums_exist {
+                "present"
+            } else {
+                "MISSING"
+            },
             if socket_available {
                 "reachable"
             } else {

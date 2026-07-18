@@ -201,17 +201,14 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
             .unwrap_or(false);
 
     if !sig_valid {
-        let msg = format!(
-            "depot signature verification FAILED (policy={policy}) — aborting fetch"
-        );
+        let msg = format!("depot signature verification FAILED (policy={policy}) — aborting fetch");
         tracing::warn!("{msg}");
         return Ok(ShadowOutcome::fail(msg));
     }
     tracing::info!(policy = %policy, "depot signature verification passed");
 
     // ── Phase 3: download binaries (checksums now trusted) ───────────
-    let mut results =
-        fetch_primals(&primals, &bin_dir, arch, &tag, &checksums, args, config).await;
+    let mut results = fetch_primals(&primals, &bin_dir, arch, &tag, &checksums, args, config).await;
 
     if should_fetch_gpu(&primals) {
         let gnu_results = fetch_gpu_primals(&primals, &dest_root, &tag, args, config).await;
@@ -376,25 +373,35 @@ async fn download_with_retry(
 ) -> bool {
     let arch_asset = format!("{primal}-{arch}");
     let got = download::download_asset(
-        args.source, config, tag, &arch_asset, arch, primal, local_path,
+        args.source,
+        config,
+        tag,
+        &arch_asset,
+        arch,
+        primal,
+        local_path,
     )
     .await
-        || download::download_asset(
-            args.source, config, tag, primal, arch, primal, local_path,
-        )
-        .await;
+        || download::download_asset(args.source, config, tag, primal, arch, primal, local_path)
+            .await;
 
     if got {
         return true;
     }
 
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    download::download_asset(args.source, config, tag, &arch_asset, arch, primal, local_path)
-        .await
-        || download::download_asset(
-            args.source, config, tag, primal, arch, primal, local_path,
-        )
-        .await
+    download::download_asset(
+        args.source,
+        config,
+        tag,
+        &arch_asset,
+        arch,
+        primal,
+        local_path,
+    )
+    .await
+        || download::download_asset(args.source, config, tag, primal, arch, primal, local_path)
+            .await
 }
 
 async fn fetch_primals(
@@ -434,8 +441,7 @@ async fn fetch_primals(
         }
 
         if let Some(expected) = checksums.get(*primal) {
-            let verified =
-                checksum::verify_blake3_async(&local_path, expected).await;
+            let verified = checksum::verify_blake3_async(&local_path, expected).await;
             if !verified {
                 tracing::warn!(
                     primal = %primal,
@@ -628,7 +634,10 @@ mod tests {
             .filter(|s| s.is_primal)
             .map(|s| s.binary)
             .collect();
-        assert_eq!(derived, registry, "super::nucleus_primals() must match registry");
+        assert_eq!(
+            derived, registry,
+            "super::nucleus_primals() must match registry"
+        );
     }
 
     #[test]

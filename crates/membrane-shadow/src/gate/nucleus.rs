@@ -55,9 +55,7 @@ pub(super) fn start_nucleus_primals(arch: &str) -> super::ProbeResult {
     let Some(crypto_svc) = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     ) else {
-        return super::ProbeResult::fail(
-            "CryptoSigner capability not found in service registry",
-        );
+        return super::ProbeResult::fail("CryptoSigner capability not found in service registry");
     };
     let security_socket = paths.socket_path(crypto_svc).unwrap_or_else(|| {
         format!(
@@ -126,7 +124,10 @@ pub(super) fn start_nucleus_primals(arch: &str) -> super::ProbeResult {
     }
 
     let ok = failed == 0 && installed > 0;
-    super::ProbeResult { ok, detail: format!("{installed} units installed, {failed} failed") }
+    super::ProbeResult {
+        ok,
+        detail: format!("{installed} units installed, {failed} failed"),
+    }
 }
 
 /// Construct the nucleus startup phase.
@@ -466,5 +467,4 @@ mod tests {
         assert_eq!(phase.name, "nucleus.start");
         assert!(phase.detail.contains("dry-run"));
     }
-
 }

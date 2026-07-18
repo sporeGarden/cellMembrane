@@ -233,8 +233,9 @@ async fn probe_s4_auth() -> StatusProbe {
             continue;
         }
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await {
-            let is_jsonrpc = serde_json::from_str::<serde_json::Value>(&response)
-                .is_ok_and(|j| j.get("jsonrpc").is_some() || j.get("result").is_some() || j.get("error").is_some());
+            let is_jsonrpc = serde_json::from_str::<serde_json::Value>(&response).is_ok_and(|j| {
+                j.get("jsonrpc").is_some() || j.get("result").is_some() || j.get("error").is_some()
+            });
             if is_jsonrpc || response.contains("BTSP") {
                 let enforced = response.contains("BTSP handshake required")
                     || response.contains("\"auth_mode\":\"btsp\"");

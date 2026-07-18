@@ -291,7 +291,9 @@ wan_turn = 0.3
         let resolved = map.resolve_gate("eastGate");
         assert_eq!(resolved.gate, "eastGate");
         assert_eq!(resolved.zone_id.as_deref(), Some("backbone"));
-        assert!(resolved.segment.as_ref().and_then(|s| s.subnet.as_deref()) == Some("192.168.4.0/22"));
+        assert!(
+            resolved.segment.as_ref().and_then(|s| s.subnet.as_deref()) == Some("192.168.4.0/22")
+        );
     }
 
     #[test]

@@ -130,7 +130,9 @@ pub(super) fn to_songbird_routes_toml(config: &GatewayConfig) -> String {
 /// Produces routes for `JupyterHub` (`lab`), `footPrint`, and `tideGlass`
 /// based on the gate's declared roles.
 #[must_use]
-pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -> Vec<GatewayRoute> {
+pub(super) fn default_routes_for_roles(
+    roles: &[cellmembrane_types::GateRole],
+) -> Vec<GatewayRoute> {
     use cellmembrane_types::GateRole;
 
     let timeout = cellmembrane_types::service::DEFAULT_GATEWAY_TIMEOUT_SECS;
@@ -155,7 +157,11 @@ pub(super) fn default_routes_for_roles(roles: &[cellmembrane_types::GateRole]) -
     let has_footprint = roles.iter().any(|r| matches!(r, GateRole::FootPrint));
     if has_footprint {
         let host = cellmembrane_types::service::FOOTPRINT_DOMAIN;
-        for (prefix, cap) in &[("/api", "cas"), ("/ws", "agent_bridge"), ("/", "drawbridge")] {
+        for (prefix, cap) in &[
+            ("/api", "cas"),
+            ("/ws", "agent_bridge"),
+            ("/", "drawbridge"),
+        ] {
             routes.push(GatewayRoute {
                 host: host.into(),
                 path_prefix: (*prefix).into(),
@@ -390,10 +396,26 @@ mod tests {
         let roles = vec![GateRole::FootPrint];
         let routes = default_routes_for_roles(&roles);
         assert_eq!(routes.len(), 3, "footprint: /api, /ws, catch-all");
-        assert!(routes.iter().any(|r| r.path_prefix == "/api" && r.capability == "cas"));
-        assert!(routes.iter().any(|r| r.path_prefix == "/ws" && r.capability == "agent_bridge"));
-        assert!(routes.iter().any(|r| r.path_prefix == "/" && r.capability == "drawbridge"));
-        assert!(routes.iter().all(|r| r.host == cellmembrane_types::service::FOOTPRINT_DOMAIN));
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path_prefix == "/api" && r.capability == "cas")
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path_prefix == "/ws" && r.capability == "agent_bridge")
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path_prefix == "/" && r.capability == "drawbridge")
+        );
+        assert!(
+            routes
+                .iter()
+                .all(|r| r.host == cellmembrane_types::service::FOOTPRINT_DOMAIN)
+        );
     }
 
     #[test]
@@ -402,7 +424,10 @@ mod tests {
         let roles = vec![GateRole::TideGlass];
         let routes = default_routes_for_roles(&roles);
         assert_eq!(routes.len(), 1);
-        assert_eq!(routes[0].host, cellmembrane_types::service::TIDEGLASS_DOMAIN);
+        assert_eq!(
+            routes[0].host,
+            cellmembrane_types::service::TIDEGLASS_DOMAIN
+        );
         assert_eq!(routes[0].capability, "tideglass");
     }
 
@@ -437,7 +462,10 @@ mod tests {
         let routes = default_routes_for_roles(&roles);
         assert_eq!(routes.len(), 1);
         assert_eq!(routes[0].host, cellmembrane_types::service::SURFACE_DOMAIN);
-        assert_eq!(routes[0].path_prefix, cellmembrane_types::service::ESOTERICWEBB_PATH);
+        assert_eq!(
+            routes[0].path_prefix,
+            cellmembrane_types::service::ESOTERICWEBB_PATH
+        );
         assert_eq!(routes[0].capability, "esotericwebb");
     }
 
