@@ -2,7 +2,7 @@
 # esotericwebb-server.service — esotericWebb composition server on flockGate
 #
 # Serves the esotericWebb interactive experience via HTTP.
-# Caddy routes: primals.eco/webb/* → flockGate:8090.
+# Caddy routes: webb.primals.eco → flockGate:8090.
 #
 # Usage: sudo systemctl enable --now esotericwebb-server
 # Deploy: copy binary from plasmidBin/primals/esotericwebb

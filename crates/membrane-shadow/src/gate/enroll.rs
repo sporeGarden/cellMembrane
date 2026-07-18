@@ -6,6 +6,7 @@
 //! `WireGuard` mesh with Forgejo-first git remotes. It automates the manual
 //! process documented in the northGate AAR (Wave 147a):
 //!
+//! 0. `manifest.resolve` — Locate gate profile and mesh IP in ecosystem manifest
 //! 1. `wg.keygen` — Generate `WireGuard` keypair
 //! 2. `wg.config` — Render wg-quick config from manifest
 //! 3. `mesh.verify` — Verify tunnel connectivity to hub
@@ -14,6 +15,9 @@
 //! 6. `hub.peer` — Register this gate as a peer on the hub (SSH + `wg set`)
 //!
 //! After enrollment, `gate.bootstrap` handles depot fetch + NUCLEUS deployment.
+//!
+//! Future: Phase 7 (`songbird.mesh_enroll`) — call songBird's BTSP-verified
+//! `mesh.enroll` to complete the proof-of-enrollment handshake.
 
 use super::bootstrap::BootstrapPhase;
 use crate::error::Result;

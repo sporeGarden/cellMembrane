@@ -73,8 +73,10 @@ WG helpers extracted to `gate/wg.rs` (smart refactor, both files <500L).
 Wave 147c: Caddy blocks for footPrint API endpoints (sub-route handle blocks).
 `GateRole::FootPrint`/`TideGlass` promoted to typed variants (no more stringly-typed).
 Wave 147e: `ZoneLabel::House1` variant (unblocks cascade). `GateRole::EsotericWebb`
-typed. Caddy block for `primals.eco/webb/`. NUCLEUS service units for footPrint + Webb.
+typed. NUCLEUS service units for footPrint + Webb.
 northGate added to mesh registry (10.13.37.8).
+Wave 150d: Subdomain standard (`prefix.primals.eco`). `webb.primals.eco` vhost.
+CSP headers for footPrint tiles. Root domain redirect to `sporeprint.primals.eco`.
 Timestamp formatting centralized (12 inline `chrono::` sites → 4 shared helpers).
 HTTP client construction centralized (8 builder sites → 2 shared helpers).
 Deep debt sweep (140a–147a): visibility tightened, allocation hot paths optimized,
