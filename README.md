@@ -339,7 +339,7 @@ gardens/cellMembrane/
           drift.rs            # Source divergence detection
           download.rs         # SSH + WAN binary download
           toolchain.rs        # ELF validation + NDK cross-compile + strip
-        caddy/                # Caddy TLS + depot provisioning (deprecated Wave 132)
+        caddy/                # Manifest-driven Caddy config generation + TLS + depot
         gateway/              # Tower HTTP gateway (Caddy replacement)
         webhook/              # Webhook receiver (Forgejo + GitHub cascade wiring)
         bridge.rs             # Neural API bridge (UDS discovery)
