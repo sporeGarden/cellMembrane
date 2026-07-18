@@ -455,14 +455,16 @@ pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
 
 // ── Composition domains ──────────────────────────────────────────────
 
-/// Root domain for the sovereign membrane surface.
+/// Root domain for the sovereign membrane surface (intra-membrane).
 pub const SURFACE_DOMAIN: &str = "primals.eco";
 /// Default domain for footPrint composition.
 pub const FOOTPRINT_DOMAIN: &str = "footprint.primals.eco";
 /// Default domain for tideGlass composition.
 pub const TIDEGLASS_DOMAIN: &str = "tideglass.primals.eco";
-/// Path prefix for esotericWebb on the root domain.
-pub const ESOTERICWEBB_PATH: &str = "/webb/";
+/// Default domain for esotericWebb composition.
+pub const WEBB_DOMAIN: &str = "webb.primals.eco";
+/// Default domain for sporePrint documentation site.
+pub const SPOREPRINT_DOMAIN: &str = "sporeprint.primals.eco";
 /// Default esotericWebb server port.
 pub const DEFAULT_ESOTERICWEBB_PORT: u16 = 8090;
 

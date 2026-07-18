@@ -184,8 +184,8 @@ pub(super) fn default_routes_for_roles(
     let has_webb = roles.iter().any(|r| matches!(r, GateRole::EsotericWebb));
     if has_webb {
         routes.push(GatewayRoute {
-            host: cellmembrane_types::service::SURFACE_DOMAIN.into(),
-            path_prefix: cellmembrane_types::service::ESOTERICWEBB_PATH.into(),
+            host: cellmembrane_types::service::WEBB_DOMAIN.into(),
+            path_prefix: "/".into(),
             capability: "esotericwebb".into(),
             timeout_secs: timeout,
         });
@@ -461,11 +461,8 @@ mod tests {
         let roles = vec![GateRole::EsotericWebb];
         let routes = default_routes_for_roles(&roles);
         assert_eq!(routes.len(), 1);
-        assert_eq!(routes[0].host, cellmembrane_types::service::SURFACE_DOMAIN);
-        assert_eq!(
-            routes[0].path_prefix,
-            cellmembrane_types::service::ESOTERICWEBB_PATH
-        );
+        assert_eq!(routes[0].host, cellmembrane_types::service::WEBB_DOMAIN);
+        assert_eq!(routes[0].path_prefix, "/");
         assert_eq!(routes[0].capability, "esotericwebb");
     }
 

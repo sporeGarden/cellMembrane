@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-18 (Wave 148a)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, composition Caddy blocks + typed roles + NUCLEUS service units, ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-18 (Wave 150d)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 150d (subdomain standard — routing architecture overhaul):**
+URL standard adopted: all compositions use `prefix.primals.eco` subdomains.
+Path-based routing (`/webb/`) eliminated. `ESOTERICWEBB_PATH` removed,
+replaced by `WEBB_DOMAIN = "webb.primals.eco"`. `SPOREPRINT_DOMAIN` added.
+footPrint Caddy simplified: catch-all → footPrint:8090 (Express handles
+everything), `/ws` → petalTongue:8080 (agent bridge). CSP headers added
+for Esri/OSM tile domains. esotericWebb Caddy: simple vhost at
+`webb.primals.eco` → flockGate:8090. Root domain `primals.eco` redirects
+to `sporeprint.primals.eco`. Gateway routes updated for subdomain standard.
+`cargo fmt` applied (62 files, Wave 149b). 1,100 tests, 0 clippy warnings.
 
 **Wave 148a (esotericWebb deploy fix — port + unit + Caddy correction):**
 esotericWebb LIVE on flockGate:8090 (AAR resolved all 3 deploy blockers).

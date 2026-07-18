@@ -263,6 +263,7 @@ pub async fn dispatch(
 
 // ── Manifest-driven Caddyfile generation ────────────────────────────
 
+#[allow(clippy::too_many_lines)]
 async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> {
     use cellmembrane_types::caddy::{CaddyConfig, CaddySubRoute, CaddyVhost};
     use cellmembrane_types::service;
@@ -339,19 +340,23 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
                 upstream: String::new(),
                 path: None,
                 tls: true,
-                extra_directives: vec![],
+                extra_directives: vec![
+                    "header Content-Security-Policy \"default-src 'self'; img-src 'self' data: blob: https://*.arcgisonline.com https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.arcgisonline.com https://geocode-api.arcgis.com wss:;\"".into(),
+                ],
                 sub_routes: vec![
                     CaddySubRoute {
-                        path_prefix: "/api/*".into(),
-                        upstream: format!("{ip}:{}", service::DEFAULT_FOOTPRINT_PORT),
-                    },
-                    CaddySubRoute {
                         path_prefix: "/ws".into(),
-                        upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                        upstream: format!(
+                            "{ip}:{}",
+                            service::DEFAULT_PETALTONGUE_PORT
+                        ),
                     },
                     CaddySubRoute {
                         path_prefix: String::new(),
-                        upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                        upstream: format!(
+                            "{ip}:{}",
+                            service::DEFAULT_FOOTPRINT_PORT
+                        ),
                     },
                 ],
             });
@@ -372,17 +377,27 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
         if let Some((gate_name_ref, profile)) = m.gates_for_role("esotericwebb").first() {
             let ip = resolve_upstream_ip(gate_name_ref, profile, inner_ip);
             vhosts.push(CaddyVhost {
-                domain: service::SURFACE_DOMAIN.into(),
-                upstream: String::new(),
+                domain: service::WEBB_DOMAIN.into(),
+                upstream: format!("{ip}:{}", service::DEFAULT_ESOTERICWEBB_PORT),
                 path: None,
                 tls: true,
                 extra_directives: vec![],
-                sub_routes: vec![CaddySubRoute {
-                    path_prefix: format!("{}*", service::ESOTERICWEBB_PATH),
-                    upstream: format!("{ip}:{}", service::DEFAULT_ESOTERICWEBB_PORT),
-                }],
+                sub_routes: vec![],
             });
         }
+
+        // Root domain redirects to sporePrint documentation site.
+        vhosts.push(CaddyVhost {
+            domain: service::SURFACE_DOMAIN.into(),
+            upstream: String::new(),
+            path: None,
+            tls: true,
+            extra_directives: vec![format!(
+                "redir https://{} permanent",
+                service::SPOREPRINT_DOMAIN
+            )],
+            sub_routes: vec![],
+        });
     }
 
     if vhosts.is_empty() {
