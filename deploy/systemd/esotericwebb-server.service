@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # esotericwebb-server.service — esotericWebb composition server on flockGate
 #
-# Runs the esotericWebb game/interactive server behind petalTongue.
-# Caddy routes: primals.eco/webb/* → petalTongue :8080 on the target gate.
+# Serves the esotericWebb interactive experience via HTTP.
+# Caddy routes: primals.eco/webb/* → flockGate:8090.
 #
 # Usage: sudo systemctl enable --now esotericwebb-server
-# Deploy: membrane plasmid.deploy --binary esotericwebb --gate flockGate
+# Deploy: copy binary from plasmidBin/primals/esotericwebb
 [Unit]
 Description=esotericWebb Composition Server
 After=songbird-federation.service membrane-nucleus.target
@@ -15,12 +15,13 @@ ConditionPathExists=/opt/membrane/esotericwebb
 [Service]
 Type=simple
 UMask=0002
-ExecStart=/opt/membrane/esotericwebb server --socket /run/membrane/esotericwebb.sock
+WorkingDirectory=/opt/ecoPrimals/gardens/esotericWebb
+ExecStart=/opt/membrane/esotericwebb serve --content content/ --listen 0.0.0.0:8090
 Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
 Environment=BIOMEOS_SOCKET_DIR=/run/membrane
 Environment=HOME=/root
-Restart=always
+Restart=on-failure
 RestartSec=3
 RuntimeDirectory=membrane
 RuntimeDirectoryMode=0755

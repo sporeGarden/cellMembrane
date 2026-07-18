@@ -367,7 +367,7 @@ async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> 
                 extra_directives: vec![],
                 sub_routes: vec![CaddySubRoute {
                     path_prefix: format!("{}*", service::ESOTERICWEBB_PATH),
-                    upstream: format!("{ip}:{}", service::DEFAULT_PETALTONGUE_PORT),
+                    upstream: format!("{ip}:{}", service::DEFAULT_ESOTERICWEBB_PORT),
                 }],
             });
         }

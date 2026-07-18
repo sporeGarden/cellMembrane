@@ -1,13 +1,22 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-17 (Wave 147e)
+**Last updated:** 2026-07-18 (Wave 148a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, composition Caddy blocks + typed roles + NUCLEUS service units, ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 148a (esotericWebb deploy fix — port + unit + Caddy correction):**
+esotericWebb LIVE on flockGate:8090 (AAR resolved all 3 deploy blockers).
+Port confusion clarified: 8080 = nestGate/petalTongue, 8090 = esotericWebb.
+`esotericwebb-server.service` ExecStart fixed from `server --socket` to
+`serve --content content/ --listen 0.0.0.0:8090`, WorkingDirectory added,
+Restart policy changed to `on-failure`. `DEFAULT_ESOTERICWEBB_PORT` constant
+(8090) added. Caddy generation for `/webb/*` sub-route fixed from
+petalTongue :8080 → esotericWebb :8090. 1,100 tests, 0 clippy warnings.
 
 **Wave 147e (zone fix + esotericWebb Caddy + composition service units):**
 `ZoneLabel::House1` variant: unblocks cascade for northGate (manifest `zone = "house1"`

@@ -463,6 +463,8 @@ pub const FOOTPRINT_DOMAIN: &str = "footprint.primals.eco";
 pub const TIDEGLASS_DOMAIN: &str = "tideglass.primals.eco";
 /// Path prefix for esotericWebb on the root domain.
 pub const ESOTERICWEBB_PATH: &str = "/webb/";
+/// Default esotericWebb server port.
+pub const DEFAULT_ESOTERICWEBB_PORT: u16 = 8090;
 
 /// Default footPrint server bind (loopback, behind drawbridge).
 pub const DEFAULT_FOOTPRINT_BIND: &str = "127.0.0.1:8090";
