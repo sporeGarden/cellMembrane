@@ -155,7 +155,7 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
     "eastGate",
     "flockGate",
     "ironGate",
-    "northGate",
+    "southGate",
 ];
 
 /// All known active gates in the ecosystem (superset of [`KNOWN_MESH_GATES`]).
@@ -169,6 +169,7 @@ pub const KNOWN_GATES: &[&str] = &[
     "flockGate",
     "ironGate",
     "northGate",
+    "southGate",
     "grapheneGate",
 ];
 
@@ -186,7 +187,7 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
         "eastGate" => Some("10.13.37.5"),
         "flockGate" => Some("10.13.37.6"),
         "ironGate" => Some("10.13.37.7"),
-        "northGate" => Some("10.13.37.8"),
+        "southGate" => Some("10.13.37.8"),
         _ => None,
     }
 }
@@ -280,8 +281,13 @@ mod tests {
     }
 
     #[test]
-    fn mesh_address_northgate() {
-        assert_eq!(mesh_address("northGate"), Some("10.13.37.8"));
+    fn mesh_address_southgate() {
+        assert_eq!(mesh_address("southGate"), Some("10.13.37.8"));
+    }
+
+    #[test]
+    fn mesh_address_northgate_no_wg() {
+        assert_eq!(mesh_address("northGate"), None);
     }
 
     #[test]

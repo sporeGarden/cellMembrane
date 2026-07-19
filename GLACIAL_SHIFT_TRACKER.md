@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-18 (Wave 150h)
+**Last updated:** 2026-07-19 (Wave 150n)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 150n (mesh registry: southGate allocated, northGate WG deferred):**
+southGate allocated 10.13.37.8 (USB enrollment ready, House2 zone). northGate
+removed from `KNOWN_MESH_GATES` and `mesh_address` (WG pending — Windows gate,
+enrolled but no mesh tunnel yet). Both remain in `KNOWN_GATES`. Origin remote
+fixed: `ecoPrimals/cellMembrane` → `sporeGarden/cellMembrane` on Forgejo
+(Wave 150l canonicalization). 1,101 tests (+1), 0 clippy warnings.
+
+**Wave 150k (unwrap audit — 551 test-only, 0 production):**
+Dimensional review flagged 551 `.unwrap()` as P1. Full audit confirms ALL 551
+are in test code. Zero production unwrap/expect(invariant)/panic/todo.
 
 **Wave 150h (depot URL evolution + NUCLEUS composition milestone):**
 Full NUCLEUS composition wired — both footPrint and esotericWebb consumer-side
