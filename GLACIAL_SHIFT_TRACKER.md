@@ -1,13 +1,21 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-18 (Wave 150d)
+**Last updated:** 2026-07-18 (Wave 150h)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 150h (depot URL evolution + NUCLEUS composition milestone):**
+Full NUCLEUS composition wired — both footPrint and esotericWebb consumer-side
+connections COMPLETE (petalTongue WS bridge + nestGate CAS). Depot defaults
+evolved from legacy `membrane.primals.eco/depot` to subdomain-standard
+`depot.primals.eco`. `DEFAULT_WAN_DEPOT_URL` and `DEFAULT_DEPOT_HOSTNAME`
+updated. All P1 inter-primal wiring items RESOLVED on both provider and
+consumer sides. 1,100 tests, 0 clippy warnings.
 
 **Wave 150d (subdomain standard — routing architecture overhaul):**
 URL standard adopted: all compositions use `prefix.primals.eco` subdomains.

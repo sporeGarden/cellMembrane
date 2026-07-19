@@ -171,7 +171,7 @@ pub const ENV_CADDY_ADMIN_ENDPOINT: &str = "CADDY_ADMIN_ENDPOINT";
 pub const DEFAULT_CADDY_ADMIN_ENDPOINT: &str = "localhost:2019";
 
 /// Default WAN depot base URL served by Caddy on the sovereign membrane surface.
-pub const DEFAULT_WAN_DEPOT_URL: &str = "https://membrane.primals.eco/depot";
+pub const DEFAULT_WAN_DEPOT_URL: &str = "https://depot.primals.eco";
 
 /// Environment variable to override the sandbox socket directory.
 pub const ENV_SANDBOX_SOCKET_DIR: &str = "MEMBRANE_SANDBOX_SOCKET_DIR";
@@ -300,7 +300,7 @@ pub const DEFAULT_FORGEJO_ORG: &str = "sporeGarden";
 /// WAN depot hostname (used in Caddy config and depot URLs).
 pub const ENV_DEPOT_HOSTNAME: &str = "MEMBRANE_DEPOT_HOSTNAME";
 /// Default depot hostname served by Caddy.
-pub const DEFAULT_DEPOT_HOSTNAME: &str = "membrane.primals.eco";
+pub const DEFAULT_DEPOT_HOSTNAME: &str = "depot.primals.eco";
 
 /// Sovereign git remote name — authority-first push target.
 ///
