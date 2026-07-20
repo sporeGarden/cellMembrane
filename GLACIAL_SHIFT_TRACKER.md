@@ -1,7 +1,7 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-19 (Wave 150n)
+**Last updated:** 2026-07-20 (Wave 150o)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
@@ -9,12 +9,17 @@
 
 ## Recent Waves
 
-**Wave 150n (mesh registry: southGate allocated, northGate WG deferred):**
-southGate allocated 10.13.37.8 (USB enrollment ready, House2 zone). northGate
-removed from `KNOWN_MESH_GATES` and `mesh_address` (WG pending — Windows gate,
-enrolled but no mesh tunnel yet). Both remain in `KNOWN_GATES`. Origin remote
-fixed: `ecoPrimals/cellMembrane` → `sporeGarden/cellMembrane` on Forgejo
-(Wave 150l canonicalization). 1,101 tests (+1), 0 clippy warnings.
+**Wave 150o (mesh registry IP correction + methodology audit):**
+southGate IP corrected from .8 to .9 (northGate keeps .8). Both northGate and
+southGate now in `KNOWN_MESH_GATES` with correct addresses (.8 and .9).
+Dimensional review's "456 production unwrap" and "2 unsafe" are false positives:
+grep excludes `#[test]` lines but not `#[cfg(test)]` module bodies; "unsafe"
+matches `#![forbid(unsafe_code)]` attributes and `'unsafe-inline'` CSP strings.
+Actual: 0 production unwrap, 0 unsafe code. 1,101 tests, 0 clippy.
+
+**Wave 150n (mesh registry: southGate allocated, origin remote fix):**
+Origin remote fixed: `ecoPrimals/cellMembrane` → `sporeGarden/cellMembrane`
+on Forgejo (Wave 150l canonicalization).
 
 **Wave 150k (unwrap audit — 551 test-only, 0 production):**
 Dimensional review flagged 551 `.unwrap()` as P1. Full audit confirms ALL 551
