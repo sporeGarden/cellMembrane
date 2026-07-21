@@ -7,7 +7,7 @@
 **Status**: Active
 **Authority**: cellMembrane team
 **License**: AGPL-3.0-or-later
-**Related**: `K_DERM_TOPOLOGY.md`, `MEMBRANE_COMPOSITION_MODEL.md`, `FIELDMOUSE_CONTRACT.md`, `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md`
+**Related**: `K_DERM_TOPOLOGY.md`, `MEMBRANE_COMPOSITION_MODEL.md`, `FIELDMOUSE_CONTRACT.md`, `infra/wateringHole/compositions/MEMBRANE_CHANNEL_ARCHITECTURE.md`
 
 ---
 
@@ -298,8 +298,8 @@ and feeds it to a deployer.
 
 - K-Derm topology: `specs/K_DERM_TOPOLOGY.md`
 - K-NOME methodology: `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md`
-- Channel architecture prose: `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md`
-- fieldMouse deployment class: `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md`
+- Channel architecture prose: `infra/wateringHole/compositions/MEMBRANE_CHANNEL_ARCHITECTURE.md`
+- fieldMouse deployment class: `infra/wateringHole/fossilRecord/wave132h_jul2026/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` (fossilized)
 - Dark Forest standard: `springs/primalSpring/specs/DARK_FOREST_GLACIAL_GATE.md`
 - Deploy graph: `primals/biomeOS/graphs/membrane_deploy.toml`
 - Composition model: `specs/MEMBRANE_COMPOSITION_MODEL.md`

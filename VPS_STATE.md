@@ -1,16 +1,16 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-07-17 (Wave 147b)
+**Last updated:** 2026-07-21 (Wave 150t)
 **Deployed composition:** Full NUCLEUS (Wave 61→118) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust `membrane` binary
 **Deployment model:** Deterministic — `gate.bootstrap` (7 phases) + sandbox validation + atomic promote + canary retirement + cascade auto-fetch
-**WAN depot:** `https://membrane.primals.eco/depot/` — 13 binaries + checksums.toml over HTTPS (zero SSH for WAN gates)
+**WAN depot:** `https://depot.primals.eco` — 13 binaries + checksums.toml over HTTPS (zero SSH for WAN gates)
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 **Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02, S4 GRADUATED)
-**Mesh:** 6-node WireGuard (golgi 10.13.37.1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7, northGate .8) + songbird:7700 federation
+**Mesh:** 7-node WireGuard (golgi 10.13.37.1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7, northGate .8, southGate .9) + songbird:7700 federation
 **Disk:** 60% (cleaned Wave 69)
-**Caddy:** sovereign TLS on `membrane.primals.eco` (Let's Encrypt E8) + `/depot/` file_server
+**Caddy:** sovereign TLS (Let's Encrypt E8) — subdomain routing: `sporeprint.primals.eco`, `webb.primals.eco`, `depot.primals.eco`
 **Sandbox:** `/opt/membrane/sandbox/` + `/run/membrane/sandbox/` — ephemeral UDS validation (systemd `membrane-sandbox@`)
 **Canary:** `/opt/membrane/canary/` + `/run/membrane/canary/` — previous-good fallback pool (systemd `membrane-canary@`)
 
@@ -200,7 +200,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `membrane gate.bootstrap` (was `nucleus_launcher.sh`) | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellMembrane workspace) | 1073 PASS, 0 FAIL, 0 clippy | 2026-07-16 |
+| `cargo test` (cellMembrane workspace) | 1101 PASS, 0 FAIL, 0 clippy | 2026-07-21 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

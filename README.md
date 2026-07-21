@@ -8,8 +8,8 @@
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
-| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 6-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 150h) |
+| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 150t) |
 
 ---
 
@@ -25,9 +25,10 @@
 ### Channel 3 Surface Details
 
 - Caddy reverse proxy with automatic Let's Encrypt TLS
+- Subdomain routing: `sporeprint.primals.eco`, `webb.primals.eco`, `depot.primals.eco`
 - 19 MB sporePrint content cache synced from NestGate
 - Sovereignty proof: 68ms TTFB (vs GitHub Pages 89ms)
-- Domain: `membrane.primals.eco`
+- Root domain `primals.eco` redirects to `sporeprint.primals.eco`
 
 ---
 
@@ -55,35 +56,28 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1089 tests — pedantic clippy clean
+cargo test                  # 1101 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 147e): ~9k lines types, ~36k lines shadow. All manifest fields
+Current state (Wave 150t): ~9k lines types, ~36k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-Wave 147a: `gate.enroll` automated mesh enrollment (WG keygen, config render,
-mesh verify, Forgejo SSH verify, Forgejo-first git remote config).
-Wave 147b: `hub.peer` phase — hub-side peer addition via SSH + `wg set`.
-WG helpers extracted to `gate/wg.rs` (smart refactor, both files <500L).
-Wave 147c: Caddy blocks for footPrint API endpoints (sub-route handle blocks).
-`GateRole::FootPrint`/`TideGlass` promoted to typed variants (no more stringly-typed).
-Wave 147e: `ZoneLabel::House1` variant (unblocks cascade). `GateRole::EsotericWebb`
-typed. NUCLEUS service units for footPrint + Webb.
-northGate added to mesh registry (10.13.37.8).
-Wave 150d: Subdomain standard (`prefix.primals.eco`). `webb.primals.eco` vhost.
-CSP headers for footPrint tiles. Root domain redirect to `sporeprint.primals.eco`.
-Timestamp formatting centralized (12 inline `chrono::` sites → 4 shared helpers).
-HTTP client construction centralized (8 builder sites → 2 shared helpers).
-Deep debt sweep (140a–147a): visibility tightened, allocation hot paths optimized,
+7-gate WG mesh (golgi, sporeGate, eastGate, flockGate, ironGate, northGate, southGate).
+Subdomain standard (`prefix.primals.eco`): `webb.primals.eco` vhost, CSP headers,
+root domain redirect to `sporeprint.primals.eco`, depot at `depot.primals.eco`.
+`gate.enroll` automated mesh enrollment + `hub.peer` hub-side addition.
+Deep debt sweep (140a–150o): visibility tightened, allocation hot paths optimized,
 error taxonomy reclassified, domain constants centralized, CAC tree-parity checks,
 CSPRNG unified via `getrandom`, service filter registry-derived, `ProbeResult` typed
 gate probes, `build_err` consolidated, zero f64 casts in display formatting,
-nested `if let` → let-chains (Rust 2024 edition).
+nested `if let` → let-chains (Rust 2024 edition), timestamp/HTTP helpers centralized.
+Zero production `unwrap()` (551 test-only, confirmed via full audit).
+Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 The `membrane.toml` config file is the user-facing interface. Write one,
@@ -177,7 +171,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 147e are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 150t are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -185,10 +179,10 @@ through Wave 147e are **DONE**. Full wave-by-wave audit trail is preserved in
 | Infrastructure | exim4/droplet-agent purged, fail2ban, UFW, SSH key-only, journald persistence | DONE |
 | TLS | Caddy + Let's Encrypt sovereign TLS, Cloudflare removed | DONE |
 | Dark Forest | 21/21 PASS, 5-pillar compliance, stripped static ELF binaries | DONE |
-| NUCLEUS | 13/13 primals ALIVE, 6-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
+| NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1089 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1101 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -230,7 +224,7 @@ through Wave 147e are **DONE**. Full wave-by-wave audit trail is preserved in
 - Caddy TLS certificate management and reverse proxy on VPS
 - Sovereign DNS (knot-dns on VPS, replacing commercial DNS)
 - RustDesk self-hosted remote access
-- Multi-gate expansion (westGate, northGate provisioning)
+- Multi-gate expansion (7-gate mesh: golgi, sporeGate, eastGate, flockGate, ironGate, northGate, southGate)
 - plasmidBin — binary harvesting, checksums, `sources.toml`, CI workflows
 - VPS deployment ops — systemd units, UDS probes, firewall, refresh cycles
 - Peptidoglycan self-refresh timer and auto-fetch evolution
@@ -358,7 +352,7 @@ gardens/cellMembrane/
   specs/                      # Formal architecture specs (6 documents)
   config/                     # capability_registry.toml (specification artifact)
   deploy/                     # Systemd units, hooks, provisioning
-  experiments/                # Validated experiment records (fossil record)
+  receipts/                   # Operational receipts (key generation, deploy)
   .forgejo/workflows/ci.yml   # Forgejo CI pipeline
 ```
 
@@ -366,11 +360,11 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,100 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,101 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1089 tests)
+cargo test                  # Full suite (1101 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```
@@ -384,11 +378,9 @@ Wave-by-wave evolution history is preserved in `GLACIAL_SHIFT_TRACKER.md` and gi
 | Resource | Location | Relationship |
 |----------|----------|-------------|
 | Ecosystem manifest | `infra/wateringHole/ecosystem_manifest.toml` | Single source of truth for all primals, repos, gates |
-| Channel architecture | `infra/wateringHole/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
-| fieldMouse spec | `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` | Deployment class, hardening checklist, boot order |
+| Channel architecture | `infra/wateringHole/compositions/MEMBRANE_CHANNEL_ARCHITECTURE.md` | Channel isolation, port policy, crypto layers |
 | K-NOME programming | `infra/whitePaper/gen3/about/K_NOME_PROGRAMMING.md` | K-Derm topology parallels K-NOME methodology |
-| Dark Forest standard | `infra/wateringHole/DARK_FOREST_GLACIAL_GATE_STANDARD.md` | 5-pillar security audit |
-| Glacial readiness | `infra/wateringHole/GLACIAL_SHIFT_READINESS.md` | 6 stadial entry criteria |
+| Dark Forest standard | `infra/wateringHole/foundations/DARK_FOREST_GLACIAL_GATE_STANDARD.md` | 5-pillar security audit |
 | Fossil record | `infra/fossilRecord/cellMembrane/` | Archived Wave 59/119 scripts (deploy, provision) |
 
 ---

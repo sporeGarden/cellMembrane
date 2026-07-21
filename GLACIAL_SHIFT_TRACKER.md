@@ -1,13 +1,22 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-20 (Wave 150o)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 6-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-21 (Wave 150t)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 150t (docs sweep + wateringHole reorg alignment):**
+Root docs updated: README stale refs (Wave 147e→150t), test count (1,089→1,101),
+depot URL (`depot.primals.eco`), mesh count (6→7 with southGate), Related Resources
+paths updated for wateringHole 150t directory reorg (compositions/, foundations/,
+fossilRecord/). Phantom `experiments/` dir removed from tree listing. VPS_STATE.md
+updated (mesh, depot, validation). RUNBOOKS and IRONGATE bumped to 150t.
+wateringHole handoff written for overwatch. Zero false-positive TODOs in codebase.
+`cargo clean` reclaimed 1.3G. 1,101 tests, 0 clippy, 0 fmt drift.
 
 **Wave 150o (mesh registry IP correction + methodology audit):**
 southGate IP corrected from .8 to .9 (northGate keeps .8). Both northGate and
@@ -138,7 +147,7 @@ All criteria satisfied — stadial-ready.
 | # | Criterion | Status |
 |---|-----------|--------|
 | 1 | All 4 sovereignty shadows cut over (7-day gates) | S1 **OPERATIONAL**, S2 LIVE, S3 LIVE, S4 **GRADUATED** |
-| 2 | Multi-gate LAN mesh (3+ gates) | **OPERATIONAL** — 6-node WG mesh |
+| 2 | Multi-gate LAN mesh (3+ gates) | **OPERATIONAL** — 7-node WG mesh |
 | 3 | Nest expansion deployed on VPS | **LIVE** (Wave 38) |
 | 4 | Remote covalent node (WAN) | **flockGate LIVE** (16 bonds) |
 | 5 | DNS pointed to sovereign infrastructure | **knot-dns RUNNING** — NS cutover pending (registrar) |

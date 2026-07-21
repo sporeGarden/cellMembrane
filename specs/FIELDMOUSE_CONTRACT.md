@@ -7,7 +7,7 @@
 **Status**: Active
 **Authority**: cellMembrane team
 **License**: AGPL-3.0-or-later
-**Related**: `CELLMEMBRANE_ARCHITECTURE.md`, `infra/wateringHole/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md`
+**Related**: `CELLMEMBRANE_ARCHITECTURE.md`, `infra/wateringHole/fossilRecord/wave132h_jul2026/CELLMEMBRANE_FIELDMOUSE_DEPLOYMENT.md` (fossilized)
 
 ---
 
