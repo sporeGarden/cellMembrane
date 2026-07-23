@@ -232,7 +232,7 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
             name: format!("{} binary", svc.binary),
             ok: bin_path.is_file(),
             detail: if bin_path.is_file() {
-                format!("{}", bin_path.display())
+                bin_path.display().to_string()
             } else {
                 format!("missing: {}", bin_path.display())
             },
@@ -423,7 +423,7 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
             name: format!("{binary} binary"),
             ok: bin_path.is_file(),
             detail: if bin_path.is_file() {
-                format!("{}", bin_path.display())
+                bin_path.display().to_string()
             } else {
                 format!("missing: {}", bin_path.display())
             },
@@ -451,7 +451,7 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
             name: "sporePrint site".into(),
             ok: has_config,
             detail: if has_config {
-                format!("{}", sporeprint_dir.display())
+                sporeprint_dir.display().to_string()
             } else {
                 format!("no config.toml in {}", sporeprint_dir.display())
             },

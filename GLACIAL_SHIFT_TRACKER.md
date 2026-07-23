@@ -9,19 +9,20 @@
 
 ## Recent Waves
 
-**Wave 150w (sovereign depot pipeline + deep debt sweep):**
-Sovereign depot auto-build pipeline (Wave 150v): Forgejo post-receive hook
-dispatches `sovereign.ci.trigger` on push; post-cascade commit drift detection
-with auto-harvest on build authority gates; hard lineage enforcement for
-`PostPrimordial` primals (BLAKE3 + provenance + builder authority); build-pending
-mesh signal. Deep debt sweep (Wave 150w): unified mesh registry (`MESH_REGISTRY`
-const table → single source for `mesh_address()`, `KNOWN_MESH_GATES`,
-`KNOWN_GATES`), shared canary/sandbox staging (`ensure_staging_dirs`,
-`stage_binary`, `spawn_primal_server` — 60L dedup), `request_beardog_sign`
-renamed to `request_signer_sign` (capability-based), `mesh_address_from_topology`
-6-deep let pyramid flattened to let-chain, 4 sequential CascadeMode guards
-consolidated. Unwrap audit (150u) confirmed 0 production unwraps via
-`cargo clippy -W clippy::unwrap_used`. 1,110 tests, 0 clippy, 0 fmt drift.
+**Wave 150w (tower.shadow + checksums migration + deep debt sweep):**
+`membrane tower.shadow` shipped (1,204 lines, 14 tests) — continuous WG vs Tower
+transport shadow comparison across all mesh gate pairs. Shadow deploy ACTIVE on
+3 gates (sporeGate, flockGate, golgiBody) with 60min continuous benchmarks.
+`checksums.toml` format migration: custom `serde::Deserialize` for `ChecksumEntry`
+accepts both struct entries `{ blake3 = "...", size = N }` and legacy plain-string
+`"hash"` — resolves depot.integrity DEGRADED on flockGate. `ChecksumEntry` moved
+from harvest.rs to checksum.rs (857→804L). `persist_checksums` now writes struct
+format with size. Sovereign depot auto-build pipeline (Wave 150v): Forgejo
+post-receive hook, commit drift detection, hard lineage enforcement for
+`PostPrimordial` primals, build-pending mesh signal. Deep debt sweep: unified mesh
+registry, shared staging (60L dedup), capability-based naming, let-chain flattening,
+guard consolidation, `format!` to `.display().to_string()` idiom fixes.
+1,136 tests, 0 clippy, 0 fmt drift.
 
 **Wave 150t (docs sweep + wateringHole reorg alignment):**
 Root docs updated: README stale refs (Wave 147e→150t), test count (1,089→1,101),
