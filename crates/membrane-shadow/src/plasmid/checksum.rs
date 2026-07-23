@@ -70,6 +70,10 @@ pub async fn fetch_wan_checksums(_arch: &str) -> HashMap<String, String> {
 }
 
 /// Parse the arch-keyed `checksums.toml` format into a flat primal->blake3 map.
+///
+/// Accepts both formats:
+/// - Struct entries: `name = { blake3 = "hash", size = 12345 }`
+/// - Plain strings (legacy): `name = "hash"`
 pub(super) fn parse_checksums_toml(content: &str, arch: &str) -> HashMap<String, String> {
     let Ok(table) = content.parse::<toml::Table>() else {
         return HashMap::new();
@@ -81,6 +85,8 @@ pub(super) fn parse_checksums_toml(content: &str, arch: &str) -> HashMap<String,
     for (name, entry) in arch_table {
         if let Some(blake3) = entry.get("blake3").and_then(toml::Value::as_str) {
             result.insert(name.clone(), blake3.to_string());
+        } else if let Some(plain) = entry.as_str() {
+            result.insert(name.clone(), plain.to_string());
         }
     }
     result
@@ -140,7 +146,7 @@ pub(super) fn persist_checksums(
     let mut sorted: Vec<_> = checksums.iter().collect();
     sorted.sort_by_key(|(k, _)| k.as_str());
     for (name, hash) in sorted {
-        let _ = writeln!(content, "{name} = \"{hash}\"");
+        let _ = writeln!(content, "{name} = {{ blake3 = \"{hash}\" }}");
     }
     let path = depot_root.join(cellmembrane_types::service::CHECKSUMS_FILE);
     if let Err(e) = std::fs::write(&path, content.as_bytes()) {
@@ -195,7 +201,7 @@ beardog = { blake3 = "zzz999" }
     }
 
     #[test]
-    fn persist_writes_sorted_toml() {
+    fn persist_writes_sorted_struct_toml() {
         let dir = std::env::temp_dir().join("cksum_persist_test");
         let _ = std::fs::create_dir_all(&dir);
         let arch = "x86_64-unknown-linux-musl";
@@ -207,12 +213,29 @@ beardog = { blake3 = "zzz999" }
 
         let content = std::fs::read_to_string(dir.join("checksums.toml")).unwrap();
         assert!(content.starts_with(&format!("[{arch}]")));
-        assert!(content.contains("beardog = \"abc123\""));
-        assert!(content.contains("songbird = \"def456\""));
+        assert!(content.contains(r#"beardog = { blake3 = "abc123" }"#));
+        assert!(content.contains(r#"songbird = { blake3 = "def456" }"#));
         let beardog_pos = content.find("beardog").unwrap();
         let songbird_pos = content.find("songbird").unwrap();
         assert!(beardog_pos < songbird_pos, "sorted alphabetically");
+
+        let map = parse_checksums_toml(&content, arch);
+        assert_eq!(map.get("beardog").unwrap(), "abc123");
+        assert_eq!(map.get("songbird").unwrap(), "def456");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_checksums_toml_accepts_plain_strings() {
+        let content = r#"
+[x86_64-unknown-linux-musl]
+beardog = "abc123"
+songbird = "def456"
+"#;
+        let map = parse_checksums_toml(content, "x86_64-unknown-linux-musl");
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("beardog").unwrap(), "abc123");
+        assert_eq!(map.get("songbird").unwrap(), "def456");
     }
 
     #[test]

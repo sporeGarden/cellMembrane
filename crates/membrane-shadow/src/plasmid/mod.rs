@@ -196,20 +196,6 @@ pub(crate) enum LineageResult {
     Warned(String),
 }
 
-#[derive(serde::Deserialize)]
-struct LineageChecksumFile {
-    #[serde(flatten)]
-    targets: std::collections::BTreeMap<
-        String,
-        std::collections::BTreeMap<String, LineageChecksumEntry>,
-    >,
-}
-
-#[derive(serde::Deserialize)]
-struct LineageChecksumEntry {
-    blake3: String,
-}
-
 /// Validate depot lineage for a primal: BLAKE3 checksum, provenance commit,
 /// and builder authority. `PostPrimordial` primals are hard-blocked on failure;
 /// other primals get a warning.
@@ -271,19 +257,12 @@ fn verify_checksum_against_depot(
         return false;
     };
 
-    let parsed: LineageChecksumFile = match toml::from_str(&content) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    let Some(entries) = parsed.targets.get(arch) else {
-        return false;
-    };
-    let Some(expected) = entries.get(primal) else {
+    let map = checksum::parse_checksums_toml(&content, arch);
+    let Some(expected) = map.get(primal) else {
         return false;
     };
 
-    compute_blake3_file(bin_path).is_ok_and(|actual| actual == expected.blake3)
+    compute_blake3_file(bin_path).is_ok_and(|actual| actual == *expected)
 }
 
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.
