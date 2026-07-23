@@ -83,6 +83,7 @@ pub(crate) mod sovereignty_ledger;
 pub(crate) mod ssh;
 pub(crate) mod temporal;
 pub(crate) mod topology;
+pub(crate) mod tower;
 pub(crate) mod webhook;
 
 pub use config::ShadowConfig;

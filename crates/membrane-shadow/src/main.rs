@@ -110,7 +110,14 @@ Plasmid (primal binary bootstrap):
 Relay (K-Derm diderm relay chain):
   relay.run [repo_path...]         Full relay: pull → impulse → ship (metallic→ionic→weak)
   relay.mediate [repo_path...]     Pull from Forgejo only (metallic bond inward)
-  relay.ship [repo_path...]        Push to GitHub via golgiBody-ext (ionic→weak outward)"
+  relay.ship [repo_path...]        Push to GitHub via golgiBody-ext (ionic→weak outward)
+
+Tower (Tower Atomic transport — sovereign WG replacement):
+  tower.shadow [--enable|--disable]  Shadow benchmark mode (continuous parity metrics)
+                   [--interval N]      Benchmark interval in minutes (default: 60)
+  tower.status                     Tower stack health (songBird + bearDog + skunkBat)
+  tower.benchmark [--peer ADDR]    Run immediate benchmark cycle against mesh peers
+                   [--probes N] [--duration N]"
     );
 }
 

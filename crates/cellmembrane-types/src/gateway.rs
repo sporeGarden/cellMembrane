@@ -260,6 +260,112 @@ impl ShadowReport {
     }
 }
 
+// ── Tower Shadow — WG vs Tower transport comparison ──────────────────────
+
+/// Metrics from a single transport probe (one direction, one transport).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransportProbe {
+    /// Transport type: `"wireguard"` or `"tower"`.
+    pub transport: String,
+    /// Round-trip latency in microseconds.
+    pub latency_us: u64,
+    /// Throughput in bytes/sec (0 if not measured).
+    pub throughput_bps: u64,
+    /// Jitter in microseconds (std-dev of latency samples).
+    pub jitter_us: u64,
+    /// Number of probe samples.
+    pub samples: u32,
+    /// Error message (if probe failed).
+    pub error: Option<String>,
+}
+
+impl TransportProbe {
+    /// Whether the probe completed without error.
+    #[must_use]
+    pub const fn is_ok(&self) -> bool {
+        self.error.is_none()
+    }
+}
+
+/// Comparison of WG vs Tower for a single gate pair.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GatePairShadow {
+    /// Source gate name.
+    pub from_gate: String,
+    /// Destination gate name.
+    pub to_gate: String,
+    /// Destination `WireGuard` mesh IP.
+    pub to_ip: String,
+    /// `WireGuard` probe results.
+    pub wireguard: TransportProbe,
+    /// Tower probe results.
+    pub tower: TransportProbe,
+    /// Latency ratio (Tower / WG). <1.0 means Tower is faster.
+    pub latency_ratio: f64,
+    /// Throughput ratio (Tower / WG). >1.0 means Tower is faster.
+    pub throughput_ratio: f64,
+}
+
+impl GatePairShadow {
+    /// Whether Tower meets or exceeds `WireGuard` on this pair.
+    #[must_use]
+    pub fn tower_exceeds(&self) -> bool {
+        self.latency_ratio <= 1.05 && self.throughput_ratio >= 0.95
+    }
+}
+
+/// Full tower shadow report — all gate pairs, summary stats.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TowerShadowReport {
+    /// ISO-8601 timestamp of report generation.
+    pub timestamp: String,
+    /// Gate that ran the shadow command.
+    pub source_gate: String,
+    /// Wave identifier.
+    pub wave: String,
+    /// Individual gate-pair comparisons.
+    pub pairs: Vec<GatePairShadow>,
+    /// Count of pairs where Tower meets/exceeds WG.
+    pub tower_exceeds_count: u32,
+    /// Total pairs measured.
+    pub total_pairs: u32,
+    /// Overall verdict: `"EXCEEDS"`, `"PARITY"`, or `"REGRESSED"`.
+    pub verdict: String,
+}
+
+impl TowerShadowReport {
+    /// Build a report from gate-pair measurements.
+    #[must_use]
+    pub fn from_pairs(
+        source_gate: String,
+        wave: String,
+        timestamp: String,
+        pairs: Vec<GatePairShadow>,
+    ) -> Self {
+        let total = u32::try_from(pairs.len()).unwrap_or(u32::MAX);
+        let exceeds = u32::try_from(pairs.iter().filter(|p| p.tower_exceeds()).count())
+            .unwrap_or(u32::MAX);
+        let verdict = if total == 0 {
+            "NO_DATA".to_string()
+        } else if exceeds == total {
+            "EXCEEDS".to_string()
+        } else if exceeds * 2 >= total {
+            "PARITY".to_string()
+        } else {
+            "REGRESSED".to_string()
+        };
+        Self {
+            timestamp,
+            source_gate,
+            wave,
+            pairs,
+            tower_exceeds_count: exceeds,
+            total_pairs: total,
+            verdict,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,5 +725,109 @@ mod tests {
         let errors = cfg.validate();
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("acme_directory"));
+    }
+
+    // ── Tower Shadow Tests ────────────────────────────────────────────
+
+    fn sample_probe(transport: &str, latency_us: u64, throughput_bps: u64) -> TransportProbe {
+        TransportProbe {
+            transport: transport.into(),
+            latency_us,
+            throughput_bps,
+            jitter_us: latency_us / 10,
+            samples: 10,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn transport_probe_ok_when_no_error() {
+        let p = sample_probe("wireguard", 1000, 100_000);
+        assert!(p.is_ok());
+    }
+
+    #[test]
+    fn transport_probe_not_ok_with_error() {
+        let p = TransportProbe {
+            error: Some("timeout".into()),
+            ..sample_probe("tower", 0, 0)
+        };
+        assert!(!p.is_ok());
+    }
+
+    #[test]
+    fn gate_pair_tower_exceeds_when_faster() {
+        let pair = GatePairShadow {
+            from_gate: "sporeGate".into(),
+            to_gate: "flockGate".into(),
+            to_ip: "10.13.37.6".into(),
+            wireguard: sample_probe("wireguard", 1000, 50_000),
+            tower: sample_probe("tower", 993, 99_000),
+            latency_ratio: 0.993,
+            throughput_ratio: 1.98,
+        };
+        assert!(pair.tower_exceeds());
+    }
+
+    #[test]
+    fn gate_pair_tower_regressed_when_slower() {
+        let pair = GatePairShadow {
+            from_gate: "sporeGate".into(),
+            to_gate: "eastGate".into(),
+            to_ip: "10.13.37.5".into(),
+            wireguard: sample_probe("wireguard", 1000, 100_000),
+            tower: sample_probe("tower", 2000, 50_000),
+            latency_ratio: 2.0,
+            throughput_ratio: 0.5,
+        };
+        assert!(!pair.tower_exceeds());
+    }
+
+    #[test]
+    fn tower_shadow_report_all_exceed() {
+        let pairs = vec![GatePairShadow {
+            from_gate: "sporeGate".into(),
+            to_gate: "flockGate".into(),
+            to_ip: "10.13.37.6".into(),
+            wireguard: sample_probe("wireguard", 1000, 50_000),
+            tower: sample_probe("tower", 993, 99_000),
+            latency_ratio: 0.993,
+            throughput_ratio: 1.98,
+        }];
+        let report = TowerShadowReport::from_pairs(
+            "sporeGate".into(),
+            "150w".into(),
+            "2026-07-23T10:00:00Z".into(),
+            pairs,
+        );
+        assert_eq!(report.verdict, "EXCEEDS");
+        assert_eq!(report.tower_exceeds_count, 1);
+        assert_eq!(report.total_pairs, 1);
+    }
+
+    #[test]
+    fn tower_shadow_report_no_data() {
+        let report = TowerShadowReport::from_pairs(
+            "sporeGate".into(),
+            "150w".into(),
+            "2026-07-23T10:00:00Z".into(),
+            vec![],
+        );
+        assert_eq!(report.verdict, "NO_DATA");
+    }
+
+    #[test]
+    fn tower_shadow_report_serialization() {
+        let report = TowerShadowReport::from_pairs(
+            "sporeGate".into(),
+            "150w".into(),
+            "2026-07-23T10:00:00Z".into(),
+            vec![],
+        );
+        let json = serde_json::to_string_pretty(&report).unwrap();
+        assert!(json.contains("\"source_gate\": \"sporeGate\""));
+        assert!(json.contains("\"verdict\": \"NO_DATA\""));
+        let parsed: TowerShadowReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.source_gate, "sporeGate");
     }
 }

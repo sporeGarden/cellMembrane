@@ -139,6 +139,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("sovereign.") => sovereign::dispatch_sovereign(config, cmd, args).await,
         c if c.starts_with("rootpulse.") => dispatch_rootpulse(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
+        c if c.starts_with("tower.") => crate::tower::dispatch(config, cmd, args).await,
         c if c.starts_with("gateway.") => crate::gateway::dispatch(config, cmd, args).await,
         c if c.starts_with("webhook.") => dispatch_webhook(config, cmd, args).await,
         "pepti.validate" => {
