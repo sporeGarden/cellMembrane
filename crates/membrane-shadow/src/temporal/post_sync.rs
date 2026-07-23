@@ -96,6 +96,10 @@ pub(super) async fn run_post_sync_phases(
     }
 
     if opts.mode == CascadeMode::Sync {
+        run_commit_drift_pipeline(lines).await;
+    }
+
+    if opts.mode == CascadeMode::Sync {
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
     }
 
@@ -612,6 +616,66 @@ async fn run_content_rebuild_if_needed(root: &std::path::Path, lines: &mut Vec<S
     }
 }
 
+/// Commit drift pipeline: detect primals with source changes not yet in the depot.
+/// On build authority gates, auto-harvest + sandbox + refresh drifted primals.
+/// On consumer gates, log the drift as a warning.
+async fn run_commit_drift_pipeline(lines: &mut Vec<String>) {
+    let drifted = crate::plasmid::detect_commit_drift().await;
+
+    if drifted.is_empty() {
+        lines.push("  [drift] all primals current with depot".into());
+        return;
+    }
+
+    let total = crate::plasmid::nucleus_primals().len();
+    lines.push(format!(
+        "  [drift] {}/{total} primals have source changes not in depot: [{}]",
+        drifted.len(),
+        drifted.join(", ")
+    ));
+
+    if !is_build_authority() {
+        return;
+    }
+
+    crate::plasmid::notify_mesh_build_pending(&drifted).await;
+    lines.push("  [drift] build authority — auto-harvesting drifted primals".into());
+
+    for primal in &drifted {
+        let harvest_args = crate::plasmid::HarvestArgs {
+            primal: Some(primal.clone()),
+            force: true,
+            dry_run: false,
+            depot_dir: None,
+            target: None,
+            local: true,
+        };
+        match crate::plasmid::harvest(&harvest_args).await {
+            Ok(o) => lines.push(format!("  [drift] {primal}: {}", o.message)),
+            Err(e) => lines.push(format!("  [drift] {primal}: FAIL — {e}")),
+        }
+    }
+
+    let passed = run_post_cascade_sandbox(&drifted, lines).await;
+    if !passed.is_empty() {
+        match run_post_cascade_refresh(Some(&passed), lines).await {
+            Ok(pushed) => {
+                lines.push(format!(
+                    "  [drift] {} rebuilt, {pushed} pushed to depot",
+                    drifted.len()
+                ));
+            }
+            Err(e) => lines.push(format!("  [drift] refresh FAIL: {e}")),
+        }
+    }
+}
+
+/// Whether this gate is a build authority (builds and publishes depot binaries).
+fn is_build_authority() -> bool {
+    std::env::var(cellmembrane_types::service::ENV_BUILD_AUTHORITY)
+        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+}
+
 /// Post-rebuild health check: verify sporePrint `public/` is non-empty and
 /// contains an `index.html`. Detects the P0 root-404 scenario where Zola
 /// succeeds but the output directory is stale or empty.
@@ -691,6 +755,13 @@ timestamp = "2026-06-19T12:00:00Z"
 
         let gate = table.get("gate").and_then(toml::Value::as_str).unwrap();
         assert_eq!(gate, "sporeGate");
+    }
+
+    #[test]
+    fn is_build_authority_defaults_false() {
+        if std::env::var(cellmembrane_types::service::ENV_BUILD_AUTHORITY).is_err() {
+            assert!(!is_build_authority());
+        }
     }
 
     #[test]

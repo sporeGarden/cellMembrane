@@ -73,9 +73,26 @@ pub async fn refresh(config: &crate::ShadowConfig, args: &RefreshArgs) -> Result
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
 
+    let depot_dir = super::depot::resolve_depot(None).ok();
     let mut results: Vec<RefreshResult> = Vec::new();
 
     for (i, &primal) in primals_to_refresh.iter().enumerate() {
+        if let Some(ref depot) = depot_dir {
+            match super::validate_lineage(primal, depot) {
+                super::LineageResult::Verified => {}
+                super::LineageResult::Blocked(reason) => {
+                    results.push(RefreshResult {
+                        binary: primal.to_string(),
+                        status: RefreshStatus::Failed,
+                        detail: reason,
+                    });
+                    continue;
+                }
+                super::LineageResult::Warned(reason) => {
+                    warn!(primal, reason = %reason, "lineage incomplete (soft enforcement)");
+                }
+            }
+        }
         if i > 0 && !args.dry_run {
             tokio::time::sleep(std::time::Duration::from_millis(INTER_PRIMAL_DELAY_MS)).await;
         }

@@ -314,6 +314,10 @@ pub const DEFAULT_SOVEREIGN_REMOTE: &str = "forgejo";
 /// when depot staleness is detected (production gates only).
 pub const ENV_AUTO_REBUILD: &str = "MEMBRANE_AUTO_REBUILD";
 
+/// When set to `1`/`true`/`yes`, this gate is a build authority — commit drift
+/// detection auto-harvests drifted primals after cascade sync. Set on sporeGate.
+pub const ENV_BUILD_AUTHORITY: &str = "MEMBRANE_BUILD_AUTHORITY";
+
 /// Single-writer freshness publisher designation. Set to `1`/`true`/`yes`
 /// on exactly one gate per mesh to avoid multi-writer race conditions.
 pub const ENV_FRESHNESS_PUBLISHER: &str = "FRESHNESS_PUBLISHER";
@@ -453,6 +457,26 @@ pub const DEFAULT_ACME_EMAIL: &str = "acme@primals.eco";
 pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
     &["petaltongue", "nestgate", "songbird", "beardog"];
 
+/// Primals in the intercommunication layer requiring signed depot lineage.
+///
+/// No local builds on consumer gates. Hard enforcement at `plasmid.refresh`
+/// and `gate.bootstrap` — binary must chain back to a recognized build
+/// authority with valid BLAKE3 + provenance.
+pub const POST_PRIMORDIAL_PRIMALS: &[&str] = &[
+    "beardog",
+    "songbird",
+    "skunkbat",
+    "nestgate",
+    "cellmembrane",
+    "biomeos",
+];
+
+/// Whether a primal is in the postPrimordial set (requires signed depot lineage).
+#[must_use]
+pub fn is_post_primordial(primal: &str) -> bool {
+    POST_PRIMORDIAL_PRIMALS.contains(&primal)
+}
+
 // ── Composition domains ──────────────────────────────────────────────
 
 /// Root domain for the sovereign membrane surface (intra-membrane).
@@ -548,5 +572,28 @@ mod tests {
         assert!(DEFAULT_SSH_TIMEOUT_SECS >= 5);
         assert!(DEFAULT_GIT_OP_TIMEOUT_SECS >= 30);
         assert!(DEFAULT_FETCH_TIMEOUT_SECS >= 60);
+    }
+
+    #[test]
+    fn post_primordial_contains_core_stack() {
+        assert!(is_post_primordial("beardog"));
+        assert!(is_post_primordial("songbird"));
+        assert!(is_post_primordial("skunkbat"));
+        assert!(is_post_primordial("nestgate"));
+        assert!(is_post_primordial("cellmembrane"));
+        assert!(is_post_primordial("biomeos"));
+    }
+
+    #[test]
+    fn post_primordial_excludes_non_core() {
+        assert!(!is_post_primordial("squirrel"));
+        assert!(!is_post_primordial("petaltongue"));
+        assert!(!is_post_primordial("loamspine"));
+        assert!(!is_post_primordial("toadstool"));
+    }
+
+    #[test]
+    fn post_primordial_count() {
+        assert_eq!(POST_PRIMORDIAL_PRIMALS.len(), 6);
     }
 }

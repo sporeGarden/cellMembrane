@@ -103,6 +103,132 @@ pub(crate) async fn compute_blake3_file_async(
         })?
 }
 
+/// Detect primals where source HEAD has advanced past depot provenance.
+///
+/// Compares each primal's upstream HEAD (Forgejo/GitHub `ls-remote`) against the
+/// recorded commit in `provenance.toml`. Returns names of drifted primals.
+/// Used by `post_sync` commit drift detection (Phase 2 sovereign pipeline).
+pub(crate) async fn detect_commit_drift() -> Vec<String> {
+    let Ok(depot_dir) = depot::resolve_depot(None) else {
+        return Vec::new();
+    };
+    let provenance = depot::load_provenance(&depot_dir);
+    let Ok(sources) = depot::load_sources(&depot_dir) else {
+        return Vec::new();
+    };
+
+    let mut drifted = Vec::new();
+    for name in nucleus_primals() {
+        if let Some(source) = sources.get(name) {
+            if drift::has_upstream_changes(name, source, provenance.as_ref(), &depot_dir).await {
+                drifted.push(name.to_string());
+            }
+        }
+    }
+    drifted
+}
+
+/// Result of lineage validation for a primal binary.
+#[derive(Debug, Clone)]
+pub(crate) enum LineageResult {
+    /// Checksum, provenance, and builder all verified.
+    Verified,
+    /// `PostPrimordial` primal with broken lineage — must not be installed.
+    Blocked(String),
+    /// Non-critical primal with incomplete lineage — warn but allow.
+    Warned(String),
+}
+
+#[derive(serde::Deserialize)]
+struct LineageChecksumFile {
+    #[serde(flatten)]
+    targets: std::collections::BTreeMap<
+        String,
+        std::collections::BTreeMap<String, LineageChecksumEntry>,
+    >,
+}
+
+#[derive(serde::Deserialize)]
+struct LineageChecksumEntry {
+    blake3: String,
+}
+
+/// Validate depot lineage for a primal: BLAKE3 checksum, provenance commit,
+/// and builder authority. `PostPrimordial` primals are hard-blocked on failure;
+/// other primals get a warning.
+pub(crate) fn validate_lineage(primal: &str, depot_dir: &std::path::Path) -> LineageResult {
+    let is_critical = cellmembrane_types::service::is_post_primordial(primal);
+    let arch = detect_target_triple();
+    let bin_path = depot_dir.join("primals").join(arch).join(primal);
+
+    let checksum_ok = if bin_path.exists() {
+        verify_checksum_against_depot(primal, &bin_path, depot_dir, arch)
+    } else {
+        false
+    };
+
+    let provenance = depot::load_provenance(depot_dir);
+    let provenance_ok = provenance
+        .as_ref()
+        .and_then(|p| p.entries.get(primal))
+        .and_then(|e| e.commit.as_ref())
+        .is_some();
+
+    let builder_ok = provenance
+        .as_ref()
+        .is_some_and(|p| !p.builder.as_ref().is_some_and(String::is_empty));
+
+    if checksum_ok && provenance_ok && builder_ok {
+        return LineageResult::Verified;
+    }
+
+    let mut reasons = Vec::new();
+    if !checksum_ok {
+        reasons.push("BLAKE3 mismatch or missing");
+    }
+    if !provenance_ok {
+        reasons.push("no provenance commit");
+    }
+    if !builder_ok {
+        reasons.push("no builder identity");
+    }
+    let detail = format!("{primal}: lineage incomplete — {}", reasons.join(", "));
+
+    if is_critical {
+        LineageResult::Blocked(format!(
+            "{primal} is postPrimordial — depot lineage validation FAILED ({detail})"
+        ))
+    } else {
+        LineageResult::Warned(detail)
+    }
+}
+
+fn verify_checksum_against_depot(
+    primal: &str,
+    bin_path: &std::path::Path,
+    depot_dir: &std::path::Path,
+    arch: &str,
+) -> bool {
+    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
+    let Ok(content) = std::fs::read_to_string(&checksums_path) else {
+        return false;
+    };
+
+    let parsed: LineageChecksumFile = match toml::from_str(&content) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    let Some(entries) = parsed.targets.get(arch) else {
+        return false;
+    };
+    let Some(expected) = entries.get(primal) else {
+        return false;
+    };
+
+    compute_blake3_file(bin_path).is_ok_and(|actual| actual == expected.blake3)
+}
+
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.
 pub fn detect_depot_staleness() -> crate::error::Result<StalenessReport> {
     let depot_dir = depot::resolve_depot(None)?;
@@ -240,6 +366,26 @@ pub(crate) fn resolve_path(
         return PathBuf::from(val);
     }
     default_fn()
+}
+
+/// Publish `depot.build_pending` to the mesh so consumer gates know binaries
+/// are stale and a rebuild is in progress. Consumers should delay fetch until
+/// `depot.updated` arrives (or a timeout expires).
+///
+/// Currently logs to tracing — mesh publish will route through songBird's
+/// `mesh.publish` JSON-RPC when the IPC bridge is wired (pending `mesh.enroll`
+/// songBird integration).
+#[allow(
+    clippy::unused_async,
+    reason = "will be async when mesh.publish IPC is wired"
+)]
+pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
+    tracing::info!(
+        event = "depot.build_pending",
+        primals = ?drifted,
+        "build pending — {} drifted primals queued for rebuild",
+        drifted.len()
+    );
 }
 
 /// `plasmid.pipeline` — Full zero-touch harvest → refresh cycle.
@@ -467,6 +613,46 @@ mod tests {
             PathBuf::from("/fallback")
         });
         assert_eq!(result, PathBuf::from("/fallback"));
+    }
+
+    #[test]
+    fn validate_lineage_missing_depot_warns_non_critical() {
+        let tmp = std::env::temp_dir().join("lineage_test_warn");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let result = validate_lineage("squirrel", &tmp);
+        assert!(
+            matches!(result, LineageResult::Warned(_)),
+            "non-critical primal with no depot should warn, got: {result:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn validate_lineage_missing_depot_blocks_critical() {
+        let tmp = std::env::temp_dir().join("lineage_test_block");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let result = validate_lineage("beardog", &tmp);
+        assert!(
+            matches!(result, LineageResult::Blocked(_)),
+            "postPrimordial primal with no depot should be blocked, got: {result:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn lineage_result_variants_exhaustive() {
+        let v = LineageResult::Verified;
+        assert!(matches!(v, LineageResult::Verified));
+        let b = LineageResult::Blocked("test".into());
+        assert!(matches!(b, LineageResult::Blocked(_)));
+        let w = LineageResult::Warned("test".into());
+        assert!(matches!(w, LineageResult::Warned(_)));
     }
 
     #[tokio::test]
