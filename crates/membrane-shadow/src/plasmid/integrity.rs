@@ -11,8 +11,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use super::checksum::ChecksumEntry;
 use super::depot::compute_blake3_file;
-use super::harvest::ChecksumEntry;
 use crate::error::{Result, ShadowError};
 
 /// Result of a depot integrity check (generate or verify).

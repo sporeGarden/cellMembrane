@@ -119,12 +119,7 @@ struct SourcesFile {
     sources: BTreeMap<String, SourceEntry>,
 }
 
-/// Checksum entry from `checksums.toml`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChecksumEntry {
-    pub blake3: String,
-    pub size: u64,
-}
+pub use super::checksum::ChecksumEntry;
 
 /// Compute which target triples to build for a given primal.
 /// If CLI overrides target, use that. Otherwise: default host triple,
@@ -759,5 +754,51 @@ gpu = true
         };
         assert!(args.local);
         assert!(args.force);
+    }
+
+    #[test]
+    fn checksum_entry_deserialize_struct() {
+        let toml_str = r#"blake3 = "abc123"
+size = 42"#;
+        let entry: ChecksumEntry = toml::from_str(toml_str).unwrap();
+        assert_eq!(entry.blake3, "abc123");
+        assert_eq!(entry.size, 42);
+    }
+
+    #[test]
+    fn checksum_entry_deserialize_plain_string() {
+        let val = toml::Value::String("abc123".into());
+        let entry: ChecksumEntry = val.try_into().unwrap();
+        assert_eq!(entry.blake3, "abc123");
+        assert_eq!(entry.size, 0);
+    }
+
+    #[test]
+    fn checksum_entry_deserialize_struct_without_size() {
+        let toml_str = r#"blake3 = "abc123""#;
+        let entry: ChecksumEntry = toml::from_str(toml_str).unwrap();
+        assert_eq!(entry.blake3, "abc123");
+        assert_eq!(entry.size, 0);
+    }
+
+    #[test]
+    fn checksum_file_mixed_format() {
+        use std::collections::BTreeMap;
+        #[derive(serde::Deserialize)]
+        struct ChecksumFile {
+            #[serde(flatten)]
+            targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>>,
+        }
+        let content = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "abc123", size = 1000 }
+songbird = "def456"
+"#;
+        let parsed: ChecksumFile = toml::from_str(content).unwrap();
+        let arch = &parsed.targets["x86_64-unknown-linux-musl"];
+        assert_eq!(arch["beardog"].blake3, "abc123");
+        assert_eq!(arch["beardog"].size, 1000);
+        assert_eq!(arch["songbird"].blake3, "def456");
+        assert_eq!(arch["songbird"].size, 0);
     }
 }

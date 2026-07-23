@@ -12,6 +12,64 @@ use serde::Deserialize;
 
 use super::detect_target_triple;
 
+/// Checksum entry from `checksums.toml`.
+///
+/// Deserializes from either the struct format `{ blake3 = "...", size = N }`
+/// or the legacy plain-string format `"hash"` (size defaults to 0).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ChecksumEntry {
+    pub blake3: String,
+    pub size: u64,
+}
+
+impl<'de> serde::Deserialize<'de> for ChecksumEntry {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = ChecksumEntry;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a checksum entry (struct or plain hash string)")
+            }
+
+            fn visit_str<E: serde::de::Error>(
+                self,
+                v: &str,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(ChecksumEntry {
+                    blake3: v.to_string(),
+                    size: 0,
+                })
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> std::result::Result<Self::Value, A::Error> {
+                let mut blake3: Option<String> = None;
+                let mut size: u64 = 0;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "blake3" => blake3 = Some(map.next_value()?),
+                        "size" => size = map.next_value()?,
+                        _ => {
+                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                let blake3 = blake3.ok_or_else(|| serde::de::Error::missing_field("blake3"))?;
+                Ok(ChecksumEntry { blake3, size })
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 pub(super) fn compute_blake3(path: &Path) -> std::io::Result<String> {
     let data = std::fs::read(path)?;
     Ok(blake3::hash(&data).to_hex().to_string())
@@ -71,9 +129,9 @@ pub async fn fetch_wan_checksums(_arch: &str) -> HashMap<String, String> {
 
 /// Parse the arch-keyed `checksums.toml` format into a flat primal->blake3 map.
 ///
-/// Accepts both formats:
-/// - Struct entries: `name = { blake3 = "hash", size = 12345 }`
-/// - Plain strings (legacy): `name = "hash"`
+/// Accepts both struct entries (`primal = { blake3 = "...", size = N }`) and
+/// legacy plain-string entries (`primal = "hash"`). This enables backward
+/// compatibility with depot files written before the struct format was adopted.
 pub(super) fn parse_checksums_toml(content: &str, arch: &str) -> HashMap<String, String> {
     let Ok(table) = content.parse::<toml::Table>() else {
         return HashMap::new();
@@ -146,12 +204,22 @@ pub(super) fn persist_checksums(
     let mut sorted: Vec<_> = checksums.iter().collect();
     sorted.sort_by_key(|(k, _)| k.as_str());
     for (name, hash) in sorted {
-        let _ = writeln!(content, "{name} = {{ blake3 = \"{hash}\" }}");
+        let size = resolve_binary_size(depot_root, arch, name);
+        let _ = writeln!(content, "{name} = {{ blake3 = \"{hash}\", size = {size} }}");
     }
     let path = depot_root.join(cellmembrane_types::service::CHECKSUMS_FILE);
     if let Err(e) = std::fs::write(&path, content.as_bytes()) {
         tracing::warn!(error = %e, path = %path.display(), "failed to persist checksums.toml");
     }
+}
+
+fn resolve_binary_size(depot_root: &Path, arch: &str, name: &str) -> u64 {
+    depot_root
+        .join("primals")
+        .join(arch)
+        .join(name)
+        .metadata()
+        .map_or(0, |m| m.len())
 }
 
 #[cfg(test)]
@@ -201,10 +269,14 @@ beardog = { blake3 = "zzz999" }
     }
 
     #[test]
-    fn persist_writes_sorted_struct_toml() {
-        let dir = std::env::temp_dir().join("cksum_persist_test");
-        let _ = std::fs::create_dir_all(&dir);
+    fn persist_writes_struct_format() {
+        let dir = std::env::temp_dir().join("cksum_persist_struct");
+        let _ = std::fs::remove_dir_all(&dir);
         let arch = "x86_64-unknown-linux-musl";
+        let arch_dir = dir.join("primals").join(arch);
+        std::fs::create_dir_all(&arch_dir).unwrap();
+        std::fs::write(arch_dir.join("beardog"), b"fake binary").unwrap();
+
         let mut checksums = HashMap::new();
         checksums.insert("beardog".to_string(), "abc123".to_string());
         checksums.insert("songbird".to_string(), "def456".to_string());
@@ -213,23 +285,36 @@ beardog = { blake3 = "zzz999" }
 
         let content = std::fs::read_to_string(dir.join("checksums.toml")).unwrap();
         assert!(content.starts_with(&format!("[{arch}]")));
-        assert!(content.contains(r#"beardog = { blake3 = "abc123" }"#));
-        assert!(content.contains(r#"songbird = { blake3 = "def456" }"#));
+        assert!(
+            content.contains("blake3 = \"abc123\""),
+            "should use struct format: {content}"
+        );
+        assert!(content.contains("blake3 = \"def456\""));
+        assert!(content.contains("size = "), "should include size field");
         let beardog_pos = content.find("beardog").unwrap();
         let songbird_pos = content.find("songbird").unwrap();
         assert!(beardog_pos < songbird_pos, "sorted alphabetically");
-
-        let map = parse_checksums_toml(&content, arch);
-        assert_eq!(map.get("beardog").unwrap(), "abc123");
-        assert_eq!(map.get("songbird").unwrap(), "def456");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn parse_checksums_toml_accepts_plain_strings() {
+    fn parse_checksums_toml_handles_legacy_plain_strings() {
         let content = r#"
 [x86_64-unknown-linux-musl]
 beardog = "abc123"
+songbird = "def456"
+"#;
+        let map = parse_checksums_toml(content, "x86_64-unknown-linux-musl");
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("beardog").unwrap(), "abc123");
+        assert_eq!(map.get("songbird").unwrap(), "def456");
+    }
+
+    #[test]
+    fn parse_checksums_toml_handles_mixed_formats() {
+        let content = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "abc123", size = 1234 }
 songbird = "def456"
 "#;
         let map = parse_checksums_toml(content, "x86_64-unknown-linux-musl");
