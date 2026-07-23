@@ -93,19 +93,9 @@ pub(super) async fn run_post_sync_phases(
         if !heads.is_empty() {
             run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
         }
-    }
 
-    if opts.mode == CascadeMode::Sync {
         run_commit_drift_pipeline(lines).await;
-    }
-
-    if opts.mode == CascadeMode::Sync {
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
-    }
-
-    // Rebuild static site if sporePrint was pulled and this gate serves content.
-    // Post-rebuild, verify the generated `public/` directory is non-empty.
-    if opts.mode == CascadeMode::Sync {
         run_content_rebuild_if_needed(root, lines).await;
         check_content_health(root, lines).await;
     }

@@ -85,13 +85,7 @@ pub(crate) async fn spin_up_with_deps(
 ) -> crate::Result<SandboxInstance> {
     let socket_dir = resolve_sandbox_socket_dir();
     let bin_dir = resolve_sandbox_bin_dir();
-
-    tokio::fs::create_dir_all(&socket_dir)
-        .await
-        .map_err(|e| ShadowError::Build(format!("create sandbox socket dir: {e}")))?;
-    tokio::fs::create_dir_all(&bin_dir)
-        .await
-        .map_err(|e| ShadowError::Build(format!("create sandbox bin dir: {e}")))?;
+    super::ensure_staging_dirs(&socket_dir, &bin_dir).await?;
 
     let commit_short = if args.commit.len() >= 8 {
         &args.commit[..8]
@@ -103,32 +97,12 @@ pub(crate) async fn spin_up_with_deps(
     let socket_path = socket_dir.join(format!("{}-{commit_short}.sock", args.primal));
 
     let _ = tokio::fs::remove_file(&socket_path).await;
+    super::stage_binary(&args.binary_path, &sandbox_binary).await?;
 
-    tokio::fs::copy(&args.binary_path, &sandbox_binary)
-        .await
-        .map_err(|e| ShadowError::Build(format!("stage sandbox binary: {e}")))?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(&sandbox_binary, std::fs::Permissions::from_mode(0o755))
-            .await
-            .map_err(|e| ShadowError::Build(format!("chmod sandbox binary: {e}")))?;
-    }
-
-    let mut cmd = tokio::process::Command::new(&sandbox_binary);
-    cmd.arg("server").arg("--socket").arg(&socket_path);
-
-    if let Some(sec_sock) = security_socket {
-        cmd.arg("--security-socket").arg(sec_sock);
-    }
-
-    let child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| ShadowError::Build(format!("spawn sandbox {}: {e}", args.primal)))?;
+    let extra_args: Vec<(&str, &std::path::Path)> = security_socket
+        .map(|s| vec![("--security-socket", s)])
+        .unwrap_or_default();
+    let child = super::spawn_primal_server(&sandbox_binary, &socket_path, &extra_args)?;
 
     let pid = child.id();
 

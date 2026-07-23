@@ -73,15 +73,8 @@ pub(crate) async fn retire_to_canary(
 ) -> crate::Result<CanarySlot> {
     let socket_dir = resolve_canary_socket_dir();
     let bin_dir = resolve_canary_bin_dir();
+    super::ensure_staging_dirs(&socket_dir, &bin_dir).await?;
 
-    tokio::fs::create_dir_all(&socket_dir)
-        .await
-        .map_err(|e| ShadowError::Build(format!("create canary socket dir: {e}")))?;
-    tokio::fs::create_dir_all(&bin_dir)
-        .await
-        .map_err(|e| ShadowError::Build(format!("create canary bin dir: {e}")))?;
-
-    // Kill any existing canary for this primal
     let mut pool = load_pool().await;
     if let Some(existing) = pool.slots.iter().find(|s| s.primal == primal) {
         kill_canary(existing).await;
@@ -91,34 +84,9 @@ pub(crate) async fn retire_to_canary(
     let canary_binary = bin_dir.join(primal);
     let socket_path = socket_dir.join(format!("{primal}.sock"));
 
-    // Remove stale socket
-    if socket_path.exists() {
-        tokio::fs::remove_file(&socket_path).await.ok();
-    }
-
-    // Stage binary to canary directory
-    tokio::fs::copy(old_binary, &canary_binary)
-        .await
-        .map_err(|e| ShadowError::Build(format!("stage canary binary: {e}")))?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(&canary_binary, std::fs::Permissions::from_mode(0o755))
-            .await
-            .map_err(|e| ShadowError::Build(format!("chmod canary binary: {e}")))?;
-    }
-
-    // Start canary on isolated socket
-    let child = tokio::process::Command::new(&canary_binary)
-        .arg("server")
-        .arg("--socket")
-        .arg(&socket_path)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| ShadowError::Build(format!("spawn canary {primal}: {e}")))?;
+    let _ = tokio::fs::remove_file(&socket_path).await;
+    super::stage_binary(old_binary, &canary_binary).await?;
+    let child = super::spawn_primal_server(&canary_binary, &socket_path, &[])?;
 
     let slot = CanarySlot {
         primal: primal.to_string(),

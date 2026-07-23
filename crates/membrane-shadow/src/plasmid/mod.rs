@@ -103,6 +103,63 @@ pub(crate) async fn compute_blake3_file_async(
         })?
 }
 
+/// Ensure a directory pair exists (socket dir + binary staging dir).
+pub(crate) async fn ensure_staging_dirs(
+    socket_dir: &std::path::Path,
+    bin_dir: &std::path::Path,
+) -> crate::Result<()> {
+    tokio::fs::create_dir_all(socket_dir)
+        .await
+        .map_err(|e| crate::error::ShadowError::Build(format!("create socket dir: {e}")))?;
+    tokio::fs::create_dir_all(bin_dir)
+        .await
+        .map_err(|e| crate::error::ShadowError::Build(format!("create bin dir: {e}")))?;
+    Ok(())
+}
+
+/// Copy a binary to a staging path and set executable permissions.
+pub(crate) async fn stage_binary(
+    source: &std::path::Path,
+    dest: &std::path::Path,
+) -> crate::Result<()> {
+    tokio::fs::copy(source, dest)
+        .await
+        .map_err(|e| crate::error::ShadowError::Build(format!("stage binary: {e}")))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755))
+            .await
+            .map_err(|e| crate::error::ShadowError::Build(format!("chmod binary: {e}")))?;
+    }
+    Ok(())
+}
+
+/// Spawn a primal process on an isolated socket.
+pub(crate) fn spawn_primal_server(
+    binary: &std::path::Path,
+    socket: &std::path::Path,
+    extra_args: &[(&str, &std::path::Path)],
+) -> crate::Result<tokio::process::Child> {
+    let mut cmd = tokio::process::Command::new(binary);
+    cmd.arg("server").arg("--socket").arg(socket);
+    for (flag, path) in extra_args {
+        cmd.arg(flag).arg(path);
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| {
+            crate::error::ShadowError::Build(format!(
+                "spawn {}: {e}",
+                binary
+                    .file_name()
+                    .map_or("?", |n| n.to_str().unwrap_or("?"))
+            ))
+        })
+}
+
 /// Detect primals where source HEAD has advanced past depot provenance.
 ///
 /// Compares each primal's upstream HEAD (Forgejo/GitHub `ls-remote`) against the

@@ -26,7 +26,7 @@ fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
     let checksums_blake3 = blake3::hash(&checksums_content).to_hex().to_string();
 
     let gate = crate::gate::resolve_local_gate_identity();
-    let sign_result = request_beardog_sign(&checksums_blake3)?;
+    let sign_result = request_signer_sign(&checksums_blake3)?;
 
     let sig = DepotSignature {
         algorithm: SignatureAlgorithm::Ed25519,
@@ -242,10 +242,10 @@ struct SignResult {
     signature: String,
 }
 
-/// Request an ed25519 signature from bearDog via UDS.
+/// Request an ed25519 signature from the `CryptoSigner` capability holder via UDS.
 ///
-/// Reuses the same UDS discovery pattern as impulse signing.
-fn request_beardog_sign(data: &str) -> Option<SignResult> {
+/// Discovers the signer socket at runtime via `MembraneService::binary_for`.
+fn request_signer_sign(data: &str) -> Option<SignResult> {
     #[cfg(not(unix))]
     {
         let _ = data;

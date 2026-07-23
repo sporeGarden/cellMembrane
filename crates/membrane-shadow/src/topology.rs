@@ -100,10 +100,10 @@ fn extract_backbone(table: &toml::Table) -> Vec<BackboneLink> {
     };
     let mut links = Vec::new();
     for (key, value) in bt {
-        if key.starts_with("leg_") {
-            if let Some(link) = try_deserialize::<BackboneLink>(value) {
-                links.push(link);
-            }
+        if key.starts_with("leg_")
+            && let Some(link) = try_deserialize::<BackboneLink>(value)
+        {
+            links.push(link);
         }
     }
     links

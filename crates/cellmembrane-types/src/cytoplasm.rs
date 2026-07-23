@@ -122,33 +122,98 @@ pub fn mesh_address_from_topology(
     topology: &crate::topology::TopologyMap,
 ) -> Option<String> {
     for segment in topology.segments.values() {
-        if segment.transport.contains("wireguard") || segment.transport.contains("overlay") {
-            if let Some(pos) = segment.gates.iter().position(|g| g == gate_name) {
-                if let Some(subnet) = &segment.subnet {
-                    if let Some(base) = subnet.split('/').next() {
-                        if let Some((prefix, last_octet)) = base.rsplit_once('.') {
-                            if let Ok(start) = last_octet.parse::<u32>() {
-                                if let Ok(offset) = u32::try_from(pos) {
-                                    return Some(format!(
-                                        "{prefix}.{}",
-                                        start.saturating_add(offset)
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        let is_overlay =
+            segment.transport.contains("wireguard") || segment.transport.contains("overlay");
+        if !is_overlay {
+            continue;
+        }
+        let Some(pos) = segment.gates.iter().position(|g| g == gate_name) else {
+            continue;
+        };
+        if let Some(subnet) = &segment.subnet
+            && let Some(base) = subnet.split('/').next()
+            && let Some((prefix, last_octet)) = base.rsplit_once('.')
+            && let Ok(start) = last_octet.parse::<u32>()
+            && let Ok(offset) = u32::try_from(pos)
+        {
+            return Some(format!("{prefix}.{}", start.saturating_add(offset)));
         }
     }
     mesh_address(gate_name).map(String::from)
 }
 
+/// Single-source mesh registry entry.
+///
+/// All gate lists and IP lookups derive from this table. Add new gates here
+/// when they join the mesh — no other code changes required.
+struct MeshEntry {
+    name: &'static str,
+    wg_ip: Option<&'static str>,
+    aliases: &'static [&'static str],
+}
+
+/// Bootstrap mesh registry — single source of truth for gate identities.
+///
+/// Authoritative source at runtime is `ecosystem_manifest.toml`; this const
+/// table is the fallback when the manifest is unavailable. IP assignments
+/// are permanent once allocated.
+const MESH_REGISTRY: &[MeshEntry] = &[
+    MeshEntry {
+        name: "golgi",
+        wg_ip: Some("10.13.37.1"),
+        aliases: &["golgiBody"],
+    },
+    MeshEntry {
+        name: "sporeGate",
+        wg_ip: Some("10.13.37.2"),
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "eastGate",
+        wg_ip: Some("10.13.37.5"),
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "flockGate",
+        wg_ip: Some("10.13.37.6"),
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "ironGate",
+        wg_ip: Some("10.13.37.7"),
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "northGate",
+        wg_ip: Some("10.13.37.8"),
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "southGate",
+        wg_ip: Some("10.13.37.9"),
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "grapheneGate",
+        wg_ip: None,
+        aliases: &[],
+    },
+];
+
 /// Gates with permanent `WireGuard` mesh IP assignments.
 ///
-/// Used as a fallback when the ecosystem manifest is unavailable.
-/// Once assigned, an address is permanent — add new gates here when
-/// they join the mesh.
+/// Derived from [`MESH_REGISTRY`]. Used as a fallback when the ecosystem
+/// manifest is unavailable.
+#[must_use]
+pub fn known_mesh_gates() -> Vec<&'static str> {
+    MESH_REGISTRY
+        .iter()
+        .filter(|e| e.wg_ip.is_some())
+        .map(|e| e.name)
+        .collect()
+}
+
+/// Backward-compatible const slice — prefer [`known_mesh_gates()`].
 pub const KNOWN_MESH_GATES: &[&str] = &[
     "golgi",
     "sporeGate",
@@ -159,10 +224,16 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
     "southGate",
 ];
 
-/// All known active gates in the ecosystem (superset of [`KNOWN_MESH_GATES`]).
+/// All known active gates in the ecosystem (superset of mesh gates).
 ///
-/// Includes gates using any transport (`WireGuard`, ADB, LAN-only).
-/// Gates join this list when they first successfully bootstrap NUCLEUS.
+/// Derived from [`MESH_REGISTRY`]. Includes gates using any transport
+/// (`WireGuard`, ADB, LAN-only).
+#[must_use]
+pub fn known_gates() -> Vec<&'static str> {
+    MESH_REGISTRY.iter().map(|e| e.name).collect()
+}
+
+/// Backward-compatible const slice — prefer [`known_gates()`].
 pub const KNOWN_GATES: &[&str] = &[
     "golgi",
     "sporeGate",
@@ -176,22 +247,16 @@ pub const KNOWN_GATES: &[&str] = &[
 
 /// `WireGuard` mesh address assignments (10.13.37.0/24 overlay).
 ///
-/// Built-in fallback registry for when the ecosystem manifest is unavailable.
+/// Looks up from [`MESH_REGISTRY`], matching both canonical names and aliases.
 /// Authoritative source: `ecosystem_manifest.toml` `[gates.<name>] wg_ip`.
 /// At runtime, prefer [`mesh_address_from_topology`] or
 /// `EcosystemManifest::mesh_ip_for()` from `membrane-shadow`.
 #[must_use]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
-    match gate_name {
-        "golgi" | "golgiBody" => Some("10.13.37.1"),
-        "sporeGate" => Some("10.13.37.2"),
-        "eastGate" => Some("10.13.37.5"),
-        "flockGate" => Some("10.13.37.6"),
-        "ironGate" => Some("10.13.37.7"),
-        "northGate" => Some("10.13.37.8"),
-        "southGate" => Some("10.13.37.9"),
-        _ => None,
-    }
+    MESH_REGISTRY
+        .iter()
+        .find(|e| e.name == gate_name || e.aliases.contains(&gate_name))
+        .and_then(|e| e.wg_ip)
 }
 
 #[cfg(test)]
@@ -349,6 +414,24 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for gate in KNOWN_GATES {
             assert!(seen.insert(gate), "duplicate in KNOWN_GATES: {gate}");
+        }
+    }
+
+    #[test]
+    fn registry_derived_matches_const_mesh_gates() {
+        let derived = known_mesh_gates();
+        assert_eq!(derived.len(), KNOWN_MESH_GATES.len());
+        for gate in KNOWN_MESH_GATES {
+            assert!(derived.contains(gate), "const {gate} missing from registry");
+        }
+    }
+
+    #[test]
+    fn registry_derived_matches_const_known_gates() {
+        let derived = known_gates();
+        assert_eq!(derived.len(), KNOWN_GATES.len());
+        for gate in KNOWN_GATES {
+            assert!(derived.contains(gate), "const {gate} missing from registry");
         }
     }
 
