@@ -14,9 +14,7 @@ mod timer;
 
 use crate::error::{Result, ShadowError};
 use crate::{ShadowConfig, ShadowOutcome};
-use cellmembrane_types::gateway::{
-    GatePairShadow, TowerShadowReport, TransportProbe,
-};
+use cellmembrane_types::gateway::{GatePairShadow, TowerShadowReport, TransportProbe};
 use std::time::Instant;
 
 /// Default songBird RPC port (federation/mesh).
@@ -29,11 +27,7 @@ const DEFAULT_PROBE_SAMPLES: u32 = 10;
 const PROBE_PAYLOAD_SIZE: usize = 4096;
 
 /// Dispatch tower commands.
-pub async fn dispatch(
-    _config: &ShadowConfig,
-    cmd: &str,
-    args: &[&str],
-) -> Result<ShadowOutcome> {
+pub async fn dispatch(_config: &ShadowConfig, cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
     match cmd {
         "tower.shadow" if has_flag(args, "--enable") || has_flag(args, "--disable") => {
             timer::dispatch_shadow_timer(args).await
@@ -45,9 +39,7 @@ pub async fn dispatch(
         "tower.shadow.export" => dispatch_shadow_export(args).await,
         "tower.status" => timer::dispatch_tower_status().await,
         "tower.benchmark" => timer::dispatch_benchmark(args).await,
-        _ => Ok(ShadowOutcome::fail(format!(
-            "unknown tower command: {cmd}"
-        ))),
+        _ => Ok(ShadowOutcome::fail(format!("unknown tower command: {cmd}"))),
     }
 }
 
@@ -61,10 +53,7 @@ async fn dispatch_shadow(args: &[&str]) -> Result<ShadowOutcome> {
 
     let summary = format!(
         "tower.shadow: {}/{} exceed (verdict={}), source={}",
-        report.tower_exceeds_count,
-        report.total_pairs,
-        report.verdict,
-        report.source_gate,
+        report.tower_exceeds_count, report.total_pairs, report.verdict, report.source_gate,
     );
 
     let data = serde_json::to_value(&report)?;
@@ -92,7 +81,13 @@ async fn dispatch_shadow_export(args: &[&str]) -> Result<ShadowOutcome> {
         "shadow_{}_{}_{}.json",
         report.source_gate,
         report.wave,
-        report.timestamp.replace(':', "-").replace('T', "_").split('.').next().unwrap_or(""),
+        report
+            .timestamp
+            .replace(':', "-")
+            .replace('T', "_")
+            .split('.')
+            .next()
+            .unwrap_or(""),
     );
     let path = std::path::Path::new(&export_dir).join(&filename);
     let json = serde_json::to_string_pretty(&report)?;
@@ -182,22 +177,23 @@ async fn is_gate_reachable(ip: &str) -> bool {
 }
 
 /// Probe a single gate pair over both WG and Tower transports.
-async fn probe_gate_pair(
-    from: &str,
-    to: &str,
-    ip: &str,
-    samples: u32,
-) -> GatePairShadow {
+async fn probe_gate_pair(from: &str, to: &str, ip: &str, samples: u32) -> GatePairShadow {
     let wg = probe_wireguard(ip, samples).await;
     let tower = probe_tower(ip, samples).await;
 
-    #[allow(clippy::cast_precision_loss, reason = "latency/throughput values are small")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "latency/throughput values are small"
+    )]
     let latency_ratio = if wg.latency_us > 0 {
         tower.latency_us as f64 / wg.latency_us as f64
     } else {
         1.0
     };
-    #[allow(clippy::cast_precision_loss, reason = "latency/throughput values are small")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "latency/throughput values are small"
+    )]
     let throughput_ratio = if tower.throughput_bps > 0 && wg.throughput_bps > 0 {
         tower.throughput_bps as f64 / wg.throughput_bps as f64
     } else if tower.throughput_bps > 0 {
@@ -224,22 +220,14 @@ async fn probe_wireguard(ip: &str, samples: u32) -> TransportProbe {
 
 /// Probe Tower path — TCP connect on Tower port (7780 drawbridge).
 async fn probe_tower(ip: &str, samples: u32) -> TransportProbe {
-    let tower_port = cellmembrane_types::service::env_or(
-        "MEMBRANE_TOWER_PORT",
-        "7780",
-    )
-    .parse::<u16>()
-    .unwrap_or(7780);
+    let tower_port = cellmembrane_types::service::env_or("MEMBRANE_TOWER_PORT", "7780")
+        .parse::<u16>()
+        .unwrap_or(7780);
     probe_tcp_transport("tower", ip, tower_port, samples).await
 }
 
 /// Generic TCP transport probe: measures connect latency and estimates throughput.
-async fn probe_tcp_transport(
-    transport: &str,
-    ip: &str,
-    port: u16,
-    samples: u32,
-) -> TransportProbe {
+async fn probe_tcp_transport(transport: &str, ip: &str, port: u16, samples: u32) -> TransportProbe {
     let addr = format!("{ip}:{port}");
     let mut latencies_us = Vec::with_capacity(samples as usize);
 
@@ -302,14 +290,16 @@ async fn probe_tcp_transport(
         / count;
     let jitter = int_sqrt(variance);
 
-    let throughput = (PROBE_PAYLOAD_SIZE as u64 * 1_000_000).checked_div(mean).unwrap_or(0);
+    let throughput = (PROBE_PAYLOAD_SIZE as u64 * 1_000_000)
+        .checked_div(mean)
+        .unwrap_or(0);
 
     TransportProbe {
         transport: transport.into(),
         latency_us: mean,
         throughput_bps: throughput,
         jitter_us: jitter,
-        samples: count as u32,
+        samples: u32::try_from(count).unwrap_or(u32::MAX),
         error: None,
     }
 }
@@ -320,10 +310,10 @@ const fn int_sqrt(n: u64) -> u64 {
         return 0;
     }
     let mut x = n;
-    let mut y = (x + 1) / 2;
+    let mut y = x.div_ceil(2);
     while y < x {
         x = y;
-        y = (x + n / x) / 2;
+        y = u64::midpoint(x, n / x);
     }
     x
 }
@@ -341,8 +331,7 @@ fn resolve_export_dir(args: &[&str]) -> String {
         return dir.to_string();
     }
     let workspace = crate::temporal::resolve_workspace_root()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "/opt/ecoPrimals".into());
+        .map_or_else(|_| "/opt/ecoPrimals".into(), |p| p.display().to_string());
     format!("{workspace}/benchScale/tower_shadow")
 }
 
@@ -397,6 +386,9 @@ mod tests {
 
     #[test]
     fn extract_samples_invalid_fallback() {
-        assert_eq!(extract_samples(&["--samples", "abc"]), DEFAULT_PROBE_SAMPLES);
+        assert_eq!(
+            extract_samples(&["--samples", "abc"]),
+            DEFAULT_PROBE_SAMPLES
+        );
     }
 }

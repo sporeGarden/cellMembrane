@@ -110,14 +110,13 @@ pub async fn dispatch_benchmark(args: &[&str]) -> Result<ShadowOutcome> {
         .await
         .map_err(ShadowError::Io)?;
 
-    let peers = if let Some(peer_addr) = cli::extract_flag_value(args, "--peer") {
-        vec![MeshPeer {
-            name: peer_addr.to_string(),
-            addr: peer_addr.to_string(),
-        }]
-    } else {
-        discover_mesh_peers().await
-    };
+    let peers =
+        cli::extract_flag_value(args, "--peer").map_or_else(discover_mesh_peers, |peer_addr| {
+            vec![MeshPeer {
+                name: peer_addr.to_string(),
+                addr: peer_addr.to_string(),
+            }]
+        });
 
     if peers.is_empty() {
         return Ok(ShadowOutcome::fail(
@@ -137,14 +136,8 @@ pub async fn dispatch_benchmark(args: &[&str]) -> Result<ShadowOutcome> {
 
     for peer in &peers {
         for mode in &["tower-atomic", "wireguard"] {
-            let output = run_songbird_benchmark(
-                &songbird_bin,
-                mode,
-                &peer.addr,
-                duration,
-                probes,
-            )
-            .await;
+            let output =
+                run_songbird_benchmark(&songbird_bin, mode, &peer.addr, duration, probes).await;
 
             let safe_name = peer.name.replace('.', "_");
             let filename = format!("{mode}_{safe_name}_{ts}.json");
@@ -189,7 +182,7 @@ async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
         .map_err(ShadowError::Io)?;
 
     let songbird_bin = resolve_songbird_bin()?;
-    let peers = discover_mesh_peers().await;
+    let peers = discover_mesh_peers();
 
     if peers.is_empty() {
         return Ok(ShadowOutcome::fail(
@@ -262,7 +255,7 @@ struct MeshPeer {
     addr: String,
 }
 
-async fn discover_mesh_peers() -> Vec<MeshPeer> {
+fn discover_mesh_peers() -> Vec<MeshPeer> {
     let mesh_gates = cellmembrane_types::cytoplasm::known_mesh_gates();
     let local_gate = crate::gate::resolve_local_gate_identity();
     let mut peers = Vec::new();
@@ -356,18 +349,16 @@ async fn probe_socket(path: &Path) -> bool {
 
 async fn probe_mesh(songbird_socket: &Path) -> Option<String> {
     let request = r#"{"jsonrpc":"2.0","method":"mesh.status","params":{},"id":1}"#;
-    let response = crate::jsonrpc::call(songbird_socket, request)
-        .await
-        .ok()?;
+    let response = crate::jsonrpc::call(songbird_socket, request).await.ok()?;
     let json: serde_json::Value = serde_json::from_str(&response).ok()?;
 
     let peers = json
         .pointer("/result/reachable_peers")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     let relay = json
         .pointer("/result/relay_enabled")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
 
     Some(format!(
@@ -436,11 +427,7 @@ WantedBy=timers.target
     )
 }
 
-fn generate_benchmark_script(
-    songbird_bin: &Path,
-    peers: &[MeshPeer],
-    output_dir: &Path,
-) -> String {
+fn generate_benchmark_script(songbird_bin: &Path, peers: &[MeshPeer], output_dir: &Path) -> String {
     let cmds: String = peers
         .iter()
         .flat_map(|p| {
@@ -510,11 +497,7 @@ async fn count_json_files(dir: &Path) -> usize {
     let mut count = 0;
     if let Ok(mut entries) = tokio::fs::read_dir(dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
-            if entry
-                .path()
-                .extension()
-                .is_some_and(|ext| ext == "json")
-            {
+            if entry.path().extension().is_some_and(|ext| ext == "json") {
                 count += 1;
             }
         }

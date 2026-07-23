@@ -343,8 +343,8 @@ impl TowerShadowReport {
         pairs: Vec<GatePairShadow>,
     ) -> Self {
         let total = u32::try_from(pairs.len()).unwrap_or(u32::MAX);
-        let exceeds = u32::try_from(pairs.iter().filter(|p| p.tower_exceeds()).count())
-            .unwrap_or(u32::MAX);
+        let exceeds =
+            u32::try_from(pairs.iter().filter(|p| p.tower_exceeds()).count()).unwrap_or(u32::MAX);
         let verdict = if total == 0 {
             "NO_DATA".to_string()
         } else if exceeds == total {
