@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 150t) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 150w) |
 
 ---
 
@@ -56,12 +56,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1101 tests — pedantic clippy clean
+cargo test                  # 1110 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 150t): ~9k lines types, ~36k lines shadow. All manifest fields
+Current state (Wave 150w): ~9k lines types, ~36k lines shadow. All manifest fields
 type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `BindMode`, `EnvelopeTopology`,
 `MembraneComposition`, `Platform`, `TargetArch`, `TransportEndpoint`).
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
@@ -71,10 +71,14 @@ drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process life
 Subdomain standard (`prefix.primals.eco`): `webb.primals.eco` vhost, CSP headers,
 root domain redirect to `sporeprint.primals.eco`, depot at `depot.primals.eco`.
 `gate.enroll` automated mesh enrollment + `hub.peer` hub-side addition.
-Deep debt sweep (140a–150o): visibility tightened, allocation hot paths optimized,
-error taxonomy reclassified, domain constants centralized, CAC tree-parity checks,
-CSPRNG unified via `getrandom`, service filter registry-derived, `ProbeResult` typed
-gate probes, `build_err` consolidated, zero f64 casts in display formatting,
+Sovereign depot auto-build pipeline (Wave 150v): reactive CI trigger (Forgejo
+post-receive), convergent drift detection, hard lineage enforcement for
+`PostPrimordial` primals, build-pending mesh signal.
+Deep debt sweep (140a–150w): unified mesh registry (`MESH_REGISTRY` const table),
+shared canary/sandbox staging, capability-based naming, visibility tightened,
+allocation hot paths optimized, error taxonomy reclassified, domain constants
+centralized, CAC tree-parity checks, CSPRNG unified via `getrandom`, service
+filter registry-derived, `ProbeResult` typed gate probes, zero f64 casts,
 nested `if let` → let-chains (Rust 2024 edition), timestamp/HTTP helpers centralized.
 Zero production `unwrap()` (551 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
@@ -171,7 +175,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 150t are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 150w are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -182,7 +186,7 @@ through Wave 150t are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1101 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1110 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -329,7 +333,7 @@ gardens/cellMembrane/
           fetch.rs            # Fetch + WAN checksum verification + BLAKE3
           harvest.rs          # Build + checksum + sign + atomic publish to git
           harvest_manifest.rs # Manifest build config integration
-          signing.rs          # Depot signing (BLAKE3 + ed25519 via bearDog UDS)
+          signing.rs          # Depot signing (BLAKE3 + ed25519 via CryptoSigner UDS)
           sandbox.rs          # Ephemeral isolated validation
           canary.rs           # Previous-good pool (retire → failover)
           drift.rs            # Source divergence detection
@@ -360,11 +364,11 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,101 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,110 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1101 tests)
+cargo test                  # Full suite (1110 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

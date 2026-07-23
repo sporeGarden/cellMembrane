@@ -1,8 +1,8 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 150t (7-gate mesh live, subdomain routing, depot.primals.eco, 1101 tests, 0 clippy, 2026-07-21)
-**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 6-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate), capability-based registry, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), typed build/plasmid errors, git_ops consolidation, env_or helper (39 sites), typed divergence enums, pure function extraction (5 fns), topology-agnostic transport, SSH builder abstraction, systemctl helpers (sync+async), manifest-first mesh + SSH resolution, LAN DNS discovery, `exec_on_gate`, `KNOWN_MESH_GATES` constant, Tower HTTP gateway types + shadow validation dispatch, `KNOWN_GATES` (6 gates incl. grapheneGate), `AffinityTable` expanded, `SONGBIRD_PROXY_ROUTES` bridge, gateway deployment commands (env/units/retire-caddy), systemd unit generators (songBird + bearDog)
+**Last validated:** Wave 150w (7-gate mesh live, subdomain routing, depot.primals.eco, 1110 tests, 0 clippy, 2026-07-23)
+**Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming
 
 ---
 

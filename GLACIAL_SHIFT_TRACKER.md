@@ -1,13 +1,27 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-21 (Wave 150t)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-23 (Wave 150w)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 150w (sovereign depot pipeline + deep debt sweep):**
+Sovereign depot auto-build pipeline (Wave 150v): Forgejo post-receive hook
+dispatches `sovereign.ci.trigger` on push; post-cascade commit drift detection
+with auto-harvest on build authority gates; hard lineage enforcement for
+`PostPrimordial` primals (BLAKE3 + provenance + builder authority); build-pending
+mesh signal. Deep debt sweep (Wave 150w): unified mesh registry (`MESH_REGISTRY`
+const table → single source for `mesh_address()`, `KNOWN_MESH_GATES`,
+`KNOWN_GATES`), shared canary/sandbox staging (`ensure_staging_dirs`,
+`stage_binary`, `spawn_primal_server` — 60L dedup), `request_beardog_sign`
+renamed to `request_signer_sign` (capability-based), `mesh_address_from_topology`
+6-deep let pyramid flattened to let-chain, 4 sequential CascadeMode guards
+consolidated. Unwrap audit (150u) confirmed 0 production unwraps via
+`cargo clippy -W clippy::unwrap_used`. 1,110 tests, 0 clippy, 0 fmt drift.
 
 **Wave 150t (docs sweep + wateringHole reorg alignment):**
 Root docs updated: README stale refs (Wave 147e→150t), test count (1,089→1,101),
