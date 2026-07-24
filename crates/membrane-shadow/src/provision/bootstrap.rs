@@ -146,7 +146,10 @@ async fn deploy_binaries(ip: &str, gate_name: &str) -> Result<String> {
 }
 
 /// Generate systemd unit content for the Tower atomic services.
-#[allow(clippy::too_many_lines, reason = "unit template strings — splitting would obscure")]
+#[allow(
+    clippy::too_many_lines,
+    reason = "unit template strings — splitting would obscure"
+)]
 fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     use cellmembrane_types::{MembraneService, ServiceCapability};
     let spine = MembraneService::binary_for(ServiceCapability::CryptoSigner);

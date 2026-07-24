@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1146 tests — pedantic clippy clean
+cargo test                  # 1150 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -83,6 +83,13 @@ allocation hot paths optimized, error taxonomy reclassified, domain constants
 centralized, CAC tree-parity checks, CSPRNG unified via `getrandom`, service
 filter registry-derived, `ProbeResult` typed gate probes, zero f64 casts,
 nested `if let` → let-chains (Rust 2024 edition), timestamp/HTTP helpers centralized.
+Large test extraction: `manifest/mod.rs` (785→333L, tests→`tests.rs`),
+`webhook/mod.rs` (703→345L, tests→`tests.rs`). All >800L files reviewed.
+`MESH_REGISTRY` extended with `lan_ip` field for LAN peer discovery
+(eastGate `192.168.4.244`, sporeGate `192.168.4.3`).
+Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
+remote — all resolved via capability registry or centralized constants.
+`as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.
 Zero production `unwrap()` (551 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
@@ -189,7 +196,7 @@ through Wave 150x are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1146 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1150 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -371,7 +378,7 @@ gardens/cellMembrane/
 enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1146 tests)
+cargo test                  # Full suite (1150 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

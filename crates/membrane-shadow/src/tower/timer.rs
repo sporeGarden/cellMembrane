@@ -204,8 +204,9 @@ async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
     let service_content = generate_service_unit(&output_dir);
     let timer_content = generate_timer_unit(interval_min);
 
-    let service_path = format!("/etc/systemd/system/{SHADOW_SERVICE_UNIT}");
-    let timer_path = format!("/etc/systemd/system/{SHADOW_TIMER_UNIT}");
+    let unit_dir = cellmembrane_types::service::SYSTEMD_UNIT_DIR;
+    let service_path = format!("{unit_dir}/{SHADOW_SERVICE_UNIT}");
+    let timer_path = format!("{unit_dir}/{SHADOW_TIMER_UNIT}");
 
     write_unit_file(&service_path, &service_content).await?;
     write_unit_file(&timer_path, &timer_content).await?;
@@ -239,8 +240,9 @@ async fn disable_shadow() -> Result<ShadowOutcome> {
     let _ = systemctl(&["disable", "--now", SHADOW_TIMER_UNIT]).await;
     let _ = systemctl(&["stop", SHADOW_SERVICE_UNIT]).await;
 
-    let service_path = format!("/etc/systemd/system/{SHADOW_SERVICE_UNIT}");
-    let timer_path = format!("/etc/systemd/system/{SHADOW_TIMER_UNIT}");
+    let unit_dir = cellmembrane_types::service::SYSTEMD_UNIT_DIR;
+    let service_path = format!("{unit_dir}/{SHADOW_SERVICE_UNIT}");
+    let timer_path = format!("{unit_dir}/{SHADOW_TIMER_UNIT}");
     let _ = tokio::fs::remove_file(&service_path).await;
     let _ = tokio::fs::remove_file(&timer_path).await;
     let _ = systemctl(&["daemon-reload"]).await;
@@ -328,16 +330,30 @@ fn resolve_songbird_socket() -> PathBuf {
 }
 
 fn resolve_beardog_socket() -> PathBuf {
+    let default = format!(
+        "{}/{}.sock",
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+        cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::ServiceCapability::CryptoSigner
+        ),
+    );
     PathBuf::from(cellmembrane_types::service::env_or(
         "MEMBRANE_SOCKET_BEARDOG",
-        "/run/membrane/beardog.sock",
+        &default,
     ))
 }
 
 fn resolve_skunkbat_socket() -> PathBuf {
+    let default = format!(
+        "{}/{}.sock",
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+        cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::ServiceCapability::Observability
+        ),
+    );
     PathBuf::from(cellmembrane_types::service::env_or(
         "MEMBRANE_SOCKET_SKUNKBAT",
-        "/run/membrane/skunkbat.sock",
+        &default,
     ))
 }
 
@@ -370,15 +386,18 @@ async fn probe_mesh(songbird_socket: &Path) -> Option<String> {
 // ── Binary resolution ────────────────────────────────────────────────
 
 fn resolve_songbird_bin() -> Result<PathBuf> {
+    let relay_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
     let plasmid_base = crate::resolve_xdg_data_home()
         .join("ecoPrimals/plasmidBin/primals/x86_64-unknown-linux-musl");
-    let bin = plasmid_base.join("songbird");
+    let bin = plasmid_base.join(relay_binary);
     if bin.exists() {
         return Ok(bin);
     }
 
     let system_bin = PathBuf::from(cellmembrane_types::service::DEFAULT_INSTALL_BASE)
-        .join("primals/x86_64-unknown-linux-musl/songbird");
+        .join(format!("primals/x86_64-unknown-linux-musl/{relay_binary}"));
     if system_bin.exists() {
         return Ok(system_bin);
     }

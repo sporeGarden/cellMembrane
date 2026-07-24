@@ -223,9 +223,7 @@ fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
     use cellmembrane_types::MembraneComposition;
     use cellmembrane_types::service::ServiceCapability;
 
-    let service = cellmembrane_types::MembraneService::all()
-        .iter()
-        .find(|s| s.binary == primal)?;
+    let service = cellmembrane_types::MembraneService::for_binary(primal)?;
 
     // Tower-tier primals (beardog, songbird, skunkbat) have no upstream deps
     if service.min_composition <= MembraneComposition::Tower {

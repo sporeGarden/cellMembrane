@@ -9,7 +9,7 @@
 
 ## Recent Waves
 
-**Wave 150x (crash-loop breaker + nestgate unit fix):**
+**Wave 150x (crash-loop breaker + nestgate unit fix + test extraction):**
 Systemd crash-loop divergence found on eastGate: `membrane-nucleus@nestgate` (17,920
 restarts at 3s intervals — CLI evolved, `--socket` flag rejected) and `biomeos-beacon`
 (11,161 restarts at 5s intervals — binary not built). Combined ~890 restarts/hour caused
@@ -20,7 +20,18 @@ health probes and cascade post-sync. `ServerContract::ServerNoSocket` variant ad
 binaries whose CLI evolved past `--socket` flag. nestgate registry updated from
 `SocketOnly` → `ServerNoSocket`. sporePrint unit template updated to pass socket via env
 var instead of CLI flag. New CLI command: `membrane gate.crash-loop [--dry-run] [--threshold N]`.
-1,146 tests, 0 clippy, 0 fmt drift.
+`Restart=always` eliminated from all systemd units — replaced with `Restart=on-failure` +
+`StartLimitIntervalSec=120` + `StartLimitBurst=10`.
+Large test extraction: `manifest/mod.rs` (785→333L, 454L tests→`tests.rs`),
+`webhook/mod.rs` (703→345L, 360L tests→`tests.rs`). All >800L files reviewed.
+`MESH_REGISTRY` extended with `lan_ip` field — LAN peer discovery bootstrap for
+songBird local-priority routing. eastGate corrected to `192.168.4.244`.
+Deep debt: hardcoded sockets/IPs/paths → capability registry + constants
+(`tower/timer.rs`, `enroll.rs`, `relay.rs`, `resolve.rs`, `tower/mod.rs`).
+`as` casts → `try_from`/`f64::from`. `for_binary()` replaces manual `.find()`.
+Unused `portable-atomic` dep removed. Bug-adjacent `"forgejo"` literal
+inconsistency fixed in `resolve.rs` (now uses `sovereign_remote()`).
+1,150 tests, 0 clippy, 0 fmt drift.
 
 **Wave 150w (tower.shadow + checksums migration + deep debt sweep):**
 `membrane tower.shadow` shipped (1,204 lines, 14 tests) — continuous WG vs Tower

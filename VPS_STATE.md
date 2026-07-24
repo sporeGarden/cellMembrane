@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-07-24 (Wave 150x)
+**Last updated:** 2026-07-24p (Wave 150x)
 **Deployed composition:** Full NUCLEUS (Wave 61→118) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust `membrane` binary
@@ -42,7 +42,7 @@
 | Songbird TURN | `songbird-relay` | ACTIVE | :3478 tcp/udp | v0.2.1 |
 | SkunkBat | `skunkbat-membrane` | ACTIVE | 127.0.0.1:9140 | — |
 
-### Node Tier (compute) — NEW Wave 59
+### Node Tier (compute)
 
 | Service | Unit Name | Status | Port / Socket | Version |
 |---------|-----------|--------|---------------|---------|
@@ -59,7 +59,7 @@
 | loamSpine | `loamspine-membrane` | ACTIVE | `/run/membrane/loamspine.sock` + :9700 | v0.9.16 |
 | sweetGrass | `sweetgrass-membrane` | ACTIVE | `/run/membrane/sweetgrass.sock` + :9850 | v0.7.34 |
 
-### Meta Tier (orchestration) — NEW Wave 59
+### Meta Tier (orchestration)
 
 | Service | Unit Name | Status | Port / Socket | Version |
 |---------|-----------|--------|---------------|---------|
@@ -200,7 +200,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `membrane gate.bootstrap` (was `nucleus_launcher.sh`) | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellMembrane workspace) | 1146 PASS, 0 FAIL, 0 clippy | 2026-07-24 |
+| `cargo test` (cellMembrane workspace) | 1150 PASS, 0 FAIL, 0 clippy | 2026-07-24 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

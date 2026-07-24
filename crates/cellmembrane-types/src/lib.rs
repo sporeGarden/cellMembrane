@@ -60,7 +60,7 @@ pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, Tru
 pub use composition::{CompositionSpec, MembraneComposition};
 pub use config::{DeployPaths, MembraneConfig, ShadowMode};
 pub use credentials::{CredentialFile, CredentialModel, credential_files_for};
-pub use cytoplasm::{ZoneLabel, mesh_address, mesh_address_from_topology};
+pub use cytoplasm::{ZoneLabel, lan_address, mesh_address, mesh_address_from_topology};
 pub use envelope::{
     BondType, BoundaryPolicy, BraidPolicy, ChannelProtein, EnvelopeLayer, EnvelopeTopology,
 };

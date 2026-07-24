@@ -184,7 +184,7 @@ pub(super) async fn push_to_followers(
     };
 
     for pos in sovereign_first {
-        if push_target == PushTarget::Forgejo && pos.remote != "forgejo" {
+        if push_target == PushTarget::Forgejo && pos.remote != sov {
             continue;
         }
         let use_force = force_lease || pos.remote != sov;
@@ -297,7 +297,7 @@ pub(super) async fn push_converge_followers(
     push_targets.sort_by_key(|p| i32::from(p.remote != sov));
 
     for pos in push_targets {
-        if push_target == PushTarget::Forgejo && pos.remote != "forgejo" {
+        if push_target == PushTarget::Forgejo && pos.remote != sov {
             continue;
         }
         let remote_ref = format!("{}/{branch}", pos.remote);

@@ -26,11 +26,17 @@ use serde::{Deserialize, Serialize};
 const ENROLL_PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// SSH timeout for hub-side peer addition (generous for WAN latency).
+///
+/// Compile-time assertion below guarantees the `as u32` truncation is safe.
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "DEFAULT_SSH_TIMEOUT_SECS is 10 — fits in u32"
+    reason = "guarded by const assertion below"
 )]
 const HUB_SSH_TIMEOUT: u32 = cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS as u32 + 5;
+const _: () = assert!(
+    cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS <= u32::MAX as u64,
+    "SSH timeout must fit in u32"
+);
 
 /// Result of a `gate.enroll` run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,7 +136,11 @@ fn resolve_hub_ip() -> Option<String> {
 
 /// Verify mesh connectivity by pinging the hub gateway.
 async fn mesh_verify_phase(mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
-    let hub_ip = resolve_hub_ip().unwrap_or_else(|| "10.13.37.1".into());
+    let hub_ip = resolve_hub_ip().unwrap_or_else(|| {
+        cellmembrane_types::mesh_address("golgi")
+            .unwrap_or("10.13.37.1")
+            .into()
+    });
 
     if dry_run {
         return BootstrapPhase {

@@ -102,7 +102,7 @@ topology = "diderm"  # or "monoderm"
 | Port           | 53/tcp, 53/udp                           |
 | Trust level    | Lowest — public data, no authentication  |
 | Crypto layer   | DNSSEC (when configured)                 |
-| Status         | Planned — not yet deployed               |
+| Status         | **LIVE** — knot-dns, DNSSEC enabled      |
 
 Signal is the most exposed channel. It serves public DNS records and
 requires no authentication. It is the first channel to be probed by

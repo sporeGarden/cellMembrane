@@ -86,7 +86,10 @@ impl RelayConfig {
                         .as_ref()
                         .and_then(|c| c.forgejo_remote.clone())
                 })
-                .map_or(Cow::Borrowed("forgejo"), Cow::Owned);
+                .map_or(
+                    Cow::Borrowed(cellmembrane_types::service::DEFAULT_SOVEREIGN_REMOTE),
+                    Cow::Owned,
+                );
 
         let github_remote: Cow<'static, str> =
             std::env::var(cellmembrane_types::service::ENV_RELAY_GITHUB_REMOTE)

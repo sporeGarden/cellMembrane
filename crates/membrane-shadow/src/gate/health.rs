@@ -481,10 +481,7 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
         format!("{socket_base}/{primal}.sock"),
         format!("{xdg_runtime}/{ns}/{primal}.sock"),
     ];
-    if let Some(svc) = cellmembrane_types::MembraneService::all()
-        .iter()
-        .find(|s| s.binary == primal)
-    {
+    if let Some(svc) = cellmembrane_types::MembraneService::for_binary(primal) {
         if let Some(api) = svc.api_socket {
             paths.insert(0, format!("{socket_base}/{api}.sock"));
             paths.insert(0, format!("{socket_base}/{api}-default.sock"));

@@ -30,7 +30,6 @@ ed25519-dalek = "3.0.0"
 getrandom = "0.2"
 hex = "0.4.3"
 base64 = "0.22.1"
-portable-atomic = { version = "1", default-features = false, features = ["require-cas"], optional = true }
 
 [dev-dependencies]
 
@@ -38,7 +37,6 @@ portable-atomic = { version = "1", default-features = false, features = ["requir
 default = ["http", "cloudflare"]
 http = ["reqwest/rustls-tls"]
 cloudflare = ["http"]
-extra-platforms = ["portable-atomic"]
 
 [lints]
 workspace = true

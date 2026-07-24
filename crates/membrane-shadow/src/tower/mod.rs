@@ -267,7 +267,7 @@ async fn probe_tcp_transport(transport: &str, ip: &str, port: u16, samples: u32)
         }
     }
 
-    let count = latencies_us.len() as u64;
+    let count = u64::try_from(latencies_us.len()).unwrap_or(u64::MAX);
     if count == 0 {
         return TransportProbe {
             transport: transport.into(),
@@ -290,7 +290,7 @@ async fn probe_tcp_transport(transport: &str, ip: &str, port: u16, samples: u32)
         / count;
     let jitter = int_sqrt(variance);
 
-    let throughput = (PROBE_PAYLOAD_SIZE as u64 * 1_000_000)
+    let throughput = (u64::try_from(PROBE_PAYLOAD_SIZE).unwrap_or(0) * 1_000_000)
         .checked_div(mean)
         .unwrap_or(0);
 
@@ -330,8 +330,10 @@ fn resolve_export_dir(args: &[&str]) -> String {
     if let Some(dir) = crate::cli::extract_flag_value(args, "--export-dir") {
         return dir.to_string();
     }
-    let workspace = crate::temporal::resolve_workspace_root()
-        .map_or_else(|_| "/opt/ecoPrimals".into(), |p| p.display().to_string());
+    let workspace = crate::temporal::resolve_workspace_root().map_or_else(
+        |_| cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
+        |p| p.display().to_string(),
+    );
     format!("{workspace}/benchScale/tower_shadow")
 }
 

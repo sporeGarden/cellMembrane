@@ -243,14 +243,14 @@ pub struct ShadowReport {
 impl ShadowReport {
     /// Build a report from a set of comparisons.
     #[must_use]
-    #[allow(clippy::cast_precision_loss, reason = "route counts are small")]
     pub fn from_comparisons(comparisons: Vec<ShadowComparison>) -> Self {
         let total = comparisons.len();
         let passed = comparisons.iter().filter(|c| c.passes()).count();
         let pass_rate = if total == 0 {
             0.0
         } else {
-            passed as f64 / total as f64
+            f64::from(u32::try_from(passed).unwrap_or(u32::MAX))
+                / f64::from(u32::try_from(total).unwrap_or(u32::MAX))
         };
         Self {
             comparisons,

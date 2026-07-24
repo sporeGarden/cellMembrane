@@ -149,6 +149,7 @@ pub fn mesh_address_from_topology(
 struct MeshEntry {
     name: &'static str,
     wg_ip: Option<&'static str>,
+    lan_ip: Option<&'static str>,
     aliases: &'static [&'static str],
 }
 
@@ -161,41 +162,49 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "golgi",
         wg_ip: Some("10.13.37.1"),
+        lan_ip: None,
         aliases: &["golgiBody"],
     },
     MeshEntry {
         name: "sporeGate",
         wg_ip: Some("10.13.37.2"),
+        lan_ip: Some("192.168.4.3"),
         aliases: &[],
     },
     MeshEntry {
         name: "eastGate",
         wg_ip: Some("10.13.37.5"),
+        lan_ip: Some("192.168.4.244"),
         aliases: &[],
     },
     MeshEntry {
         name: "flockGate",
         wg_ip: Some("10.13.37.6"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
         name: "ironGate",
         wg_ip: Some("10.13.37.7"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
         name: "northGate",
         wg_ip: Some("10.13.37.8"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
         name: "southGate",
         wg_ip: Some("10.13.37.9"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
         name: "grapheneGate",
         wg_ip: None,
+        lan_ip: None,
         aliases: &[],
     },
 ];
@@ -257,6 +266,19 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
         .iter()
         .find(|e| e.name == gate_name || e.aliases.contains(&gate_name))
         .and_then(|e| e.wg_ip)
+}
+
+/// LAN IP address for a gate (direct local network, bypasses `WireGuard`).
+///
+/// Looks up from [`MESH_REGISTRY`]. Authoritative source at runtime is
+/// `ecosystem_manifest.toml` `[gates.<name>] lan_ip`. Used by songBird for
+/// local-priority routing when gates share a `MikroTik` switch.
+#[must_use]
+pub fn lan_address(gate_name: &str) -> Option<&'static str> {
+    MESH_REGISTRY
+        .iter()
+        .find(|e| e.name == gate_name || e.aliases.contains(&gate_name))
+        .and_then(|e| e.lan_ip)
 }
 
 #[cfg(test)]
@@ -432,6 +454,36 @@ mod tests {
         assert_eq!(derived.len(), KNOWN_GATES.len());
         for gate in KNOWN_GATES {
             assert!(derived.contains(gate), "const {gate} missing from registry");
+        }
+    }
+
+    #[test]
+    fn lan_address_known_gates() {
+        assert_eq!(lan_address("sporeGate"), Some("192.168.4.3"));
+        assert_eq!(lan_address("eastGate"), Some("192.168.4.244"));
+    }
+
+    #[test]
+    fn lan_address_wan_gates_return_none() {
+        assert_eq!(lan_address("golgi"), None);
+        assert_eq!(lan_address("flockGate"), None);
+    }
+
+    #[test]
+    fn lan_address_unknown_gate_returns_none() {
+        assert_eq!(lan_address("newGate"), None);
+    }
+
+    #[test]
+    fn lan_addresses_in_subnet() {
+        for entry in MESH_REGISTRY {
+            if let Some(ip) = entry.lan_ip {
+                assert!(
+                    ip.starts_with("192.168.4."),
+                    "{} LAN address not in 192.168.4.0/22",
+                    entry.name
+                );
+            }
         }
     }
 
