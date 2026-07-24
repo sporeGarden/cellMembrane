@@ -88,8 +88,11 @@ pub enum ServerContract {
     /// Used by: beardog (crypto spine)
     SocketAuditDir,
     /// Socket-only: `server --socket <path>`
-    /// Used by: sweetgrass, nestgate, coralreef, squirrel, petaltongue, barracuda, toadstool
+    /// Used by: sweetgrass, coralreef, squirrel, petaltongue, barracuda, toadstool
     SocketOnly,
+    /// Server subcommand only: `server` (socket path via env/convention, no `--socket` flag).
+    /// Used by: nestgate (CLI evolved in Wave 150x)
+    ServerNoSocket,
     /// biomeOS-style: `api --socket <path>` or `neural-api --socket <path>`
     /// Used by: biomeos
     BiomeosApi,
@@ -123,6 +126,7 @@ impl ServerContract {
             Self::SocketOnly | Self::Tarpc => {
                 format!("{install_base}/{binary} server --socket {socket_path}")
             }
+            Self::ServerNoSocket => format!("{install_base}/{binary} server"),
             Self::BiomeosApi => {
                 format!("{install_base}/{binary} neural-api --socket {socket_path}")
             }

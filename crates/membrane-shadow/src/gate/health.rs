@@ -91,6 +91,24 @@ pub async fn status() -> crate::error::Result<GateStatus> {
         probes.push(cert_probe);
     }
 
+    let crash_loop_report = tokio::task::spawn_blocking(|| super::crash_loop::scan_only(None))
+        .await
+        .ok();
+    if let Some(ref report) = crash_loop_report {
+        let crash_ok = !report.has_loops();
+        let detail = if crash_ok {
+            format!("{} services scanned, no crash-loops", report.scanned)
+        } else {
+            let units: Vec<&str> = report.loops.iter().map(|e| e.unit.as_str()).collect();
+            format!("{} crash-loop(s): {}", report.loops.len(), units.join(", "))
+        };
+        probes.push(StatusProbe {
+            name: "service.crash-loop".into(),
+            ok: crash_ok,
+            detail,
+        });
+    }
+
     let healthy = probes.iter().all(|p| p.ok);
 
     Ok(GateStatus {

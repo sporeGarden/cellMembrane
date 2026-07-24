@@ -117,6 +117,74 @@ impl fmt::Display for InitSystem {
     }
 }
 
+// ── Crash-loop detection ──────────────────────────────────────────────
+
+/// Default restart count above which a service is considered crash-looping.
+pub const CRASH_LOOP_RESTART_THRESHOLD: u32 = 5;
+
+/// Action taken when a crash-loop is detected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrashLoopAction {
+    /// Service was disabled to stop the loop.
+    Disabled,
+    /// Service was only logged (dry-run or threshold not met).
+    Logged,
+    /// Could not disable (permission denied, etc.).
+    FailedToDisable,
+}
+
+impl fmt::Display for CrashLoopAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disabled => write!(f, "disabled"),
+            Self::Logged => write!(f, "logged"),
+            Self::FailedToDisable => write!(f, "failed-to-disable"),
+        }
+    }
+}
+
+/// A single service found to be crash-looping.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CrashLoopEntry {
+    /// Systemd unit name.
+    pub unit: String,
+    /// Number of restarts observed.
+    pub restart_count: u32,
+    /// Current sub-state (e.g. "failed", "activating").
+    pub sub_state: String,
+    /// Action taken.
+    pub action: CrashLoopAction,
+}
+
+/// Report from a crash-loop scan.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CrashLoopReport {
+    /// Services detected as crash-looping (restart count > threshold).
+    pub loops: Vec<CrashLoopEntry>,
+    /// Threshold used for detection.
+    pub threshold: u32,
+    /// Total membrane services scanned.
+    pub scanned: u32,
+}
+
+impl CrashLoopReport {
+    /// Whether any crash loops were found.
+    #[must_use]
+    pub fn has_loops(&self) -> bool {
+        !self.loops.is_empty()
+    }
+
+    /// Count of loops that were successfully disabled.
+    #[must_use]
+    pub fn disabled_count(&self) -> usize {
+        self.loops
+            .iter()
+            .filter(|e| e.action == CrashLoopAction::Disabled)
+            .count()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +233,68 @@ mod tests {
         assert!(InitSystem::Launchd.supports_units());
         assert!(InitSystem::WindowsSCM.supports_units());
         assert!(!InitSystem::Bare.supports_units());
+    }
+
+    #[test]
+    fn crash_loop_action_display() {
+        assert_eq!(CrashLoopAction::Disabled.to_string(), "disabled");
+        assert_eq!(CrashLoopAction::Logged.to_string(), "logged");
+        assert_eq!(
+            CrashLoopAction::FailedToDisable.to_string(),
+            "failed-to-disable"
+        );
+    }
+
+    #[test]
+    fn crash_loop_report_empty() {
+        let report = CrashLoopReport {
+            loops: vec![],
+            threshold: 5,
+            scanned: 10,
+        };
+        assert!(!report.has_loops());
+        assert_eq!(report.disabled_count(), 0);
+    }
+
+    #[test]
+    fn crash_loop_report_with_entries() {
+        let report = CrashLoopReport {
+            loops: vec![
+                CrashLoopEntry {
+                    unit: "nestgate-membrane.service".into(),
+                    restart_count: 17920,
+                    sub_state: "failed".into(),
+                    action: CrashLoopAction::Disabled,
+                },
+                CrashLoopEntry {
+                    unit: "biomeos-beacon.service".into(),
+                    restart_count: 11161,
+                    sub_state: "activating".into(),
+                    action: CrashLoopAction::FailedToDisable,
+                },
+            ],
+            threshold: 5,
+            scanned: 15,
+        };
+        assert!(report.has_loops());
+        assert_eq!(report.disabled_count(), 1);
+    }
+
+    #[test]
+    fn crash_loop_report_serialization() {
+        let report = CrashLoopReport {
+            loops: vec![CrashLoopEntry {
+                unit: "test.service".into(),
+                restart_count: 100,
+                sub_state: "failed".into(),
+                action: CrashLoopAction::Disabled,
+            }],
+            threshold: 5,
+            scanned: 1,
+        };
+        let json = serde_json::to_string(&report).unwrap();
+        assert!(json.contains("\"action\":\"disabled\""));
+        let parsed: CrashLoopReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.loops[0].restart_count, 100);
     }
 }

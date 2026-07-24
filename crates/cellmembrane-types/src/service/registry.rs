@@ -92,7 +92,7 @@ const NESTGATE: MembraneService = MembraneService {
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
     capabilities: &[ServiceCapability::ContentServing],
-    server_contract: ServerContract::SocketOnly,
+    server_contract: ServerContract::ServerNoSocket,
     api_socket: None,
     socket_aliases: &[],
 };

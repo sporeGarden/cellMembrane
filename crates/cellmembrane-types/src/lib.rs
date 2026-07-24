@@ -71,7 +71,9 @@ pub use gateway::{
     ShadowComparison, ShadowReport, TlsGatewayConfig,
 };
 pub use identity::{BindMode, GateMobility, GateRole, MembraneIdentity};
-pub use process::{InitSystem, ServiceOutcome, ServiceStatus};
+pub use process::{
+    CrashLoopAction, CrashLoopEntry, CrashLoopReport, InitSystem, ServiceOutcome, ServiceStatus,
+};
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
     BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,

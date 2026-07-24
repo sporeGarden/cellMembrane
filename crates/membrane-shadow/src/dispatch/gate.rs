@@ -90,6 +90,7 @@ pub(super) async fn dispatch(
             })?;
             dispatch_profile(gate_name)
         }
+        "gate.crash-loop" => dispatch_crash_loop(args).await,
         "gate.preflight" => dispatch_preflight(args).await,
         "firewall.generate" => dispatch_firewall_generate(args),
         "gate.validate" => super::gate_validate(config, args, None).await,
@@ -427,6 +428,39 @@ async fn dispatch_health_audit(
             message: msg,
             data: Some(data),
         }
+    })
+}
+
+// ── Crash-loop breaker ──────────────────────────────────────────────
+
+async fn dispatch_crash_loop(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let dry_run = args.contains(&"--dry-run");
+    let threshold: Option<u32> =
+        cli::extract_flag_value(args, "--threshold").and_then(|v| v.parse().ok());
+
+    let report = if dry_run {
+        tokio::task::spawn_blocking(move || crate::gate::crash_loop::scan_only(threshold))
+            .await
+            .map_err(|e| {
+                crate::error::ShadowError::Io(std::io::Error::other(format!(
+                    "spawn_blocking panicked: {e}"
+                )))
+            })?
+    } else {
+        crate::gate::crash_loop::scan_and_break_async(threshold).await
+    };
+
+    let msg = crate::gate::crash_loop::format_report(&report);
+    let ok = !report.has_loops()
+        || report.loops.iter().all(|e| {
+            e.action == cellmembrane_types::process::CrashLoopAction::Disabled
+                || e.action == cellmembrane_types::process::CrashLoopAction::Logged
+        });
+
+    Ok(ShadowOutcome {
+        ok,
+        message: msg,
+        data: Some(serde_json::to_value(&report)?),
     })
 }
 

@@ -1,13 +1,26 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-23 (Wave 150w)
+**Last updated:** 2026-07-24 (Wave 150x)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 150x (crash-loop breaker + nestgate unit fix):**
+Systemd crash-loop divergence found on eastGate: `membrane-nucleus@nestgate` (17,920
+restarts at 3s intervals — CLI evolved, `--socket` flag rejected) and `biomeos-beacon`
+(11,161 restarts at 5s intervals — binary not built). Combined ~890 restarts/hour caused
+AT&T gateway throttle. Crash-loop breaker implemented: `CrashLoopReport` types in
+`cellmembrane-types/process.rs`, `gate/crash_loop.rs` module scans systemd `NRestarts`,
+auto-disables services exceeding threshold (default 5), integrated into `gate.status`
+health probes and cascade post-sync. `ServerContract::ServerNoSocket` variant added for
+binaries whose CLI evolved past `--socket` flag. nestgate registry updated from
+`SocketOnly` → `ServerNoSocket`. sporePrint unit template updated to pass socket via env
+var instead of CLI flag. New CLI command: `membrane gate.crash-loop [--dry-run] [--threshold N]`.
+1,146 tests, 0 clippy, 0 fmt drift.
 
 **Wave 150w (tower.shadow + checksums migration + deep debt sweep):**
 `membrane tower.shadow` shipped (1,204 lines, 14 tests) — continuous WG vs Tower

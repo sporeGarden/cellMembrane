@@ -145,6 +145,20 @@ async fn run_depot_staleness_and_fetch(
             run_cascade_restart(lines).await;
         }
     }
+
+    let crash_report = crate::gate::crash_loop::scan_and_break_async(None).await;
+    if crash_report.has_loops() {
+        lines.push(format!(
+            "  [crash-loop] BREAKER TRIGGERED: {} service(s) disabled",
+            crash_report.disabled_count(),
+        ));
+        for entry in &crash_report.loops {
+            lines.push(format!(
+                "  [crash-loop]   {}: {} restarts → {}",
+                entry.unit, entry.restart_count, entry.action,
+            ));
+        }
+    }
 }
 
 /// Run harvest after cascade sync — build any drifted primals locally.

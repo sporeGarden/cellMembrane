@@ -73,7 +73,6 @@ fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
 #[must_use]
 fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
-    let socket = format!("{socket_base}/nestgate.sock");
 
     format!(
         "[Unit]\n\
@@ -82,8 +81,9 @@ fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
          [Service]\n\
          Type=simple\n\
          UMask={umask}\n\
-         ExecStart={base}/nestgate server --socket {socket}\n\
+         ExecStart={base}/nestgate server\n\
          Environment=GATE_NAME={gate}\n\
+         Environment=NESTGATE_SOCKET={socket_base}/nestgate.sock\n\
          Restart=on-failure\n\
          RestartSec=3\n\
          RuntimeDirectory=membrane\n\
@@ -222,7 +222,14 @@ mod tests {
         assert!(unit.contains("[Service]"));
         assert!(unit.contains("[Install]"));
         assert!(unit.contains("nestgate server"));
-        assert!(unit.contains("--socket"));
+        assert!(
+            !unit.contains("--socket"),
+            "nestgate CLI no longer accepts --socket flag"
+        );
+        assert!(
+            unit.contains("NESTGATE_SOCKET="),
+            "socket path should be passed via env var"
+        );
         assert!(unit.contains("nestgate.sock"));
     }
 
