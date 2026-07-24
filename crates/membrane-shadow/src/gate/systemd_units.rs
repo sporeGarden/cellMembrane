@@ -166,8 +166,10 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
          UMask={umask}\n\
          ExecStart={base}/songbird server --socket {socket} --bind {bind_all} --port {federation_port}\n\
          {env_lines}\
-         Restart=always\n\
-         RestartSec=3\n\
+         Restart=on-failure\n\
+         RestartSec=5\n\
+         StartLimitIntervalSec=120\n\
+         StartLimitBurst=10\n\
          RuntimeDirectory=membrane\n\
          RuntimeDirectoryMode={rtd_mode}\n\
          RuntimeDirectoryPreserve=yes\n\n\
@@ -199,8 +201,10 @@ pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
          --upstream {socket} \
          --bind {bind}\n\
          Environment=GATE_NAME={gate}\n\
-         Restart=always\n\
+         Restart=on-failure\n\
          RestartSec=5\n\
+         StartLimitIntervalSec=120\n\
+         StartLimitBurst=10\n\
          AmbientCapabilities=CAP_NET_BIND_SERVICE\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n",
@@ -267,7 +271,8 @@ mod tests {
         assert!(unit.contains("sporeGate"));
         assert!(unit.contains("songbird server"));
         assert!(unit.contains("--port 7700"));
-        assert!(unit.contains("Restart=always"));
+        assert!(unit.contains("Restart=on-failure"));
+        assert!(unit.contains("StartLimitBurst=10"));
     }
 
     #[test]

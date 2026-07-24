@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# membrane-nucleus-nosocket@.service (user) — for primals with ServerNoSocket contract
+# Instance name (%i) is the primal binary name (e.g. nestgate).
+# Socket path passed via environment variable instead of --socket CLI flag.
+#
+# Install: cp membrane-nucleus-nosocket@.service ~/.config/systemd/user/
+#          systemctl --user daemon-reload
+#          systemctl --user enable --now membrane-nucleus-nosocket@nestgate
+[Unit]
+Description=NUCLEUS Primal (no-socket) — %i (user session)
+After=songbird-federation.service
+Wants=songbird-federation.service
+
+[Service]
+Type=simple
+UMask=0002
+ExecStart=${ECOPRIMALS_ROOT}/infra/plasmidBin/primals/${MEMBRANE_TARGET}/%i server
+Environment=ECOPRIMALS_ROOT=%h/Development/ecoPrimals
+Environment=MEMBRANE_TARGET=x86_64-unknown-linux-musl
+Environment=BIOMEOS_SOCKET_DIR=%t/biomeos
+Environment=NESTGATE_SOCKET=%t/biomeos/nestgate.sock
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=membrane-%i
+
+[Install]
+WantedBy=default.target

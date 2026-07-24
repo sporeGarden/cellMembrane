@@ -119,8 +119,10 @@ fn generate_beardog_acme_unit(params: &SporePrintDeployParams<'_>) -> String {
          --domain {domain} \
          --acme-email {email}\n\
          Environment=GATE_NAME={gate}\n\
-         Restart=always\n\
+         Restart=on-failure\n\
          RestartSec=5\n\
+         StartLimitIntervalSec=120\n\
+         StartLimitBurst=10\n\
          AmbientCapabilities=CAP_NET_BIND_SERVICE\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n",

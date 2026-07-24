@@ -277,7 +277,9 @@ pub(crate) fn generate_unit_content(
          {env_file_line}\
          ExecStart={exec_start}{extra_args}\n\
          Restart=on-failure\n\
-         RestartSec=3\n\
+         RestartSec=5\n\
+         StartLimitIntervalSec=120\n\
+         StartLimitBurst=10\n\
          RuntimeDirectory=membrane\n\
          RuntimeDirectoryMode={rtd_mode}\n\
          RuntimeDirectoryPreserve=yes\n\n\

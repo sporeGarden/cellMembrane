@@ -22,7 +22,9 @@ Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
 Environment=BIOMEOS_SOCKET_DIR=/run/membrane
 Environment=HOME=/root
 Restart=on-failure
-RestartSec=3
+RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 RuntimeDirectory=membrane
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes

@@ -146,6 +146,7 @@ async fn deploy_binaries(ip: &str, gate_name: &str) -> Result<String> {
 }
 
 /// Generate systemd unit content for the Tower atomic services.
+#[allow(clippy::too_many_lines, reason = "unit template strings — splitting would obscure")]
 fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     use cellmembrane_types::{MembraneService, ServiceCapability};
     let spine = MembraneService::binary_for(ServiceCapability::CryptoSigner);
@@ -179,8 +180,10 @@ UMask={umask}
 ExecStart={install_base}/{spine} server --socket /run/membrane/{spine}.sock --audit-dir /var/lib/membrane/{spine}
 Environment={spine_upper}_NODE_ID={gate_name}
 Environment={spine_upper}_LOG_LEVEL=info
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 RuntimeDirectory=membrane
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
@@ -220,7 +223,7 @@ Environment={relay_upper}_PID_DIR=/run/membrane
 Environment={relay_upper}_FEDERATION_PORT={federation_port}
 Environment={relay_upper}_FEDERATION_ENABLED=true
 Environment={relay_upper}_PEERS={hub_id}@{vps_peer}
-Restart=always
+Restart=on-failure
 RestartSec=5
 RuntimeDirectory=membrane
 RuntimeDirectoryMode={rtd_mode}
@@ -242,8 +245,10 @@ Wants={relay}-membrane.service
 Type=simple
 UMask={umask}
 ExecStart={install_base}/%i server --socket /run/membrane/%i.sock --security-socket /run/membrane/{spine}.sock --pid-dir /run/membrane
-Restart=always
+Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 RuntimeDirectory=membrane
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
@@ -294,8 +299,10 @@ Wants={relay}-membrane.service
 [Service]
 Type=simple
 ExecStart={exec_start}
-Restart=always
+Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 MemoryMax=128M
 
 [Install]

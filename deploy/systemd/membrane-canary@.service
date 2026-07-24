@@ -31,9 +31,11 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=canary-%i
 
-# Canary runs indefinitely (until replaced by next promotion cycle)
-Restart=always
+# Canary runs until replaced by next promotion cycle
+Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 MemoryMax=64M
 
 [Install]

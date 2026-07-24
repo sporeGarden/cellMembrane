@@ -10,6 +10,10 @@
 # Install: cp membrane-nucleus@.service ~/.config/systemd/user/
 #          systemctl --user daemon-reload
 #          systemctl --user enable --now membrane-nucleus@beardog
+#
+# NOTE: nestgate's CLI evolved (Wave 150x) and no longer accepts --socket.
+# Use membrane-nucleus-nosocket@nestgate.service for nestgate, or pass the
+# socket path via NESTGATE_SOCKET env var with a drop-in override.
 [Unit]
 Description=NUCLEUS Primal — %i (user session)
 After=songbird-federation.service
@@ -23,8 +27,10 @@ ExecStart=${ECOPRIMALS_ROOT}/infra/plasmidBin/primals/${MEMBRANE_TARGET}/%i serv
 Environment=ECOPRIMALS_ROOT=%h/Development/ecoPrimals
 Environment=MEMBRANE_TARGET=x86_64-unknown-linux-musl
 Environment=BIOMEOS_SOCKET_DIR=%t/biomeos
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=membrane-%i

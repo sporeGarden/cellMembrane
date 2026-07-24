@@ -7,6 +7,12 @@
 #        (repeat for all 13 primals, or use membrane-nucleus-all.target)
 #
 # For mobile golgi NUCs: identical to VPS primal lifecycle but user-controllable.
+#
+# NOTE: nestgate's CLI evolved (Wave 150x) and no longer accepts --socket.
+# Use drop-in override or membrane-nucleus-nosocket@.service for nestgate.
+#
+# Restart policy: on-failure with StartLimitBurst prevents crash-loop storms.
+# Wave 150x lesson: Restart=always + 3s RestartSec caused 17,920 restarts.
 [Unit]
 Description=NUCLEUS Primal — %i
 After=songbird-federation.service
@@ -21,8 +27,10 @@ Environment=ECOPRIMALS_ROOT=/opt/ecoPrimals
 Environment=MEMBRANE_INSTALL_BASE=/opt/membrane
 Environment=BIOMEOS_SOCKET_DIR=/run/membrane
 Environment=HOME=/root
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 RuntimeDirectory=membrane
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes

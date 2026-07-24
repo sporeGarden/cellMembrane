@@ -20,8 +20,10 @@ ExecStart=/opt/membrane/songbird server \
 Environment=SONGBIRD_PRODUCTION_BIND_ADDRESS=0.0.0.0
 Environment=SONGBIRD_DATA_DIR=/var/lib/membrane/songbird
 Environment=HOME=/root
-Restart=always
+Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=10
 RuntimeDirectory=membrane
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
