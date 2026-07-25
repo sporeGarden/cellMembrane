@@ -38,10 +38,21 @@ pub(super) fn load_manifest_build_configs() -> BTreeMap<String, ManifestBuildCon
             package: entry.package.clone(),
             linker: entry.linker.clone(),
             gpu: entry.gpu,
+            targets: Vec::new(),
         };
         if cfg.package.is_some() || cfg.linker.is_some() || cfg.gpu {
             let lower = name.to_lowercase();
             configs.insert(lower, cfg);
+        }
+    }
+    for (name, build) in &manifest.build {
+        if !build.targets.is_empty() {
+            let lower = name.to_lowercase();
+            configs
+                .entry(lower)
+                .or_default()
+                .targets
+                .clone_from(&build.targets);
         }
     }
     configs

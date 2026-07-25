@@ -221,6 +221,9 @@ pub struct ManifestBuildConfig {
     pub linker: Option<String>,
     /// Whether this primal needs a glibc build for GPU workloads.
     pub gpu: bool,
+    /// Supported target triples from `[build.<primal>].targets`.
+    /// When non-empty, harvest builds all listed targets instead of host-only.
+    pub targets: Vec<String>,
 }
 
 /// Composition profile — a replicable, fractal deployment pattern.

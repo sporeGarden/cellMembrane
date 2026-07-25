@@ -1,13 +1,29 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-24 (Wave 150x)
-**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), ALL 8 GLACIAL CRITERIA CLEAR
+**Last updated:** 2026-07-25 (Wave 151a)
+**Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 151a (depot provenance + multi-target harvest + staleness alarm):**
+P0 DEPOT DIVERGENCE: golgiBody depot 40 days stale, builder identity was OS
+hostname (often `"unknown"`), no multi-arch support, no staleness detection.
+`provenance.toml` builder attribution now uses `resolve_local_gate_identity()`
+(reads `GATE_NAME` env / `.gate` file) — aligned with mesh notification identity.
+Removed dead `hostname()` fallback. Multi-target harvest: `BuildEntry.targets`
+from `[build.<primal>]` manifest section now wired into `targets_for_primal()` —
+when manifest specifies `targets = ["x86_64-...", "aarch64-..."]`, harvest
+builds all listed targets without CLI `--target` override. CLI `--target` still
+takes priority. `ManifestBuildConfig` extended with `targets` field, populated
+from `manifest.build`. `plasmid.status` drift alarm: parses `provenance.toml`
+`generated` timestamp, computes age in days, warns when >7 days stale
+(`DEPOT_STALE_THRESHOLD_DAYS = 7`). Status outcome `ok` now false when stale.
+6 new tests (manifest targets, CLI override, staleness parsing).
+1,156 tests, 0 clippy, 0 fmt drift.
 
 **Wave 150x (crash-loop breaker + nestgate unit fix + test extraction):**
 Systemd crash-loop divergence found on eastGate: `membrane-nucleus@nestgate` (17,920

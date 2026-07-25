@@ -551,10 +551,43 @@ pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate
     }
 }
 
+/// Maximum age (in days) before `plasmid.status` flags the depot as stale.
+const DEPOT_STALE_THRESHOLD_DAYS: u64 = 7;
+
+/// Parse an ISO-8601 `generated` timestamp into days since that date.
+///
+/// Returns `None` if the timestamp is unparseable or missing.
+fn parse_staleness_days(generated: &str) -> Option<u64> {
+    let date_part = generated.split('T').next()?;
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let year: i64 = parts[0].parse().ok()?;
+    let month: i64 = parts[1].parse().ok()?;
+    let day: i64 = parts[2].parse().ok()?;
+
+    let now = crate::utc_now_iso8601();
+    let now_date = now.split('T').next()?;
+    let now_parts: Vec<&str> = now_date.split('-').collect();
+    if now_parts.len() < 3 {
+        return None;
+    }
+    let now_year: i64 = now_parts[0].parse().ok()?;
+    let now_month: i64 = now_parts[1].parse().ok()?;
+    let now_day: i64 = now_parts[2].parse().ok()?;
+
+    let gen_days = year * 365 + month * 30 + day;
+    let now_days = now_year * 365 + now_month * 30 + now_day;
+    let diff = now_days.saturating_sub(gen_days);
+    u64::try_from(diff).ok()
+}
+
 /// `plasmid.status` — Report depot freshness and upstream drift.
 ///
 /// Reads provenance.toml for last build timestamp, then checks each
 /// primal's HEAD against the recorded commit to identify drift.
+/// Warns when the depot is older than `DEPOT_STALE_THRESHOLD_DAYS`.
 pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
     let depot_dir = harvest::resolve_depot(None)?;
     let sources = harvest::load_sources(&depot_dir)?;
@@ -593,8 +626,17 @@ pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
         }
     }
 
+    let stale_days = parse_staleness_days(&generated);
+    let stale_warning = stale_days.is_some_and(|d| d > DEPOT_STALE_THRESHOLD_DAYS);
+
+    let age_suffix = match stale_days {
+        Some(d) if d > DEPOT_STALE_THRESHOLD_DAYS => format!(" | ⚠ STALE ({d} days old)"),
+        Some(d) => format!(" | age: {d}d"),
+        None => String::new(),
+    };
+
     let msg = format!(
-        "depot: {current}/{total} current, {} drifted | built: {generated} | target: {target}",
+        "depot: {current}/{total} current, {} drifted | built: {generated} | target: {target}{age_suffix}",
         drifted.len()
     );
 
@@ -604,10 +646,12 @@ pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
         "drifted": drifted,
         "generated": generated,
         "target": target,
+        "stale_days": stale_days,
+        "stale": stale_warning,
     });
 
     Ok(crate::ShadowOutcome {
-        ok: drifted.is_empty(),
+        ok: drifted.is_empty() && !stale_warning,
         message: msg,
         data: Some(data),
     })
@@ -691,6 +735,32 @@ mod tests {
         assert!(matches!(w, LineageResult::Warned(_)));
     }
 
+    #[test]
+    fn parse_staleness_recent() {
+        let ts = crate::utc_now_iso8601();
+        let days = parse_staleness_days(&ts);
+        assert_eq!(days, Some(0), "today's timestamp should be 0 days old");
+    }
+
+    #[test]
+    fn parse_staleness_old() {
+        let days = parse_staleness_days("2020-01-01T00:00:00Z");
+        assert!(days.is_some());
+        assert!(days.unwrap() > 365, "2020 should be years ago");
+    }
+
+    #[test]
+    fn parse_staleness_unparseable() {
+        assert!(parse_staleness_days("unknown").is_none());
+        assert!(parse_staleness_days("").is_none());
+        assert!(parse_staleness_days("not-a-date").is_none());
+    }
+
+    #[test]
+    fn stale_threshold_is_7_days() {
+        assert_eq!(DEPOT_STALE_THRESHOLD_DAYS, 7);
+    }
+
     #[tokio::test]
     async fn status_reports_depot_state() {
         let result = status().await;
@@ -701,6 +771,8 @@ mod tests {
                 let data = outcome.data.unwrap();
                 assert!(data.get("total").is_some());
                 assert!(data.get("drifted").is_some());
+                assert!(data.get("stale_days").is_some());
+                assert!(data.get("stale").is_some());
             }
             Err(e) => {
                 let msg = e.to_string();

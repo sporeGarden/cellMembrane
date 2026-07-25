@@ -229,7 +229,7 @@ fn determine_primals_all_filtered() {
 #[test]
 fn targets_for_regular_primal() {
     let source = test_source_entry("ecoPrimals/bearDog");
-    let targets = targets_for_primal(None, &source);
+    let targets = targets_for_primal(None, &source, &[]);
     assert_eq!(targets.len(), 1);
     assert!(targets[0].contains("musl"));
 }
@@ -238,7 +238,7 @@ fn targets_for_regular_primal() {
 fn targets_for_gpu_primal() {
     let mut source = test_source_entry("ecoPrimals/barracuda");
     source.gpu = true;
-    let targets = targets_for_primal(None, &source);
+    let targets = targets_for_primal(None, &source, &[]);
     if cfg!(target_arch = "x86_64") {
         assert_eq!(targets.len(), 2);
         assert!(targets[0].contains("musl"));
@@ -247,10 +247,39 @@ fn targets_for_gpu_primal() {
 }
 
 #[test]
+fn targets_from_manifest_overrides_host() {
+    let source = test_source_entry("ecoPrimals/bearDog");
+    let manifest_targets = vec![
+        "x86_64-unknown-linux-musl".to_string(),
+        "aarch64-unknown-linux-musl".to_string(),
+    ];
+    let targets = targets_for_primal(None, &source, &manifest_targets);
+    assert_eq!(targets.len(), 2);
+    assert!(targets.contains(&"x86_64-unknown-linux-musl".to_string()));
+    assert!(targets.contains(&"aarch64-unknown-linux-musl".to_string()));
+}
+
+#[test]
+fn targets_cli_overrides_manifest() {
+    let source = test_source_entry("ecoPrimals/bearDog");
+    let manifest_targets = vec![
+        "x86_64-unknown-linux-musl".to_string(),
+        "aarch64-unknown-linux-musl".to_string(),
+    ];
+    let targets = targets_for_primal(
+        Some("aarch64-unknown-linux-musl"),
+        &source,
+        &manifest_targets,
+    );
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0], "aarch64-unknown-linux-musl");
+}
+
+#[test]
 fn targets_cli_override_ignores_gpu() {
     let mut source = test_source_entry("ecoPrimals/barracuda");
     source.gpu = true;
-    let targets = targets_for_primal(Some("aarch64-unknown-linux-musl"), &source);
+    let targets = targets_for_primal(Some("aarch64-unknown-linux-musl"), &source, &[]);
     assert_eq!(targets.len(), 1);
     assert_eq!(targets[0], "aarch64-unknown-linux-musl");
 }
@@ -262,6 +291,7 @@ fn apply_manifest_package_override() {
         package: Some("biomeos-unibin".into()),
         linker: None,
         gpu: false,
+        targets: Vec::new(),
     };
     apply_manifest_overrides(&mut source, &cfg);
     assert_eq!(source.build_args.as_deref(), Some("-p biomeos-unibin"));
@@ -276,6 +306,7 @@ fn apply_manifest_gpu_override() {
         package: None,
         linker: None,
         gpu: true,
+        targets: Vec::new(),
     };
     apply_manifest_overrides(&mut source, &cfg);
     assert!(source.gpu);

@@ -109,13 +109,13 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
     let now = crate::utc_now_iso8601();
     let header_target = detect_target_triple();
 
+    let builder = crate::gate::resolve_local_gate_identity();
     let mut prov_out = format!(
         "# plasmidBin provenance — build traceability\n\
          generated = \"{now}\"\n\
-         builder = \"{}\"\n\
+         builder = \"{builder}\"\n\
          target = \"{header_target}\"\n\
          rustc = \"{}\"\n\n",
-        hostname(),
         rustc_version().await,
     );
 
@@ -160,12 +160,6 @@ async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result
         .await
         .map_err(ShadowError::Io)?;
     Ok(())
-}
-
-fn hostname() -> String {
-    std::env::var(cellmembrane_types::service::ENV_HOSTNAME)
-        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_HOST))
-        .unwrap_or_else(|_| "unknown".into())
 }
 
 async fn rustc_version() -> String {

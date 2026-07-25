@@ -115,11 +115,19 @@ pub struct ProvenanceFile {
 pub use super::checksum::ChecksumEntry;
 
 /// Compute which target triples to build for a given primal.
-/// If CLI overrides target, use that. Otherwise: default host triple,
-/// plus gnu triple if the source is marked `gpu = true`.
-fn targets_for_primal(cli_target: Option<&str>, source: &SourceEntry) -> Vec<String> {
+///
+/// Priority: CLI `--target` > manifest `[build.<primal>].targets` >
+/// host triple (+ gnu if GPU).
+fn targets_for_primal(
+    cli_target: Option<&str>,
+    source: &SourceEntry,
+    manifest_targets: &[String],
+) -> Vec<String> {
     if let Some(t) = cli_target {
         return vec![t.to_string()];
+    }
+    if !manifest_targets.is_empty() {
+        return manifest_targets.to_vec();
     }
     let host = detect_target_triple().to_string();
     let mut targets = vec![host];
@@ -180,7 +188,10 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             .get(primal.as_str())
             .and_then(|c| c.linker.as_deref());
 
-        let targets = targets_for_primal(args.target.as_deref(), &source);
+        let manifest_targets = manifest_configs
+            .get(primal.as_str())
+            .map_or(&[][..], |c| &c.targets);
+        let targets = targets_for_primal(args.target.as_deref(), &source, manifest_targets);
         for target in &targets {
             if args.dry_run {
                 let mode = if args.local {
