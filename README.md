@@ -190,7 +190,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 150x are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 151a are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -379,8 +379,10 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,110 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-enrollment, and sovereignty. All tests are inline (`#[cfg(test)]`) — no external fixtures.
+1,156 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, and sovereignty. Tests use both inline `#[cfg(test)]` modules and
+dedicated test files (`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`,
+`webhook/tests.rs`) — no external fixtures.
 
 ```bash
 cargo test                  # Full suite (1156 tests)
