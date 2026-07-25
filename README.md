@@ -83,10 +83,10 @@ allocation hot paths optimized, error taxonomy reclassified, domain constants
 centralized, CAC tree-parity checks, CSPRNG unified via `getrandom`, service
 filter registry-derived, `ProbeResult` typed gate probes, zero f64 casts,
 nested `if let` → let-chains (Rust 2024 edition), timestamp/HTTP helpers centralized.
-Large test extraction: `manifest/mod.rs` (785→333L, tests→`tests.rs`),
-`webhook/mod.rs` (703→345L, tests→`tests.rs`). All >800L files reviewed.
-`MESH_REGISTRY` extended with `lan_ip` field for LAN peer discovery
-(eastGate `192.168.4.244`, sporeGate `192.168.4.3`).
+Large test extraction: `manifest/mod.rs` (785→333L), `webhook/mod.rs` (703→345L),
+`gateway.rs` (833→371L), `harvest.rs` (804→422L) — all tests in dedicated files.
+Zero files >800L. `MESH_REGISTRY` extended with `lan_ip` field for LAN peer
+discovery (eastGate `192.168.4.244`, sporeGate `192.168.4.3`).
 Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
 remote — all resolved via capability registry or centralized constants.
 `as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.

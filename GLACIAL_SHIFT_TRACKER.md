@@ -22,8 +22,9 @@ binaries whose CLI evolved past `--socket` flag. nestgate registry updated from
 var instead of CLI flag. New CLI command: `membrane gate.crash-loop [--dry-run] [--threshold N]`.
 `Restart=always` eliminated from all systemd units — replaced with `Restart=on-failure` +
 `StartLimitIntervalSec=120` + `StartLimitBurst=10`.
-Large test extraction: `manifest/mod.rs` (785→333L, 454L tests→`tests.rs`),
-`webhook/mod.rs` (703→345L, 360L tests→`tests.rs`). All >800L files reviewed.
+Large test extraction: `manifest/mod.rs` (785→333L), `webhook/mod.rs` (703→345L),
+`gateway.rs` (833→371L), `harvest.rs` (804→422L) — all tests in dedicated files.
+Zero files >800L across entire workspace.
 `MESH_REGISTRY` extended with `lan_ip` field — LAN peer discovery bootstrap for
 songBird local-priority routing. eastGate corrected to `192.168.4.244`.
 Deep debt: hardcoded sockets/IPs/paths → capability registry + constants
