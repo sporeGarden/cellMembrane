@@ -55,6 +55,7 @@
 #![allow(clippy::redundant_pub_crate)]
 
 pub(crate) mod bridge;
+pub(crate) mod btsp_client;
 pub(crate) mod caddy;
 pub(crate) mod cli;
 #[cfg(feature = "cloudflare")]

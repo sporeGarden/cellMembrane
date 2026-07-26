@@ -69,7 +69,7 @@ pub async fn dispatch_tower_status() -> Result<ShadowOutcome> {
     let skunkbat_socket = resolve_skunkbat_socket();
 
     let songbird_ok = probe_socket(&songbird_socket).await;
-    let beardog_ok = probe_socket(&beardog_socket).await;
+    let beardog_ok = probe_socket_btsp(&beardog_socket).await;
     let skunkbat_ok = probe_socket(&skunkbat_socket).await;
 
     let mesh_info = if songbird_ok {
@@ -359,6 +359,12 @@ fn resolve_skunkbat_socket() -> PathBuf {
 
 async fn probe_socket(path: &Path) -> bool {
     crate::jsonrpc::call(path, crate::jsonrpc::HEALTH_REQUEST)
+        .await
+        .is_ok()
+}
+
+async fn probe_socket_btsp(path: &Path) -> bool {
+    crate::jsonrpc::call_btsp(path, crate::jsonrpc::HEALTH_REQUEST)
         .await
         .is_ok()
 }

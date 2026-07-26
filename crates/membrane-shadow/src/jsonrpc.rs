@@ -7,7 +7,8 @@
 //! copy-paste implementations.
 //!
 //! All calls prepend the riboCipher clear signal `[0xEC, 0x01]` with graceful
-//! fallback to raw JSON for transitional deployments.
+//! fallback to raw JSON for transitional deployments. For bearDog crypto sockets,
+//! `call_btsp` performs the BTSP handshake before JSON-RPC traffic.
 
 use std::path::Path;
 use std::time::Duration;
@@ -63,6 +64,91 @@ pub async fn call_with_policy(
     }
 
     raw(socket_path, request, false).await
+}
+
+/// Send a JSON-RPC request over UDS with BTSP handshake.
+///
+/// Performs the BTSP `ClientHello` handshake before sending the JSON-RPC
+/// request. Falls back to `call()` if BTSP is unavailable (no `FAMILY_SEED`)
+/// or the handshake fails.
+pub async fn call_btsp(socket_path: &Path, request: &str) -> Result<String> {
+    if !crate::btsp_client::is_available() {
+        return call(socket_path, request).await;
+    }
+
+    let connect_result = tokio::time::timeout(
+        DEFAULT_TIMEOUT,
+        tokio::net::UnixStream::connect(socket_path),
+    )
+    .await;
+
+    let mut stream = match connect_result {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            return Err(rpc_err(format_args!(
+                "btsp connect {}: {e}",
+                socket_path.display()
+            )));
+        }
+        Err(_) => {
+            return Err(rpc_err(format_args!(
+                "btsp connect timeout: {}",
+                socket_path.display()
+            )));
+        }
+    };
+
+    // Send BTSP signal prefix then perform handshake
+    if let Err(e) = stream
+        .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
+        .await
+    {
+        tracing::warn!(error = %e, "BTSP signal write failed, falling back");
+        return call(socket_path, request).await;
+    }
+
+    let handshake = tokio::time::timeout(
+        DEFAULT_TIMEOUT,
+        crate::btsp_client::handshake_async(&mut stream),
+    )
+    .await;
+
+    if !matches!(handshake, Ok(Some(_))) {
+        tracing::warn!(socket = %socket_path.display(), "BTSP handshake failed, falling back");
+        return call(socket_path, request).await;
+    }
+
+    // Post-handshake: send JSON-RPC request over the authenticated stream
+    let (reader, mut writer) = stream.into_split();
+    writer
+        .write_all(request.as_bytes())
+        .await
+        .map_err(|e| rpc_err(format_args!("btsp write: {e}")))?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|e| rpc_err(format_args!("btsp newline: {e}")))?;
+
+    let mut buf_reader = tokio::io::BufReader::new(reader);
+    let mut line = String::new();
+
+    let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
+        .await
+        .map_err(|_| rpc_err(format_args!("btsp read timeout: {}", socket_path.display())))?
+        .map_err(|e| rpc_err(format_args!("btsp read: {e}")))?;
+
+    if let Err(e) = writer.shutdown().await {
+        tracing::debug!(error = %e, "btsp writer shutdown (non-fatal)");
+    }
+
+    if read_result == 0 && line.is_empty() {
+        return Err(rpc_err(format_args!(
+            "btsp empty response: {}",
+            socket_path.display()
+        )));
+    }
+
+    Ok(line)
 }
 
 /// Send a JSON-RPC request with explicit signal control.

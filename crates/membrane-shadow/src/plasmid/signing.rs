@@ -310,6 +310,43 @@ fn uds_sign_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(5)))
         .ok()?;
+
+    // BTSP handshake — authenticate before sending crypto requests.
+    // Send signal prefix then perform 4-step handshake.
+    stream
+        .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
+        .ok()?;
+    if crate::btsp_client::handshake_sync(&mut stream).is_none() {
+        tracing::warn!(
+            socket = %socket_path.display(),
+            "BTSP handshake failed — falling back to plain JSON-RPC"
+        );
+        drop(stream);
+        return uds_sign_request_plain(socket_path, request);
+    }
+
+    writeln!(stream, "{request}").ok()?;
+    stream.shutdown(std::net::Shutdown::Write).ok()?;
+
+    let mut buf = Vec::with_capacity(4096);
+    stream.read_to_end(&mut buf).ok()?;
+    Some(buf)
+}
+
+/// Fallback for when BTSP is unavailable (`FAMILY_SEED` not set or bearDog
+/// running in legacy mode during transition).
+#[cfg(unix)]
+fn uds_sign_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+
+    let mut stream = UnixStream::connect(socket_path).ok()?;
+    stream
+        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .ok()?;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .ok()?;
     writeln!(stream, "{request}").ok()?;
     stream.shutdown(std::net::Shutdown::Write).ok()?;
 

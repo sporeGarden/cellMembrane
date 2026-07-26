@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 151a) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 151b) |
 
 ---
 
@@ -56,12 +56,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1156 tests — pedantic clippy clean
+cargo test                  # 1167 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 151a): ~9k lines types, ~36k lines shadow. Crash-loop breaker
+Current state (Wave 151b): ~9k lines types, ~36k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -82,6 +82,11 @@ identity (`GATE_NAME` / `.gate`) instead of OS hostname. Multi-target harvest
 wired from `[build.<primal>].targets` manifest field — drives x86_64 + aarch64
 builds without CLI `--target` override. `plasmid.status` drift alarm warns when
 depot is >7 days stale.
+BTSP evolution (Wave 151b): `btsp_client.rs` implements the 4-step `ClientHello`
+handshake (HMAC-SHA256 challenge-response via `FAMILY_SEED`). All bearDog UDS
+clients (`signing.rs`, `impulse/primal.rs`, `jsonrpc.rs`) now perform BTSP
+handshake before crypto requests. Graceful fallback to plain JSON-RPC during
+transition. Tower status probes use BTSP for bearDog socket.
 Deep debt sweep (140a–151a): unified mesh registry (`MESH_REGISTRY` const table),
 shared canary/sandbox staging, capability-based naming, visibility tightened,
 allocation hot paths optimized, error taxonomy reclassified, domain constants
@@ -190,7 +195,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 151a are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 151b are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -201,7 +206,7 @@ through Wave 151a are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1156 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1167 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -379,13 +384,13 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,156 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-enrollment, and sovereignty. Tests use both inline `#[cfg(test)]` modules and
+1,167 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, sovereignty, and BTSP. Tests use both inline `#[cfg(test)]` modules and
 dedicated test files (`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`,
 `webhook/tests.rs`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1156 tests)
+cargo test                  # Full suite (1167 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

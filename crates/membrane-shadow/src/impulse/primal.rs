@@ -227,16 +227,46 @@ fn uds_send(socket_path: &Path, request: &str) {
     {
         tracing::debug!(socket = %socket_path.display(), "impulse relay: cannot set write timeout");
     }
-    if stream
+
+    // Attempt BTSP handshake for bearDog crypto sockets.
+    if is_beardog_socket(socket_path) {
+        if stream
+            .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
+            .is_err()
+        {
+            tracing::debug!(socket = %socket_path.display(), "impulse relay: BTSP signal write failed");
+            return;
+        }
+        if crate::btsp_client::handshake_sync(&mut stream).is_none() {
+            tracing::debug!(socket = %socket_path.display(), "impulse relay: BTSP handshake failed, falling back");
+            drop(stream);
+            uds_send_plain(socket_path, request);
+            return;
+        }
+    } else if stream
         .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
         .is_err()
     {
         tracing::debug!(socket = %socket_path.display(), "impulse relay: signal write failed");
         return;
     }
+
     if writeln!(stream, "{request}").is_err() {
         tracing::debug!(socket = %socket_path.display(), "impulse relay: request write failed");
     }
+}
+
+#[cfg(unix)]
+fn uds_send_plain(socket_path: &Path, request: &str) {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+
+    let Ok(mut stream) = UnixStream::connect(socket_path) else {
+        return;
+    };
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
+    let _ = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL);
+    let _ = writeln!(stream, "{request}");
 }
 
 #[cfg(unix)]
@@ -251,6 +281,38 @@ fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(5)))
         .ok()?;
+
+    if is_beardog_socket(socket_path) {
+        stream
+            .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
+            .ok()?;
+        if crate::btsp_client::handshake_sync(&mut stream).is_none() {
+            tracing::debug!(socket = %socket_path.display(), "BTSP handshake failed, falling back");
+            drop(stream);
+            return uds_request_plain(socket_path, request);
+        }
+    } else {
+        stream
+            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+            .ok()?;
+    }
+
+    writeln!(stream, "{request}").ok()?;
+    stream.shutdown(std::net::Shutdown::Write).ok()?;
+
+    let mut buf = Vec::with_capacity(4096);
+    stream.read_to_end(&mut buf).ok()?;
+    Some(buf)
+}
+
+#[cfg(unix)]
+fn uds_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+
+    let mut stream = UnixStream::connect(socket_path).ok()?;
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
     stream
         .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
         .ok()?;
@@ -260,6 +322,14 @@ fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     let mut buf = Vec::with_capacity(4096);
     stream.read_to_end(&mut buf).ok()?;
     Some(buf)
+}
+
+/// Check if a socket path belongs to bearDog (crypto signer).
+fn is_beardog_socket(path: &std::path::Path) -> bool {
+    let binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    path.to_str().is_some_and(|s| s.contains(binary))
 }
 
 #[cfg(test)]

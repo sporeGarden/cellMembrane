@@ -1,13 +1,27 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-25 (Wave 151a)
+**Last updated:** 2026-07-26 (Wave 151b)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 151b (BTSP ClientHello evolution — bearDog auth standard):**
+Sub-wave 151b: all primals that talk to bearDog must evolve to BTSP before
+Nest Atomic. cellMembrane implements the 4-step `ClientHello` handshake in
+new `btsp_client.rs` module (sync + async variants). HMAC-SHA256 challenge-
+response using `FAMILY_SEED` via HKDF-derived BTSP key (distinct from mito
+key). All 3 direct bearDog UDS clients evolved: `signing.rs` (depot signing),
+`impulse/primal.rs` (impulse signing), `jsonrpc.rs` (health probes). Signal
+prefix `[0xEC, 0x03]` (BTSP_JSON_LINE) sent before handshake. Graceful
+fallback to plain JSON-RPC when `FAMILY_SEED` unavailable or handshake fails.
+Tower status bearDog probe now uses BTSP path. `is_beardog_socket()` helper
+detects crypto signer sockets by binary name. 11 new tests covering key
+derivation, HMAC determinism, protocol serialization.
+1,167 tests, 0 clippy, 0 fmt drift.
 
 **Wave 151a (depot provenance + multi-target harvest + staleness alarm):**
 P0 DEPOT DIVERGENCE: golgiBody depot 40 days stale, builder identity was OS
