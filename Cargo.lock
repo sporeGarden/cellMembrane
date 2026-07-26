@@ -703,7 +703,7 @@ dependencies = [
  "cellmembrane-types",
  "chrono",
  "ed25519-dalek",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "hex",
  "hmac",
  "reqwest",

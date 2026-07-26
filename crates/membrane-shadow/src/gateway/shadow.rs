@@ -17,7 +17,7 @@ const DEFAULT_SHADOW_PATHS: &[&str] = &["/hub/login", "/api/status", "/hub/api"]
 pub async fn dispatch_shadow(config: &ShadowConfig, args: &[&str]) -> Result<ShadowOutcome> {
     let default_host = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
-        "lab.primals.eco",
+        cellmembrane_types::service::LAB_DOMAIN,
     );
     let host = extract_host(args).unwrap_or(default_host.as_str());
     let legacy_port = extract_port(args, "--legacy-port")

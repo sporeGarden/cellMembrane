@@ -191,7 +191,7 @@ pub async fn handshake_async(stream: &mut tokio::net::UnixStream) -> Option<Hand
 /// Generate a 32-byte random ephemeral public key (hex-encoded).
 fn generate_ephemeral_pub() -> String {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("CSPRNG unavailable");
+    getrandom::fill(&mut bytes).expect("CSPRNG unavailable");
     hex::encode(bytes)
 }
 

@@ -203,7 +203,7 @@ fn set_restricted_permissions(path: &std::path::Path) {
 /// `SecRandomCopyBytes` on macOS/iOS, etc.).
 fn csprng_hex(n: usize) -> Option<String> {
     let mut buf = vec![0u8; n];
-    getrandom::getrandom(&mut buf).ok()?;
+    getrandom::fill(&mut buf).ok()?;
     let mut hex = String::with_capacity(n * 2);
     for b in &buf {
         use std::fmt::Write;

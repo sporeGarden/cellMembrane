@@ -9,7 +9,7 @@
 
 ## Recent Waves
 
-**Wave 151b (BTSP ClientHello evolution — bearDog auth standard):**
+**Wave 151b (BTSP ClientHello evolution + deep debt sweep):**
 Sub-wave 151b: all primals that talk to bearDog must evolve to BTSP before
 Nest Atomic. cellMembrane implements the 4-step `ClientHello` handshake in
 new `btsp_client.rs` module (sync + async variants). HMAC-SHA256 challenge-
@@ -21,6 +21,12 @@ fallback to plain JSON-RPC when `FAMILY_SEED` unavailable or handshake fails.
 Tower status bearDog probe now uses BTSP path. `is_beardog_socket()` helper
 detects crypto signer sockets by binary name. 11 new tests covering key
 derivation, HMAC determinism, protocol serialization.
+Post-BTSP deep debt sweep: `gateway/shadow.rs` hardcoded `"lab.primals.eco"` →
+`LAB_DOMAIN` constant. `gate/enroll.rs` IP fallback `"10.13.37.1"` → new
+`DEFAULT_HUB_MESH_IP` constant + `mesh_address()` chain. Preventive test
+extraction: `post_sync.rs` (791→716L), `plasmid/mod.rs` (788→662L) — both
+safely below 800L threshold. `getrandom` 0.2 → 0.4 (`getrandom::getrandom()`
+→ `getrandom::fill()`, 2 call sites). Zero files >800L (largest 745L).
 1,167 tests, 0 clippy, 0 fmt drift.
 
 **Wave 151a (depot provenance + multi-target harvest + staleness alarm):**

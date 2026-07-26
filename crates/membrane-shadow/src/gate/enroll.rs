@@ -136,11 +136,9 @@ fn resolve_hub_ip() -> Option<String> {
 
 /// Verify mesh connectivity by pinging the hub gateway.
 async fn mesh_verify_phase(mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
-    let hub_ip = resolve_hub_ip().unwrap_or_else(|| {
-        cellmembrane_types::mesh_address("golgi")
-            .unwrap_or("10.13.37.1")
-            .into()
-    });
+    let hub_ip = resolve_hub_ip()
+        .or_else(|| cellmembrane_types::mesh_address("golgi").map(Into::into))
+        .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_HUB_MESH_IP.into());
 
     if dry_run {
         return BootstrapPhase {

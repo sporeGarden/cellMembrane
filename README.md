@@ -87,20 +87,22 @@ handshake (HMAC-SHA256 challenge-response via `FAMILY_SEED`). All bearDog UDS
 clients (`signing.rs`, `impulse/primal.rs`, `jsonrpc.rs`) now perform BTSP
 handshake before crypto requests. Graceful fallback to plain JSON-RPC during
 transition. Tower status probes use BTSP for bearDog socket.
-Deep debt sweep (140a–151a): unified mesh registry (`MESH_REGISTRY` const table),
+Deep debt sweep (140a–151b): unified mesh registry (`MESH_REGISTRY` const table),
 shared canary/sandbox staging, capability-based naming, visibility tightened,
 allocation hot paths optimized, error taxonomy reclassified, domain constants
-centralized, CAC tree-parity checks, CSPRNG unified via `getrandom`, service
+centralized, CAC tree-parity checks, CSPRNG unified via `getrandom` (0.4), service
 filter registry-derived, `ProbeResult` typed gate probes, zero f64 casts,
 nested `if let` → let-chains (Rust 2024 edition), timestamp/HTTP helpers centralized.
 Large test extraction: `manifest/mod.rs` (785→333L), `webhook/mod.rs` (703→345L),
-`gateway.rs` (833→371L), `harvest.rs` (804→422L) — all tests in dedicated files.
+`gateway.rs` (833→371L), `harvest.rs` (804→422L), `post_sync.rs` (791→716L),
+`plasmid/mod.rs` (788→662L) — all tests in dedicated files.
 Zero files >800L. `MESH_REGISTRY` extended with `lan_ip` field for LAN peer
 discovery (eastGate `192.168.4.244`, sporeGate `192.168.4.3`).
 Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
-remote — all resolved via capability registry or centralized constants.
+remote, shadow domain literal, hub mesh IP — all resolved via capability registry
+or centralized constants (`LAB_DOMAIN`, `DEFAULT_HUB_MESH_IP`).
 `as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.
-Zero production `unwrap()` (551 test-only, confirmed via full audit).
+Zero production `unwrap()` (575 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
@@ -362,6 +364,7 @@ gardens/cellMembrane/
         caddy/                # Manifest-driven Caddy config generation + TLS + depot
         gateway/              # Tower HTTP gateway (Caddy replacement)
         webhook/              # Webhook receiver (Forgejo + GitHub cascade wiring)
+        btsp_client.rs        # BTSP ClientHello handshake (bearDog auth)
         bridge.rs             # Neural API bridge (UDS discovery)
         jsonrpc.rs            # Centralized JSON-RPC client (UDS, TCP, relay)
         resolve.rs            # Transport endpoint resolution

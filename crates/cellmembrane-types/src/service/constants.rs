@@ -136,6 +136,8 @@ pub const DEFAULT_LAN_IFACE: &str = "eno1";
 pub const DEFAULT_LAN_SUBNET: &str = "192.168.4.0/22";
 /// Default `WireGuard` mesh subnet CIDR.
 pub const DEFAULT_WG_MESH_SUBNET: &str = "10.13.37.0/24";
+/// Default hub gateway mesh IP (golgiBody `.1` in the WG subnet).
+pub const DEFAULT_HUB_MESH_IP: &str = "10.13.37.1";
 /// Systemd `RuntimeDirectoryMode` for primal services.
 ///
 /// `0755` allows non-root processes to traverse `/run/membrane/` and
