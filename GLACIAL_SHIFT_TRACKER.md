@@ -9,7 +9,14 @@
 
 ## Recent Waves
 
-**Wave 155b (fleet convergence — checksum fix + topology update):**
+**Wave 155b (cross-platform NUCLEUS + fleet convergence):**
+G1 evolution: `nucleus.rs` evolved from systemd-only to `InitSystem::detect()`
+dispatch — systemd (Linux), bare process spawn with PID file tracking (Windows,
+macOS, containers). Added `stop_bare_process()`, `restart_bare_process()` for
+non-systemd lifecycle. `nucleus_restart.rs` refactored: `converge_primal()`
+extraction with `ConvergeOutcome` enum (was 105 lines, now 3 clean functions).
+`crash_loop.rs` guards systemd-only scan with `InitSystem` check. Dead code
+cleanup in `verify.rs` — removed orphaned `ChecksumFile`/`ChecksumEntry` structs.
 Track B Fleet Convergence: composition profiles fixed upstream (compute/nest now
 include Tower base primals), blueGate joining as distributed builder. cellMembrane
 changes: `gate/verify.rs` migrated from private `ChecksumEntry` struct (could
@@ -19,7 +26,7 @@ module promoted from `mod` to `pub(crate) mod`. blueGate and westGate added to
 `MESH_REGISTRY` (WG IPs pending allocation), `KNOWN_GATES`, and zone fallbacks
 (blueGate → Backbone, westGate → House1). Build authority foreman pattern already
 supported. Clippy `uninlined_format_args` fix in enroll.rs test.
-1,175 tests, 0 clippy, 0 fmt drift.
+1,182 tests, 0 clippy, 0 fmt drift.
 
 **Wave 151b (BTSP ClientHello evolution + deep debt sweep):**
 Sub-wave 151b: all primals that talk to bearDog must evolve to BTSP before

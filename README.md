@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1175 tests — pedantic clippy clean
+cargo test                  # 1182 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -83,6 +83,14 @@ identity (`GATE_NAME` / `.gate`) instead of OS hostname. Multi-target harvest
 wired from `[build.<primal>].targets` manifest field — drives x86_64 + aarch64
 builds without CLI `--target` override. `plasmid.status` drift alarm warns when
 depot is >7 days stale.
+Cross-platform NUCLEUS (Wave 155b): `nucleus.rs` evolved from systemd-only to
+`InitSystem::detect()` dispatch — systemd unit generation on Linux, bare process
+spawn with PID file tracking on Windows/macOS/containers. `stop_bare_process()`,
+`restart_bare_process()` for non-systemd lifecycle. `nucleus_restart.rs` refactored
+to `converge_primal()` extraction (per-primal convergence with `ConvergeOutcome`
+enum). `crash_loop.rs` guards systemd-only scan with `InitSystem` check. Dead code
+cleanup in `verify.rs` (removed orphaned `ChecksumFile`/`ChecksumEntry` structs
+after migration to shared `parse_checksums_toml()`).
 Fleet convergence (Wave 155b): `gate/verify.rs` checksum verification migrated
 from private `ChecksumEntry` to shared `parse_checksums_toml()` — handles both
 struct `{ blake3 = "...", size = N }` and legacy plain-string `"hash"` formats.
@@ -112,7 +120,7 @@ Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
 remote, shadow domain literal, hub mesh IP — all resolved via capability registry
 or centralized constants (`LAB_DOMAIN`, `DEFAULT_HUB_MESH_IP`).
 `as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.
-Zero production `unwrap()` (575 test-only, confirmed via full audit).
+Zero production `unwrap()` (476 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
@@ -218,7 +226,7 @@ through Wave 155b are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1175 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1182 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -346,7 +354,7 @@ gardens/cellMembrane/
           health.rs           # Native async UDS probes + rootpulse + status
           verify.rs           # Dual checksum verification (git + WAN)
           mesh.rs             # Mesh peer configuration (transport, songbird UDS)
-          nucleus.rs          # NUCLEUS systemd management (unit generation, secrets)
+          nucleus.rs          # Cross-platform NUCLEUS (systemd + bare process, PID files)
           local.rs            # Shared helpers (identity via identity::resolve, depot paths)
           interface.rs        # Network interface detection (sysfs + /proc/net)
           preflight.rs        # Pre-bootstrap checks (ports, services, ARP)

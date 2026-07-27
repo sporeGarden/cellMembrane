@@ -1,15 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! NUCLEUS service management — systemd unit generation, secrets, and startup.
+//! NUCLEUS service management — cross-platform primal lifecycle.
 //!
-//! Extracted from `bootstrap.rs` to keep the bootstrap orchestrator focused on
-//! phase coordination while this module handles systemd unit installation,
-//! secret generation, and primal service lifecycle.
+//! Dispatches on [`InitSystem::detect()`] to select the service management
+//! strategy: systemd unit generation on Linux, bare process spawn on Windows,
+//! macOS, containers, and other platforms. Secrets generation and service
+//! registry resolution are platform-agnostic.
 
 use super::BootstrapPhase;
 
 /// Run a `systemctl` subcommand. Returns `true` if it exits 0.
+///
+/// On non-systemd platforms, returns `false` with a trace-level warning.
 pub(super) fn systemctl(args: &[&str]) -> bool {
+    if !matches!(
+        cellmembrane_types::InitSystem::detect(),
+        cellmembrane_types::InitSystem::Systemd
+    ) {
+        tracing::trace!(args = ?args, "systemctl skipped — not on systemd");
+        return false;
+    }
     std::process::Command::new("systemctl")
         .args(args)
         .output()
@@ -17,7 +27,16 @@ pub(super) fn systemctl(args: &[&str]) -> bool {
 }
 
 /// Async variant for use in tokio contexts (e.g. cascade-restart).
+///
+/// On non-systemd platforms, returns `false` with a trace-level warning.
 pub(crate) async fn systemctl_async(args: &[&str]) -> bool {
+    if !matches!(
+        cellmembrane_types::InitSystem::detect(),
+        cellmembrane_types::InitSystem::Systemd
+    ) {
+        tracing::trace!(args = ?args, "systemctl_async skipped — not on systemd");
+        return false;
+    }
     tokio::process::Command::new("systemctl")
         .args(args)
         .output()
@@ -25,8 +44,22 @@ pub(crate) async fn systemctl_async(args: &[&str]) -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
-/// Start all NUCLEUS primals — generate secrets, write systemd units, enable+start.
+/// Start all NUCLEUS primals — dispatches on [`InitSystem::detect()`].
+///
+/// - **Systemd**: generate secrets, write unit files, `systemctl enable --now`
+/// - **Bare / Windows / macOS**: generate secrets, spawn processes, write PID files
 pub(super) fn start_nucleus_primals(arch: &str) -> super::ProbeResult {
+    let init = cellmembrane_types::InitSystem::detect();
+    tracing::info!(init_system = %init, "starting NUCLEUS primals");
+
+    match init {
+        cellmembrane_types::InitSystem::Systemd => start_nucleus_systemd(arch),
+        _ => start_nucleus_bare(arch, init),
+    }
+}
+
+/// Systemd path: write unit files, daemon-reload, enable+start.
+fn start_nucleus_systemd(arch: &str) -> super::ProbeResult {
     let config_dir = generate_secrets_env();
 
     let install_base = super::resolve_install_base();
@@ -35,34 +68,9 @@ pub(super) fn start_nucleus_primals(arch: &str) -> super::ProbeResult {
     let paths = cellmembrane_types::service::ServicePaths::from_env();
     let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
 
-    let socket_base = std::path::Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE);
-    if let Err(e) = std::fs::create_dir_all(socket_base) {
-        tracing::warn!(error = %e, "failed to create socket base directory");
-    } else {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o755);
-            if let Err(e) = std::fs::set_permissions(socket_base, perms) {
-                tracing::warn!(error = %e, "failed to set socket base directory permissions");
-            }
-        }
-    }
+    prepare_socket_base();
 
-    let security_binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-    let Some(crypto_svc) = cellmembrane_types::MembraneService::with_capability(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    ) else {
-        return super::ProbeResult::fail("CryptoSigner capability not found in service registry");
-    };
-    let security_socket = paths.socket_path(crypto_svc).unwrap_or_else(|| {
-        format!(
-            "{}/{security_binary}.sock",
-            cellmembrane_types::service::DEFAULT_SOCKET_BASE
-        )
-    });
+    let security_socket = resolve_security_socket(&paths);
 
     let services = cellmembrane_types::MembraneService::all();
     let mut installed = 0u32;
@@ -126,8 +134,265 @@ pub(super) fn start_nucleus_primals(arch: &str) -> super::ProbeResult {
     let ok = failed == 0 && installed > 0;
     super::ProbeResult {
         ok,
-        detail: format!("{installed} units installed, {failed} failed"),
+        detail: format!("{installed} units installed, {failed} failed (systemd)"),
     }
+}
+
+/// Bare process path: spawn each primal binary directly, write PID files.
+///
+/// Used on Windows (SCM not yet implemented), macOS (launchd not yet
+/// implemented), containers without systemd, and other non-systemd platforms.
+/// PID files are written to `{install_base}/pids/` for lifecycle management.
+fn start_nucleus_bare(arch: &str, init: cellmembrane_types::InitSystem) -> super::ProbeResult {
+    let config_dir = generate_secrets_env();
+
+    let install_base = super::resolve_install_base();
+    let dest_root = super::resolve_plasmidbin_dir();
+    let bin_dir = dest_root.join("primals").join(arch);
+    let paths = cellmembrane_types::service::ServicePaths::from_env();
+    let pid_dir = std::path::Path::new(&install_base).join("pids");
+
+    if let Err(e) = std::fs::create_dir_all(&pid_dir) {
+        tracing::warn!(error = %e, "failed to create PID directory");
+    }
+
+    prepare_socket_base();
+
+    let security_socket = resolve_security_socket(&paths);
+
+    let env_file = std::path::Path::new(&config_dir).join("secrets.env");
+    let env_vars = load_env_file(&env_file);
+
+    let services = cellmembrane_types::MembraneService::all();
+    let mut started = 0u32;
+    let mut failed = 0u32;
+
+    for svc in services {
+        let bin_path = bin_dir.join(svc.binary);
+        if !svc.is_primal || !bin_path.exists() {
+            continue;
+        }
+
+        let socket_path = paths.socket_path(svc).unwrap_or_else(|| {
+            format!(
+                "{}/{}.sock",
+                cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+                svc.binary
+            )
+        });
+        let exec_start = svc.server_contract.exec_args_with_base(
+            &install_base,
+            svc.binary,
+            &socket_path,
+            &security_socket,
+        );
+        let extra_args = extra_exec_args(svc);
+        let full_cmd = format!("{exec_start}{extra_args}");
+
+        let parts: Vec<&str> = full_cmd.split_whitespace().collect();
+        let Some((&program, args)) = parts.split_first() else {
+            failed += 1;
+            continue;
+        };
+
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
+        for (k, v) in &env_vars {
+            cmd.env(k, v);
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+
+        match cmd.spawn() {
+            Ok(child) => {
+                let pid = child.id();
+                let pid_file = pid_dir.join(format!("{}.pid", svc.binary));
+                if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
+                    tracing::warn!(service = %svc.binary, error = %e, "PID file write failed");
+                }
+                tracing::info!(service = %svc.binary, pid, "spawned (bare)");
+                started += 1;
+            }
+            Err(e) => {
+                tracing::warn!(service = %svc.binary, error = %e, "spawn failed");
+                failed += 1;
+            }
+        }
+    }
+
+    if started == 0 && failed == 0 {
+        return super::ProbeResult::pass("no primal binaries found in depot — skipped");
+    }
+
+    let ok = failed == 0 && started > 0;
+    super::ProbeResult {
+        ok,
+        detail: format!("{started} processes spawned, {failed} failed ({init})"),
+    }
+}
+
+/// Create the socket base directory with appropriate permissions.
+fn prepare_socket_base() {
+    let socket_base = std::path::Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE);
+    if let Err(e) = std::fs::create_dir_all(socket_base) {
+        tracing::warn!(error = %e, "failed to create socket base directory");
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        if let Err(e) = std::fs::set_permissions(socket_base, perms) {
+            tracing::warn!(error = %e, "failed to set socket base directory permissions");
+        }
+    }
+}
+
+/// Resolve the crypto signer socket path from the service registry.
+fn resolve_security_socket(paths: &cellmembrane_types::service::ServicePaths) -> String {
+    let security_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    )
+    .and_then(|svc| paths.socket_path(svc))
+    .unwrap_or_else(|| {
+        format!(
+            "{}/{security_binary}.sock",
+            cellmembrane_types::service::DEFAULT_SOCKET_BASE
+        )
+    })
+}
+
+/// Stop a bare-process primal by reading its PID file and sending SIGTERM (Unix)
+/// or `taskkill` (Windows). Cleans up the PID file afterward.
+pub(crate) fn stop_bare_process(binary: &str) -> bool {
+    let install_base = super::resolve_install_base();
+    let pid_dir = std::path::Path::new(&install_base).join("pids");
+    let pid_file = pid_dir.join(format!("{binary}.pid"));
+
+    let Ok(pid_str) = std::fs::read_to_string(&pid_file) else {
+        return false;
+    };
+    let Ok(pid) = pid_str.trim().parse::<u32>() else {
+        return false;
+    };
+
+    let killed = kill_process(pid);
+    if killed {
+        let _ = std::fs::remove_file(&pid_file);
+    }
+    killed
+}
+
+/// Kill a process by PID — platform-aware.
+fn kill_process(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+/// Restart a bare-process primal: stop then re-spawn from the current binary.
+pub(crate) async fn restart_bare_process(binary: &str, arch: &str) -> bool {
+    stop_bare_process(binary);
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let install_base = super::resolve_install_base();
+    let dest_root = super::resolve_plasmidbin_dir();
+    let bin_dir = dest_root.join("primals").join(arch);
+    let bin_path = bin_dir.join(binary);
+
+    if !bin_path.exists() {
+        return false;
+    }
+
+    let paths = cellmembrane_types::service::ServicePaths::from_env();
+    let Some(svc) = cellmembrane_types::MembraneService::for_binary(binary) else {
+        return false;
+    };
+    let security_socket = resolve_security_socket(&paths);
+    let socket_path = paths.socket_path(svc).unwrap_or_else(|| {
+        format!(
+            "{}/{}.sock",
+            cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+            svc.binary
+        )
+    });
+    let exec_start = svc.server_contract.exec_args_with_base(
+        &install_base,
+        svc.binary,
+        &socket_path,
+        &security_socket,
+    );
+    let extra_args = extra_exec_args(svc);
+    let full_cmd = format!("{exec_start}{extra_args}");
+
+    let parts: Vec<&str> = full_cmd.split_whitespace().collect();
+    let Some((&program, args)) = parts.split_first() else {
+        return false;
+    };
+
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
+    match cmd.spawn() {
+        Ok(child) => {
+            let pid_dir = std::path::Path::new(&install_base).join("pids");
+            let pid_file = pid_dir.join(format!("{}.pid", svc.binary));
+            let _ = std::fs::write(&pid_file, child.id().to_string());
+            tracing::info!(service = %binary, pid = child.id(), "respawned (bare)");
+            true
+        }
+        Err(e) => {
+            tracing::warn!(service = %binary, error = %e, "respawn failed");
+            false
+        }
+    }
+}
+
+/// Load key=value pairs from a secrets env file (best-effort).
+fn load_env_file(path: &std::path::Path) -> Vec<(String, String)> {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    content
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let (k, v) = line.split_once('=')?;
+            Some((k.trim().to_string(), v.trim().to_string()))
+        })
+        .collect()
 }
 
 /// Construct the nucleus startup phase.
@@ -468,5 +733,55 @@ mod tests {
         assert!(phase.ok, "dry-run should always succeed");
         assert_eq!(phase.name, "nucleus.start");
         assert!(phase.detail.contains("dry-run"));
+    }
+
+    #[test]
+    fn init_system_detect_is_valid() {
+        let init = cellmembrane_types::InitSystem::detect();
+        let valid = matches!(
+            init,
+            cellmembrane_types::InitSystem::Systemd
+                | cellmembrane_types::InitSystem::Launchd
+                | cellmembrane_types::InitSystem::WindowsSCM
+                | cellmembrane_types::InitSystem::Bare
+        );
+        assert!(
+            valid,
+            "detect() must return a known init system, got: {init}"
+        );
+    }
+
+    #[test]
+    fn load_env_file_parses_key_value_pairs() {
+        let dir = std::env::temp_dir().join(format!("nucleus_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("test.env");
+        std::fs::write(&path, "FOO=bar\n# comment\nBAZ=qux\n\n").expect("write");
+        let pairs = load_env_file(&path);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0], ("FOO".to_string(), "bar".to_string()));
+        assert_eq!(pairs[1], ("BAZ".to_string(), "qux".to_string()));
+    }
+
+    #[test]
+    fn load_env_file_returns_empty_on_missing() {
+        let pairs = load_env_file(std::path::Path::new("/nonexistent/secrets.env"));
+        assert!(pairs.is_empty());
+    }
+
+    #[test]
+    fn resolve_security_socket_returns_valid_path() {
+        let paths = cellmembrane_types::service::ServicePaths::from_env();
+        let socket = resolve_security_socket(&paths);
+        assert!(
+            socket.contains(".sock"),
+            "should be a .sock path, got: {socket}"
+        );
+    }
+
+    #[test]
+    fn stop_bare_process_returns_false_on_missing_pid() {
+        assert!(!stop_bare_process("nonexistent-binary-xyz"));
     }
 }

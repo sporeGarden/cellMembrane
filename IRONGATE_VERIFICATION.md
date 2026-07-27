@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 155b (7-gate mesh live, 10-gate topology, subdomain routing, depot.primals.eco, 1175 tests, 0 clippy, checksum format fix, blueGate/westGate topology, fleet convergence, BTSP, getrandom 0.4, 2026-07-27)
+**Last validated:** Wave 155b (7-gate mesh live, 10-gate topology, subdomain routing, depot.primals.eco, 1182 tests, 0 clippy, cross-platform NUCLEUS (InitSystem dispatch), checksum format fix, blueGate/westGate topology, fleet convergence, BTSP, getrandom 0.4, 2026-07-27)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming
 
 ---

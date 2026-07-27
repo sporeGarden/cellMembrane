@@ -6,6 +6,14 @@
 //! If they differ, sandbox-validates then restarts the service unit.
 //! This enables a "pull and converge" workflow without manual intervention.
 
+/// Outcome of converging a single primal binary.
+enum ConvergeOutcome {
+    Restarted,
+    Current,
+    Failed,
+    Skipped,
+}
+
 /// Restart local NUCLEUS processes whose binaries were updated in the depot.
 pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
     let arch = crate::plasmid::detect_target_triple();
@@ -35,82 +43,11 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
     let mut failed = 0u32;
 
     for primal in &primals {
-        let depot_bin = bin_dir.join(primal);
-        let installed_bin = install_dir.join(primal);
-
-        if !depot_bin.exists() || !installed_bin.exists() {
-            continue;
-        }
-
-        let depot_hash = match crate::plasmid::compute_blake3_file_async(&depot_bin).await {
-            Ok(h) => h,
-            Err(e) => {
-                tracing::warn!(primal, error = %e, "cascade-restart: cannot hash depot binary");
-                failed += 1;
-                continue;
-            }
-        };
-        let installed_hash = match crate::plasmid::compute_blake3_file_async(&installed_bin).await {
-            Ok(h) => h,
-            Err(e) => {
-                tracing::warn!(primal, error = %e, "cascade-restart: cannot hash installed binary");
-                failed += 1;
-                continue;
-            }
-        };
-
-        if depot_hash == installed_hash {
-            skipped += 1;
-            continue;
-        }
-
-        let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
-            primal: primal.clone(),
-            commit: depot_hash[..8].to_string(),
-            binary_path: depot_bin.clone(),
-            timeout_secs: None,
-        };
-
-        let sandbox_ok = match crate::plasmid::sandbox::validate_with_deps(&sandbox_args).await {
-            Ok(result) => result.health_ok,
-            Err(e) => {
-                lines.push(format!(
-                    "  [cascade-restart] {primal} sandbox infra error (proceeding): {e}"
-                ));
-                true
-            }
-        };
-
-        if !sandbox_ok {
-            lines.push(format!(
-                "  [cascade-restart] {primal} sandbox FAIL — skipping"
-            ));
-            failed += 1;
-            continue;
-        }
-
-        if installed_bin.exists() {
-            if let Err(e) = crate::plasmid::canary::retire_to_canary(
-                primal,
-                &installed_bin,
-                &installed_hash[..8],
-            )
-            .await
-            {
-                tracing::warn!(error = %e, primal, "canary retirement failed");
-            }
-        }
-
-        if tokio::fs::copy(&depot_bin, &installed_bin).await.is_err() {
-            failed += 1;
-            continue;
-        }
-
-        let unit = format!("{primal}-membrane.service");
-        if crate::gate::nucleus::systemctl_async(&["restart", &unit]).await {
-            restarted += 1;
-        } else {
-            failed += 1;
+        match converge_primal(primal, &bin_dir, install_dir, arch, lines).await {
+            ConvergeOutcome::Restarted => restarted += 1,
+            ConvergeOutcome::Current => skipped += 1,
+            ConvergeOutcome::Failed => failed += 1,
+            ConvergeOutcome::Skipped => {}
         }
     }
 
@@ -118,4 +55,97 @@ pub(super) async fn run_cascade_restart(lines: &mut Vec<String>) {
     lines.push(format!(
         "  [cascade-restart] {tag} — {restarted} restarted, {skipped} current, {failed} failed"
     ));
+}
+
+/// Compare, sandbox-validate, and restart a single primal binary.
+async fn converge_primal(
+    primal: &str,
+    bin_dir: &std::path::Path,
+    install_dir: &std::path::Path,
+    arch: &str,
+    lines: &mut Vec<String>,
+) -> ConvergeOutcome {
+    let depot_bin = bin_dir.join(primal);
+    let installed_bin = install_dir.join(primal);
+
+    if !depot_bin.exists() || !installed_bin.exists() {
+        return ConvergeOutcome::Skipped;
+    }
+
+    let depot_hash = match crate::plasmid::compute_blake3_file_async(&depot_bin).await {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::warn!(primal, error = %e, "cascade-restart: cannot hash depot binary");
+            return ConvergeOutcome::Failed;
+        }
+    };
+    let installed_hash = match crate::plasmid::compute_blake3_file_async(&installed_bin).await {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::warn!(primal, error = %e, "cascade-restart: cannot hash installed binary");
+            return ConvergeOutcome::Failed;
+        }
+    };
+
+    if depot_hash == installed_hash {
+        return ConvergeOutcome::Current;
+    }
+
+    if !sandbox_validate(primal, &depot_bin, &depot_hash, lines).await {
+        return ConvergeOutcome::Failed;
+    }
+
+    if let Err(e) =
+        crate::plasmid::canary::retire_to_canary(primal, &installed_bin, &installed_hash[..8]).await
+    {
+        tracing::warn!(error = %e, primal, "canary retirement failed");
+    }
+
+    if tokio::fs::copy(&depot_bin, &installed_bin).await.is_err() {
+        return ConvergeOutcome::Failed;
+    }
+
+    let ok = match cellmembrane_types::InitSystem::detect() {
+        cellmembrane_types::InitSystem::Systemd => {
+            let unit = format!("{primal}-membrane.service");
+            crate::gate::nucleus::systemctl_async(&["restart", &unit]).await
+        }
+        _ => crate::gate::nucleus::restart_bare_process(primal, arch).await,
+    };
+    if ok {
+        ConvergeOutcome::Restarted
+    } else {
+        ConvergeOutcome::Failed
+    }
+}
+
+/// Sandbox-validate a depot binary before deploying.
+async fn sandbox_validate(
+    primal: &str,
+    depot_bin: &std::path::Path,
+    depot_hash: &str,
+    lines: &mut Vec<String>,
+) -> bool {
+    let sandbox_args = crate::plasmid::sandbox::SandboxArgs {
+        primal: primal.to_string(),
+        commit: depot_hash[..8].to_string(),
+        binary_path: depot_bin.to_path_buf(),
+        timeout_secs: None,
+    };
+
+    match crate::plasmid::sandbox::validate_with_deps(&sandbox_args).await {
+        Ok(result) if result.health_ok => true,
+        Ok(_) => {
+            lines.push(format!(
+                "  [cascade-restart] {primal} sandbox FAIL — skipping"
+            ));
+            false
+        }
+        Err(e) => {
+            lines.push(format!(
+                "  [cascade-restart] {primal} sandbox infra error (proceeding): {e}"
+            ));
+            true
+        }
+    }
 }

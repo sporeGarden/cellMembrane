@@ -134,7 +134,19 @@ pub fn scan_only(threshold: Option<u32>) -> CrashLoopReport {
 }
 
 /// Discover systemd units matching the membrane service filter.
+///
+/// On non-systemd platforms, returns an empty list — crash-loop detection
+/// relies on init system introspection which isn't yet implemented for
+/// bare/Windows/launchd process management.
 fn discover_membrane_units(filter: &str) -> Vec<String> {
+    if !matches!(
+        cellmembrane_types::InitSystem::detect(),
+        cellmembrane_types::InitSystem::Systemd
+    ) {
+        tracing::trace!("crash-loop scan: not on systemd — skipped");
+        return Vec::new();
+    }
+
     let output = std::process::Command::new("systemctl")
         .args([
             "list-units",

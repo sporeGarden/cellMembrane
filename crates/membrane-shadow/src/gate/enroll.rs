@@ -90,9 +90,8 @@ pub async fn enroll(gate_name: &str, dry_run: bool) -> Result<EnrollResult> {
 
     phases.push(timed_phase_enroll("hub.peer", hub_peer_phase(gate_name, &ip, dry_run)).await);
 
-    phases.push(
-        timed_phase_enroll("mesh.enroll", mesh_enroll_phase(gate_name, &ip, dry_run)).await,
-    );
+    phases
+        .push(timed_phase_enroll("mesh.enroll", mesh_enroll_phase(gate_name, &ip, dry_run)).await);
 
     let all_pass = phases.iter().all(|p| p.ok);
 
@@ -462,7 +461,8 @@ async fn mesh_enroll_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> Boo
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
 
-    let proof = compute_enrollment_proof(&family_seed, gate_name, &pubkey, timestamp, seed_generation);
+    let proof =
+        compute_enrollment_proof(&family_seed, gate_name, &pubkey, timestamp, seed_generation);
 
     if dry_run {
         return BootstrapPhase {
@@ -508,9 +508,7 @@ async fn mesh_enroll_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> Boo
                 BootstrapPhase {
                     name: "mesh.enroll".into(),
                     ok: true,
-                    detail: format!(
-                        "{gate_name} enrolled into mesh (gen={seed_generation})"
-                    ),
+                    detail: format!("{gate_name} enrolled into mesh (gen={seed_generation})"),
                 }
             } else {
                 let reason = serde_json::from_str::<serde_json::Value>(&response)
@@ -583,8 +581,7 @@ fn compute_enrollment_proof(
 
     // HKDF-SHA256 extract + expand (mirrors bearDog derive_enrollment_key)
     let info = format!("enrollment-v{generation}");
-    let mut extract_mac =
-        HmacSha256::new_from_slice(family_id.as_bytes()).expect("HMAC key init");
+    let mut extract_mac = HmacSha256::new_from_slice(family_id.as_bytes()).expect("HMAC key init");
     extract_mac.update(family_seed);
     let prk = extract_mac.finalize().into_bytes();
 
@@ -704,7 +701,10 @@ mod tests {
         // manifest.resolve — mesh.enroll only appears when IP is resolved.
         if r.mesh_ip.is_some() {
             let phase = r.phases.iter().find(|p| p.name == "mesh.enroll");
-            assert!(phase.is_some(), "mesh.enroll phase should be present when IP resolved");
+            assert!(
+                phase.is_some(),
+                "mesh.enroll phase should be present when IP resolved"
+            );
             if let Some(p) = phase {
                 assert!(
                     p.detail.contains("dry-run") || p.detail.contains("FAMILY_SEED"),
