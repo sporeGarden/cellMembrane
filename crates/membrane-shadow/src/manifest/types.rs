@@ -270,7 +270,9 @@ pub struct GateProfile {
     /// List of repo short names this gate syncs.
     #[serde(default)]
     pub repos: Vec<String>,
-    /// Target architecture (e.g. `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`).
+    /// Target architecture triple. **Transitional** — primals auto-detect via
+    /// `Platform::detect()`. Kept for depot fetch path selection until genomeBin
+    /// depot serves architecture-negotiated downloads.
     #[serde(default)]
     pub target: Option<String>,
     /// Mobility classification: `fixed` or `mobile`.
@@ -279,7 +281,9 @@ pub struct GateProfile {
     /// Mesh relay peer address for federation (e.g. `157.230.3.183:7700`).
     #[serde(default)]
     pub mesh_peer: Option<String>,
-    /// How primal processes bind their control sockets.
+    /// IPC bind mode. **Transitional** — songBird `universal-ipc` auto-selects
+    /// the best transport per platform (UDS on Linux, named pipes on Windows,
+    /// abstract sockets on Android, XPC on iOS, TCP fallback everywhere).
     #[serde(default)]
     pub bind_mode: Option<cellmembrane_types::BindMode>,
     /// Composition: which primals to start (e.g. `tower`, `compute`, `full`).

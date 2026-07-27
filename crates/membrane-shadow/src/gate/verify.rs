@@ -14,6 +14,15 @@ use tracing::warn;
 /// plain-string format `"hash"` — ensuring all depot formats parse correctly.
 #[must_use]
 pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
+    use crate::plasmid::checksum::ChecksumEntry;
+
+    #[derive(serde::Deserialize)]
+    struct ChecksumFile {
+        #[serde(flatten)]
+        targets:
+            std::collections::BTreeMap<String, std::collections::BTreeMap<String, ChecksumEntry>>,
+    }
+
     let dest_root = resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
@@ -153,6 +162,15 @@ pub async fn verify_wan_checksums(arch: &str, dry_run: bool) -> super::bootstrap
 mod tests {
     use super::*;
 
+    use crate::plasmid::checksum::ChecksumEntry;
+
+    #[derive(serde::Deserialize)]
+    struct ChecksumFile {
+        #[serde(flatten)]
+        targets:
+            std::collections::BTreeMap<String, std::collections::BTreeMap<String, ChecksumEntry>>,
+    }
+
     #[test]
     fn verify_parses_struct_format_via_shared_checksum() {
         let toml_str = r#"
@@ -265,5 +283,32 @@ beardog = { blake3 = "dddd000000000000000000000000000000000000000000000000000000
         assert!(phase.ok);
         assert_eq!(phase.name, "checksum.wan");
         assert!(phase.detail.contains("dry-run"));
+    }
+
+    #[test]
+    fn checksums_toml_plain_string_format() {
+        let toml_str = r#"
+[x86_64-unknown-linux-musl]
+beardog = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+songbird = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+"#;
+        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
+        let x86 = parsed.targets.get("x86_64-unknown-linux-musl").unwrap();
+        assert_eq!(x86.len(), 2);
+        assert_eq!(x86["beardog"].blake3.len(), 64);
+        assert_eq!(x86["beardog"].size, 0);
+    }
+
+    #[test]
+    fn checksums_toml_mixed_struct_and_string() {
+        let toml_str = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "aaaa000000000000000000000000000000000000000000000000000000000000", size = 100 }
+songbird = "bbbb000000000000000000000000000000000000000000000000000000000000"
+"#;
+        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
+        let x86 = &parsed.targets["x86_64-unknown-linux-musl"];
+        assert_eq!(x86["beardog"].size, 100);
+        assert_eq!(x86["songbird"].size, 0);
     }
 }
