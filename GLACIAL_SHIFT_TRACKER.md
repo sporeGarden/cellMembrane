@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-26 (Wave 151b)
+**Last updated:** 2026-07-27 (Wave 155b)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155b (fleet convergence — checksum fix + topology update):**
+Track B Fleet Convergence: composition profiles fixed upstream (compute/nest now
+include Tower base primals), blueGate joining as distributed builder. cellMembrane
+changes: `gate/verify.rs` migrated from private `ChecksumEntry` struct (could
+not parse plain-string format) to shared `parse_checksums_toml()` — now handles
+both `{ blake3 = "hash", size = N }` and legacy `"hash"` formats. `checksum`
+module promoted from `mod` to `pub(crate) mod`. blueGate and westGate added to
+`MESH_REGISTRY` (WG IPs pending allocation), `KNOWN_GATES`, and zone fallbacks
+(blueGate → Backbone, westGate → House1). Build authority foreman pattern already
+supported. Clippy `uninlined_format_args` fix in enroll.rs test.
+1,175 tests, 0 clippy, 0 fmt drift.
 
 **Wave 151b (BTSP ClientHello evolution + deep debt sweep):**
 Sub-wave 151b: all primals that talk to bearDog must evolve to BTSP before

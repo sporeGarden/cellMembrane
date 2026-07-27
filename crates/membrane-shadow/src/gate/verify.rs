@@ -8,21 +8,12 @@ use super::resolve_plasmidbin_dir;
 use tracing::warn;
 
 /// Verify local depot binaries against the git-tracked `checksums.toml`.
+///
+/// Uses the shared [`crate::plasmid::checksum::ChecksumEntry`] deserializer which
+/// handles both the struct format `{ blake3 = "...", size = N }` and legacy
+/// plain-string format `"hash"` — ensuring all depot formats parse correctly.
 #[must_use]
 pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
-    #[derive(serde::Deserialize)]
-    struct ChecksumFile {
-        #[serde(flatten)]
-        targets:
-            std::collections::BTreeMap<String, std::collections::BTreeMap<String, ChecksumEntry>>,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChecksumEntry {
-        blake3: String,
-        #[serde(rename = "size")]
-        _size: u64,
-    }
-
     let dest_root = resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
@@ -48,14 +39,15 @@ pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
         return super::ProbeResult::fail("cannot read checksums.toml");
     };
 
-    let parsed = match toml::from_str::<ChecksumFile>(&content) {
-        Ok(p) => p,
-        Err(e) => return super::ProbeResult::fail(format!("checksums.toml parse error: {e}")),
-    };
-
-    let Some(entries) = parsed.targets.get(arch) else {
-        return super::ProbeResult::fail(format!("no [{arch}] section in checksums.toml"));
-    };
+    let entries = crate::plasmid::checksum::parse_checksums_toml(&content, arch);
+    if entries.is_empty() {
+        let Ok(table) = content.parse::<toml::Table>() else {
+            return super::ProbeResult::fail("checksums.toml parse error");
+        };
+        if !table.contains_key(arch) {
+            return super::ProbeResult::fail(format!("no [{arch}] section in checksums.toml"));
+        }
+    }
 
     let mut verified = 0u32;
     let mut failed = 0u32;
@@ -63,7 +55,7 @@ pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
     let nucleus_set: std::collections::HashSet<&str> =
         crate::plasmid::nucleus_primals().into_iter().collect();
 
-    for (name, entry) in entries {
+    for (name, expected_hash) in &entries {
         let bin_path = bin_dir.join(name);
         if !bin_path.exists() {
             if nucleus_set.contains(name.as_str()) {
@@ -75,7 +67,7 @@ pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
             failed += 1;
             continue;
         };
-        if hash == entry.blake3 {
+        if hash == *expected_hash {
             verified += 1;
         } else {
             failed += 1;
@@ -161,23 +153,8 @@ pub async fn verify_wan_checksums(arch: &str, dry_run: bool) -> super::bootstrap
 mod tests {
     use super::*;
 
-    /// Mirror of the `ChecksumFile` / `ChecksumEntry` structs inside
-    /// `verify_local_depot` — used to validate our TOML format expectations.
-    #[derive(serde::Deserialize)]
-    struct ChecksumFile {
-        #[serde(flatten)]
-        targets:
-            std::collections::BTreeMap<String, std::collections::BTreeMap<String, ChecksumEntry>>,
-    }
-    #[derive(serde::Deserialize)]
-    struct ChecksumEntry {
-        blake3: String,
-        #[serde(rename = "size")]
-        _size: u64,
-    }
-
     #[test]
-    fn checksums_toml_parses_correctly() {
+    fn verify_parses_struct_format_via_shared_checksum() {
         let toml_str = r#"
 [x86_64-unknown-linux-musl]
 beardog = { blake3 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", size = 4096 }
@@ -186,35 +163,66 @@ songbird = { blake3 = "1234567890abcdef1234567890abcdef1234567890abcdef123456789
 [aarch64-unknown-linux-musl]
 beardog = { blake3 = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321", size = 4100 }
 "#;
-        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
-        let x86 = parsed.targets.get("x86_64-unknown-linux-musl").unwrap();
+        let x86 =
+            crate::plasmid::checksum::parse_checksums_toml(toml_str, "x86_64-unknown-linux-musl");
         assert_eq!(x86.len(), 2);
         assert!(x86.contains_key("beardog"));
         assert!(x86.contains_key("songbird"));
-        assert_eq!(x86["beardog"].blake3.len(), 64);
+        assert_eq!(x86["beardog"].len(), 64);
 
-        let aarch64 = parsed.targets.get("aarch64-unknown-linux-musl").unwrap();
+        let aarch64 = crate::plasmid::checksum::parse_checksums_toml(
+            toml_str,
+            "aarch64-unknown-linux-musl",
+        );
         assert_eq!(aarch64.len(), 1);
     }
 
     #[test]
-    fn checksums_toml_missing_arch_section() {
+    fn verify_parses_plain_string_format() {
         let toml_str = r#"
 [x86_64-unknown-linux-musl]
-beardog = { blake3 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", size = 4096 }
+beardog = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+songbird = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 "#;
-        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
-        assert!(!parsed.targets.contains_key("riscv64"));
+        let entries =
+            crate::plasmid::checksum::parse_checksums_toml(toml_str, "x86_64-unknown-linux-musl");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries["beardog"].len(), 64);
     }
 
     #[test]
-    fn checksums_toml_rejects_invalid() {
-        let bad = "this is not valid toml [[[";
-        assert!(toml::from_str::<ChecksumFile>(bad).is_err());
+    fn verify_parses_mixed_formats() {
+        let toml_str = r#"
+[x86_64-unknown-linux-musl]
+beardog = { blake3 = "abc123", size = 1024 }
+songbird = "def456"
+"#;
+        let entries =
+            crate::plasmid::checksum::parse_checksums_toml(toml_str, "x86_64-unknown-linux-musl");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries["beardog"], "abc123");
+        assert_eq!(entries["songbird"], "def456");
     }
 
     #[test]
-    fn checksums_toml_blake3_hash_roundtrip() {
+    fn verify_missing_arch_returns_empty() {
+        let toml_str = "[x86_64-unknown-linux-musl]\nbeardog = \"abc\"\n";
+        let entries =
+            crate::plasmid::checksum::parse_checksums_toml(toml_str, "riscv64-unknown-linux-musl");
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn verify_invalid_toml_returns_empty() {
+        let entries = crate::plasmid::checksum::parse_checksums_toml(
+            "this is not valid toml [[[",
+            "x86_64-unknown-linux-musl",
+        );
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn checksums_blake3_hash_roundtrip() {
         let content = b"hello membrane";
         let hash = blake3::hash(content).to_hex().to_string();
         assert_eq!(hash.len(), 64, "blake3 hex hash should be 64 chars");
@@ -223,13 +231,15 @@ beardog = { blake3 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234
             "[x86_64-unknown-linux-musl]\nbeardog = {{ blake3 = \"{hash}\", size = {} }}\n",
             content.len()
         );
-        let parsed: ChecksumFile = toml::from_str(&toml_str).unwrap();
-        let entry = &parsed.targets["x86_64-unknown-linux-musl"]["beardog"];
-        assert_eq!(entry.blake3, hash, "TOML round-trip should preserve hash");
+        let entries = crate::plasmid::checksum::parse_checksums_toml(
+            &toml_str,
+            "x86_64-unknown-linux-musl",
+        );
+        assert_eq!(entries["beardog"], hash, "round-trip should preserve hash");
     }
 
     #[test]
-    fn checksums_toml_multiple_archs_and_binaries() {
+    fn checksums_multiple_archs_and_binaries() {
         let toml_str = r#"
 [x86_64-unknown-linux-musl]
 beardog = { blake3 = "aaaa000000000000000000000000000000000000000000000000000000000000", size = 100 }
@@ -239,10 +249,14 @@ nestgate = { blake3 = "cccc00000000000000000000000000000000000000000000000000000
 [aarch64-unknown-linux-musl]
 beardog = { blake3 = "dddd000000000000000000000000000000000000000000000000000000000000", size = 110 }
 "#;
-        let parsed: ChecksumFile = toml::from_str(toml_str).unwrap();
-        assert_eq!(parsed.targets.len(), 2);
-        assert_eq!(parsed.targets["x86_64-unknown-linux-musl"].len(), 3);
-        assert_eq!(parsed.targets["aarch64-unknown-linux-musl"].len(), 1);
+        let x86 =
+            crate::plasmid::checksum::parse_checksums_toml(toml_str, "x86_64-unknown-linux-musl");
+        assert_eq!(x86.len(), 3);
+        let aarch64 = crate::plasmid::checksum::parse_checksums_toml(
+            toml_str,
+            "aarch64-unknown-linux-musl",
+        );
+        assert_eq!(aarch64.len(), 1);
     }
 
     #[tokio::test]

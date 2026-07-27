@@ -726,8 +726,7 @@ mod tests {
         let path = resolve_songbird_socket();
         assert!(
             path.extension().is_some_and(|e| e == "sock"),
-            "socket path should end with .sock: {:?}",
-            path
+            "socket path should end with .sock: {path:?}"
         );
     }
 }

@@ -72,8 +72,8 @@ impl ZoneLabel {
     #[must_use]
     pub fn for_gate(gate_name: &str) -> Self {
         match gate_name {
-            "eastGate" | "sporeGate" | "ironGate" => Self::Backbone,
-            "northGate" => Self::House1,
+            "eastGate" | "sporeGate" | "ironGate" | "blueGate" => Self::Backbone,
+            "northGate" | "westGate" => Self::House1,
             "strandGate" | "southGate" | "swiftGate" | "fieldGate" => Self::House2,
             "golgi" | "pepti" | "flockGate" => Self::Wan,
             _ => Self::Unassigned,
@@ -202,6 +202,18 @@ const MESH_REGISTRY: &[MeshEntry] = &[
         aliases: &[],
     },
     MeshEntry {
+        name: "blueGate",
+        wg_ip: None,
+        lan_ip: None,
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "westGate",
+        wg_ip: None,
+        lan_ip: None,
+        aliases: &[],
+    },
+    MeshEntry {
         name: "grapheneGate",
         wg_ip: None,
         lan_ip: None,
@@ -251,6 +263,8 @@ pub const KNOWN_GATES: &[&str] = &[
     "ironGate",
     "northGate",
     "southGate",
+    "blueGate",
+    "westGate",
     "grapheneGate",
 ];
 

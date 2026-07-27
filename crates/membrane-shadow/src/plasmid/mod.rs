@@ -15,7 +15,7 @@ pub mod auto_fetch;
 pub mod build;
 pub(crate) mod canary;
 pub(crate) mod canary_remote;
-mod checksum;
+pub(crate) mod checksum;
 pub(crate) mod depot;
 mod depot_sync;
 mod download;

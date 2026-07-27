@@ -132,7 +132,7 @@ pub async fn fetch_wan_checksums(_arch: &str) -> HashMap<String, String> {
 /// Accepts both struct entries (`primal = { blake3 = "...", size = N }`) and
 /// legacy plain-string entries (`primal = "hash"`). This enables backward
 /// compatibility with depot files written before the struct format was adopted.
-pub(super) fn parse_checksums_toml(content: &str, arch: &str) -> HashMap<String, String> {
+pub(crate) fn parse_checksums_toml(content: &str, arch: &str) -> HashMap<String, String> {
     let Ok(table) = content.parse::<toml::Table>() else {
         return HashMap::new();
     };

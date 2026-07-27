@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 151b) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155b) |
 
 ---
 
@@ -56,12 +56,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1167 tests — pedantic clippy clean
+cargo test                  # 1175 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 151b): ~9k lines types, ~36k lines shadow. Crash-loop breaker
+Current state (Wave 155b): ~9k lines types, ~36k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -70,7 +70,8 @@ All manifest fields type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `Bin
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-7-gate WG mesh (golgi, sporeGate, eastGate, flockGate, ironGate, northGate, southGate).
+7-gate WG mesh (golgi, sporeGate, eastGate, flockGate, ironGate, northGate, southGate),
+10-gate topology (+ blueGate, westGate, grapheneGate — WG IPs pending enrollment).
 Subdomain standard (`prefix.primals.eco`): `webb.primals.eco` vhost, CSP headers,
 root domain redirect to `sporeprint.primals.eco`, depot at `depot.primals.eco`.
 `gate.enroll` automated mesh enrollment + `hub.peer` hub-side addition.
@@ -82,6 +83,15 @@ identity (`GATE_NAME` / `.gate`) instead of OS hostname. Multi-target harvest
 wired from `[build.<primal>].targets` manifest field — drives x86_64 + aarch64
 builds without CLI `--target` override. `plasmid.status` drift alarm warns when
 depot is >7 days stale.
+Fleet convergence (Wave 155b): `gate/verify.rs` checksum verification migrated
+from private `ChecksumEntry` to shared `parse_checksums_toml()` — handles both
+struct `{ blake3 = "...", size = N }` and legacy plain-string `"hash"` formats.
+`checksum` module promoted to `pub(crate)`. blueGate (distributed builder) and
+westGate (cold storage) added to `MESH_REGISTRY`, `KNOWN_GATES`, and zone
+fallbacks. Build authority foreman pattern already supported via
+`ENV_BUILD_AUTHORITY` + manifest `build_authority` field. Composition profiles
+validated: `compute` → Tower trust, `nest` → Nest trust, manifest profiles
+control primal deployment lists.
 BTSP evolution (Wave 151b): `btsp_client.rs` implements the 4-step `ClientHello`
 handshake (HMAC-SHA256 challenge-response via `FAMILY_SEED`). All bearDog UDS
 clients (`signing.rs`, `impulse/primal.rs`, `jsonrpc.rs`) now perform BTSP
@@ -197,7 +207,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 151b are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 155b are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -208,7 +218,7 @@ through Wave 151b are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1167 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1175 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -387,13 +397,13 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,167 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-enrollment, sovereignty, and BTSP. Tests use both inline `#[cfg(test)]` modules and
-dedicated test files (`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`,
-`webhook/tests.rs`) — no external fixtures.
+1,175 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, sovereignty, BTSP, and checksum verification. Tests use both inline
+`#[cfg(test)]` modules and dedicated test files (`gateway_tests.rs`, `harvest_tests.rs`,
+`manifest/tests.rs`, `webhook/tests.rs`) — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1167 tests)
+cargo test                  # Full suite (1175 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```
