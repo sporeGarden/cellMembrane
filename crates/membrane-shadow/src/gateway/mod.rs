@@ -190,10 +190,18 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
 
     let (songbird_unit, beardog_unit) = crate::gate::systemd_units::generate_gateway_units(&params);
 
-    let mut lines = vec!["--- songbird-gateway.service ---".to_owned()];
+    let relay_unit = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    )
+    .map_or("songbird-relay.service", |s| s.systemd_unit);
+    let signer_unit = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    )
+    .map_or("beardog-membrane.service", |s| s.systemd_unit);
+    let mut lines = vec![format!("--- {relay_unit} ---")];
     lines.extend(songbird_unit.lines().map(String::from));
     lines.push(String::new());
-    lines.push("--- beardog-gateway.service ---".to_owned());
+    lines.push(format!("--- {signer_unit} ---"));
     lines.extend(beardog_unit.lines().map(String::from));
 
     Ok(ShadowOutcome::ok_with(

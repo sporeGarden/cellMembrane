@@ -311,7 +311,7 @@ fn dispatch_service_template(binary: &str) -> ShadowOutcome {
     let unit_content =
         crate::gate::nucleus::generate_unit_content(svc, &exec_start, &extra_args, &config_dir);
 
-    let unit_name = format!("membrane-{}.service", svc.binary);
+    let unit_name = svc.systemd_unit;
     ShadowOutcome::ok_with(
         unit_content.clone(),
         serde_json::json!({

@@ -107,7 +107,10 @@ async fn converge_primal(
 
     let ok = match cellmembrane_types::InitSystem::detect() {
         cellmembrane_types::InitSystem::Systemd => {
-            let unit = format!("{primal}-membrane.service");
+            let unit = cellmembrane_types::MembraneService::for_binary(primal).map_or_else(
+                || format!("{primal}-membrane.service"),
+                |svc| svc.systemd_unit.to_string(),
+            );
             crate::gate::nucleus::systemctl_async(&["restart", &unit]).await
         }
         _ => crate::gate::nucleus::restart_bare_process(primal, arch).await,

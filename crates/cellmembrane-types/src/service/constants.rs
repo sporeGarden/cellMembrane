@@ -235,6 +235,12 @@ pub const DEFAULT_DEPOT_HTTP_PORT: u16 = 8080;
 /// Default songbird federation port.
 pub const DEFAULT_FEDERATION_PORT: u16 = 7700;
 
+/// Default Tower Atomic drawbridge port.
+pub const DEFAULT_TOWER_PORT: u16 = 7780;
+
+/// Environment variable for Tower port override.
+pub const ENV_TOWER_PORT: &str = "MEMBRANE_TOWER_PORT";
+
 /// Default TURN relay port.
 pub const DEFAULT_TURN_PORT: u16 = 3478;
 

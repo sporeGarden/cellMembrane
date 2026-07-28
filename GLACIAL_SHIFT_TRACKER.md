@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-28 (Wave 155d)
+**Last updated:** 2026-07-28 (Wave 155f)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155f (J6 completion: `gate.configure` / `gate.apply` + deep debt — gate workload distribution):**
+J6 completion: `gate.configure` and `gate.apply` CLI commands implement
+declarative service config generation from gate composition profile. Reads
+`ecosystem_manifest.toml`, builds `ServiceSpec` per primal, renders to
+detected init system (systemd/launchd/bare), and installs. `--env K=V`
+overrides supported. Extracted to `gate_configure.rs` module. `nucleus.rs`
+helpers promoted to `pub(crate)`. Deep debt: Tower port `7780` →
+`DEFAULT_TOWER_PORT` + `ENV_TOWER_PORT` constants. Bootstrap arch triple →
+`detect_target_triple()`.
+1,200 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155d (J1+J2+J6 jelly string codification + deep debt — Tower Atomic hardening):**
 J1+J2 closed: `plasmid.push` promoted to first-class command (was `depot_sync

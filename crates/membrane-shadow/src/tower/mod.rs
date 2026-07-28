@@ -218,11 +218,14 @@ async fn probe_wireguard(ip: &str, samples: u32) -> TransportProbe {
     probe_tcp_transport("wireguard", ip, SONGBIRD_FEDERATION_PORT, samples).await
 }
 
-/// Probe Tower path — TCP connect on Tower port (7780 drawbridge).
+/// Probe Tower path — TCP connect on Tower port (drawbridge).
 async fn probe_tower(ip: &str, samples: u32) -> TransportProbe {
-    let tower_port = cellmembrane_types::service::env_or("MEMBRANE_TOWER_PORT", "7780")
-        .parse::<u16>()
-        .unwrap_or(7780);
+    let tower_port = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_TOWER_PORT,
+        &cellmembrane_types::service::DEFAULT_TOWER_PORT.to_string(),
+    )
+    .parse::<u16>()
+    .unwrap_or(cellmembrane_types::service::DEFAULT_TOWER_PORT);
     probe_tcp_transport("tower", ip, tower_port, samples).await
 }
 

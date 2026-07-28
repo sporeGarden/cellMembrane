@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 155d (7-gate mesh live, 10-gate topology, subdomain routing, depot.primals.eco, 1194 tests, 0 clippy, J1+J2+J6 codified (ServiceSpec, plasmid.push, harvest --push, depot_sync Rust refactor), cross-platform NUCLEUS (InitSystem dispatch), deep debt sweep (dup const, arch triple, domain fallback, systemctl guards), checksum format fix, blueGate/westGate topology, fleet convergence, BTSP, getrandom 0.4, 2026-07-28)
+**Last validated:** Wave 155f (7-gate mesh live, 10-gate topology, subdomain routing, depot.primals.eco, 1200 tests, 0 clippy, J6 completed (gate.configure + gate.apply CLI), J1+J2+J6 codified (ServiceSpec, plasmid.push, harvest --push, depot_sync Rust refactor), deep debt (Tower port const, bootstrap arch triple), cross-platform NUCLEUS (InitSystem dispatch), gate workload distribution, checksum format fix, blueGate/westGate topology, fleet convergence, BTSP, getrandom 0.4, 2026-07-28)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming
 
 ---

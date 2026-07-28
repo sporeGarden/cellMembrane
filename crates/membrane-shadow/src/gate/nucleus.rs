@@ -12,7 +12,7 @@ use super::BootstrapPhase;
 /// Run a `systemctl` subcommand. Returns `true` if it exits 0.
 ///
 /// On non-systemd platforms, returns `false` with a trace-level warning.
-pub(super) fn systemctl(args: &[&str]) -> bool {
+pub(crate) fn systemctl(args: &[&str]) -> bool {
     if !matches!(
         cellmembrane_types::InitSystem::detect(),
         cellmembrane_types::InitSystem::Systemd
@@ -96,7 +96,7 @@ fn start_nucleus_systemd(arch: &str) -> super::ProbeResult {
         );
         let extra_args = extra_exec_args(svc);
         let unit_content = generate_unit_content(svc, &exec_start, &extra_args, &config_dir);
-        let unit_path = systemd_dir.join(format!("{}-membrane.service", svc.binary));
+        let unit_path = systemd_dir.join(svc.systemd_unit);
 
         if let Err(e) = std::fs::write(&unit_path, &unit_content) {
             tracing::warn!(
@@ -120,9 +120,8 @@ fn start_nucleus_systemd(arch: &str) -> super::ProbeResult {
             if !svc.is_primal || !bin_dir.join(svc.binary).exists() {
                 continue;
             }
-            let unit = format!("{}-membrane.service", svc.binary);
-            if !systemctl(&["enable", "--now", &unit]) {
-                tracing::warn!(unit = %unit, "systemctl enable failed");
+            if !systemctl(&["enable", "--now", svc.systemd_unit]) {
+                tracing::warn!(unit = %svc.systemd_unit, "systemctl enable failed");
             }
         }
     }
@@ -253,7 +252,7 @@ fn prepare_socket_base() {
 }
 
 /// Resolve the crypto signer socket path from the service registry.
-fn resolve_security_socket(paths: &cellmembrane_types::service::ServicePaths) -> String {
+pub(crate) fn resolve_security_socket(paths: &cellmembrane_types::service::ServicePaths) -> String {
     let security_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
@@ -446,7 +445,8 @@ fn generate_secrets_env() -> String {
 
 /// Set owner-only permissions on a sensitive file.
 ///
-/// On Unix: `chmod 0o600`. On other platforms: best-effort (ACLs not yet implemented).
+/// Unix: `chmod 0o600`. Windows: `icacls` to restrict to current user.
+/// Other: trace log only.
 fn set_restricted_permissions(path: &std::path::Path) {
     #[cfg(unix)]
     {
@@ -455,8 +455,19 @@ fn set_restricted_permissions(path: &std::path::Path) {
             tracing::warn!(path = %path.display(), error = %e, "failed to set restricted permissions");
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
+        let path_str = path.display().to_string();
+        let result = std::process::Command::new("icacls")
+            .args([&path_str, "/inheritance:r", "/grant:r", "%USERNAME%:F"])
+            .output();
+        if let Err(e) = result {
+            tracing::warn!(path = %path_str, error = %e, "icacls failed");
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        tracing::trace!(path = %path.display(), "restricted permissions: no platform method");
         let _ = path;
     }
 }
@@ -537,6 +548,7 @@ pub(crate) fn generate_unit_content(
 
     let spec = cellmembrane_types::ServiceSpec {
         binary: svc.binary.to_string(),
+        systemd_unit: svc.systemd_unit.to_string(),
         description: format!("{} primal (membrane NUCLEUS)", svc.binary),
         exec_start: exec_start.to_string(),
         extra_args: extra_args.to_string(),

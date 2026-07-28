@@ -549,6 +549,7 @@ pub(super) async fn write_gate_identity(
     profile: &str,
 ) -> Result<String> {
     let now = crate::utc_now_rfc3339();
+    let arch = crate::plasmid::detect_target_triple();
     let script = format!(
         r#"
 mkdir -p /etc/membrane
@@ -557,7 +558,7 @@ cat > /etc/membrane/gate_identity << 'IDENTITY'
 name = "{gate_name}"
 profile = "{profile}"
 provisioned_at = "{now}"
-arch = "x86_64-unknown-linux-musl"
+arch = "{arch}"
 IDENTITY
 echo "identity written"
 "#

@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155d) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155f) |
 
 ---
 
@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1194 tests — pedantic clippy clean
+cargo test                  # 1200 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -105,17 +105,21 @@ command (was hidden behind `depot_sync --push`), `plasmid.harvest --push` flag
 combines harvest→push in one command. Default `depot_sync` refactored from
 monolithic embedded bash `for` loop to Rust-orchestrated per-primal SSH commands
 (`sync_single_remote()` with per-binary BLAKE3 diff + atomic copy).
-J6 foundation (Wave 155d): `ServiceSpec` unified cross-platform service config
-model — platform-agnostic struct with `to_systemd_unit()`, `to_systemd_override()`,
-and `to_launchd_plist()` renderers. `from_membrane_service()` builder wires
-registry + `ServerContract` + capability-based env. `nucleus.rs` `generate_unit_content`
-refactored to delegate to `ServiceSpec::to_systemd_unit()`. Tower timer `systemctl`
-calls guarded with `InitSystem` check.
-Deep debt (Wave 155d): duplicate federation port const eliminated (`tower/mod.rs`
-→ `DEFAULT_FEDERATION_PORT`). Enroll `:7700` literal → constant. `crash_loop.rs`
-`query_unit_restart_info` defense-in-depth `InitSystem` guard. `gateway/mod.rs`
-domain fallback → `SURFACE_DOMAIN`. Hardcoded arch triple in `tower/timer.rs`
-binary resolution → `detect_target_triple()`.
+J6 completion (Wave 155f): `gate.configure` and `gate.apply` CLI commands —
+declarative service config generation from gate composition profile. Reads
+`ecosystem_manifest.toml`, builds `ServiceSpec` for each primal in the
+composition, renders to detected init system (systemd/launchd/bare), and
+optionally installs. Supports `--env K=V` overrides. Extracted to
+`gate_configure.rs` module. `ServiceSpec` foundation (Wave 155d) wired through
+to full CLI surface. `nucleus.rs` helpers (`systemctl`, `resolve_security_socket`,
+`extra_exec_args`) promoted to `pub(crate)` for cross-module use.
+Deep debt (Wave 155d–155f): Tower port `7780` → `DEFAULT_TOWER_PORT` +
+`ENV_TOWER_PORT` constants. Bootstrap `write_gate_identity` arch triple →
+`detect_target_triple()`. duplicate federation port const eliminated
+(`tower/mod.rs` → `DEFAULT_FEDERATION_PORT`). Enroll `:7700` literal →
+constant. `crash_loop.rs` `query_unit_restart_info` defense-in-depth
+`InitSystem` guard. `gateway/mod.rs` domain fallback → `SURFACE_DOMAIN`.
+Hardcoded arch triple in `tower/timer.rs` → `detect_target_triple()`.
 BTSP evolution (Wave 151b): `btsp_client.rs` implements the 4-step `ClientHello`
 handshake (HMAC-SHA256 challenge-response via `FAMILY_SEED`). All bearDog UDS
 clients (`signing.rs`, `impulse/primal.rs`, `jsonrpc.rs`) now perform BTSP
@@ -136,7 +140,7 @@ Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
 remote, shadow domain literal, hub mesh IP — all resolved via capability registry
 or centralized constants (`LAB_DOMAIN`, `DEFAULT_HUB_MESH_IP`).
 `as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.
-Zero production `unwrap()` (572 test-only, confirmed via full audit).
+Zero production `unwrap()` (576 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
@@ -231,7 +235,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 155d are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 155f are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -242,7 +246,7 @@ through Wave 155d are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1194 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1200 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |

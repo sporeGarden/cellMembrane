@@ -418,12 +418,16 @@ fn resolve_songbird_bin() -> Result<PathBuf> {
 
 fn generate_service_unit(output_dir: &Path) -> String {
     let script_path = output_dir.join("shadow-benchmark.sh");
+    let relay_svc = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    )
+    .map_or("songbird-relay.service", |s| s.systemd_unit);
 
     format!(
         "\
 [Unit]
 Description=Tower Atomic shadow benchmark — continuous parity metrics
-After=songbird-gateway.service
+After={relay_svc}
 
 [Service]
 Type=oneshot
@@ -590,7 +594,7 @@ mod tests {
         let dir = PathBuf::from("/tmp/benchScale/tower_shadow");
         let unit = generate_service_unit(&dir);
         assert!(unit.contains("shadow-benchmark.sh"));
-        assert!(unit.contains("songbird-gateway.service"));
+        assert!(unit.contains("songbird-relay.service"));
         assert!(unit.contains("Type=oneshot"));
     }
 

@@ -129,6 +129,8 @@ impl fmt::Display for InitSystem {
 pub struct ServiceSpec {
     /// Binary name (e.g. "songbird", "beardog").
     pub binary: String,
+    /// Canonical systemd unit name from the service registry.
+    pub systemd_unit: String,
     /// Human-readable description.
     pub description: String,
     /// Full `ExecStart` command line.
@@ -208,6 +210,7 @@ impl ServiceSpec {
 
         Self {
             binary: svc.binary.to_string(),
+            systemd_unit: svc.systemd_unit.to_string(),
             description: format!("{} primal (membrane NUCLEUS)", svc.binary),
             exec_start,
             extra_args: String::new(),
@@ -546,6 +549,7 @@ mod tests {
     fn service_spec_to_systemd_unit_has_sections() {
         let spec = ServiceSpec {
             binary: "beardog".into(),
+            systemd_unit: "beardog-membrane.service".into(),
             description: "beardog primal (membrane NUCLEUS)".into(),
             exec_start: "/opt/membrane/beardog server --socket /run/membrane/beardog.sock".into(),
             extra_args: String::new(),
@@ -573,6 +577,7 @@ mod tests {
     fn service_spec_env_file_included() {
         let spec = ServiceSpec {
             binary: "nestgate".into(),
+            systemd_unit: "nestgate-membrane.service".into(),
             description: "nestgate primal".into(),
             exec_start: "/opt/membrane/nestgate server".into(),
             extra_args: String::new(),
@@ -593,6 +598,7 @@ mod tests {
     fn service_spec_environment_vars() {
         let spec = ServiceSpec {
             binary: "songbird".into(),
+            systemd_unit: "songbird-relay.service".into(),
             description: "songbird primal".into(),
             exec_start: "/opt/membrane/songbird server".into(),
             extra_args: String::new(),
@@ -617,6 +623,7 @@ mod tests {
     fn service_spec_to_systemd_override() {
         let spec = ServiceSpec {
             binary: "songbird".into(),
+            systemd_unit: "songbird-relay.service".into(),
             description: String::new(),
             exec_start: String::new(),
             extra_args: String::new(),
@@ -639,6 +646,7 @@ mod tests {
     fn service_spec_to_launchd_plist() {
         let spec = ServiceSpec {
             binary: "beardog".into(),
+            systemd_unit: "beardog-membrane.service".into(),
             description: "beardog primal".into(),
             exec_start: "/opt/membrane/beardog server --socket /tmp/bd.sock".into(),
             extra_args: String::new(),
