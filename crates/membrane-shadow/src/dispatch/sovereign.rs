@@ -147,6 +147,7 @@ async fn run_harvest(primal_lower: &str, dry_run: bool) -> Result<ShadowOutcome>
         depot_dir: None,
         target: None,
         local: false,
+        push: false,
     };
     crate::plasmid::harvest(&harvest_args).await
 }

@@ -171,6 +171,7 @@ async fn run_post_cascade_harvest(lines: &mut Vec<String>) -> Result<(u32, Vec<S
         depot_dir: None,
         target: None,
         local: false,
+        push: false,
     };
 
     let outcome = crate::plasmid::harvest(&harvest_args).await?;
@@ -653,6 +654,7 @@ async fn run_commit_drift_pipeline(lines: &mut Vec<String>) {
             depot_dir: None,
             target: None,
             local: true,
+            push: false,
         };
         match crate::plasmid::harvest(&harvest_args).await {
             Ok(o) => lines.push(format!("  [drift] {primal}: {}", o.message)),

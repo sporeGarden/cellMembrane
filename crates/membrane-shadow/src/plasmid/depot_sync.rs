@@ -11,6 +11,10 @@
 //! Both modes use BLAKE3 for diff detection and post-copy verification.
 
 /// `plasmid.depot_sync` — Sync inner membrane binaries to the WAN depot directory.
+///
+/// **Default mode**: SSH to VPS, sync install-dir → depot-dir per primal via
+/// Rust-orchestrated per-primal SSH commands (BLAKE3 diff + atomic copy).
+/// **Push mode** (`--push`): SCP local depot → remote VPS depot.
 pub async fn depot_sync(
     config: &crate::ShadowConfig,
     push: bool,
@@ -26,71 +30,35 @@ pub async fn depot_sync(
     let arch = super::detect_target_triple();
     let depot_dir = format!("{depot_root}/{arch}");
 
-    let primals = super::nucleus_primals();
-    let primal_list = primals.join(" ");
-
-    let sync_cmd = format!(
-        "mkdir -p {depot_dir}; \
-         synced=0; current=0; failed=0; missing=0; verified=0; \
-         for p in {primal_list}; do \
-           src=\"{install_dir}/$p\"; \
-           dst=\"{depot_dir}/$p\"; \
-           if [ ! -f \"$src\" ]; then \
-             missing=$((missing+1)); continue; \
-           fi; \
-           src_hash=$(b3sum \"$src\" 2>/dev/null | cut -d' ' -f1); \
-           dst_hash=\"\"; \
-           [ -f \"$dst\" ] && dst_hash=$(b3sum \"$dst\" 2>/dev/null | cut -d' ' -f1); \
-           if [ \"$src_hash\" = \"$dst_hash\" ] && [ -n \"$dst_hash\" ]; then \
-             current=$((current+1)); \
-           else \
-             if cp -f \"$src\" \"$dst.new\"; then \
-               new_hash=$(b3sum \"$dst.new\" 2>/dev/null | cut -d' ' -f1); \
-               if [ \"$src_hash\" = \"$new_hash\" ]; then \
-                 mv -f \"$dst.new\" \"$dst\" && synced=$((synced+1)) && verified=$((verified+1)) || failed=$((failed+1)); \
-               else \
-                 rm -f \"$dst.new\"; \
-                 failed=$((failed+1)); \
-                 echo \"INTEGRITY_FAIL: $p src=$src_hash copy=$new_hash\" >&2; \
-               fi; \
-             else \
-               failed=$((failed+1)); \
-             fi; \
-           fi; \
-         done; \
-         echo \"synced=$synced current=$current failed=$failed missing=$missing verified=$verified\""
-    );
-
-    let (output, code) = crate::ssh::exec_raw(config, &sync_cmd).await?;
-
-    if code != 0 {
+    let ensure_cmd = format!("mkdir -p {depot_dir}");
+    if let Err(e) = crate::ssh::exec_raw(config, &ensure_cmd).await {
         return Ok(crate::ShadowOutcome {
             ok: false,
-            message: format!("depot_sync failed (exit {code}): {}", output.trim()),
+            message: format!("depot_sync: cannot create depot dir — {e}"),
             data: None,
         });
     }
 
-    let parse_field = |field: &str| -> usize {
-        output
-            .split(&format!("{field}="))
-            .nth(1)
-            .and_then(|s| s.split_whitespace().next())
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(0)
-    };
+    let primals = super::nucleus_primals();
+    let mut synced = 0usize;
+    let mut current = 0usize;
+    let mut failed = 0usize;
+    let mut missing = 0usize;
+    let mut verified = 0usize;
 
-    let synced = parse_field("synced");
-    let current = parse_field("current");
-    let failed = parse_field("failed");
-    let missing = parse_field("missing");
-    let verified = parse_field("verified");
+    for primal in &primals {
+        let src = format!("{install_dir}/{primal}");
+        let dst = format!("{depot_dir}/{primal}");
 
-    if output.contains("INTEGRITY_FAIL") {
-        tracing::error!(
-            output = %output.trim(),
-            "depot_sync: post-copy BLAKE3 integrity failure detected"
-        );
+        match sync_single_remote(config, &src, &dst).await {
+            RemoteSyncResult::Synced => {
+                synced += 1;
+                verified += 1;
+            }
+            RemoteSyncResult::Current => current += 1,
+            RemoteSyncResult::Missing => missing += 1,
+            RemoteSyncResult::Failed => failed += 1,
+        }
     }
 
     let checksums_src = format!(
@@ -111,6 +79,62 @@ pub async fn depot_sync(
         arch: arch.to_string(),
         checksums_synced,
     }))
+}
+
+/// Outcome of syncing a single binary on the remote VPS.
+enum RemoteSyncResult {
+    Synced,
+    Current,
+    Missing,
+    Failed,
+}
+
+/// Sync a single binary on the remote VPS: hash-compare, atomic copy, verify.
+async fn sync_single_remote(
+    config: &crate::ShadowConfig,
+    src: &str,
+    dst: &str,
+) -> RemoteSyncResult {
+    let check_cmd = format!(
+        "if [ ! -f {src} ]; then echo MISSING; exit 0; fi; \
+         src_hash=$(b3sum {src} 2>/dev/null | cut -d' ' -f1); \
+         dst_hash=\"\"; [ -f {dst} ] && dst_hash=$(b3sum {dst} 2>/dev/null | cut -d' ' -f1); \
+         if [ \"$src_hash\" = \"$dst_hash\" ] && [ -n \"$dst_hash\" ]; then echo CURRENT; \
+         else echo \"DRIFT $src_hash\"; fi"
+    );
+    let Ok((check_out, _)) = crate::ssh::exec_raw(config, &check_cmd).await else {
+        return RemoteSyncResult::Failed;
+    };
+    let check_out = check_out.trim();
+
+    if check_out == "MISSING" {
+        return RemoteSyncResult::Missing;
+    }
+    if check_out == "CURRENT" {
+        return RemoteSyncResult::Current;
+    }
+
+    let src_hash = check_out.strip_prefix("DRIFT ").unwrap_or("").to_string();
+
+    let copy_cmd = format!(
+        "cp -f {src} {dst}.new && \
+         new_hash=$(b3sum {dst}.new 2>/dev/null | cut -d' ' -f1); \
+         if [ \"{src_hash}\" = \"$new_hash\" ]; then \
+           mv -f {dst}.new {dst} && echo OK; \
+         else \
+           rm -f {dst}.new; echo INTEGRITY_FAIL; \
+         fi"
+    );
+    let Ok((copy_out, _)) = crate::ssh::exec_raw(config, &copy_cmd).await else {
+        return RemoteSyncResult::Failed;
+    };
+
+    if copy_out.trim() == "OK" {
+        RemoteSyncResult::Synced
+    } else {
+        tracing::error!(src, dst, "depot_sync: post-copy BLAKE3 integrity failure");
+        RemoteSyncResult::Failed
+    }
 }
 
 struct SyncResult {
@@ -207,6 +231,94 @@ async fn sync_checksums_to_wan(config: &crate::ShadowConfig, checksums_path: &st
     }
 
     true
+}
+
+/// Standalone push: auto-loads config from env and pushes local depot to VPS.
+///
+/// Called by `plasmid.harvest --push` without requiring a pre-built `ShadowConfig`.
+pub(crate) async fn depot_sync_push_standalone(
+    local_depot: &std::path::Path,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    let config = crate::ShadowConfig::from_env().await;
+    let remote_depot = format!(
+        "{}/{}",
+        config.vps_root,
+        cellmembrane_types::service::PLASMID_BIN_DIR
+    );
+
+    let primals_dir = local_depot.join("primals");
+    if !primals_dir.exists() {
+        return Ok(crate::ShadowOutcome {
+            ok: false,
+            message: format!("depot push: no primals/ dir at {}", local_depot.display()),
+            data: None,
+        });
+    }
+
+    let mut synced = 0usize;
+    let mut current = 0usize;
+    let mut failed = 0usize;
+    let mut arch_count = 0usize;
+
+    let arch_dirs: Vec<_> = std::fs::read_dir(&primals_dir)
+        .map_err(crate::error::ShadowError::Io)?
+        .filter_map(std::result::Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|ft| ft.is_dir()))
+        .collect();
+
+    for arch_entry in &arch_dirs {
+        let arch = arch_entry.file_name();
+        let arch_str = arch.to_string_lossy();
+        let local_arch_dir = arch_entry.path();
+        let remote_arch_dir = format!("{remote_depot}/primals/{arch_str}");
+
+        let ensure_dir = format!("mkdir -p {remote_arch_dir}");
+        if let Err(e) = crate::ssh::exec_raw(&config, &ensure_dir).await {
+            tracing::warn!(arch = %arch_str, error = %e, "push: failed to create remote dir");
+            failed += 1;
+            continue;
+        }
+        arch_count += 1;
+
+        let bins: Vec<_> = std::fs::read_dir(&local_arch_dir)
+            .map_err(crate::error::ShadowError::Io)?
+            .filter_map(std::result::Result::ok)
+            .filter(|e| {
+                e.file_type().is_ok_and(|ft| ft.is_file())
+                    && !e.file_name().to_string_lossy().starts_with('.')
+            })
+            .collect();
+
+        for bin_entry in &bins {
+            match push_single_binary(&config, bin_entry, &remote_arch_dir, &arch_str).await {
+                PushBinaryResult::Synced => synced += 1,
+                PushBinaryResult::Current => current += 1,
+                PushBinaryResult::Failed => failed += 1,
+            }
+        }
+    }
+
+    let metadata_pushed = push_depot_metadata(&config, local_depot, &remote_depot).await;
+    let total = synced + current + failed;
+    let ok = failed == 0;
+
+    Ok(crate::ShadowOutcome {
+        ok,
+        message: format!(
+            "{synced} pushed, {current} current, {failed} failed \
+             (of {total}, {arch_count} arch) — metadata {}",
+            if metadata_pushed { "synced" } else { "partial" }
+        ),
+        data: Some(serde_json::json!({
+            "mode": "push",
+            "synced": synced,
+            "current": current,
+            "failed": failed,
+            "total": total,
+            "architectures": arch_count,
+            "metadata_pushed": metadata_pushed,
+        })),
+    })
 }
 
 /// Push local depot binaries and metadata to the remote VPS depot via SCP.
@@ -371,4 +483,78 @@ async fn push_depot_metadata(
         }
     }
     all_ok
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_outcome_all_current() {
+        let result = format_outcome(&SyncResult {
+            synced: 0,
+            verified: 0,
+            current: 13,
+            failed: 0,
+            missing: 0,
+            depot_dir: "/opt/depot".into(),
+            install_dir: "/opt/membrane".into(),
+            arch: "x86_64-unknown-linux-musl".into(),
+            checksums_synced: true,
+        });
+        assert!(result.ok);
+        assert!(result.message.contains("13 current"));
+        assert!(result.message.contains("0 synced"));
+    }
+
+    #[test]
+    fn format_outcome_failures_not_ok() {
+        let result = format_outcome(&SyncResult {
+            synced: 5,
+            verified: 5,
+            current: 3,
+            failed: 2,
+            missing: 3,
+            depot_dir: "/opt/depot".into(),
+            install_dir: "/opt/membrane".into(),
+            arch: "x86_64-unknown-linux-musl".into(),
+            checksums_synced: false,
+        });
+        assert!(!result.ok);
+        assert!(result.message.contains("2 failed"));
+        assert!(result.message.contains("checksums.toml sync skipped"));
+    }
+
+    #[test]
+    fn format_outcome_data_fields() {
+        let result = format_outcome(&SyncResult {
+            synced: 1,
+            verified: 1,
+            current: 0,
+            failed: 0,
+            missing: 0,
+            depot_dir: "/d".into(),
+            install_dir: "/i".into(),
+            arch: "aarch64-unknown-linux-musl".into(),
+            checksums_synced: true,
+        });
+        let data = result.data.unwrap();
+        assert_eq!(data["synced"], 1);
+        assert_eq!(data["arch"], "aarch64-unknown-linux-musl");
+    }
+
+    #[test]
+    fn push_binary_result_enum_variants_exist() {
+        let _ = PushBinaryResult::Synced;
+        let _ = PushBinaryResult::Current;
+        let _ = PushBinaryResult::Failed;
+    }
+
+    #[test]
+    fn remote_sync_result_enum_variants_exist() {
+        let _ = RemoteSyncResult::Synced;
+        let _ = RemoteSyncResult::Current;
+        let _ = RemoteSyncResult::Missing;
+        let _ = RemoteSyncResult::Failed;
+    }
 }

@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-27 (Wave 155b)
+**Last updated:** 2026-07-28 (Wave 155d)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155d (J1+J2 jelly string codification — Tower Atomic hardening):**
+J1+J2 closed: `plasmid.push` promoted to first-class command (was `depot_sync
+--push`). `plasmid.harvest --push` flag combines harvest→push in one invocation.
+Default `depot_sync` refactored from monolithic embedded bash `for` loop (30-line
+shell script sent over SSH) to Rust-orchestrated per-primal SSH commands
+(`sync_single_remote()` with `RemoteSyncResult` enum, per-binary BLAKE3 diff +
+atomic copy). `depot_sync_push_standalone()` enables harvest→push without
+pre-built config. `harvest()` refactored: `finalize_depot()` and
+`append_push_outcome()` extracted to satisfy 100-line clippy limit.
+5 new depot sync tests (outcome formatting, enum variants).
+1,187 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155b (cross-platform NUCLEUS + fleet convergence):**
 G1 evolution: `nucleus.rs` evolved from systemd-only to `InitSystem::detect()`

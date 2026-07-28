@@ -184,6 +184,7 @@ fn determine_primals_single_valid() {
         depot_dir: None,
         target: None,
         local: false,
+        push: false,
     };
     let result = determine_primals(&args, &sources).unwrap();
     assert_eq!(result, vec!["beardog"]);
@@ -199,6 +200,7 @@ fn determine_primals_single_invalid() {
         depot_dir: None,
         target: None,
         local: false,
+        push: false,
     };
     assert!(determine_primals(&args, &sources).is_err());
 }
@@ -221,6 +223,7 @@ fn determine_primals_all_filtered() {
         depot_dir: None,
         target: None,
         local: false,
+        push: false,
     };
     let result = determine_primals(&args, &sources).unwrap();
     assert!(result.contains(&"beardog".to_string()));
@@ -362,6 +365,7 @@ fn harvest_args_local_flag() {
         depot_dir: None,
         target: None,
         local: true,
+        push: false,
     };
     assert!(args.local);
     assert!(args.force);

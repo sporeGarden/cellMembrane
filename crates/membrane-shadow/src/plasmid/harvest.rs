@@ -25,6 +25,7 @@ use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
 /// Parsed CLI arguments for `plasmid.harvest`.
+#[allow(clippy::struct_excessive_bools)]
 pub struct HarvestArgs {
     /// Single primal to harvest (None = all with changes).
     pub primal: Option<String>,
@@ -40,6 +41,8 @@ pub struct HarvestArgs {
     /// Uses `local_path` from the ecosystem manifest to resolve source dirs.
     /// ~10x faster than clone mode on machines with existing checkouts.
     pub local: bool,
+    /// Push to remote depot after successful harvest (combines harvest + push).
+    pub push: bool,
 }
 
 /// Outcome of harvesting a single primal.
@@ -227,36 +230,73 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     }
 
     if !args.dry_run {
-        let built: Vec<&HarvestResult> = results
-            .iter()
-            .filter(|r| matches!(r.status, HarvestStatus::Built))
-            .collect();
-        if !built.is_empty() {
-            let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
-
-            for target in &targets_built {
-                let arch_results: Vec<&HarvestResult> = built
-                    .iter()
-                    .copied()
-                    .filter(|r| r.detail.contains(target))
-                    .collect();
-                if !arch_results.is_empty() {
-                    if let Err(e) = update_depot_metadata(&depot_dir, target, &arch_results).await {
-                        warn!(target, error = %e, "failed to update depot metadata");
-                    }
-                }
-            }
-            if super::signing::sign_and_persist(&depot_dir) {
-                info!("depot signed (BLAKE3 + ed25519)");
-            }
-
-            drift::publish_depot_checksums(&depot_dir).await;
-
-            notify_mesh_depot_updated(&built_names).await;
-        }
+        finalize_depot(&results, &targets_built, &depot_dir).await;
     }
 
-    Ok(format_harvest_outcome(&results))
+    let mut outcome = format_harvest_outcome(&results);
+
+    if args.push && !args.dry_run {
+        append_push_outcome(&mut outcome, &results, &depot_dir).await;
+    }
+
+    Ok(outcome)
+}
+
+/// Post-build: update metadata, sign, publish checksums, notify mesh.
+async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], depot_dir: &Path) {
+    let built: Vec<&HarvestResult> = results
+        .iter()
+        .filter(|r| matches!(r.status, HarvestStatus::Built))
+        .collect();
+    if built.is_empty() {
+        return;
+    }
+    let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
+
+    for target in targets_built {
+        let arch_results: Vec<&HarvestResult> = built
+            .iter()
+            .copied()
+            .filter(|r| r.detail.contains(target))
+            .collect();
+        if !arch_results.is_empty() {
+            if let Err(e) = update_depot_metadata(depot_dir, target, &arch_results).await {
+                warn!(target, error = %e, "failed to update depot metadata");
+            }
+        }
+    }
+    if super::signing::sign_and_persist(depot_dir) {
+        info!("depot signed (BLAKE3 + ed25519)");
+    }
+
+    drift::publish_depot_checksums(depot_dir).await;
+    notify_mesh_depot_updated(&built_names).await;
+}
+
+/// If any primals were built, push depot to VPS and append the result.
+async fn append_push_outcome(
+    outcome: &mut ShadowOutcome,
+    results: &[HarvestResult],
+    depot_dir: &Path,
+) {
+    let any_built = results
+        .iter()
+        .any(|r| matches!(r.status, HarvestStatus::Built));
+    if !any_built {
+        return;
+    }
+    match super::depot_sync_push_standalone(depot_dir).await {
+        Ok(push_result) => {
+            outcome.message = format!("{}\npush: {}", outcome.message, push_result.message);
+            if !push_result.ok {
+                outcome.ok = false;
+            }
+        }
+        Err(e) => {
+            outcome.message = format!("{}\npush: failed — {e}", outcome.message);
+            outcome.ok = false;
+        }
+    }
 }
 
 fn determine_primals(

@@ -38,6 +38,7 @@ pub use refresh::{RefreshArgs, refresh};
 
 pub use depot::StalenessReport;
 pub use depot_sync::depot_sync;
+pub(crate) use depot_sync::depot_sync_push_standalone;
 
 /// Gracefully stop a process: SIGTERM → grace period → SIGKILL (Unix),
 /// or `TerminateProcess` (Windows).
@@ -441,6 +442,7 @@ pub async fn pipeline(
         depot_dir: None,
         target: None,
         local: false,
+        push: false,
     };
 
     let harvest_outcome = harvest(&harvest_args).await?;

@@ -52,6 +52,7 @@ pub(super) async fn dispatch_plasmid(
                 depot_dir: cli::extract_flag_value(args, "--depot").map(Into::into),
                 target: cli::extract_flag_value(args, "--target").map(Into::into),
                 local: args.contains(&"--local"),
+                push: args.contains(&"--push"),
             };
             plasmid::harvest(&harvest_args).await
         }
@@ -78,6 +79,7 @@ pub(super) async fn dispatch_plasmid(
         }
         "plasmid.ndk.check" => Ok(plasmid::ndk_check()),
         "plasmid.trigger" => plasmid::trigger(config).await,
+        "plasmid.push" => plasmid::depot_sync(config, true).await,
         "plasmid.depot_sync" => {
             let push = args.contains(&"--push");
             plasmid::depot_sync(config, push).await
