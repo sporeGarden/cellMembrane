@@ -517,6 +517,9 @@ pub(crate) fn extra_exec_args(svc: &cellmembrane_types::MembraneService) -> Stri
 }
 
 /// Generate the systemd unit file content for a NUCLEUS primal.
+///
+/// Delegates to `ServiceSpec::to_systemd_unit()` — the unified cross-platform
+/// service config model (J6). The `extra_args` are appended to the exec line.
 pub(crate) fn generate_unit_content(
     svc: &cellmembrane_types::MembraneService,
     exec_start: &str,
@@ -526,34 +529,27 @@ pub(crate) fn generate_unit_content(
     let content_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::ContentServing,
     );
-    let env_file_line = if svc.binary == content_binary {
-        format!("EnvironmentFile=-{config_dir}/secrets.env\n")
+    let env_file = if svc.binary == content_binary {
+        Some(format!("{config_dir}/secrets.env"))
     } else {
-        String::new()
+        None
     };
 
-    format!(
-        "[Unit]\n\
-         Description={binary} primal (membrane NUCLEUS)\n\
-         After=network.target\n\n\
-         [Service]\n\
-         Type=simple\n\
-         UMask={umask}\n\
-         {env_file_line}\
-         ExecStart={exec_start}{extra_args}\n\
-         Restart=on-failure\n\
-         RestartSec=5\n\
-         StartLimitIntervalSec=120\n\
-         StartLimitBurst=10\n\
-         RuntimeDirectory=membrane\n\
-         RuntimeDirectoryMode={rtd_mode}\n\
-         RuntimeDirectoryPreserve=yes\n\n\
-         [Install]\n\
-         WantedBy=multi-user.target\n",
-        binary = svc.binary,
-        umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK,
-        rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE,
-    )
+    let spec = cellmembrane_types::ServiceSpec {
+        binary: svc.binary.to_string(),
+        description: format!("{} primal (membrane NUCLEUS)", svc.binary),
+        exec_start: exec_start.to_string(),
+        extra_args: extra_args.to_string(),
+        environment: Vec::new(),
+        env_file,
+        restart_policy: cellmembrane_types::RestartPolicy::default(),
+        after: vec!["network.target".into()],
+        working_directory: None,
+        umask: cellmembrane_types::service::DEFAULT_SERVICE_UMASK.into(),
+        runtime_directory: Some("membrane".into()),
+        runtime_directory_mode: cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE.into(),
+    };
+    spec.to_systemd_unit()
 }
 
 #[cfg(test)]

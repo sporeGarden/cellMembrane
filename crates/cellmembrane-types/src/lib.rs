@@ -72,7 +72,8 @@ pub use gateway::{
 };
 pub use identity::{BindMode, GateMobility, GateRole, MembraneIdentity};
 pub use process::{
-    CrashLoopAction, CrashLoopEntry, CrashLoopReport, InitSystem, ServiceOutcome, ServiceStatus,
+    CrashLoopAction, CrashLoopEntry, CrashLoopReport, InitSystem, RestartPolicy, ServiceOutcome,
+    ServiceSpec, ServiceStatus,
 };
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{

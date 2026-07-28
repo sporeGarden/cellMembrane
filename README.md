@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1187 tests — pedantic clippy clean
+cargo test                  # 1194 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -104,8 +104,18 @@ Jelly string codification (Wave 155d): J1+J2 closed — `plasmid.push` first-cla
 command (was hidden behind `depot_sync --push`), `plasmid.harvest --push` flag
 combines harvest→push in one command. Default `depot_sync` refactored from
 monolithic embedded bash `for` loop to Rust-orchestrated per-primal SSH commands
-(`sync_single_remote()` with per-binary BLAKE3 diff + atomic copy). 5 new tests
-for depot sync outcome formatting and enum variants.
+(`sync_single_remote()` with per-binary BLAKE3 diff + atomic copy).
+J6 foundation (Wave 155d): `ServiceSpec` unified cross-platform service config
+model — platform-agnostic struct with `to_systemd_unit()`, `to_systemd_override()`,
+and `to_launchd_plist()` renderers. `from_membrane_service()` builder wires
+registry + `ServerContract` + capability-based env. `nucleus.rs` `generate_unit_content`
+refactored to delegate to `ServiceSpec::to_systemd_unit()`. Tower timer `systemctl`
+calls guarded with `InitSystem` check.
+Deep debt (Wave 155d): duplicate federation port const eliminated (`tower/mod.rs`
+→ `DEFAULT_FEDERATION_PORT`). Enroll `:7700` literal → constant. `crash_loop.rs`
+`query_unit_restart_info` defense-in-depth `InitSystem` guard. `gateway/mod.rs`
+domain fallback → `SURFACE_DOMAIN`. Hardcoded arch triple in `tower/timer.rs`
+binary resolution → `detect_target_triple()`.
 BTSP evolution (Wave 151b): `btsp_client.rs` implements the 4-step `ClientHello`
 handshake (HMAC-SHA256 challenge-response via `FAMILY_SEED`). All bearDog UDS
 clients (`signing.rs`, `impulse/primal.rs`, `jsonrpc.rs`) now perform BTSP
@@ -232,7 +242,7 @@ through Wave 155d are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1187 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1194 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |

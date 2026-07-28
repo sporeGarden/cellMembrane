@@ -9,7 +9,7 @@
 
 ## Recent Waves
 
-**Wave 155d (J1+J2 jelly string codification — Tower Atomic hardening):**
+**Wave 155d (J1+J2+J6 jelly string codification + deep debt — Tower Atomic hardening):**
 J1+J2 closed: `plasmid.push` promoted to first-class command (was `depot_sync
 --push`). `plasmid.harvest --push` flag combines harvest→push in one invocation.
 Default `depot_sync` refactored from monolithic embedded bash `for` loop (30-line
@@ -18,8 +18,16 @@ shell script sent over SSH) to Rust-orchestrated per-primal SSH commands
 atomic copy). `depot_sync_push_standalone()` enables harvest→push without
 pre-built config. `harvest()` refactored: `finalize_depot()` and
 `append_push_outcome()` extracted to satisfy 100-line clippy limit.
-5 new depot sync tests (outcome formatting, enum variants).
-1,187 tests, 0 clippy, 0 fmt drift.
+J6 foundation: `ServiceSpec` unified cross-platform config model in
+`cellmembrane-types/process.rs` — `to_systemd_unit()`, `to_systemd_override()`,
+`to_launchd_plist()` renderers. `from_membrane_service()` builder wires registry
++ `ServerContract`. `nucleus.rs` `generate_unit_content` delegates to
+`ServiceSpec`. Tower timer `systemctl` calls guarded with `InitSystem`.
+Deep debt: duplicate `SONGBIRD_FEDERATION_PORT` const → `DEFAULT_FEDERATION_PORT`.
+Enroll `:7700` literal → constant. `crash_loop.rs` `query_unit_restart_info`
+defense-in-depth guard. `gateway/mod.rs` domain fallback → `SURFACE_DOMAIN`.
+Hardcoded arch triple in `tower/timer.rs` → `detect_target_triple()`.
+1,194 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155b (cross-platform NUCLEUS + fleet convergence):**
 G1 evolution: `nucleus.rs` evolved from systemd-only to `InitSystem::detect()`

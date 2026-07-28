@@ -492,7 +492,7 @@ async fn mesh_enroll_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> Boo
         "public_key": pubkey,
         "timestamp": timestamp,
         "proof": proof,
-        "address": format!("{mesh_ip}:7700"),
+        "address": format!("{mesh_ip}:{}", cellmembrane_types::service::DEFAULT_FEDERATION_PORT),
     });
     let request = crate::jsonrpc::request_with_params("mesh.enroll", &params, 1);
 

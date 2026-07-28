@@ -375,7 +375,7 @@ fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
     let gate_name = args.first().copied().unwrap_or(resolved_gate.as_str());
     let resolved_domain = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_DEPOT_HOSTNAME,
-        "primals.eco",
+        cellmembrane_types::service::SURFACE_DOMAIN,
     );
     let domain =
         crate::cli::extract_flag_value(args, "--domain").unwrap_or(resolved_domain.as_str());

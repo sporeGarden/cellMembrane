@@ -395,21 +395,22 @@ fn resolve_songbird_bin() -> Result<PathBuf> {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    let plasmid_base = crate::resolve_xdg_data_home()
-        .join("ecoPrimals/plasmidBin/primals/x86_64-unknown-linux-musl");
+    let arch = crate::plasmid::detect_target_triple();
+    let plasmid_base =
+        crate::resolve_xdg_data_home().join(format!("ecoPrimals/plasmidBin/primals/{arch}"));
     let bin = plasmid_base.join(relay_binary);
     if bin.exists() {
         return Ok(bin);
     }
 
     let system_bin = PathBuf::from(cellmembrane_types::service::DEFAULT_INSTALL_BASE)
-        .join(format!("primals/x86_64-unknown-linux-musl/{relay_binary}"));
+        .join(format!("primals/{arch}/{relay_binary}"));
     if system_bin.exists() {
         return Ok(system_bin);
     }
 
     Err(ShadowError::Config(
-        "songbird binary not found in depot or install base".into(),
+        "mesh relay binary not found in depot or install base".into(),
     ))
 }
 
@@ -489,6 +490,13 @@ async fn write_unit_file(path: &str, content: &str) -> Result<()> {
 }
 
 async fn systemctl(args: &[&str]) -> Result<()> {
+    if !matches!(
+        cellmembrane_types::InitSystem::detect(),
+        cellmembrane_types::InitSystem::Systemd
+    ) {
+        tracing::trace!(args = ?args, "tower timer: systemctl skipped (not systemd)");
+        return Ok(());
+    }
     let output = tokio::process::Command::new("sudo")
         .arg("systemctl")
         .args(args)
@@ -504,6 +512,12 @@ async fn systemctl(args: &[&str]) -> Result<()> {
 }
 
 async fn systemctl_is_active(unit: &str) -> bool {
+    if !matches!(
+        cellmembrane_types::InitSystem::detect(),
+        cellmembrane_types::InitSystem::Systemd
+    ) {
+        return false;
+    }
     tokio::process::Command::new("systemctl")
         .args(["is-active", "--quiet", unit])
         .status()

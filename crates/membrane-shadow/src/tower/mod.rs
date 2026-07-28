@@ -17,8 +17,8 @@ use crate::{ShadowConfig, ShadowOutcome};
 use cellmembrane_types::gateway::{GatePairShadow, TowerShadowReport, TransportProbe};
 use std::time::Instant;
 
-/// Default songBird RPC port (federation/mesh).
-const SONGBIRD_FEDERATION_PORT: u16 = 7700;
+/// Default songBird RPC port — delegates to shared constant.
+const SONGBIRD_FEDERATION_PORT: u16 = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
 
 /// Number of latency probe samples per transport per pair.
 const DEFAULT_PROBE_SAMPLES: u32 = 10;

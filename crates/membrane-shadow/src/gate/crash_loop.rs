@@ -180,6 +180,13 @@ fn discover_membrane_units(filter: &str) -> Vec<String> {
 
 /// Query `NRestarts` and `SubState` for a unit via `systemctl show`.
 fn query_unit_restart_info(unit: &str) -> (u32, String) {
+    if !matches!(
+        cellmembrane_types::InitSystem::detect(),
+        cellmembrane_types::InitSystem::Systemd
+    ) {
+        return (0, "unknown".into());
+    }
+
     let output = std::process::Command::new("systemctl")
         .args(["show", unit, "--property=NRestarts,SubState", "--no-pager"])
         .output();
