@@ -1,7 +1,7 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (sporeGate team)
-**Last updated:** 2026-07-27 (Wave 155b)
+**Last updated:** 2026-07-28 (Wave 155f)
 **VPS_IP:** Set from `ecosystem_manifest.toml` topology → `MEMBRANE_VPS_IP`.
 
 > **Note (Wave 127):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
@@ -320,13 +320,24 @@ Deploys to `/opt/membrane/credentials.age` on VPS.
 
 ## 9. SSH Key Management (Multi-Gate)
 
-### List authorized keys
+> **J8 evolution (Wave 155f):** The `gate.keys` CLI replaces manual key
+> management. When step-ca is deployed on golgiBody, SSH certificates replace
+> static `authorized_keys`. Until then, the legacy flow below is the fallback.
+>
+> ```bash
+> membrane gate.keys                        # Show certificate status (user + host)
+> membrane gate.keys.renew                  # Renew SSH user certificate
+> membrane gate.keys.renew --host golgi     # Request/renew host certificate
+> membrane gate.keys.renew --bootstrap      # First-time CA trust setup
+> ```
+
+### Legacy: List authorized keys
 ```bash
 cd ../../infra/plasmidBin
 ./deploy_membrane.sh keys list root@$VPS_IP
 ```
 
-### Add a gate's key
+### Legacy: Add a gate's key
 ```bash
 ./deploy_membrane.sh keys add root@$VPS_IP \
   --name "eastGate" \
@@ -335,7 +346,7 @@ cd ../../infra/plasmidBin
 
 Keys are tagged in `authorized_keys` with `# gate:<name> added:<date>`.
 
-### Revoke a gate's key
+### Legacy: Revoke a gate's key
 ```bash
 ./deploy_membrane.sh keys revoke root@$VPS_IP --name "eastGate"
 ```

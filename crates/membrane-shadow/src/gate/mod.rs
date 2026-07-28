@@ -15,6 +15,7 @@ pub(crate) mod crash_loop;
 pub(crate) mod enroll;
 pub mod health;
 mod interface;
+pub(crate) mod key_portal;
 mod local;
 mod mesh;
 pub(crate) mod nucleus;

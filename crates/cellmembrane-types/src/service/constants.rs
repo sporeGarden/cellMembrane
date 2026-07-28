@@ -79,6 +79,25 @@ pub const ENV_NEURAL_API_SOCKET: &str = "NEURAL_API_SOCKET";
 /// Default socket filename for the biomeOS Neural API.
 pub const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
 
+// ── step-ca SSH Certificate Authority ──────────────────────────────────
+
+/// Default URL for the sovereign step-ca instance.
+pub const DEFAULT_STEP_CA_URL: &str = "https://ca.primals.eco:9443";
+/// Environment variable override for the step-ca URL.
+pub const ENV_STEP_CA_URL: &str = "STEP_CA_URL";
+/// Default SSH certificate lifetime (hours).
+pub const DEFAULT_SSH_CERT_LIFETIME: &str = "8h";
+/// Environment variable override for SSH certificate lifetime.
+pub const ENV_STEP_CA_SSH_LIFETIME: &str = "STEP_CA_SSH_LIFETIME";
+/// Environment variable for the step-ca provisioner name.
+pub const ENV_STEP_CA_PROVISIONER: &str = "STEP_CA_PROVISIONER";
+/// Default provisioner name.
+pub const DEFAULT_STEP_CA_PROVISIONER: &str = "admin";
+/// Environment variable for the step-ca root CA fingerprint (SHA256).
+pub const ENV_STEP_CA_FINGERPRINT: &str = "STEP_CA_FINGERPRINT";
+/// Default certificate storage directory under the membrane install base.
+pub const STEP_CA_CERT_DIR: &str = "certs";
+
 /// Namespace directory for biomeOS runtime sockets (under `XDG_RUNTIME_DIR` or /tmp).
 pub const NEURAL_API_NAMESPACE: &str = "biomeos";
 /// Environment variable for the peptidoglycan SSH host (legacy, prefer `ENV_VALIDATE_SSH_HOST`).

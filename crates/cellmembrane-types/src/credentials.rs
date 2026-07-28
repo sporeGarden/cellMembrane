@@ -47,6 +47,10 @@ pub enum CredentialModel {
     /// Mid-term target — requires Tower composition.
     BtspVault,
 
+    /// SSH certificates issued by a sovereign step-ca instance.
+    /// Short-lived certs replace static `authorized_keys`.
+    StepCa,
+
     /// Credentials managed manually by the operator.
     /// Fallback for minimal deployments.
     Manual,
@@ -57,8 +61,77 @@ impl std::fmt::Display for CredentialModel {
         match self {
             Self::Age => write!(f, "age"),
             Self::BtspVault => write!(f, "btsp_vault"),
+            Self::StepCa => write!(f, "step_ca"),
             Self::Manual => write!(f, "manual"),
         }
+    }
+}
+
+/// An SSH certificate issued by a step-ca certificate authority.
+///
+/// Represents a short-lived SSH user or host certificate. These replace
+/// static `authorized_keys` entries with cryptographically verifiable,
+/// time-bounded access tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SshCertificate {
+    /// Certificate type: "user" or "host".
+    pub cert_type: SshCertType,
+    /// Principal(s) the certificate is valid for (e.g. "root", gate name).
+    pub principals: Vec<String>,
+    /// Serial number assigned by the CA.
+    pub serial: u64,
+    /// Path to the certificate file on disk.
+    pub cert_path: String,
+    /// Path to the corresponding private key.
+    pub key_path: String,
+    /// Unix timestamp when the certificate expires.
+    pub valid_before: u64,
+    /// CA fingerprint (SHA256) for verification.
+    pub ca_fingerprint: String,
+}
+
+/// SSH certificate type — user or host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SshCertType {
+    /// User certificate — authenticates a person/gate to a host.
+    User,
+    /// Host certificate — authenticates a host to connecting clients.
+    Host,
+}
+
+impl std::fmt::Display for SshCertType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::User => write!(f, "user"),
+            Self::Host => write!(f, "host"),
+        }
+    }
+}
+
+impl SshCertificate {
+    /// Check whether this certificate has expired.
+    #[must_use]
+    pub fn is_expired(&self) -> bool {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        now >= self.valid_before
+    }
+
+    /// Seconds remaining until expiry, or 0 if already expired.
+    #[must_use]
+    pub fn seconds_remaining(&self) -> u64 {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        self.valid_before.saturating_sub(now)
+    }
+
+    /// Whether the certificate should be renewed (less than 25% lifetime remaining).
+    #[must_use]
+    pub fn needs_renewal(&self, lifetime_secs: u64) -> bool {
+        self.seconds_remaining() < lifetime_secs / 4
     }
 }
 
@@ -180,7 +253,74 @@ mod tests {
     fn credential_model_display() {
         assert_eq!(CredentialModel::Age.to_string(), "age");
         assert_eq!(CredentialModel::BtspVault.to_string(), "btsp_vault");
+        assert_eq!(CredentialModel::StepCa.to_string(), "step_ca");
         assert_eq!(CredentialModel::Manual.to_string(), "manual");
+    }
+
+    #[test]
+    fn ssh_cert_type_display() {
+        assert_eq!(SshCertType::User.to_string(), "user");
+        assert_eq!(SshCertType::Host.to_string(), "host");
+    }
+
+    #[test]
+    fn ssh_certificate_expired() {
+        let cert = SshCertificate {
+            cert_type: SshCertType::User,
+            principals: vec!["root".into()],
+            serial: 1,
+            cert_path: "/tmp/test-cert.pub".into(),
+            key_path: "/tmp/test-key".into(),
+            valid_before: 0,
+            ca_fingerprint: "SHA256:test".into(),
+        };
+        assert!(cert.is_expired());
+        assert_eq!(cert.seconds_remaining(), 0);
+    }
+
+    #[test]
+    fn ssh_certificate_not_expired() {
+        let far_future = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 86400;
+        let cert = SshCertificate {
+            cert_type: SshCertType::Host,
+            principals: vec!["golgi.primals.eco".into()],
+            serial: 42,
+            cert_path: "/etc/ssh/host-cert.pub".into(),
+            key_path: "/etc/ssh/host-key".into(),
+            valid_before: far_future,
+            ca_fingerprint: "SHA256:abc".into(),
+        };
+        assert!(!cert.is_expired());
+        assert!(cert.seconds_remaining() > 0);
+    }
+
+    #[test]
+    fn ssh_certificate_needs_renewal() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let cert = SshCertificate {
+            cert_type: SshCertType::User,
+            principals: vec!["sporegate".into()],
+            serial: 100,
+            cert_path: "/tmp/cert.pub".into(),
+            key_path: "/tmp/key".into(),
+            valid_before: now + 600,
+            ca_fingerprint: "SHA256:xyz".into(),
+        };
+        assert!(
+            cert.needs_renewal(28800),
+            "10min left of 8h → needs renewal"
+        );
+        assert!(
+            !cert.needs_renewal(1200),
+            "10min left of 20min → no renewal"
+        );
     }
 
     #[test]

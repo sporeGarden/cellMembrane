@@ -44,6 +44,9 @@ Gate (biomeOS gate.*):
   gate.check                       Parity check on VPS workspace
   gate.status                      Local gate health (JSON-RPC probe, depot, mesh)
   gate.profile <gate>              Show gate profile from ecosystem_manifest.toml
+  gate.keys                          Show SSH certificate status (user + host)
+  gate.keys.renew [--dry-run]        Renew SSH user certificate from step-ca
+  gate.keys.renew --host <hostname>  Request/renew host certificate
   gate.configure [<gate>] [--env K=V]  Generate service configs for gate composition (preview)
   gate.apply [<gate>] [--env K=V]      Write service configs to init system (systemd/launchd/bare)
   gate.bootstrap <name> [--dry-run] [--mobile]

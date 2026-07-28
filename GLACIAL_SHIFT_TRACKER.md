@@ -9,7 +9,7 @@
 
 ## Recent Waves
 
-**Wave 155f (J6 completion: `gate.configure` / `gate.apply` + deep debt — gate workload distribution):**
+**Wave 155f (J6+J8: `gate.configure` / `gate.apply` + key enrollment portal + deep debt):**
 J6 completion: `gate.configure` and `gate.apply` CLI commands implement
 declarative service config generation from gate composition profile. Reads
 `ecosystem_manifest.toml`, builds `ServiceSpec` per primal, renders to
@@ -18,7 +18,14 @@ overrides supported. Extracted to `gate_configure.rs` module. `nucleus.rs`
 helpers promoted to `pub(crate)`. Deep debt: Tower port `7780` →
 `DEFAULT_TOWER_PORT` + `ENV_TOWER_PORT` constants. Bootstrap arch triple →
 `detect_target_triple()`.
-1,200 tests, 0 clippy, 0 fmt drift.
+J8 foundation: SSH certificate lifecycle via sovereign step-ca CA.
+`gate/key_portal.rs` module with `request_ssh_certificate()`,
+`renew_ssh_certificate()`, `install_host_certificate()`, `bootstrap_ca()`,
+`inspect_certificates()`. New CLI: `gate.keys`, `gate.keys.renew`,
+`gate.keys.renew --bootstrap`. `SshCertificate`/`SshCertType` types +
+`CredentialModel::StepCa` variant. step-ca constants in `service/constants.rs`.
+`gate.enroll` phase 8 (`ssh_cert`) wired. Deployment handoff for step-ca.
+1,219 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155d (J1+J2+J6 jelly string codification + deep debt — Tower Atomic hardening):**
 J1+J2 closed: `plasmid.push` promoted to first-class command (was `depot_sync

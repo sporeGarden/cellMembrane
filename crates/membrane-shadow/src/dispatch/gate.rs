@@ -90,6 +90,8 @@ pub(super) async fn dispatch(
             })?;
             dispatch_profile(gate_name)
         }
+        "gate.keys" => super::gate_keys::dispatch_keys().await,
+        "gate.keys.renew" => super::gate_keys::dispatch_keys_renew(args).await,
         "gate.configure" => super::gate_configure::dispatch_configure(args),
         "gate.apply" => super::gate_configure::dispatch_apply(args).await,
         "gate.crash-loop" => dispatch_crash_loop(args).await,

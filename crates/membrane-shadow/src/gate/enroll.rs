@@ -93,6 +93,8 @@ pub async fn enroll(gate_name: &str, dry_run: bool) -> Result<EnrollResult> {
     phases
         .push(timed_phase_enroll("mesh.enroll", mesh_enroll_phase(gate_name, &ip, dry_run)).await);
 
+    phases.push(timed_phase_enroll("ssh_cert", ssh_cert_phase(gate_name, dry_run)).await);
+
     let all_pass = phases.iter().all(|p| p.ok);
 
     Ok(EnrollResult {
@@ -608,6 +610,43 @@ fn resolve_songbird_socket() -> std::path::PathBuf {
     std::path::PathBuf::from(socket_dir).join(format!("{relay_binary}.sock"))
 }
 
+/// Phase 8: Request an SSH certificate from the sovereign step-ca instance.
+///
+/// If step-ca is reachable and `STEP_CA_FINGERPRINT` is set, obtains a
+/// short-lived SSH user certificate. Non-fatal: enrollment succeeds even
+/// if step-ca is unavailable (the gate can enroll SSH certs later via
+/// `gate.keys`).
+async fn ssh_cert_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
+    match super::key_portal::request_ssh_certificate(gate_name, dry_run).await {
+        Ok(cert) => BootstrapPhase {
+            name: "ssh_cert".into(),
+            ok: true,
+            detail: format!(
+                "SSH cert issued for {} (expires {})",
+                cert.principals.join(", "),
+                if cert.valid_before == 0 {
+                    "N/A (dry-run)".into()
+                } else {
+                    format!("epoch {}", cert.valid_before)
+                }
+            ),
+        },
+        Err(e) => {
+            let msg = e.to_string();
+            let is_missing_dep = msg.contains("not found") || msg.contains("STEP_CA_FINGERPRINT");
+            BootstrapPhase {
+                name: "ssh_cert".into(),
+                ok: is_missing_dep,
+                detail: if is_missing_dep {
+                    format!("skipped (step-ca not configured): {msg}")
+                } else {
+                    format!("SSH cert request failed: {msg}")
+                },
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,5 +767,31 @@ mod tests {
             path.extension().is_some_and(|e| e == "sock"),
             "socket path should end with .sock: {path:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn ssh_cert_phase_dry_run() {
+        let phase = ssh_cert_phase("testGate", true).await;
+        assert_eq!(phase.name, "ssh_cert");
+        assert!(phase.ok, "dry-run ssh_cert should pass: {}", phase.detail);
+        assert!(
+            phase.detail.contains("testGate"),
+            "detail should contain gate name: {}",
+            phase.detail
+        );
+    }
+
+    #[tokio::test]
+    async fn enroll_dry_run_includes_ssh_cert_phase() {
+        let result = enroll("testGate", true).await;
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        if r.mesh_ip.is_some() {
+            let phase = r.phases.iter().find(|p| p.name == "ssh_cert");
+            assert!(
+                phase.is_some(),
+                "ssh_cert phase should be present when IP resolved"
+            );
+        }
     }
 }

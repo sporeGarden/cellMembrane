@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1200 tests — pedantic clippy clean
+cargo test                  # 1219 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -113,6 +113,16 @@ optionally installs. Supports `--env K=V` overrides. Extracted to
 `gate_configure.rs` module. `ServiceSpec` foundation (Wave 155d) wired through
 to full CLI surface. `nucleus.rs` helpers (`systemctl`, `resolve_security_socket`,
 `extra_exec_args`) promoted to `pub(crate)` for cross-module use.
+J8 foundation (Wave 155f): SSH certificate lifecycle via sovereign step-ca CA.
+`gate/key_portal.rs` module: `request_ssh_certificate()`, `renew_ssh_certificate()`,
+`install_host_certificate()`, `inspect_certificates()`, `bootstrap_ca()`. New CLI
+commands: `gate.keys` (status), `gate.keys.renew` (user/host cert renewal),
+`gate.keys.renew --bootstrap` (CA trust init). `SshCertificate` and `SshCertType`
+types in `cellmembrane-types/src/credentials.rs`. `CredentialModel::StepCa` variant.
+step-ca constants (`DEFAULT_STEP_CA_URL`, `ENV_STEP_CA_FINGERPRINT`, etc.) in
+`service/constants.rs`. `gate.enroll` phase 8 (`ssh_cert`) wires cert request into
+enrollment flow (non-fatal if step-ca not deployed). Deployment team handoff for
+step-ca on golgiBody in `infra/wateringHole/handoffs/`.
 Deep debt (Wave 155d–155f): Tower port `7780` → `DEFAULT_TOWER_PORT` +
 `ENV_TOWER_PORT` constants. Bootstrap `write_gate_identity` arch triple →
 `detect_target_triple()`. duplicate federation port const eliminated
@@ -140,7 +150,7 @@ Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
 remote, shadow domain literal, hub mesh IP — all resolved via capability registry
 or centralized constants (`LAB_DOMAIN`, `DEFAULT_HUB_MESH_IP`).
 `as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.
-Zero production `unwrap()` (576 test-only, confirmed via full audit).
+Zero production `unwrap()` (581 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
@@ -165,6 +175,10 @@ membrane gate.status                      # Local gate health (native UDS probes
 membrane gate.enroll <name> [--dry-run]    # Mesh enrollment (WG keys, config, remotes)
 membrane gate.bootstrap <name> [--dry-run] [--mobile]  # Profile-driven deployment (7 phases)
 membrane gate.profile <name>              # Read gate profile from ecosystem_manifest.toml
+membrane gate.keys                                     # Show SSH certificate status (user + host)
+membrane gate.keys.renew [--dry-run]                   # Renew SSH user cert from step-ca
+membrane gate.keys.renew --host <hostname>             # Request/renew host certificate
+membrane gate.keys.renew --bootstrap                   # Bootstrap step-ca trust on this gate
 membrane gate.quorum [--interval 15] [--generate]      # Install autonomous cascade timer (Quorum P1)
 membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
 membrane temporal.cascade --with-restart  # Cascade + fetch + restart updated primals

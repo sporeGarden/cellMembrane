@@ -19,6 +19,7 @@ mod data;
 mod deploy_dispatch;
 mod gate;
 mod gate_configure;
+mod gate_keys;
 mod impulse;
 mod infra;
 mod plasmid_dispatch;
