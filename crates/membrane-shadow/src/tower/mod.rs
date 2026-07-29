@@ -346,7 +346,7 @@ fn resolve_wave() -> String {
         .and_then(|ws| {
             crate::manifest::load_from_workspace(&ws)
                 .ok()
-                .map(|m| format!("{}", m.meta.wave))
+                .map(|m| m.meta.wave.to_string())
         })
         .unwrap_or_else(|| "unknown".into())
 }

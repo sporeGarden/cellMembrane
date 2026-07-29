@@ -116,16 +116,17 @@ impl FirewallRuleset {
         });
 
         for binary in spec.all_binaries() {
-            if let Some(svc) = crate::service::MembraneService::for_binary(binary) {
-                if !svc.is_externally_reachable() {
-                    continue;
-                }
-                if let Some(port) = svc.port {
-                    push_port_rules(&mut rules, port, svc.protocol, svc.binary);
-                }
-                for &(port, proto, comment) in svc.extra_ports {
-                    push_port_rules(&mut rules, port, proto, comment);
-                }
+            let Some(svc) = crate::service::MembraneService::for_binary(binary) else {
+                continue;
+            };
+            if !svc.is_externally_reachable() {
+                continue;
+            }
+            if let Some(port) = svc.port {
+                push_port_rules(&mut rules, port, svc.protocol, svc.binary);
+            }
+            for &(port, proto, comment) in svc.extra_ports {
+                push_port_rules(&mut rules, port, proto, comment);
             }
         }
 

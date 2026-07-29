@@ -50,6 +50,25 @@ fn cert_dir() -> PathBuf {
     PathBuf::from(base).join(STEP_CA_CERT_DIR)
 }
 
+/// Run a `step` CLI command and return its output.
+///
+/// Unified subprocess wrapper for all step-ca interactions. Returns an error
+/// if the `step` binary is not found or the command exits non-zero.
+async fn run_step(args: &[&str], context: &str) -> Result<std::process::Output> {
+    let output = tokio::process::Command::new("step")
+        .args(args)
+        .output()
+        .await
+        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(ShadowError::Config(format!("{context}: {stderr}")));
+    }
+
+    Ok(output)
+}
+
 /// Bootstrap the step CLI on this gate (first-time CA trust).
 ///
 /// Runs `step ca bootstrap` to download and trust the root CA certificate.
@@ -68,28 +87,13 @@ pub async fn bootstrap_ca(dry_run: bool) -> Result<String> {
         ));
     }
 
-    let output = tokio::process::Command::new("step")
-        .args([
-            "ca",
-            "bootstrap",
-            "--ca-url",
-            &ca_url,
-            "--fingerprint",
-            &fingerprint,
-            "--force",
-        ])
-        .output()
-        .await
-        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
+    run_step(
+        &["ca", "bootstrap", "--ca-url", &ca_url, "--fingerprint", &fingerprint, "--force"],
+        "step ca bootstrap failed",
+    )
+    .await?;
 
-    if output.status.success() {
-        Ok(format!("step-ca bootstrap complete (CA: {ca_url})"))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ShadowError::Config(format!(
-            "step ca bootstrap failed: {stderr}"
-        )))
-    }
+    Ok(format!("step-ca bootstrap complete (CA: {ca_url})"))
 }
 
 /// Request a new SSH user certificate from the sovereign CA.
@@ -124,32 +128,16 @@ pub async fn request_ssh_certificate(gate_name: &str, dry_run: bool) -> Result<S
         });
     }
 
-    let output = tokio::process::Command::new("step")
-        .args([
-            "ssh",
-            "certificate",
-            &principal,
-            &key_path.to_string_lossy(),
-            "--ca-url",
-            &ca_url,
-            "--provisioner",
-            &provisioner,
-            "--not-after",
-            &lifetime,
-            "--force",
-            "--no-password",
-            "--insecure",
-        ])
-        .output()
-        .await
-        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ShadowError::Config(format!(
-            "step ssh certificate failed: {stderr}"
-        )));
-    }
+    let key_str = key_path.to_string_lossy();
+    run_step(
+        &[
+            "ssh", "certificate", &principal, &key_str,
+            "--ca-url", &ca_url, "--provisioner", &provisioner,
+            "--not-after", &lifetime, "--force", "--no-password", "--insecure",
+        ],
+        "step ssh certificate failed",
+    )
+    .await?;
 
     let cert = parse_certificate_info(&cert_path).await?;
     Ok(cert)
@@ -182,24 +170,13 @@ pub async fn renew_ssh_certificate(dry_run: bool) -> Result<SshCertificate> {
         });
     }
 
-    let output = tokio::process::Command::new("step")
-        .args([
-            "ssh",
-            "renew",
-            &cert_path.to_string_lossy(),
-            &key_path.to_string_lossy(),
-            "--force",
-        ])
-        .output()
-        .await
-        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ShadowError::Config(format!(
-            "step ssh renew failed: {stderr}"
-        )));
-    }
+    let cert_str = cert_path.to_string_lossy();
+    let key_str = key_path.to_string_lossy();
+    run_step(
+        &["ssh", "renew", &cert_str, &key_str, "--force"],
+        "step ssh renew failed",
+    )
+    .await?;
 
     let cert = parse_certificate_info(&cert_path).await?;
     Ok(cert)
@@ -234,30 +211,16 @@ pub async fn install_host_certificate(hostname: &str, dry_run: bool) -> Result<S
         });
     }
 
-    let output = tokio::process::Command::new("step")
-        .args([
-            "ssh",
-            "certificate",
-            hostname,
-            &host_key.to_string_lossy(),
-            "--host",
-            "--sign",
-            "--ca-url",
-            &ca_url,
-            "--provisioner",
-            &provisioner,
-            "--force",
-        ])
-        .output()
-        .await
-        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ShadowError::Config(format!(
-            "host certificate request failed: {stderr}"
-        )));
-    }
+    let host_key_str = host_key.to_string_lossy();
+    run_step(
+        &[
+            "ssh", "certificate", hostname, &host_key_str,
+            "--host", "--sign", "--ca-url", &ca_url,
+            "--provisioner", &provisioner, "--force",
+        ],
+        "host certificate request failed",
+    )
+    .await?;
 
     let cert = parse_certificate_info(&cert_path).await?;
     Ok(cert)
@@ -335,18 +298,12 @@ async fn inspect_single_cert(label: &str, cert_path: &Path, _key_path: &Path) ->
 
 /// Parse certificate metadata using `step ssh inspect`.
 async fn parse_certificate_info(cert_path: &Path) -> Result<SshCertificate> {
-    let output = tokio::process::Command::new("step")
-        .args(["ssh", "inspect", &cert_path.to_string_lossy()])
-        .output()
-        .await
-        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ShadowError::Config(format!(
-            "step ssh inspect failed: {stderr}"
-        )));
-    }
+    let cert_str = cert_path.to_string_lossy();
+    let output = run_step(
+        &["ssh", "inspect", &cert_str],
+        "step ssh inspect failed",
+    )
+    .await?;
 
     let text = String::from_utf8_lossy(&output.stdout);
     Ok(parse_inspect_output(&text, cert_path))

@@ -477,7 +477,7 @@ async fn mesh_enroll_phase(gate_name: &str, mesh_ip: &str, dry_run: bool) -> Boo
         };
     }
 
-    let songbird_socket = resolve_songbird_socket();
+    let songbird_socket = resolve_relay_socket();
     if !songbird_socket.exists() {
         return BootstrapPhase {
             name: "mesh.enroll".into(),
@@ -601,13 +601,13 @@ fn compute_enrollment_proof(
     base64::engine::general_purpose::STANDARD.encode(proof_bytes)
 }
 
-/// Resolve the songBird UDS socket path.
-fn resolve_songbird_socket() -> std::path::PathBuf {
-    let socket_dir = super::health::resolve_biomeos_socket_dir();
-    let relay_binary = cellmembrane_types::MembraneService::binary_for(
+/// Resolve the mesh relay UDS socket path via capability discovery.
+fn resolve_relay_socket() -> std::path::PathBuf {
+    let relay = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    std::path::PathBuf::from(socket_dir).join(format!("{relay_binary}.sock"))
+    let paths = super::health::resolve_primal_socket_paths(relay);
+    std::path::PathBuf::from(&paths[0])
 }
 
 /// Phase 8: Request an SSH certificate from the sovereign step-ca instance.
@@ -761,8 +761,8 @@ mod tests {
     }
 
     #[test]
-    fn songbird_socket_path_ends_with_sock() {
-        let path = resolve_songbird_socket();
+    fn relay_socket_path_ends_with_sock() {
+        let path = resolve_relay_socket();
         assert!(
             path.extension().is_some_and(|e| e == "sock"),
             "socket path should end with .sock: {path:?}"

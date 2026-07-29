@@ -32,12 +32,11 @@ pub(super) fn parse_env_overrides(args: &[&str]) -> Vec<(String, String)> {
     let mut envs = Vec::new();
     let mut iter = args.iter();
     while let Some(&arg) = iter.next() {
-        if arg == "--env" {
-            if let Some(&val) = iter.next() {
-                if let Some((k, v)) = val.split_once('=') {
-                    envs.push((k.to_string(), v.to_string()));
-                }
-            }
+        if arg == "--env"
+            && let Some(&val) = iter.next()
+            && let Some((k, v)) = val.split_once('=')
+        {
+            envs.push((k.to_string(), v.to_string()));
         }
     }
     envs

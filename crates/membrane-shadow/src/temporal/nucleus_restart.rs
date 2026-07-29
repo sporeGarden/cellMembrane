@@ -146,9 +146,9 @@ async fn sandbox_validate(
         }
         Err(e) => {
             lines.push(format!(
-                "  [cascade-restart] {primal} sandbox infra error (proceeding): {e}"
+                "  [cascade-restart] {primal} sandbox infra error — skipping deploy: {e}"
             ));
-            true
+            false
         }
     }
 }

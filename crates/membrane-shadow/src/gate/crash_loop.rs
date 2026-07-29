@@ -13,6 +13,34 @@ use cellmembrane_types::process::{
 
 use super::nucleus::{systemctl, systemctl_async};
 
+/// Detected crash-loop before action is taken.
+struct DetectedLoop {
+    unit: String,
+    restart_count: u32,
+    sub_state: String,
+}
+
+/// Shared scanning logic — discovers units exceeding the restart threshold.
+fn detect_crash_loops(threshold: u32) -> (Vec<DetectedLoop>, u32) {
+    let filter = cellmembrane_types::MembraneService::build_service_filter();
+    let units = discover_membrane_units(&filter);
+    let scanned = u32::try_from(units.len()).unwrap_or(u32::MAX);
+    let mut detected = Vec::new();
+
+    for unit in &units {
+        let (restart_count, sub_state) = query_unit_restart_info(unit);
+        if restart_count > threshold {
+            detected.push(DetectedLoop {
+                unit: unit.clone(),
+                restart_count,
+                sub_state,
+            });
+        }
+    }
+
+    (detected, scanned)
+}
+
 /// Scan all membrane services for crash-loops and disable offenders (blocking).
 ///
 /// Intended for bootstrap/preflight contexts where an async runtime may not
@@ -20,117 +48,68 @@ use super::nucleus::{systemctl, systemctl_async};
 #[allow(dead_code, reason = "used in bootstrap/preflight — not yet wired")]
 pub fn scan_and_break(threshold: Option<u32>) -> CrashLoopReport {
     let threshold = threshold.unwrap_or(CRASH_LOOP_RESTART_THRESHOLD);
-    let filter = cellmembrane_types::MembraneService::build_service_filter();
-    let units = discover_membrane_units(&filter);
+    let (detected, scanned) = detect_crash_loops(threshold);
     let mut loops = Vec::new();
 
-    for unit in &units {
-        let (restart_count, sub_state) = query_unit_restart_info(unit);
-
-        if restart_count <= threshold {
-            continue;
-        }
-
-        tracing::warn!(
-            unit,
-            restart_count,
-            threshold,
-            "crash-loop detected — disabling service"
-        );
-
-        let action = if disable_unit(unit) {
+    for d in detected {
+        tracing::warn!(unit = d.unit, d.restart_count, threshold, "crash-loop detected — disabling");
+        let action = if disable_unit(&d.unit) {
             CrashLoopAction::Disabled
         } else {
-            tracing::error!(unit, "failed to disable crash-looping service");
+            tracing::error!(unit = d.unit, "failed to disable crash-looping service");
             CrashLoopAction::FailedToDisable
         };
-
         loops.push(CrashLoopEntry {
-            unit: unit.clone(),
-            restart_count,
-            sub_state,
+            unit: d.unit,
+            restart_count: d.restart_count,
+            sub_state: d.sub_state,
             action,
         });
     }
 
-    let scanned = u32::try_from(units.len()).unwrap_or(u32::MAX);
-    CrashLoopReport {
-        loops,
-        threshold,
-        scanned,
-    }
+    CrashLoopReport { loops, threshold, scanned }
 }
 
 /// Async variant for cascade/temporal contexts.
 pub async fn scan_and_break_async(threshold: Option<u32>) -> CrashLoopReport {
     let threshold = threshold.unwrap_or(CRASH_LOOP_RESTART_THRESHOLD);
-    let filter = cellmembrane_types::MembraneService::build_service_filter();
-    let units = discover_membrane_units(&filter);
+    let (detected, scanned) = detect_crash_loops(threshold);
     let mut loops = Vec::new();
 
-    for unit in &units {
-        let (restart_count, sub_state) = query_unit_restart_info(unit);
-
-        if restart_count <= threshold {
-            continue;
-        }
-
-        tracing::warn!(
-            unit,
-            restart_count,
-            threshold,
-            "crash-loop detected — disabling service"
-        );
-
-        let action = if disable_unit_async(unit).await {
+    for d in detected {
+        tracing::warn!(unit = d.unit, d.restart_count, threshold, "crash-loop detected — disabling");
+        let action = if disable_unit_async(&d.unit).await {
             CrashLoopAction::Disabled
         } else {
-            tracing::error!(unit, "failed to disable crash-looping service");
+            tracing::error!(unit = d.unit, "failed to disable crash-looping service");
             CrashLoopAction::FailedToDisable
         };
-
         loops.push(CrashLoopEntry {
-            unit: unit.clone(),
-            restart_count,
-            sub_state,
+            unit: d.unit,
+            restart_count: d.restart_count,
+            sub_state: d.sub_state,
             action,
         });
     }
 
-    let scanned = u32::try_from(units.len()).unwrap_or(u32::MAX);
-    CrashLoopReport {
-        loops,
-        threshold,
-        scanned,
-    }
+    CrashLoopReport { loops, threshold, scanned }
 }
 
 /// Scan without disabling — report only (dry-run).
 pub fn scan_only(threshold: Option<u32>) -> CrashLoopReport {
     let threshold = threshold.unwrap_or(CRASH_LOOP_RESTART_THRESHOLD);
-    let filter = cellmembrane_types::MembraneService::build_service_filter();
-    let units = discover_membrane_units(&filter);
-    let mut loops = Vec::new();
+    let (detected, scanned) = detect_crash_loops(threshold);
+    let loops = detected
+        .into_iter()
+        .map(|d| CrashLoopEntry {
+            unit: d.unit,
+            restart_count: d.restart_count,
+            sub_state: d.sub_state,
+            action: CrashLoopAction::Logged,
+        })
+        .collect();
 
-    for unit in &units {
-        let (restart_count, sub_state) = query_unit_restart_info(unit);
-
-        if restart_count > threshold {
-            loops.push(CrashLoopEntry {
-                unit: unit.clone(),
-                restart_count,
-                sub_state,
-                action: CrashLoopAction::Logged,
-            });
-        }
-    }
-
-    let scanned = u32::try_from(units.len()).unwrap_or(u32::MAX);
-    CrashLoopReport {
-        loops,
-        threshold,
-        scanned,
-    }
+    CrashLoopReport { loops, threshold, scanned }
 }
 
 /// Discover systemd units matching the membrane service filter.

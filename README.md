@@ -56,12 +56,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1223 tests — pedantic clippy clean
+cargo test                  # 1221 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 155b): ~9k lines types, ~36k lines shadow. Crash-loop breaker
+Current state (Wave 155i): ~9k lines types, ~36k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -157,7 +157,17 @@ Hardcode elimination: tower timer sockets/paths, enroll hub IP, relay sovereign
 remote, shadow domain literal, hub mesh IP — all resolved via capability registry
 or centralized constants (`LAB_DOMAIN`, `DEFAULT_HUB_MESH_IP`).
 `as` casts → `try_from`/`f64::from`. Unused `portable-atomic` dep removed.
-Zero production `unwrap()` (581 test-only, confirmed via full audit).
+Deep debt sweep (Wave 155i): P0 sandbox fail-closed fix (`sandbox_validate`
+returned `true` on infra `Err`, now correctly fails deploy). Tower status
+refactored from hardcoded primal names to registry-driven
+`MembraneComposition::Tower.spec()` — discovers services by composition,
+probes by capability (BTSP for `CryptoSigner`). Unified `resolve_primal_socket`
+replaces 3 per-primal resolvers + duplicate in `enroll.rs`. `run_step()` helper
+extracts 5 duplicate `step` CLI blocks in `key_portal.rs`. `detect_crash_loops()`
+extracts shared scanning from 3 crash-loop variants. `push_depot_to_remote()`
+deduplicates ~80 lines across depot push paths. Let-chains (`gate_configure.rs`,
+`firewall.rs`). Net -135 lines.
+Zero production `unwrap()` (167 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 

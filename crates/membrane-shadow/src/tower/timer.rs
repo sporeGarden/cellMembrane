@@ -63,42 +63,66 @@ pub async fn dispatch_shadow_timer_status() -> Result<ShadowOutcome> {
 }
 
 /// `tower.status` — Tower Atomic stack health on this gate.
+///
+/// Discovers the Tower composition from the service registry rather than
+/// hardcoding individual primal names. Each primal is probed via its
+/// resolved socket path; BTSP-capable services use `call_btsp`.
 pub async fn dispatch_tower_status() -> Result<ShadowOutcome> {
-    let songbird_socket = resolve_songbird_socket();
-    let beardog_socket = resolve_beardog_socket();
-    let skunkbat_socket = resolve_skunkbat_socket();
+    use cellmembrane_types::{MembraneComposition, MembraneService, ServiceCapability};
 
-    let songbird_ok = probe_socket(&songbird_socket).await;
-    let beardog_ok = probe_socket_btsp(&beardog_socket).await;
-    let skunkbat_ok = probe_socket(&skunkbat_socket).await;
+    let spec = MembraneComposition::Tower.spec();
+    let mut statuses = serde_json::Map::new();
+    let mut lines = Vec::new();
+    let mut live_count = 0u32;
+    let total = spec.primals.len();
+    let mut mesh_socket: Option<PathBuf> = None;
 
-    let mesh_info = if songbird_ok {
-        probe_mesh(&songbird_socket).await
-    } else {
-        None
+    for binary in &spec.primals {
+        let socket = resolve_primal_socket(binary);
+        let svc = MembraneService::for_binary(binary);
+        let needs_btsp =
+            svc.is_some_and(|s| s.has_capability(ServiceCapability::CryptoSigner));
+        let ok = if needs_btsp {
+            probe_socket_btsp(&socket).await
+        } else {
+            probe_socket(&socket).await
+        };
+        if ok {
+            live_count += 1;
+        }
+        if svc.is_some_and(|s| s.has_capability(ServiceCapability::MeshRelay)) {
+            mesh_socket = Some(socket);
+        }
+        let label = if ok { "LIVE" } else { "DOWN" };
+        lines.push(format!("  {binary}: {label}"));
+        statuses.insert((*binary).to_string(), serde_json::json!(ok));
+    }
+
+    let mesh_info = match mesh_socket {
+        Some(ref path) if statuses.get(
+            MembraneService::binary_for(ServiceCapability::MeshRelay)
+        ).and_then(serde_json::Value::as_bool) == Some(true) => {
+            probe_mesh(path).await
+        }
+        _ => None,
     };
 
-    let all_ok = songbird_ok && beardog_ok && skunkbat_ok;
     let shadow_active = systemctl_is_active(SHADOW_TIMER_UNIT).await;
+    let all_ok = live_count == u32::try_from(total).unwrap_or(u32::MAX);
+    statuses.insert("all_live".into(), serde_json::json!(all_ok));
+    statuses.insert("mesh".into(), serde_json::json!(mesh_info));
+    statuses.insert("shadow_active".into(), serde_json::json!(shadow_active));
 
     Ok(ShadowOutcome::ok_with(
         format!(
-            "Tower Atomic: {}\n  songBird: {} | bearDog: {} | skunkBat: {}\n  mesh: {}\n  shadow: {}",
-            if all_ok { "3/3 LIVE" } else { "DEGRADED" },
-            if songbird_ok { "LIVE" } else { "DOWN" },
-            if beardog_ok { "LIVE" } else { "DOWN" },
-            if skunkbat_ok { "LIVE" } else { "DOWN" },
+            "Tower Atomic: {}/{total} LIVE{}\n{}\n  mesh: {}\n  shadow: {}",
+            live_count,
+            if all_ok { "" } else { " — DEGRADED" },
+            lines.join("\n"),
             mesh_info.as_deref().unwrap_or("unavailable"),
             if shadow_active { "ACTIVE" } else { "INACTIVE" },
         ),
-        serde_json::json!({
-            "songbird": songbird_ok,
-            "beardog": beardog_ok,
-            "skunkbat": skunkbat_ok,
-            "all_live": all_ok,
-            "mesh": mesh_info,
-            "shadow_active": shadow_active,
-        }),
+        serde_json::Value::Object(statuses),
     ))
 }
 
@@ -322,39 +346,17 @@ async fn run_songbird_benchmark(
 
 // ── Socket probing ───────────────────────────────────────────────────
 
-fn resolve_songbird_socket() -> PathBuf {
-    PathBuf::from(cellmembrane_types::service::env_or(
-        "MEMBRANE_SOCKET_SONGBIRD",
-        cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET,
-    ))
-}
-
-fn resolve_beardog_socket() -> PathBuf {
+/// Resolve the UDS socket path for any primal by binary name.
+///
+/// Checks `MEMBRANE_SOCKET_{UPPER}` env var first, falls back to
+/// `{DEFAULT_SOCKET_BASE}/{binary}.sock`.
+fn resolve_primal_socket(binary: &str) -> PathBuf {
+    let env_key = format!("MEMBRANE_SOCKET_{}", binary.to_ascii_uppercase());
     let default = format!(
-        "{}/{}.sock",
+        "{}/{binary}.sock",
         cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-        cellmembrane_types::MembraneService::binary_for(
-            cellmembrane_types::ServiceCapability::CryptoSigner
-        ),
     );
-    PathBuf::from(cellmembrane_types::service::env_or(
-        "MEMBRANE_SOCKET_BEARDOG",
-        &default,
-    ))
-}
-
-fn resolve_skunkbat_socket() -> PathBuf {
-    let default = format!(
-        "{}/{}.sock",
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-        cellmembrane_types::MembraneService::binary_for(
-            cellmembrane_types::ServiceCapability::Observability
-        ),
-    );
-    PathBuf::from(cellmembrane_types::service::env_or(
-        "MEMBRANE_SOCKET_SKUNKBAT",
-        &default,
-    ))
+    PathBuf::from(cellmembrane_types::service::env_or(&env_key, &default))
 }
 
 async fn probe_socket(path: &Path) -> bool {
@@ -599,20 +601,12 @@ mod tests {
     }
 
     #[test]
-    fn resolve_songbird_socket_returns_path() {
-        let path = resolve_songbird_socket();
+    fn resolve_primal_socket_returns_path() {
+        let path = resolve_primal_socket("songbird");
         assert!(path.to_string_lossy().contains("songbird"));
-    }
-
-    #[test]
-    fn resolve_beardog_socket_returns_path() {
-        let path = resolve_beardog_socket();
+        let path = resolve_primal_socket("beardog");
         assert!(path.to_string_lossy().contains("beardog"));
-    }
-
-    #[test]
-    fn resolve_skunkbat_socket_returns_path() {
-        let path = resolve_skunkbat_socket();
+        let path = resolve_primal_socket("skunkbat");
         assert!(path.to_string_lossy().contains("skunkbat"));
     }
 

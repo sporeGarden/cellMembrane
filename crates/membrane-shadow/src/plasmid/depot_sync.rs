@@ -245,7 +245,22 @@ pub(crate) async fn depot_sync_push_standalone(
         config.vps_root,
         cellmembrane_types::service::PLASMID_BIN_DIR
     );
+    push_depot_to_remote(&config, local_depot, &remote_depot).await
+}
 
+/// Push local depot binaries and metadata to the remote VPS depot via SCP.
+enum PushBinaryResult {
+    Synced,
+    Current,
+    Failed,
+}
+
+/// Shared push loop: walks arch dirs, pushes changed binaries, syncs metadata.
+async fn push_depot_to_remote(
+    config: &crate::ShadowConfig,
+    local_depot: &std::path::Path,
+    remote_depot: &str,
+) -> crate::error::Result<crate::ShadowOutcome> {
     let primals_dir = local_depot.join("primals");
     if !primals_dir.exists() {
         return Ok(crate::ShadowOutcome {
@@ -273,7 +288,7 @@ pub(crate) async fn depot_sync_push_standalone(
         let remote_arch_dir = format!("{remote_depot}/primals/{arch_str}");
 
         let ensure_dir = format!("mkdir -p {remote_arch_dir}");
-        if let Err(e) = crate::ssh::exec_raw(&config, &ensure_dir).await {
+        if let Err(e) = crate::ssh::exec_raw(config, &ensure_dir).await {
             tracing::warn!(arch = %arch_str, error = %e, "push: failed to create remote dir");
             failed += 1;
             continue;
@@ -290,7 +305,7 @@ pub(crate) async fn depot_sync_push_standalone(
             .collect();
 
         for bin_entry in &bins {
-            match push_single_binary(&config, bin_entry, &remote_arch_dir, &arch_str).await {
+            match push_single_binary(config, bin_entry, &remote_arch_dir, &arch_str).await {
                 PushBinaryResult::Synced => synced += 1,
                 PushBinaryResult::Current => current += 1,
                 PushBinaryResult::Failed => failed += 1,
@@ -298,14 +313,14 @@ pub(crate) async fn depot_sync_push_standalone(
         }
     }
 
-    let metadata_pushed = push_depot_metadata(&config, local_depot, &remote_depot).await;
+    let metadata_pushed = push_depot_metadata(config, local_depot, remote_depot).await;
     let total = synced + current + failed;
     let ok = failed == 0;
 
     Ok(crate::ShadowOutcome {
         ok,
         message: format!(
-            "{synced} pushed, {current} current, {failed} failed \
+            "depot push: {synced} pushed, {current} current, {failed} failed \
              (of {total}, {arch_count} arch) — metadata {}",
             if metadata_pushed { "synced" } else { "partial" }
         ),
@@ -319,13 +334,6 @@ pub(crate) async fn depot_sync_push_standalone(
             "metadata_pushed": metadata_pushed,
         })),
     })
-}
-
-/// Push local depot binaries and metadata to the remote VPS depot via SCP.
-enum PushBinaryResult {
-    Synced,
-    Current,
-    Failed,
 }
 
 async fn push_single_binary(
@@ -384,80 +392,7 @@ async fn depot_sync_push(
         config.vps_root,
         cellmembrane_types::service::PLASMID_BIN_DIR
     );
-
-    let primals_dir = local_depot.join("primals");
-    if !primals_dir.exists() {
-        return Ok(crate::ShadowOutcome {
-            ok: false,
-            message: format!("depot push: no primals/ dir at {}", local_depot.display()),
-            data: None,
-        });
-    }
-
-    let mut synced = 0usize;
-    let mut current = 0usize;
-    let mut failed = 0usize;
-    let mut arch_count = 0usize;
-
-    let arch_dirs: Vec<_> = std::fs::read_dir(&primals_dir)
-        .map_err(crate::error::ShadowError::Io)?
-        .filter_map(std::result::Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|ft| ft.is_dir()))
-        .collect();
-
-    for arch_entry in &arch_dirs {
-        let arch = arch_entry.file_name();
-        let arch_str = arch.to_string_lossy();
-        let local_arch_dir = arch_entry.path();
-        let remote_arch_dir = format!("{remote_depot}/primals/{arch_str}");
-
-        let ensure_dir = format!("mkdir -p {remote_arch_dir}");
-        if let Err(e) = crate::ssh::exec_raw(config, &ensure_dir).await {
-            tracing::warn!(arch = %arch_str, error = %e, "push: failed to create remote dir");
-            failed += 1;
-            continue;
-        }
-        arch_count += 1;
-
-        let bins: Vec<_> = std::fs::read_dir(&local_arch_dir)
-            .map_err(crate::error::ShadowError::Io)?
-            .filter_map(std::result::Result::ok)
-            .filter(|e| {
-                e.file_type().is_ok_and(|ft| ft.is_file())
-                    && !e.file_name().to_string_lossy().starts_with('.')
-            })
-            .collect();
-
-        for bin_entry in &bins {
-            match push_single_binary(config, bin_entry, &remote_arch_dir, &arch_str).await {
-                PushBinaryResult::Synced => synced += 1,
-                PushBinaryResult::Current => current += 1,
-                PushBinaryResult::Failed => failed += 1,
-            }
-        }
-    }
-
-    let metadata_pushed = push_depot_metadata(config, &local_depot, &remote_depot).await;
-    let total = synced + current + failed;
-    let ok = failed == 0;
-
-    Ok(crate::ShadowOutcome {
-        ok,
-        message: format!(
-            "depot push: {synced} pushed, {current} current, {failed} failed \
-             (of {total}, {arch_count} arch) — metadata {}",
-            if metadata_pushed { "synced" } else { "partial" }
-        ),
-        data: Some(serde_json::json!({
-            "mode": "push",
-            "synced": synced,
-            "current": current,
-            "failed": failed,
-            "total": total,
-            "architectures": arch_count,
-            "metadata_pushed": metadata_pushed,
-        })),
-    })
+    push_depot_to_remote(config, &local_depot, &remote_depot).await
 }
 
 /// Push depot metadata files (checksums, provenance, signatures) to the remote VPS.

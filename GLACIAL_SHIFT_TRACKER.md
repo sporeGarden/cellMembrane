@@ -9,15 +9,17 @@
 
 ## Recent Waves
 
-**Wave 155i (P0 glibc depot target + P1 WireGuard DNS + deep debt):**
-P0 closed: `targets_for_primal()` now auto-appends `x86_64-unknown-linux-gnu`
-for GPU primals even when manifest `targets` is explicit. Compute primals
-(barraCuda, coralReef) on strandGate RTX 3090 can now `dlopen` glibc Vulkan ICD
-from depot binaries.
-P1 closed: `WgConfig` gains `dns` field, `to_wg_quick()` emits `DNS =` in
-`[Interface]` section. `manifest_to_wg_config()` resolves hub mesh IP as DNS
-server for mesh hostname resolution via `wg-quick`.
-1,223 tests, 0 clippy, 0 fmt drift.
+**Wave 155i (P0 glibc depot + P1 WG DNS + deep debt evolution sweep):**
+P0 closed: `targets_for_primal()` auto-appends `x86_64-unknown-linux-gnu`
+for GPU primals. P1 closed: `WgConfig` `dns` field, `DNS =` in wg-quick.
+Deep debt sweep: P0 sandbox fail-closed fix (`sandbox_validate` no longer
+proceeds on infra error). Tower status refactored from hardcoded primal names
+to registry-driven `MembraneComposition::Tower.spec()` — capability-based
+probing. Unified `resolve_primal_socket()` replaces 3 per-primal resolvers.
+`run_step()` helper deduplicates 5 `step` CLI blocks. `detect_crash_loops()`
+extracts shared scanning from 3 crash-loop variants. `push_depot_to_remote()`
+deduplicates depot push paths. Let-chains modernization. Net -135 lines.
+1,221 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155f (J6+J8: `gate.configure` / `gate.apply` + key enrollment portal + deep debt):**
 J6 completion: `gate.configure` and `gate.apply` CLI commands implement
