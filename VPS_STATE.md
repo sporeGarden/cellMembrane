@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-07-27 (Wave 155b)
+**Last updated:** 2026-07-29 (Wave 155i)
 **Deployed composition:** Full NUCLEUS (Wave 61→118) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust `membrane` binary
@@ -8,7 +8,7 @@
 **WAN depot:** `https://depot.primals.eco` — 13 binaries + checksums.toml over HTTPS (zero SSH for WAN gates)
 **K-Derm topology:** Diderm (gate firewall = plasma membrane, VPS = periplasm + outer membrane)
 **Auth:** BTSP-only enforced (`BEARDOG_AUTH_MODE=enforced` since 2026-06-02, S4 GRADUATED)
-**Mesh:** 7-node WireGuard (golgi 10.13.37.1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7, northGate .8, southGate .9) + songbird:7700 federation
+**Mesh:** 10-node WireGuard (golgi .1, sporeGate .2, eastGate .5, flockGate .6, ironGate .7, northGate .8, southGate .9, strandGate, blueGate, swiftGate) + DNS=10.13.37.1 in wg0 + songbird:7700 federation
 **Disk:** 60% (cleaned Wave 69)
 **Caddy:** sovereign TLS (Let's Encrypt E8) — subdomain routing: `sporeprint.primals.eco`, `webb.primals.eco`, `depot.primals.eco`
 **Sandbox:** `/opt/membrane/sandbox/` + `/run/membrane/sandbox/` — ephemeral UDS validation (systemd `membrane-sandbox@`)

@@ -254,6 +254,67 @@ fn parse_name_manifest_aliases() {
 }
 
 #[test]
+fn systemd_after_deps_beardog_has_no_deps() {
+    let spec = MembraneComposition::Nucleus.spec();
+    let deps = spec.systemd_after_deps("beardog");
+    assert!(deps.is_empty(), "beardog boots first — no deps: {deps:?}");
+}
+
+#[test]
+fn systemd_after_deps_songbird_depends_on_beardog() {
+    let spec = MembraneComposition::Nucleus.spec();
+    let deps = spec.systemd_after_deps("songbird");
+    assert!(
+        deps.iter().any(|d| d.contains("beardog")),
+        "songbird should depend on beardog: {deps:?}"
+    );
+}
+
+#[test]
+fn systemd_after_deps_nest_primal_includes_tower() {
+    let spec = MembraneComposition::Nucleus.spec();
+    let deps = spec.systemd_after_deps("nestgate");
+    assert!(
+        deps.iter().any(|d| d.contains("beardog")),
+        "nestgate should transitively depend on beardog: {deps:?}"
+    );
+    assert!(
+        deps.iter().any(|d| d.contains("songbird")),
+        "nestgate should depend on songbird: {deps:?}"
+    );
+    assert!(
+        deps.iter().any(|d| d.contains("skunkbat")),
+        "nestgate should depend on skunkbat: {deps:?}"
+    );
+}
+
+#[test]
+fn systemd_after_deps_unknown_binary_returns_empty() {
+    let spec = MembraneComposition::Nucleus.spec();
+    let deps = spec.systemd_after_deps("nonexistent");
+    assert!(deps.is_empty());
+}
+
+#[test]
+fn systemd_after_deps_excludes_symbiotic() {
+    let spec = MembraneComposition::Nucleus.spec();
+    let deps = spec.systemd_after_deps("nestgate");
+    for dep in &deps {
+        let svc = MembraneService::for_binary(
+            dep.strip_suffix("-membrane.service")
+                .or_else(|| dep.strip_suffix(".service"))
+                .unwrap_or(dep),
+        );
+        if let Some(s) = svc {
+            assert!(
+                s.is_primal,
+                "after deps should only include primals, found symbiotic: {dep}"
+            );
+        }
+    }
+}
+
+#[test]
 fn config_nucleus_composition_parses() {
     let toml = r#"
         [membrane]

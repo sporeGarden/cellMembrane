@@ -12,6 +12,30 @@
 
 use super::systemd_units::{GatewayUnitParams, generate_songbird_unit};
 
+/// sporePrint composition uses specific primals in fixed roles.
+///
+/// Unlike NUCLEUS (which is capability-discovered), sporePrint is a named
+/// deployment pattern: content rendering + CAS + relay + TLS. These role
+/// assignments are resolved from the service registry to avoid raw string
+/// literals while maintaining the architectural coupling.
+fn sporeprint_binaries() -> SporePrintBinaries {
+    SporePrintBinaries {
+        content: cellmembrane_types::MembraneService::for_binary("petaltongue")
+            .map_or("petaltongue", |s| s.binary),
+        cas: cellmembrane_types::MembraneService::for_binary("nestgate")
+            .map_or("nestgate", |s| s.binary),
+        crypto: cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::ServiceCapability::CryptoSigner,
+        ),
+    }
+}
+
+struct SporePrintBinaries {
+    content: &'static str,
+    cas: &'static str,
+    crypto: &'static str,
+}
+
 /// Parameters for sporePrint-specific NUCLEUS deployment (4 primals).
 pub(crate) struct SporePrintDeployParams<'a> {
     pub gate_name: &'a str,
@@ -35,10 +59,10 @@ impl<'a> SporePrintDeployParams<'a> {
     }
 }
 
-/// Generate the petalTongue content-serving systemd unit.
+/// Generate the content-serving systemd unit for sporePrint.
 ///
-/// petalTongue renders sporePrint content (Zola pages, SceneGraph→SVG viz)
-/// and listens on loopback, behind bearDog TLS termination.
+/// The content server renders sporePrint content (Zola pages, `SceneGraph`
+/// visualization) and listens on loopback, behind TLS termination.
 #[must_use]
 fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
     let bind = cellmembrane_types::service::DEFAULT_PETALTONGUE_BIND;
@@ -48,13 +72,15 @@ fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
         cellmembrane_types::service::SPOREPRINT_CONTENT_DIR,
     );
 
+    let roles = sporeprint_binaries();
+
     format!(
         "[Unit]\n\
-         Description=petalTongue content server ({gate} — sporePrint)\n\
+         Description={content} content server ({gate} — sporePrint)\n\
          After=network.target\n\n\
          [Service]\n\
          Type=simple\n\
-         ExecStart={base}/petaltongue server --bind {bind} --content-dir {content_root}\n\
+         ExecStart={base}/{content} server --bind {bind} --content-dir {content_root}\n\
          Environment=GATE_NAME={gate}\n\
          Restart=on-failure\n\
          RestartSec=3\n\
@@ -63,27 +89,29 @@ fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
          WantedBy=multi-user.target\n",
         gate = params.gate_name,
         base = params.install_base,
+        content = roles.content,
     )
 }
 
-/// Generate the nestGate CAS storage systemd unit.
+/// Generate the CAS storage systemd unit for sporePrint.
 ///
-/// nestGate provides content-addressed storage with BLAKE3 integrity.
-/// Binds to UDS socket for local IPC only (petalTongue accesses via socket).
+/// The storage primal provides content-addressed storage with BLAKE3
+/// integrity. Binds to UDS socket for local IPC only.
 #[must_use]
 fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
+    let roles = sporeprint_binaries();
 
     format!(
         "[Unit]\n\
-         Description=nestGate CAS storage ({gate} — sporePrint)\n\
+         Description={cas} CAS storage ({gate} — sporePrint)\n\
          After=network.target\n\n\
          [Service]\n\
          Type=simple\n\
          UMask={umask}\n\
-         ExecStart={base}/nestgate server\n\
+         ExecStart={base}/{cas} server\n\
          Environment=GATE_NAME={gate}\n\
-         Environment=NESTGATE_SOCKET={socket_base}/nestgate.sock\n\
+         Environment=NESTGATE_SOCKET={socket_base}/{cas}.sock\n\
          Restart=on-failure\n\
          RestartSec=3\n\
          RuntimeDirectory=membrane\n\
@@ -93,43 +121,50 @@ fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
          WantedBy=multi-user.target\n",
         gate = params.gate_name,
         base = params.install_base,
+        cas = roles.cas,
         umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK,
         rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE,
     )
 }
 
-/// Generate bearDog with ACME for a specific domain (sporePrint serving).
+/// Generate the crypto-signer ACME unit for sporePrint domain serving.
 ///
-/// Unlike the generic gateway bearDog (which proxies to songBird socket),
-/// the sporePrint bearDog proxies to petalTongue on loopback:8080.
+/// Unlike the generic gateway (which proxies to the mesh relay socket),
+/// the sporePrint ACME unit proxies to the content server on loopback.
 #[must_use]
 fn generate_beardog_acme_unit(params: &SporePrintDeployParams<'_>) -> String {
     let upstream = cellmembrane_types::service::DEFAULT_PETALTONGUE_BIND;
+    let roles = sporeprint_binaries();
+    let content_unit = format!("{}-sporeprint.service", roles.content);
 
     format!(
         "[Unit]\n\
-         Description=bearDog ACME gateway ({gate} — {domain})\n\
-         After=network-online.target petaltongue-sporeprint.service\n\
+         Description={crypto} ACME gateway ({gate} — {domain})\n\
+         After=network-online.target {content_unit}\n\
          Wants=network-online.target\n\
-         Requires=petaltongue-sporeprint.service\n\n\
+         Requires={content_unit}\n\n\
          [Service]\n\
          Type=simple\n\
-         ExecStart={base}/beardog serve-https \
+         ExecStart={base}/{crypto} serve-https \
          --upstream {upstream} \
          --domain {domain} \
          --acme-email {email}\n\
          Environment=GATE_NAME={gate}\n\
          Restart=on-failure\n\
-         RestartSec=5\n\
-         StartLimitIntervalSec=120\n\
-         StartLimitBurst=10\n\
+         RestartSec={restart_delay}\n\
+         StartLimitIntervalSec={start_limit_interval}\n\
+         StartLimitBurst={start_limit_burst}\n\
          AmbientCapabilities=CAP_NET_BIND_SERVICE\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n",
         gate = params.gate_name,
         base = params.install_base,
+        crypto = roles.crypto,
         domain = params.acme_domain,
         email = cellmembrane_types::service::DEFAULT_ACME_EMAIL,
+        restart_delay = cellmembrane_types::service::DEFAULT_RESTART_DELAY_SECS,
+        start_limit_interval = cellmembrane_types::service::DEFAULT_START_LIMIT_INTERVAL_SECS,
+        start_limit_burst = cellmembrane_types::service::DEFAULT_START_LIMIT_BURST,
     )
 }
 

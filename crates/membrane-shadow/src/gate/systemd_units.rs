@@ -137,15 +137,18 @@ impl<'a> GatewayUnitParams<'a> {
     }
 }
 
-/// Generate the songBird gateway systemd unit.
+/// Generate the mesh relay gateway systemd unit.
 ///
-/// songBird acts as the mesh router — it listens for `capability.call` IPC
-/// and routes to the correct backend. The `http.proxy` method enables it to
-/// also serve as a reverse proxy (replacing Caddy's routing role).
+/// The mesh relay (songBird) acts as the mesh router — it listens for
+/// `capability.call` IPC and routes to the correct backend. The `http.proxy`
+/// method enables it to also serve as a reverse proxy.
 #[must_use]
 pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
     use std::fmt::Write as _;
 
+    let relay_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
     let mut env_lines = format!("Environment=GATE_NAME={}\n", params.gate_name);
     if !params.proxy_routes.is_empty() {
         let _ = writeln!(
@@ -161,13 +164,13 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
 
     format!(
         "[Unit]\n\
-         Description=songBird mesh hub ({gate})\n\
+         Description={relay_binary} mesh hub ({gate})\n\
          After=network-online.target\n\
          Wants=network-online.target\n\n\
          [Service]\n\
          Type=simple\n\
          UMask={umask}\n\
-         ExecStart={base}/songbird server --socket {socket} --bind {bind_all} --port {federation_port}\n\
+         ExecStart={base}/{relay_binary} server --socket {socket} --bind {bind_all} --port {federation_port}\n\
          {env_lines}\
          Restart=on-failure\n\
          RestartSec={restart_delay}\n\
@@ -189,21 +192,34 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
     )
 }
 
-/// Generate the bearDog ACME gateway systemd unit.
+/// Generate the crypto-signer ACME gateway systemd unit.
 ///
-/// bearDog handles TLS termination on :443 and proxies to songBird's
-/// `http.proxy` method. It manages ACME certificate renewal via HTTP-01.
+/// The crypto signer (bearDog) handles TLS termination on :443 and proxies to
+/// the mesh relay's `http.proxy` method. It manages ACME certificate renewal
+/// via HTTP-01.
 #[must_use]
 pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
+    let crypto_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let relay_svc = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
+    let relay_gateway_unit = relay_svc.map_or("songbird-gateway.service", |s| {
+        s.extra_ports
+            .first()
+            .map_or(s.systemd_unit, |_| "songbird-gateway.service")
+    });
+
     format!(
         "[Unit]\n\
-         Description=bearDog ACME gateway ({gate})\n\
-         After=network-online.target songbird-gateway.service\n\
+         Description={crypto_binary} ACME gateway ({gate})\n\
+         After=network-online.target {relay_gateway_unit}\n\
          Wants=network-online.target\n\
-         Requires=songbird-gateway.service\n\n\
+         Requires={relay_gateway_unit}\n\n\
          [Service]\n\
          Type=simple\n\
-         ExecStart={base}/beardog serve-https \
+         ExecStart={base}/{crypto_binary} serve-https \
          --upstream {socket} \
          --bind {bind}\n\
          Environment=GATE_NAME={gate}\n\

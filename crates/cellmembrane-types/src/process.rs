@@ -208,6 +208,12 @@ impl ServiceSpec {
             None
         };
 
+        let mut after = vec!["network.target".to_string()];
+        let nucleus_spec = crate::MembraneComposition::Nucleus.spec();
+        for dep_unit in nucleus_spec.systemd_after_deps(svc.binary) {
+            after.push(dep_unit.to_string());
+        }
+
         Self {
             binary: svc.binary.to_string(),
             systemd_unit: svc.systemd_unit.to_string(),
@@ -217,7 +223,7 @@ impl ServiceSpec {
             environment: Vec::new(),
             env_file,
             restart_policy: RestartPolicy::default(),
-            after: vec!["network.target".into()],
+            after,
             working_directory: None,
             umask: crate::service::DEFAULT_SERVICE_UMASK.into(),
             runtime_directory: Some("membrane".into()),

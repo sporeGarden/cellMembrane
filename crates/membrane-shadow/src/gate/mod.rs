@@ -13,6 +13,7 @@
 pub mod bootstrap;
 pub(crate) mod crash_loop;
 pub(crate) mod enroll;
+mod enroll_crypto;
 pub mod health;
 mod interface;
 pub(crate) mod key_portal;

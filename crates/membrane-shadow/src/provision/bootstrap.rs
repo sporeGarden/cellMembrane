@@ -78,13 +78,14 @@ async fn setup_directories(ip: &str) -> Result<String> {
     );
     let config_dir = cellmembrane_types::service::DEFAULT_CONFIG_DIR;
     let eco_root = cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT;
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
     let script = format!(
         r#"
-        mkdir -p {base} /run/membrane {eco_root} \
-                 {base}/sandbox /run/membrane/sandbox \
-                 {base}/canary /run/membrane/canary \
+        mkdir -p {base} {socket_base} {eco_root} \
+                 {base}/sandbox {socket_base}/sandbox \
+                 {base}/canary {socket_base}/canary \
                  /var/lib/membrane/{relay_binary} {config_dir}
-        chmod 755 /run/membrane /run/membrane/sandbox /run/membrane/canary
+        chmod 755 {socket_base} {socket_base}/sandbox {socket_base}/canary
         echo "directories created"
     "#
     );
@@ -168,6 +169,10 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
 
     let umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK;
     let rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE;
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
+    let restart_delay = cellmembrane_types::service::DEFAULT_RESTART_DELAY_SECS;
+    let start_limit_interval = cellmembrane_types::service::DEFAULT_START_LIMIT_INTERVAL_SECS;
+    let start_limit_burst = cellmembrane_types::service::DEFAULT_START_LIMIT_BURST;
 
     let bearer_unit = format!(
         r"[Unit]
@@ -180,13 +185,13 @@ StartLimitBurst=5
 [Service]
 Type=simple
 UMask={umask}
-ExecStart={install_base}/{spine} server --socket /run/membrane/{spine}.sock --audit-dir /var/lib/membrane/{spine}
+ExecStart={install_base}/{spine} server --socket {socket_base}/{spine}.sock --audit-dir /var/lib/membrane/{spine}
 Environment={spine_upper}_NODE_ID={gate_name}
 Environment={spine_upper}_LOG_LEVEL=info
 Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=120
-StartLimitBurst=10
+RestartSec={restart_delay}
+StartLimitIntervalSec={start_limit_interval}
+StartLimitBurst={start_limit_burst}
 RuntimeDirectory=membrane
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
@@ -210,24 +215,24 @@ StartLimitBurst=5
 [Service]
 Type=simple
 UMask={umask}
-ExecStartPre=-/bin/rm -f /run/membrane/{relay}.sock
+ExecStartPre=-/bin/rm -f {socket_base}/{relay}.sock
 ExecStart={install_base}/{relay} server \
-    --socket /run/membrane/{relay}.sock \
-    --security-socket /run/membrane/{spine}.sock \
+    --socket {socket_base}/{relay}.sock \
+    --security-socket {socket_base}/{spine}.sock \
     --federation-port {federation_port} \
     --bind {bind_all} \
     --dark-forest \
-    --pid-dir /run/membrane
+    --pid-dir {socket_base}
 Environment={relay_upper}_NODE_ID={gate_name}
 Environment={relay_upper}_LOG_LEVEL=info
 Environment={relay_upper}_DARK_FOREST=true
 Environment={relay_upper}_SECURITY_PROVIDER={spine}
-Environment={relay_upper}_PID_DIR=/run/membrane
+Environment={relay_upper}_PID_DIR={socket_base}
 Environment={relay_upper}_FEDERATION_PORT={federation_port}
 Environment={relay_upper}_FEDERATION_ENABLED=true
 Environment={relay_upper}_PEERS={hub_id}@{vps_peer}
 Restart=on-failure
-RestartSec=5
+RestartSec={restart_delay}
 RuntimeDirectory=membrane
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
@@ -247,11 +252,11 @@ Wants={relay}-membrane.service
 [Service]
 Type=simple
 UMask={umask}
-ExecStart={install_base}/%i server --socket /run/membrane/%i.sock --security-socket /run/membrane/{spine}.sock --pid-dir /run/membrane
+ExecStart={install_base}/%i server --socket {socket_base}/%i.sock --security-socket {socket_base}/{spine}.sock --pid-dir {socket_base}
 Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=120
-StartLimitBurst=10
+RestartSec={restart_delay}
+StartLimitIntervalSec={start_limit_interval}
+StartLimitBurst={start_limit_burst}
 RuntimeDirectory=membrane
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
@@ -385,11 +390,12 @@ async fn join_mesh(ip: &str, gate_name: &str) -> Result<String> {
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
 
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
     let script = format!(
         r#"
 sleep 3
 echo '{{"jsonrpc":"2.0","method":"mesh.init","params":{{"node_id":"{gate_name}","peers":["{vps_peer}"]}},"id":1}}' | \
-    socat - UNIX-CONNECT:/run/membrane/{relay}.sock 2>/dev/null || echo "mesh.init deferred"
+    socat - UNIX-CONNECT:{socket_base}/{relay}.sock 2>/dev/null || echo "mesh.init deferred"
 "#
     );
     ssh_exec(ip, &script).await
@@ -401,11 +407,12 @@ pub(super) async fn verify_federation(ip: &str) -> Result<String> {
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
 
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
     let script = format!(
         r#"
 sleep 3
 RESP=$(echo '{{"jsonrpc":"2.0","method":"mesh.status","params":{{}},"id":1}}' | \
-    socat - UNIX-CONNECT:/run/membrane/{relay}.sock 2>/dev/null)
+    socat - UNIX-CONNECT:{socket_base}/{relay}.sock 2>/dev/null)
 if [ -z "$RESP" ]; then
     echo "federation: no response from relay"
     exit 0
@@ -420,20 +427,23 @@ echo "federation: peers=${{PEERS:-0}} connections=${{CONNS:-0}}"
 
 /// Phase 7: Health sweep — verify critical services are responding.
 pub(super) async fn health_sweep(ip: &str) -> Result<String> {
-    let script = r#"
+    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
+    let script = format!(
+        r#"
         HEALTHY=0
         TOTAL=0
-        for sock in /run/membrane/*.sock; do
+        for sock in {socket_base}/*.sock; do
             [ -S "$sock" ] || continue
             TOTAL=$((TOTAL + 1))
-            RESP=$(echo '{"jsonrpc":"2.0","method":"health","id":1}' | socat - UNIX-CONNECT:"$sock" 2>/dev/null)
+            RESP=$(echo '{{"jsonrpc":"2.0","method":"health","id":1}}' | socat - UNIX-CONNECT:"$sock" 2>/dev/null)
             if echo "$RESP" | grep -q '"status":"healthy"'; then
                 HEALTHY=$((HEALTHY + 1))
             fi
         done
         echo "$HEALTHY/$TOTAL healthy"
-    "#;
-    ssh_exec(ip, script).await
+    "#
+    );
+    ssh_exec(ip, &script).await
 }
 
 /// Full bootstrap pipeline — takes a fresh droplet from bare OS to operational gate.

@@ -347,6 +347,34 @@ impl CompositionSpec {
             .collect()
     }
 
+    /// Systemd `After=` dependencies for a given binary in this composition.
+    ///
+    /// Returns the systemd unit names of all primals that appear earlier in the
+    /// `boot_order`, ensuring correct startup sequencing. For example, `songbird`
+    /// returns `["beardog-membrane.service"]`, while `beardog` returns an empty
+    /// list (it boots first).
+    ///
+    /// Non-primal (symbiotic) services are excluded — their ordering is managed
+    /// by their own packaging.
+    #[must_use]
+    pub fn systemd_after_deps(&self, binary: &str) -> Vec<&'static str> {
+        let pos = self.boot_order.iter().position(|b| *b == binary);
+        let Some(idx) = pos else {
+            return Vec::new();
+        };
+        self.boot_order[..idx]
+            .iter()
+            .filter_map(|b| {
+                let svc = MembraneService::for_binary(b)?;
+                if svc.is_primal {
+                    Some(svc.systemd_unit)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// TCP ports still required in UDS-only mode (symbiotic services + relay).
     /// These are services that must bind to TCP regardless of transport mode.
     #[must_use]
