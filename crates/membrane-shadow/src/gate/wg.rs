@@ -226,7 +226,11 @@ pub(super) fn manifest_to_wg_config(
                 None
             };
 
-            let keepalive = if endpoint.is_some() { 25 } else { 0 };
+            let keepalive = if endpoint.is_some() {
+                cellmembrane_types::service::DEFAULT_WG_PERSISTENT_KEEPALIVE_SECS
+            } else {
+                0
+            };
             Some(cellmembrane_types::wireguard::WgPeer {
                 name: name.clone(),
                 mesh_ip: peer_ip.to_string(),

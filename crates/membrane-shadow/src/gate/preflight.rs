@@ -148,7 +148,8 @@ fn check_carrier(interfaces: &[DetectedInterface]) -> PreflightCheck {
 }
 
 async fn check_port53() -> PreflightCheck {
-    let port53_bound = is_tcp_port_bound(53).await || is_udp_port_bound(53).await;
+    let dns_port = cellmembrane_types::service::DEFAULT_DNS_PORT;
+    let port53_bound = is_tcp_port_bound(dns_port).await || is_udp_port_bound(dns_port).await;
 
     let has_resolved = std::path::Path::new("/run/systemd/resolve/stub-resolv.conf").exists();
 

@@ -447,8 +447,53 @@ pub const DEFAULT_STALENESS_THRESHOLD_SECS: u64 = 7 * 86_400;
 pub const DEFAULT_CANARY_MAX_AGE_HOURS: i64 = 168;
 /// Sandbox health check timeout (seconds).
 pub const DEFAULT_SANDBOX_HEALTH_TIMEOUT_SECS: u64 = 15;
+/// JSON-RPC call timeout over UDS/TCP (seconds).
+pub const DEFAULT_JSONRPC_TIMEOUT_SECS: u64 = 3;
+/// Sovereignty / HTTP probe timeout (seconds).
+pub const DEFAULT_PROBE_TIMEOUT_SECS: u64 = 5;
+/// TCP reachability probe timeout (seconds).
+pub const DEFAULT_TCP_PROBE_TIMEOUT_SECS: u64 = 3;
+/// Enrollment phase timeout (seconds).
+pub const DEFAULT_ENROLL_PHASE_TIMEOUT_SECS: u64 = 30;
+/// IPC write timeout over UDS (seconds).
+pub const DEFAULT_IPC_WRITE_TIMEOUT_SECS: u64 = 2;
+/// IPC read timeout over UDS (seconds).
+pub const DEFAULT_IPC_READ_TIMEOUT_SECS: u64 = 5;
+/// Sandbox health probe retries.
+pub const DEFAULT_SANDBOX_PROBE_RETRIES: u32 = 5;
+/// Sandbox health probe interval (milliseconds).
+pub const DEFAULT_SANDBOX_PROBE_INTERVAL_MS: u64 = 2000;
+/// Mesh socket wait retries during relay startup.
+pub const MESH_SOCKET_WAIT_RETRIES: u32 = 5;
+/// Mesh socket wait interval (seconds).
+pub const MESH_SOCKET_WAIT_INTERVAL_SECS: u64 = 2;
 /// Forgejo API pagination page size.
 pub const DEFAULT_API_PAGE_SIZE: u32 = 50;
+
+// ── Well-known ports ─────────────────────────────────────────────────
+
+/// DNS standard port.
+pub const DEFAULT_DNS_PORT: u16 = 53;
+/// HTTP standard port (ACME challenge, surface).
+pub const DEFAULT_HTTP_PORT: u16 = 80;
+
+// ── Systemd policy constants ─────────────────────────────────────────
+
+/// Cascade oneshot timeout (seconds) for `TimeoutStartSec`.
+pub const DEFAULT_CASCADE_TIMEOUT_SECS: u32 = 300;
+/// Cascade timer jitter (seconds) for `RandomizedDelaySec`.
+pub const DEFAULT_CASCADE_JITTER_SECS: u32 = 60;
+/// Service restart delay (seconds) for `RestartSec`.
+pub const DEFAULT_RESTART_DELAY_SECS: u32 = 5;
+/// Start-limit burst window (seconds) for `StartLimitIntervalSec`.
+pub const DEFAULT_START_LIMIT_INTERVAL_SECS: u32 = 120;
+/// Start-limit burst count for `StartLimitBurst`.
+pub const DEFAULT_START_LIMIT_BURST: u32 = 10;
+
+// ── WireGuard ────────────────────────────────────────────────────────
+
+/// Default `WireGuard` persistent keepalive (seconds).
+pub const DEFAULT_WG_PERSISTENT_KEEPALIVE_SECS: u16 = 25;
 
 /// Default push mirror sync interval (Forgejo -> GitHub).
 pub const DEFAULT_PUSH_MIRROR_INTERVAL: &str = "8h0m0s";

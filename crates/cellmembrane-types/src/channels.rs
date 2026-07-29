@@ -36,9 +36,9 @@ impl MembraneChannel {
     #[must_use]
     pub const fn default_ports(&self) -> &'static [u16] {
         match self {
-            Self::Signal => &[53],
-            Self::Relay => &[3478],
-            Self::Surface => &[80, 443],
+            Self::Signal => &[crate::service::DEFAULT_DNS_PORT],
+            Self::Relay => &[crate::service::DEFAULT_TURN_PORT],
+            Self::Surface => &[crate::service::DEFAULT_HTTP_PORT, crate::service::DEFAULT_HTTPS_PORT],
         }
     }
 

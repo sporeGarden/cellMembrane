@@ -367,7 +367,10 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
 
 fn extract_zone_arg<'a>(args: &[&'a str]) -> Result<&'a str> {
     extract_flag(args, "--zone").ok_or_else(|| {
-        ShadowError::Config("--zone <domain> required (e.g. --zone primals.eco)".into())
+        ShadowError::Config(format!(
+            "--zone <domain> required (e.g. --zone {})",
+            cellmembrane_types::service::SURFACE_DOMAIN
+        ))
     })
 }
 

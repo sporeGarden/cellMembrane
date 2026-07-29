@@ -114,7 +114,10 @@ pub async fn request_ssh_certificate(gate_name: &str, dry_run: bool) -> Result<S
 
     let key_path = dir.join("id_ecdsa");
     let cert_path = dir.join("id_ecdsa-cert.pub");
-    let principal = format!("{gate_name}@primals.eco");
+    let principal = format!(
+        "{gate_name}@{}",
+        cellmembrane_types::service::SURFACE_DOMAIN
+    );
 
     if dry_run {
         return Ok(SshCertificate {

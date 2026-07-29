@@ -113,11 +113,14 @@ async fn configure_mesh(
         .display()
         .to_string();
 
-    for _ in 0..5 {
+    for _ in 0..cellmembrane_types::service::MESH_SOCKET_WAIT_RETRIES {
         if std::path::Path::new(&socket_path).exists() {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(
+            cellmembrane_types::service::MESH_SOCKET_WAIT_INTERVAL_SECS,
+        ))
+        .await;
     }
 
     if !std::path::Path::new(&socket_path).exists() {

@@ -21,7 +21,11 @@ use super::bootstrap::BootstrapPhase;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
-const ENROLL_PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const ENROLL_PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
+    cellmembrane_types::service::DEFAULT_ENROLL_PHASE_TIMEOUT_SECS,
+);
+
+const DEFAULT_SSH_PORT: &str = "22";
 
 /// SSH timeout for hub-side peer addition (generous for WAN latency).
 ///
@@ -79,19 +83,19 @@ pub async fn enroll(gate_name: &str, dry_run: bool) -> Result<EnrollResult> {
 
     phases.push(timed_phase_enroll("wg.keygen", wg_keygen_phase(dry_run)).await);
 
-    let ip = mesh_ip.clone().unwrap_or_default();
-    phases.push(timed_phase_enroll("wg.config", wg_config_phase(gate_name, &ip, dry_run)).await);
+    let ip = mesh_ip.as_deref().unwrap_or_default();
+    phases.push(timed_phase_enroll("wg.config", wg_config_phase(gate_name, ip, dry_run)).await);
 
-    phases.push(timed_phase_enroll("mesh.verify", mesh_verify_phase(&ip, dry_run)).await);
+    phases.push(timed_phase_enroll("mesh.verify", mesh_verify_phase(ip, dry_run)).await);
 
     phases.push(timed_phase_enroll("forgejo.verify", forgejo_verify_phase(dry_run)).await);
 
     phases.push(timed_phase_enroll("git.remotes", git_remotes_phase(gate_name, dry_run)).await);
 
-    phases.push(timed_phase_enroll("hub.peer", hub_peer_phase(gate_name, &ip, dry_run)).await);
+    phases.push(timed_phase_enroll("hub.peer", hub_peer_phase(gate_name, ip, dry_run)).await);
 
     phases
-        .push(timed_phase_enroll("mesh.enroll", mesh_enroll_phase(gate_name, &ip, dry_run)).await);
+        .push(timed_phase_enroll("mesh.enroll", mesh_enroll_phase(gate_name, ip, dry_run)).await);
 
     phases.push(timed_phase_enroll("ssh_cert", ssh_cert_phase(gate_name, dry_run)).await);
 
@@ -152,7 +156,13 @@ async fn mesh_verify_phase(mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
     }
 
     let ping_result = tokio::process::Command::new("ping")
-        .args(["-c", "3", "-W", "5", &hub_ip])
+        .args([
+            "-c",
+            "3",
+            "-W",
+            &cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS.to_string(),
+            &hub_ip,
+        ])
         .output()
         .await;
 
@@ -193,14 +203,17 @@ async fn forgejo_verify_phase(dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let (host, port) = git_addr.split_once(':').unwrap_or((&git_addr, "22"));
+    let (host, port) = git_addr.split_once(':').unwrap_or((&git_addr, DEFAULT_SSH_PORT));
 
     let ssh_result = tokio::process::Command::new("ssh")
         .args([
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            "ConnectTimeout=10",
+            &format!(
+                "ConnectTimeout={}",
+                cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS
+            ),
             "-p",
             port,
             &format!("git@{host}"),

@@ -206,7 +206,7 @@ pub struct NftablesConfig {
 /// Default `WireGuard` listen port (standard: 51820).
 #[must_use]
 pub const fn default_wg_port() -> u16 {
-    51820
+    crate::wireguard::DEFAULT_WG_PORT
 }
 const fn default_true() -> bool {
     true

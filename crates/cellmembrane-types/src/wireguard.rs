@@ -70,7 +70,11 @@ impl WgConfig {
         let _ = writeln!(out, "# Mesh subnet: {}", self.subnet);
         let _ = writeln!(out);
         let _ = writeln!(out, "[Interface]");
-        let _ = writeln!(out, "Address = {}/24", self.address);
+        let cidr_prefix = self
+            .subnet
+            .rsplit_once('/')
+            .map_or("24", |(_, prefix)| prefix);
+        let _ = writeln!(out, "Address = {}/{cidr_prefix}", self.address);
         let _ = writeln!(out, "ListenPort = {}", self.listen_port);
         let _ = writeln!(out, "PrivateKey = <PRIVATE_KEY>");
         if let Some(dns) = &self.dns {

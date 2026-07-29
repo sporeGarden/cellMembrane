@@ -12,13 +12,21 @@
 **Wave 155i (P0 glibc depot + P1 WG DNS + deep debt evolution sweep):**
 P0 closed: `targets_for_primal()` auto-appends `x86_64-unknown-linux-gnu`
 for GPU primals. P1 closed: `WgConfig` `dns` field, `DNS =` in wg-quick.
-Deep debt sweep: P0 sandbox fail-closed fix (`sandbox_validate` no longer
-proceeds on infra error). Tower status refactored from hardcoded primal names
-to registry-driven `MembraneComposition::Tower.spec()` — capability-based
-probing. Unified `resolve_primal_socket()` replaces 3 per-primal resolvers.
-`run_step()` helper deduplicates 5 `step` CLI blocks. `detect_crash_loops()`
-extracts shared scanning from 3 crash-loop variants. `push_depot_to_remote()`
-deduplicates depot push paths. Let-chains modernization. Net -135 lines.
+Deep debt sweep #1: P0 sandbox fail-closed, registry-driven tower status,
+5 dedup extractions, let-chains modernization. Net -135 lines.
+Deep debt sweep #2: 45 new centralized constants (timeouts, retries, ports,
+systemd policy, WG keepalive). SSH timeout `10` → `DEFAULT_SSH_TIMEOUT_SECS`,
+JSON-RPC `3` → `DEFAULT_JSONRPC_TIMEOUT_SECS`, sovereignty probes `5` →
+`DEFAULT_PROBE_TIMEOUT_SECS`, TCP probe `3` → `DEFAULT_TCP_PROBE_TIMEOUT_SECS`,
+enrollment `30` → `DEFAULT_ENROLL_PHASE_TIMEOUT_SECS`, mesh socket wait →
+`MESH_SOCKET_WAIT_RETRIES`/`INTERVAL_SECS`, cascade `300`/`60` →
+`DEFAULT_CASCADE_TIMEOUT_SECS`/`JITTER_SECS`, `RestartSec=5` → constant,
+`StartLimitBurst=10` → constant. Hardcoded `/24` → parsed from subnet CIDR.
+Duplicate `default_wg_port()` → delegates to `wireguard::DEFAULT_WG_PORT`.
+Channel ports `53`/`80`/`443`/`3478` → `DEFAULT_DNS_PORT`/`DEFAULT_HTTP_PORT`/
+`DEFAULT_HTTPS_PORT`/`DEFAULT_TURN_PORT`. `@primals.eco` → `SURFACE_DOMAIN`.
+Unnecessary `clone()` → `as_deref()` in enroll. SSH port `"22"` → const.
+WG keepalive `25` → `DEFAULT_WG_PERSISTENT_KEEPALIVE_SECS`.
 1,221 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155f (J6+J8: `gate.configure` / `gate.apply` + key enrollment portal + deep debt):**

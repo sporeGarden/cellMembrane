@@ -12,6 +12,7 @@ const SECS_PER_DAY: u64 = 86_400;
 const SECS_PER_HOUR: u64 = 3_600;
 const CERT_WARNING_THRESHOLD_DAYS: i64 = 14;
 const MAX_CERT_PROBE_DOMAINS: usize = 5;
+const DEFAULT_FALLBACK_UID: &str = "1000";
 
 /// A single status probe (e.g. depot integrity, mesh connectivity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -445,7 +446,7 @@ pub(crate) fn resolve_uid() -> String {
         .or_else(|_| std::env::var("EUID"))
         .unwrap_or_else(|_| {
             std::fs::read_to_string("/proc/self/loginuid")
-                .unwrap_or_else(|_| "1000".into())
+                .unwrap_or_else(|_| DEFAULT_FALLBACK_UID.into())
                 .trim()
                 .to_string()
         })

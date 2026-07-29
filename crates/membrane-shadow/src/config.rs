@@ -11,6 +11,16 @@ use crate::error::{Result, ShadowError};
 
 use cellmembrane_types::MembraneService;
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "guarded by const assertion"
+)]
+const SSH_TIMEOUT_U32: u32 = cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS as u32;
+const _: () = assert!(
+    cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS <= u32::MAX as u64,
+    "SSH timeout must fit u32"
+);
+
 /// Shadow function configuration — all the context needed to reach the VPS.
 #[derive(Debug, Clone)]
 pub struct ShadowConfig {
@@ -58,7 +68,7 @@ impl Default for ShadowConfig {
             forgejo_api: String::new(),
             forgejo_token: None,
             vps_root: cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT.into(),
-            ssh_timeout: 10,
+            ssh_timeout: SSH_TIMEOUT_U32,
             forgejo_data_dir: None,
             forgejo_work_dir: None,
             forgejo_admin_user: None,
@@ -98,7 +108,7 @@ impl ShadowConfig {
             ssh_timeout: std::env::var(cellmembrane_types::service::ENV_SSH_TIMEOUT)
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(10),
+                .unwrap_or(SSH_TIMEOUT_U32),
             forgejo_token: None,
             forgejo_data_dir: std::env::var(cellmembrane_types::service::ENV_FORGEJO_DATA_DIR).ok(),
             forgejo_work_dir: std::env::var(cellmembrane_types::service::ENV_FORGEJO_WORK_DIR).ok(),

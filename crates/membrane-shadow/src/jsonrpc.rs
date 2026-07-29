@@ -17,7 +17,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 use crate::error::{Result, ShadowError};
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
+const DEFAULT_TIMEOUT: Duration =
+    Duration::from_secs(cellmembrane_types::service::DEFAULT_JSONRPC_TIMEOUT_SECS);
 
 fn rpc_err(msg: impl std::fmt::Display) -> ShadowError {
     ShadowError::Rpc(msg.to_string())

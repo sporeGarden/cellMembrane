@@ -29,6 +29,9 @@ pub(crate) fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> 
             m.sync.default_source
         });
 
+    let cascade_timeout = cellmembrane_types::service::DEFAULT_CASCADE_TIMEOUT_SECS;
+    let cascade_jitter = cellmembrane_types::service::DEFAULT_CASCADE_JITTER_SECS;
+
     let service = format!(
         r"[Unit]
 Description=Membrane Autonomous Cascade ({gate_name})
@@ -39,7 +42,7 @@ Wants=network-online.target
 Type=oneshot
 ExecStart={install_base}/membrane temporal.cascade --source {source}
 Environment=GATE_NAME={gate_name}
-TimeoutStartSec=300
+TimeoutStartSec={cascade_timeout}
 StandardOutput=journal
 StandardError=journal
 "
@@ -51,7 +54,7 @@ Description=Membrane Cascade Timer ({gate_name}) — Quorum Phase 1
 
 [Timer]
 OnCalendar=*:0/{interval_minutes}
-RandomizedDelaySec=60
+RandomizedDelaySec={cascade_jitter}
 Persistent=true
 
 [Install]
@@ -167,9 +170,9 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
          ExecStart={base}/songbird server --socket {socket} --bind {bind_all} --port {federation_port}\n\
          {env_lines}\
          Restart=on-failure\n\
-         RestartSec=5\n\
-         StartLimitIntervalSec=120\n\
-         StartLimitBurst=10\n\
+         RestartSec={restart_delay}\n\
+         StartLimitIntervalSec={start_limit_interval}\n\
+         StartLimitBurst={start_limit_burst}\n\
          RuntimeDirectory=membrane\n\
          RuntimeDirectoryMode={rtd_mode}\n\
          RuntimeDirectoryPreserve=yes\n\n\
@@ -180,6 +183,9 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
         socket = params.songbird_socket,
         umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK,
         rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE,
+        restart_delay = cellmembrane_types::service::DEFAULT_RESTART_DELAY_SECS,
+        start_limit_interval = cellmembrane_types::service::DEFAULT_START_LIMIT_INTERVAL_SECS,
+        start_limit_burst = cellmembrane_types::service::DEFAULT_START_LIMIT_BURST,
     )
 }
 
@@ -202,9 +208,9 @@ pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
          --bind {bind}\n\
          Environment=GATE_NAME={gate}\n\
          Restart=on-failure\n\
-         RestartSec=5\n\
-         StartLimitIntervalSec=120\n\
-         StartLimitBurst=10\n\
+         RestartSec={restart_delay}\n\
+         StartLimitIntervalSec={start_limit_interval}\n\
+         StartLimitBurst={start_limit_burst}\n\
          AmbientCapabilities=CAP_NET_BIND_SERVICE\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n",
@@ -212,6 +218,9 @@ pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
         base = params.install_base,
         socket = params.songbird_socket,
         bind = params.gateway_bind,
+        restart_delay = cellmembrane_types::service::DEFAULT_RESTART_DELAY_SECS,
+        start_limit_interval = cellmembrane_types::service::DEFAULT_START_LIMIT_INTERVAL_SECS,
+        start_limit_burst = cellmembrane_types::service::DEFAULT_START_LIMIT_BURST,
     )
 }
 
@@ -240,7 +249,10 @@ mod tests {
 
         assert!(timer.contains("[Timer]"));
         assert!(timer.contains("OnCalendar=*:0/15"));
-        assert!(timer.contains("RandomizedDelaySec=60"));
+        assert!(timer.contains(&format!(
+            "RandomizedDelaySec={}",
+            cellmembrane_types::service::DEFAULT_CASCADE_JITTER_SECS
+        )));
         assert!(timer.contains("Persistent=true"));
         assert!(timer.contains("timers.target"));
     }
