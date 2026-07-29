@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155f) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155i) |
 
 ---
 
@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1219 tests — pedantic clippy clean
+cargo test                  # 1223 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -113,6 +113,13 @@ optionally installs. Supports `--env K=V` overrides. Extracted to
 `gate_configure.rs` module. `ServiceSpec` foundation (Wave 155d) wired through
 to full CLI surface. `nucleus.rs` helpers (`systemctl`, `resolve_security_socket`,
 `extra_exec_args`) promoted to `pub(crate)` for cross-module use.
+Glibc depot target (Wave 155i): `targets_for_primal()` now auto-appends
+`x86_64-unknown-linux-gnu` for GPU primals even when manifest `targets` is
+explicit — closes P0 musl/glibc `dlopen` gap for compute primals
+(barraCuda, coralReef) on strandGate RTX 3090.
+WireGuard DNS (Wave 155i): `WgConfig` gains `dns` field, `to_wg_quick()` emits
+`DNS =` in `[Interface]`, `manifest_to_wg_config()` resolves hub mesh IP as
+DNS server. Fixes P1 WireGuard DNS catch-all.
 J8 foundation (Wave 155f): SSH certificate lifecycle via sovereign step-ca CA.
 `gate/key_portal.rs` module: `request_ssh_certificate()`, `renew_ssh_certificate()`,
 `install_host_certificate()`, `inspect_certificates()`, `bootstrap_ca()`. New CLI

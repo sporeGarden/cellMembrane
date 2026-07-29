@@ -1,13 +1,23 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-28 (Wave 155f)
+**Last updated:** 2026-07-29 (Wave 155i)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155i (P0 glibc depot target + P1 WireGuard DNS + deep debt):**
+P0 closed: `targets_for_primal()` now auto-appends `x86_64-unknown-linux-gnu`
+for GPU primals even when manifest `targets` is explicit. Compute primals
+(barraCuda, coralReef) on strandGate RTX 3090 can now `dlopen` glibc Vulkan ICD
+from depot binaries.
+P1 closed: `WgConfig` gains `dns` field, `to_wg_quick()` emits `DNS =` in
+`[Interface]` section. `manifest_to_wg_config()` resolves hub mesh IP as DNS
+server for mesh hostname resolution via `wg-quick`.
+1,223 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155f (J6+J8: `gate.configure` / `gate.apply` + key enrollment portal + deep debt):**
 J6 completion: `gate.configure` and `gate.apply` CLI commands implement

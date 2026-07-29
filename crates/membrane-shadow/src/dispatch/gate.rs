@@ -642,6 +642,7 @@ async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<ShadowOutco
         address: local_ip,
         listen_port,
         subnet: subnet.into(),
+        dns: Some(cellmembrane_types::service::DEFAULT_HUB_MESH_IP.into()),
         peers,
     };
 

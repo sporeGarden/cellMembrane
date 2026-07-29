@@ -238,11 +238,18 @@ pub(super) fn manifest_to_wg_config(
         })
         .collect();
 
+    let dns = manifest
+        .topology
+        .as_ref()
+        .and_then(|t| manifest.gates.get(&t.inner_membrane))
+        .and_then(|g| g.wg_ip.clone());
+
     cellmembrane_types::wireguard::WgConfig {
         gate_name: gate_name.into(),
         address: mesh_ip.into(),
         listen_port: cellmembrane_types::wireguard::DEFAULT_WG_PORT,
         subnet: cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET.into(),
+        dns,
         peers,
     }
 }

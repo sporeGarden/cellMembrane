@@ -120,7 +120,8 @@ pub use super::checksum::ChecksumEntry;
 /// Compute which target triples to build for a given primal.
 ///
 /// Priority: CLI `--target` > manifest `[build.<primal>].targets` >
-/// host triple (+ gnu if GPU).
+/// host triple. GPU primals always include the gnu target for `dlopen`
+/// support (CUDA/Vulkan), even when manifest targets are explicit.
 fn targets_for_primal(
     cli_target: Option<&str>,
     source: &SourceEntry,
@@ -129,11 +130,11 @@ fn targets_for_primal(
     if let Some(t) = cli_target {
         return vec![t.to_string()];
     }
-    if !manifest_targets.is_empty() {
-        return manifest_targets.to_vec();
-    }
-    let host = detect_target_triple().to_string();
-    let mut targets = vec![host];
+    let mut targets = if manifest_targets.is_empty() {
+        vec![detect_target_triple().to_string()]
+    } else {
+        manifest_targets.to_vec()
+    };
     if source.gpu && cfg!(target_arch = "x86_64") {
         let gnu = cellmembrane_types::TargetArch::X86_64Gnu.triple();
         if !targets.iter().any(|t| t == gnu) {

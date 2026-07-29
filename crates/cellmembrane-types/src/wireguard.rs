@@ -45,6 +45,10 @@ pub struct WgConfig {
     pub listen_port: u16,
     /// Mesh subnet CIDR.
     pub subnet: String,
+    /// DNS server IP for mesh hostname resolution (e.g. golgiBody running knot-dns).
+    /// When set, emits `DNS =` in `[Interface]` so `wg-quick` configures `resolv.conf`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns: Option<String>,
     /// Peers in the mesh (all other gates).
     pub peers: Vec<WgPeer>,
 }
@@ -69,6 +73,9 @@ impl WgConfig {
         let _ = writeln!(out, "Address = {}/24", self.address);
         let _ = writeln!(out, "ListenPort = {}", self.listen_port);
         let _ = writeln!(out, "PrivateKey = <PRIVATE_KEY>");
+        if let Some(dns) = &self.dns {
+            let _ = writeln!(out, "DNS = {dns}");
+        }
         let _ = writeln!(out);
 
         for peer in &self.peers {
@@ -113,6 +120,7 @@ mod tests {
             address: "10.13.37.2".into(),
             listen_port: DEFAULT_WG_PORT,
             subnet: "10.13.37.0/24".into(),
+            dns: Some("10.13.37.1".into()),
             peers: vec![
                 WgPeer {
                     name: "golgi".into(),
@@ -172,6 +180,24 @@ mod tests {
         let output = conf.to_wg_quick();
         let east_section = output.split("# eastGate").nth(1).unwrap();
         assert!(east_section.contains("AllowedIPs = 10.13.37.5/32"));
+    }
+
+    #[test]
+    fn wg_quick_dns_rendered() {
+        let conf = sample_config();
+        let output = conf.to_wg_quick();
+        assert!(
+            output.contains("DNS = 10.13.37.1"),
+            "DNS directive should be present"
+        );
+    }
+
+    #[test]
+    fn wg_quick_no_dns_when_none() {
+        let mut conf = sample_config();
+        conf.dns = None;
+        let output = conf.to_wg_quick();
+        assert!(!output.contains("DNS ="), "No DNS line when dns is None");
     }
 
     #[test]

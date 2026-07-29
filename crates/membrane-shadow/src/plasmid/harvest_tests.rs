@@ -279,6 +279,37 @@ fn targets_cli_overrides_manifest() {
 }
 
 #[test]
+fn targets_manifest_gpu_adds_gnu() {
+    let mut source = test_source_entry("ecoPrimals/barracuda");
+    source.gpu = true;
+    let manifest_targets = vec![
+        "x86_64-unknown-linux-musl".to_string(),
+        "aarch64-unknown-linux-musl".to_string(),
+    ];
+    let targets = targets_for_primal(None, &source, &manifest_targets);
+    if cfg!(target_arch = "x86_64") {
+        assert_eq!(
+            targets.len(),
+            3,
+            "gpu should auto-add gnu to manifest targets"
+        );
+        assert!(targets.contains(&"x86_64-unknown-linux-gnu".to_string()));
+    }
+}
+
+#[test]
+fn targets_manifest_gpu_no_duplicate_gnu() {
+    let mut source = test_source_entry("ecoPrimals/barracuda");
+    source.gpu = true;
+    let manifest_targets = vec![
+        "x86_64-unknown-linux-musl".to_string(),
+        "x86_64-unknown-linux-gnu".to_string(),
+    ];
+    let targets = targets_for_primal(None, &source, &manifest_targets);
+    assert_eq!(targets.len(), 2, "gnu already present — no duplicate");
+}
+
+#[test]
 fn targets_cli_override_ignores_gpu() {
     let mut source = test_source_entry("ecoPrimals/barracuda");
     source.gpu = true;
