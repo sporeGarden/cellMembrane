@@ -163,9 +163,7 @@ async fn probe_s3_content() -> StatusProbe {
             let ttfb_ms = start.elapsed().as_millis();
             if resp.status().is_success() {
                 let size_kb = resp
-                    .headers()
-                    .get("content-length")
-                    .and_then(|v| v.to_str().ok())
+                    .header("content-length")
                     .and_then(|s| s.parse::<u64>().ok())
                     .map(|b| b / 1024);
                 let size_info = size_kb.map_or(String::new(), |kb| format!(" {kb}KB"));

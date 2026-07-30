@@ -77,9 +77,10 @@ async fn download_via_http(url: &str, dest: &Path) -> bool {
         _ => return false,
     };
 
-    let Ok(bytes) = response.bytes().await else {
+    let bytes = response.bytes();
+    if bytes.is_empty() {
         return false;
-    };
+    }
 
     atomic_write(dest, &bytes).await
 }

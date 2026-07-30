@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1255 tests — pedantic clippy clean
+cargo test                  # 1264 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -480,14 +480,14 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,255 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-enrollment, sovereignty, BTSP, checksum verification, DNS, and user-space deploy.
+1,264 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, and user-space deploy.
 Tests use both inline `#[cfg(test)]` modules and dedicated test files
 (`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`, `webhook/tests.rs`)
 — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1255 tests)
+cargo test                  # Full suite (1264 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

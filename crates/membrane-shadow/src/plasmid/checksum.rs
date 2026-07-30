@@ -117,7 +117,7 @@ pub async fn fetch_wan_checksums(arch: &str) -> HashMap<String, String> {
         return HashMap::new();
     }
 
-    let Ok(body) = resp.text().await else {
+    let Ok(body) = resp.text() else {
         return HashMap::new();
     };
 

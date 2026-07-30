@@ -191,7 +191,7 @@ pub(super) async fn fetch_wan_signatures() -> SignaturesFile {
         return SignaturesFile::default();
     }
 
-    match resp.text().await {
+    match resp.text() {
         Ok(body) => toml::from_str(&body).unwrap_or_else(|e| {
             tracing::debug!(error = %e, "WAN signatures: invalid TOML");
             SignaturesFile::default()

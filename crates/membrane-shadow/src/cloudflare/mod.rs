@@ -52,7 +52,7 @@ impl CloudflareConfig {
         Ok(Self { api_token, zone_id })
     }
 
-    fn client() -> Result<reqwest::Client> {
+    fn client() -> Result<crate::http_client::HttpClient> {
         crate::http_client(API_TIMEOUT)
     }
 
@@ -177,7 +177,7 @@ pub async fn cache_purge(
     };
 
     let resp = client
-        .post(format!("{CF_API_BASE}/zones/{zone_id}/purge_cache"))
+        .post(&format!("{CF_API_BASE}/zones/{zone_id}/purge_cache"))
         .header(header_key, &header_val)
         .json(&payload)
         .send()
@@ -186,7 +186,6 @@ pub async fn cache_purge(
 
     let body: CfResponse<serde_json::Value> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("cache_purge", e))?;
 
     body.into_result().map(|_: serde_json::Value| ())?;
@@ -210,7 +209,7 @@ pub async fn ssl_settings(cf: &CloudflareConfig, zone: &str) -> Result<SslSettin
     let (header_key, header_val) = cf.auth_header();
 
     let resp = client
-        .get(format!("{CF_API_BASE}/zones/{zone_id}/settings/ssl"))
+        .get(&format!("{CF_API_BASE}/zones/{zone_id}/settings/ssl"))
         .header(header_key, &header_val)
         .send()
         .await
@@ -218,7 +217,6 @@ pub async fn ssl_settings(cf: &CloudflareConfig, zone: &str) -> Result<SslSettin
 
     let body: CfResponse<SslSettings> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("ssl_settings", e))?;
 
     body.into_result()
@@ -233,7 +231,7 @@ pub async fn zone_settings(cf: &CloudflareConfig, zone: &str) -> Result<Vec<Zone
     let (header_key, header_val) = cf.auth_header();
 
     let resp = client
-        .get(format!("{CF_API_BASE}/zones/{zone_id}/settings"))
+        .get(&format!("{CF_API_BASE}/zones/{zone_id}/settings"))
         .header(header_key, &header_val)
         .send()
         .await
@@ -241,7 +239,6 @@ pub async fn zone_settings(cf: &CloudflareConfig, zone: &str) -> Result<Vec<Zone
 
     let body: CfResponse<Vec<ZoneSetting>> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("zone_settings", e))?;
 
     body.into_result_or_default()
@@ -259,7 +256,7 @@ async fn resolve_zone_id(cf: &CloudflareConfig, zone_name: &str) -> Result<Strin
     let (header_key, header_val) = cf.auth_header();
 
     let resp = client
-        .get(format!("{CF_API_BASE}/zones?name={zone_name}"))
+        .get(&format!("{CF_API_BASE}/zones?name={zone_name}"))
         .header(header_key, &header_val)
         .send()
         .await
@@ -267,7 +264,6 @@ async fn resolve_zone_id(cf: &CloudflareConfig, zone_name: &str) -> Result<Strin
 
     let body: CfResponse<Vec<ZoneInfo>> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("resolve_zone_id", e))?;
 
     let zones = body.into_result_or_default()?;

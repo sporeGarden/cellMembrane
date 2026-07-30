@@ -70,7 +70,6 @@ pub async fn dns_list(
         .await
         .map_err(|e| cf_request_err("dns_list", e))?
         .json()
-        .await
         .map_err(|e| cf_parse_err("dns_list", e))?;
 
     body.into_result_or_default()
@@ -99,7 +98,7 @@ pub async fn dns_create(
     });
 
     let resp = client
-        .post(format!("{CF_API_BASE}/zones/{zone_id}/dns_records"))
+        .post(&format!("{CF_API_BASE}/zones/{zone_id}/dns_records"))
         .header(header_key, &header_val)
         .json(&payload)
         .send()
@@ -108,7 +107,6 @@ pub async fn dns_create(
 
     let body: CfResponse<DnsRecord> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("dns_create", e))?;
 
     body.into_result()
@@ -133,7 +131,7 @@ pub async fn dns_update(
     });
 
     let resp = client
-        .put(format!(
+        .put(&format!(
             "{CF_API_BASE}/zones/{zone_id}/dns_records/{record_id}"
         ))
         .header(header_key, &header_val)
@@ -144,7 +142,6 @@ pub async fn dns_update(
 
     let body: CfResponse<DnsRecord> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("dns_update", e))?;
 
     body.into_result()
@@ -157,7 +154,7 @@ pub async fn dns_delete(cf: &CloudflareConfig, zone: &str, record_id: &str) -> R
     let (header_key, header_val) = cf.auth_header();
 
     let resp = client
-        .delete(format!(
+        .delete(&format!(
             "{CF_API_BASE}/zones/{zone_id}/dns_records/{record_id}"
         ))
         .header(header_key, &header_val)
@@ -167,7 +164,6 @@ pub async fn dns_delete(cf: &CloudflareConfig, zone: &str, record_id: &str) -> R
 
     let body: CfResponse<serde_json::Value> = resp
         .json()
-        .await
         .map_err(|e| cf_parse_err("dns_delete", e))?;
 
     body.into_result().map(|_: serde_json::Value| ())

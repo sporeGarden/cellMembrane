@@ -332,14 +332,15 @@ async fn resolve_tag(
 
 #[cfg(feature = "http")]
 async fn fetch_release_tag(url: &str) -> Result<String> {
-    let client = reqwest::Client::new();
+    let client = crate::http_client(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_API_READ_TIMEOUT_SECS,
+    ))?;
     let resp: ReleaseResponse = client
         .get(url)
         .header("User-Agent", "membrane-shadow/0.1")
         .send()
         .await?
-        .json()
-        .await?;
+        .json()?;
     Ok(resp.tag_name)
 }
 

@@ -93,7 +93,10 @@ async fn probe_endpoint(url: &str) -> ProbeResult {
     match client.get(url).send().await {
         Ok(resp) => {
             let status = resp.status().as_u16();
-            let body_size = resp.content_length().unwrap_or(0);
+            let body_size = resp
+                .header("content-length")
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
             let elapsed = start.elapsed().as_millis();
             let latency_ms = u32::try_from(elapsed).unwrap_or(u32::MAX);
             ProbeResult::ok(status, latency_ms, body_size)

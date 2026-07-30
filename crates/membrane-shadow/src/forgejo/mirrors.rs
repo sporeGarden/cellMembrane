@@ -85,20 +85,19 @@ pub async fn push_mirror_create(
         use_ssh: true,
     };
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_WRITE)?;
     let resp = client
         .post(&url)
         .header("Authorization", auth_header(token))
         .json(&body)
-        .timeout(API_TIMEOUT_WRITE)
         .send()
         .await?;
 
     let status = resp.status().as_u16();
     if status == 200 || status == 201 {
-        Ok(resp.json().await?)
+        Ok(resp.json()?)
     } else {
-        let msg = resp.text().await.unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         Err(ShadowError::ForgejoApi {
             status,
             message: msg,
@@ -114,19 +113,18 @@ pub async fn push_mirror_list(config: &ShadowConfig, full_name: &str) -> Result<
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}/push_mirrors", config.forgejo_api);
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_READ)?;
     let resp = client
         .get(&url)
         .header("Authorization", auth_header(token))
-        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
     let status = resp.status().as_u16();
     if status == 200 {
-        Ok(resp.json().await?)
+        Ok(resp.json()?)
     } else {
-        let msg = resp.text().await.unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         Err(ShadowError::ForgejoApi {
             status,
             message: msg,
@@ -142,11 +140,10 @@ pub async fn push_mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}/mirror-sync", config.forgejo_api);
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_READ)?;
     let resp = client
         .post(&url)
         .header("Authorization", auth_header(token))
-        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 

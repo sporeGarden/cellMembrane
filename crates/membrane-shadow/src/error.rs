@@ -25,9 +25,8 @@ pub enum ShadowError {
     },
 
     /// HTTP transport failure.
-    #[cfg(feature = "http")]
     #[error("http: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(String),
 
     /// No Forgejo token available.
     #[error("no forgejo token: set FORGEJO_TOKEN env var (file-based tokens deprecated Wave 121)")]

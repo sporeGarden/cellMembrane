@@ -21,7 +21,7 @@
 //!
 //! # Transport
 //!
-//! - **Forgejo API**: HTTPS via `reqwest` (feature `http`)
+//! - **Forgejo API**: HTTPS via `http_client` (pure-Rust TLS, feature `http`)
 //! - **VPS commands**: SSH via system client (`ssh golgi '...'`)
 //! - **Neural API**: UDS JSON-RPC via `bridge` module
 //!   — try-primal-first, fall back to shadow when biomeOS unavailable
@@ -70,6 +70,8 @@ pub(crate) mod freshness;
 pub mod gate;
 pub(crate) mod gateway;
 pub(crate) mod git_ops;
+#[cfg(feature = "http")]
+pub mod http_client;
 pub(crate) mod identity;
 pub(crate) mod impulse;
 pub(crate) mod jsonrpc;
@@ -202,28 +204,23 @@ pub fn utc_now_compact() -> String {
 
 // ── HTTP client ──────────────────────────────────────────────────────
 
-/// Build a `reqwest::Client` with a timeout.
+/// Build an [`http_client::HttpClient`] with standard TLS and timeout.
 ///
 /// All HTTP-using code should route through this to ensure consistent
 /// TLS backend (rustls) and timeout policy.
 #[cfg(feature = "http")]
-pub fn http_client(timeout: std::time::Duration) -> error::Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(timeout)
-        .build()
-        .map_err(|e| error::ShadowError::Config(format!("HTTP client: {e}")))
+pub fn http_client(timeout: std::time::Duration) -> error::Result<http_client::HttpClient> {
+    http_client::HttpClient::new(timeout)
 }
 
-/// Build a `reqwest::Client` that accepts invalid TLS certs.
+/// Build an [`http_client::HttpClient`] that accepts invalid TLS certs.
 ///
 /// Only for loopback/localhost testing — never WAN traffic.
 #[cfg(feature = "http")]
-pub fn http_client_insecure(timeout: std::time::Duration) -> error::Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .timeout(timeout)
-        .build()
-        .map_err(|e| error::ShadowError::Config(format!("HTTP client (insecure): {e}")))
+pub fn http_client_insecure(
+    timeout: std::time::Duration,
+) -> error::Result<http_client::HttpClient> {
+    http_client::HttpClient::insecure(timeout)
 }
 
 // ── Atomic I/O ───────────────────────────────────────────────────────

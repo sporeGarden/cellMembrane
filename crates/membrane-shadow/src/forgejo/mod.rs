@@ -99,20 +99,19 @@ pub async fn repo_create(config: &ShadowConfig, org: &str, name: &str) -> Result
         "default_branch": "main",
     });
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_WRITE)?;
     let resp = client
         .post(&url)
         .header("Authorization", auth_header(token))
         .json(&body)
-        .timeout(API_TIMEOUT_WRITE)
         .send()
         .await?;
 
     let status = resp.status().as_u16();
     if status == 201 {
-        Ok(resp.json().await?)
+        Ok(resp.json()?)
     } else {
-        let msg = resp.text().await.unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         Err(ShadowError::ForgejoApi {
             status,
             message: msg,
@@ -126,7 +125,7 @@ pub async fn repo_create(config: &ShadowConfig, org: &str, name: &str) -> Result
 #[cfg(feature = "http")]
 pub async fn repo_list(config: &ShadowConfig, org: &str) -> Result<Vec<RepoInfo>> {
     let token = config.require_token()?;
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_READ)?;
     let mut all_repos = Vec::new();
     let mut page = 1u32;
 
@@ -138,20 +137,19 @@ pub async fn repo_list(config: &ShadowConfig, org: &str) -> Result<Vec<RepoInfo>
         let resp = client
             .get(&url)
             .header("Authorization", auth_header(token))
-            .timeout(API_TIMEOUT_READ)
             .send()
             .await?;
 
         let status = resp.status().as_u16();
         if status != 200 {
-            let msg = resp.text().await.unwrap_or_default();
+            let msg = resp.text().unwrap_or_default();
             return Err(ShadowError::ForgejoApi {
                 status,
                 message: msg,
             });
         }
 
-        let batch: Vec<RepoInfo> = resp.json().await?;
+        let batch: Vec<RepoInfo> = resp.json()?;
         let count = batch.len();
         all_repos.extend(batch);
         if count < PAGE_SIZE {
@@ -171,11 +169,10 @@ pub async fn repo_delete(config: &ShadowConfig, full_name: &str) -> Result<()> {
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}", config.forgejo_api);
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_READ)?;
     let resp = client
         .delete(&url)
         .header("Authorization", auth_header(token))
-        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
@@ -183,7 +180,7 @@ pub async fn repo_delete(config: &ShadowConfig, full_name: &str) -> Result<()> {
     if status == 204 {
         Ok(())
     } else {
-        let msg = resp.text().await.unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         Err(ShadowError::ForgejoApi {
             status,
             message: msg,
@@ -201,11 +198,10 @@ pub async fn mirror_sync(config: &ShadowConfig, full_name: &str) -> Result<Mirro
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}/mirror-sync", config.forgejo_api);
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_READ)?;
     let resp = client
         .post(&url)
         .header("Authorization", auth_header(token))
-        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
@@ -225,19 +221,18 @@ pub async fn mirror_status(config: &ShadowConfig, full_name: &str) -> Result<Rep
     let token = config.require_token()?;
     let url = format!("{}/repos/{full_name}", config.forgejo_api);
 
-    let client = reqwest::Client::new();
+    let client = crate::http_client(API_TIMEOUT_READ)?;
     let resp = client
         .get(&url)
         .header("Authorization", auth_header(token))
-        .timeout(API_TIMEOUT_READ)
         .send()
         .await?;
 
     let status = resp.status().as_u16();
     if status == 200 {
-        Ok(resp.json().await?)
+        Ok(resp.json()?)
     } else {
-        let msg = resp.text().await.unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         Err(ShadowError::ForgejoApi {
             status,
             message: msg,
@@ -382,10 +377,10 @@ pub async fn token_revoke(config: &ShadowConfig, token_id: u64) -> Result<()> {
 #[cfg(feature = "http")]
 pub async fn version(config: &ShadowConfig) -> Result<String> {
     let url = format!("{}/version", config.forgejo_api);
-    let client = reqwest::Client::new();
-    let resp = client.get(&url).timeout(API_TIMEOUT_FAST).send().await?;
+    let client = crate::http_client(API_TIMEOUT_FAST)?;
+    let resp = client.get(&url).send().await?;
 
-    let body: serde_json::Value = resp.json().await?;
+    let body: serde_json::Value = resp.json()?;
     body["version"]
         .as_str()
         .map(String::from)
