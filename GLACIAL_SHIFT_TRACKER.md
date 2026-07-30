@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-29 (Wave 155i)
+**Last updated:** 2026-07-30 (Wave 155k)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155k (sovereign HTTP client + deep debt sweep):**
+Purged `reqwest` — sovereign HTTP/1.1 client built on `tokio-rustls` + `webpki-roots`
++ `ring`. Eliminates 63 transitive crates (191 → 128 deps). New `http_client.rs`:
+`HttpClient` (reusable, `Arc<ClientConfig>`), `RequestBuilder` (fluent API),
+`HttpResponse` (buffered, sync `.json()`/`.text()`/`.bytes()`), chunked transfer,
+`InsecureVerifier` for shadow TLS. Migrated 27 call sites across 10 files.
+Deep debt sweep: removed dead `manifest/wave.rs` module (150 lines), added
+`DEFAULT_TLS_CERT_DIR` const, wired `arch.rs`/`channels.rs` to canonical constants,
+evolved binary name hardcoding to registry lookups (`MembraneService::for_binary()`),
+replaced port literals with `DEFAULT_HTTPS_PORT`/`DEFAULT_HTTP_PORT`, cleaned
+stale reqwest refs in `deny.toml`. 1,259 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155i (P0 glibc depot + P1 WG DNS + deep debt evolution sweep):**
 P0 closed: `targets_for_primal()` auto-appends `x86_64-unknown-linux-gnu`

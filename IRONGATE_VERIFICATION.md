@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 155i (7-gate mesh live, 10-gate topology, subdomain routing, depot.primals.eco, 1221 tests, 0 clippy, glibc depot target for GPU primals (P0 closed), WireGuard DNS in wg0 template (P1 closed), J6 completed (gate.configure + gate.apply CLI), J8 foundation (key enrollment portal — step-ca SSH certificates, gate.keys CLI, enroll phase 8), deep debt evolution sweep: sandbox fail-closed P0 fix, tower status registry-driven, unified socket resolvers, run_step() helper, crash-loop dedup, depot push dedup, let-chains, net -135 lines, 2026-07-29)
+**Last validated:** Wave 155k (7-gate mesh live, 10-gate topology, subdomain routing, depot.primals.eco, 1259 tests, 0 clippy, sovereign HTTP/1.1 client (reqwest purged — pure-Rust TLS), deep debt sweep: dead code removal, constants consolidation, registry-driven binary names, capability-based port/path resolution, deny.toml updated, 2026-07-30)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming
 
 ---
@@ -40,7 +40,7 @@ ssh root@$VPS_IP "
 ssh root@$VPS_IP "ls -la /run/membrane/*.sock"
 
 # 4. Verify 5-domain sovereign TLS
-for domain in primals.eco mesh.primal.eco auth.primal.eco api.primal.eco nestgate.io; do
+for domain in primals.eco sporeprint.primals.eco depot.primals.eco mesh.primals.eco nestgate.io; do
   echo "--- $domain ---"
   curl -sI "https://$domain/" | head -3
 done

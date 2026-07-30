@@ -143,7 +143,7 @@
 | `/etc/membrane/Caddyfile` | Channel 3 Caddy config (SSOT: `plasmidBin/membrane/Caddyfile`) |
 | `/etc/membrane/family/` | MitoBeacon seeds: `.beacon.seed`, `family.key`, `nodes/*.lineage.seed` |
 | `/opt/ecoPrimals/` | Standard ecoPrimals workspace (17 repos from Forgejo) |
-| `/opt/ecoPrimals/infra/plasmidBin/` | Binary depot + checksums (legacy shell scripts superseded by `membrane` CLI) |
+| `/opt/ecoPrimals/infra/plasmidBin/` | Binary depot + checksums (managed by `membrane plasmid.*` CLI) |
 | `/opt/ecoPrimals/infra/wateringHole/` | Ecosystem standards + membrane temporal.cascade |
 | `/opt/ecoPrimals/primals/` | 13 primal source repos (cloned from sovereign Forgejo) |
 | `/opt/ecoPrimals/gardens/` | cellMembrane + projectNUCLEUS |
@@ -195,9 +195,9 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | Dark Forest audit (Nest) | 21 PASS, 0 FAIL, 1 SKIP (MEM-09 b3sum) | 2026-05-22 |
 | Provenance trio pipeline | 10/10 PASS | 2026-05-22 |
 | Shadow orchestrator | 6/6 PASS | 2026-05-22 |
-| `membrane gate.status` (was `deploy_membrane.sh status`) | All 19 services RUNNING | 2026-05-28 |
+| `membrane gate.status` | All 19 services RUNNING | 2026-05-28 |
 | `membrane temporal.cascade` | 17/17 repos synced from sovereign Forgejo | 2026-06-02 |
-| `membrane gate.bootstrap` (was `nucleus_launcher.sh`) | 13/13 primals registered in Songbird | 2026-05-29 |
+| `membrane gate.bootstrap` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
 | `cargo test` (cellMembrane workspace) | 1259 PASS, 0 FAIL, 0 clippy | 2026-07-30 |
@@ -219,19 +219,19 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 
 ---
 
-## VPS Deployment Standard (Wave 56)
+## VPS Deployment Standard (Wave 155k)
 
-Three-step deployment model from primalSpring coordination:
+Three-step deployment model via `membrane` CLI (replaced `deploy_membrane.sh` Wave 127):
 
 ```
-Step 1: deploy_membrane.sh deploy root@$VPS_IP --composition nucleus --uds-only
+Step 1: membrane gate.bootstrap --composition nucleus
         → NUCLEUS base (13 primals, UDS-only, zero TCP ports for primals)
-        → Binaries from plasmidBin GitHub Releases
-        → nucleus_launcher start --uds-only manages all 13 primals
+        → Binaries from sovereign depot (depot.primals.eco) with BLAKE3+ed25519
+        → systemd units managed via gate.configure + gate.apply
 
-Step 2: deploy_membrane.sh spring-overlay root@$VPS_IP --cell <spring>
-        → Spring overlay via biomeos deploy (spawn=false on all nodes)
-        → Only for VPS-standard springs (6 of 9 in manifest)
+Step 2: membrane plasmid.refresh
+        → Binary freshness against depot, sandbox validation, canary rollback
+        → Sovereign CI pipeline: Forgejo push → sporeGate harvest → depot push
 
 Step 3: Spring runtime discovers NUCLEUS via UDS
         → CompositionContext::from_live_discovery()
