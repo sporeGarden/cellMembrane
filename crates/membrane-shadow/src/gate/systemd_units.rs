@@ -82,7 +82,8 @@ pub fn install_cascade_timer(
     }
 
     let (service_content, timer_content) = generate_cascade_timer(interval_minutes, gate_name);
-    let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
+    let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
+    let systemd_dir = std::path::Path::new(&unit_dir);
 
     let service_path = systemd_dir.join("membrane-cascade.service");
     let timer_path = systemd_dir.join("membrane-cascade.timer");

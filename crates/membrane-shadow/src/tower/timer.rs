@@ -228,7 +228,7 @@ async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
     let service_content = generate_service_unit(&output_dir);
     let timer_content = generate_timer_unit(interval_min);
 
-    let unit_dir = cellmembrane_types::service::SYSTEMD_UNIT_DIR;
+    let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
     let service_path = format!("{unit_dir}/{SHADOW_SERVICE_UNIT}");
     let timer_path = format!("{unit_dir}/{SHADOW_TIMER_UNIT}");
 
@@ -264,7 +264,7 @@ async fn disable_shadow() -> Result<ShadowOutcome> {
     let _ = systemctl(&["disable", "--now", SHADOW_TIMER_UNIT]).await;
     let _ = systemctl(&["stop", SHADOW_SERVICE_UNIT]).await;
 
-    let unit_dir = cellmembrane_types::service::SYSTEMD_UNIT_DIR;
+    let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
     let service_path = format!("{unit_dir}/{SHADOW_SERVICE_UNIT}");
     let timer_path = format!("{unit_dir}/{SHADOW_TIMER_UNIT}");
     let _ = tokio::fs::remove_file(&service_path).await;
@@ -501,6 +501,11 @@ async fn write_unit_file(path: &str, content: &str) -> Result<()> {
         .map_err(ShadowError::Io)
 }
 
+fn is_user_scope() -> bool {
+    std::env::var(cellmembrane_types::service::ENV_INIT_SCOPE)
+        .is_ok_and(|s| s == "user")
+}
+
 async fn systemctl(args: &[&str]) -> Result<()> {
     if !matches!(
         cellmembrane_types::InitSystem::detect(),
@@ -509,12 +514,18 @@ async fn systemctl(args: &[&str]) -> Result<()> {
         tracing::trace!(args = ?args, "tower timer: systemctl skipped (not systemd)");
         return Ok(());
     }
-    let output = tokio::process::Command::new("sudo")
-        .arg("systemctl")
-        .args(args)
-        .output()
-        .await
-        .map_err(ShadowError::Io)?;
+    let output = if is_user_scope() {
+        let mut cmd = tokio::process::Command::new("systemctl");
+        cmd.arg("--user").args(args);
+        cmd.output().await.map_err(ShadowError::Io)?
+    } else {
+        tokio::process::Command::new("sudo")
+            .arg("systemctl")
+            .args(args)
+            .output()
+            .await
+            .map_err(ShadowError::Io)?
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -530,8 +541,11 @@ async fn systemctl_is_active(unit: &str) -> bool {
     ) {
         return false;
     }
-    tokio::process::Command::new("systemctl")
-        .args(["is-active", "--quiet", unit])
+    let mut cmd = tokio::process::Command::new("systemctl");
+    if is_user_scope() {
+        cmd.arg("--user");
+    }
+    cmd.args(["is-active", "--quiet", unit])
         .status()
         .await
         .is_ok_and(|s| s.success())

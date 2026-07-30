@@ -8,8 +8,8 @@
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
-| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 7-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155i) |
+| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 10-gate mesh |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155k) |
 
 ---
 
@@ -56,12 +56,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1221 tests — pedantic clippy clean
+cargo test                  # 1255 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 155i): ~9k lines types, ~36k lines shadow. Crash-loop breaker
+Current state (Wave 155k): ~9k lines types, ~36k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -70,8 +70,8 @@ All manifest fields type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `Bin
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-7-gate WG mesh (golgi, sporeGate, eastGate, flockGate, ironGate, northGate, southGate),
-10-gate topology (+ blueGate, westGate, grapheneGate — WG IPs pending enrollment).
+10-gate WG mesh (golgi, sporeGate, eastGate, flockGate, ironGate, northGate,
+southGate, blueGate, westGate, grapheneGate).
 Subdomain standard (`prefix.primals.eco`): `webb.primals.eco` vhost, CSP headers,
 root domain redirect to `sporeprint.primals.eco`, depot at `depot.primals.eco`.
 `gate.enroll` automated mesh enrollment + `hub.peer` hub-side addition.
@@ -167,6 +167,23 @@ extracts 5 duplicate `step` CLI blocks in `key_portal.rs`. `detect_crash_loops()
 extracts shared scanning from 3 crash-loop variants. `push_depot_to_remote()`
 deduplicates ~80 lines across depot push paths. Let-chains (`gate_configure.rs`,
 `firewall.rs`). Net -135 lines.
+Sovereign CI polish (Wave 155k): `membrane.exe` Windows cross-compile fix —
+`jsonrpc.rs` UDS functions gated with `#[cfg(unix)]`, `#[cfg(not(unix))]` stubs
+return platform-specific errors. `mesh.build_pending` wired to songBird UDS
+(was tracing-only). UDS webhook listener (`webhook/listener.rs`) accepts
+Forgejo/GitHub HTTP POSTs, verifies HMAC-SHA256 signatures, dispatches to
+`handle_push()` pipeline. DNS manifest generators (`dns.configure`/`dns.apply`)
+shipped — knot-dns zone file + config generation from `ecosystem_manifest.toml`.
+User-space deploy readiness (Wave 155k): `MEMBRANE_INIT_SCOPE` env override
+for init system selection (`bare`/`user`/`systemd`) — enables deployment on
+read-only rootfs (`SteamOS` Steam Deck), non-root users, or containerized
+environments. `prepare_socket_base()` respects `MEMBRANE_SOCKET_BASE`. All
+`systemctl` helpers auto-inject `--user` when `MEMBRANE_INIT_SCOPE=user`.
+Systemd unit dir resolves via `MEMBRANE_SYSTEMD_UNIT_DIR` or init scope
+(user scope → `$HOME/.config/systemd/user`). `WantedBy` target adapts
+(`multi-user.target` for system, `default.target` for user). Hardcoded
+`/run/membrane` and `/var/lib/membrane` paths replaced with `MEMBRANE_SOCKET_BASE`
+resolution. Bootstrap permissions phase uses env-resolved socket base.
 Zero production `unwrap()` (167 test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
@@ -229,6 +246,11 @@ membrane topology.service <role>          # Find gate providing a service role
 membrane topology.endpoint <gate> <cap>   # Resolve transport endpoint (UDS/TCP/relay)
 membrane topology.roles                   # Map all service→gate assignments from manifest
 membrane topology.mesh                    # Show WireGuard mesh topology
+membrane gate.configure [--env K=V]       # Preview systemd/launchd units from manifest
+membrane gate.apply [--env K=V]           # Write + enable service units
+membrane dns.configure [--gate G]         # Preview knot-dns config + zone files from manifest
+membrane dns.apply [--gate G] [--dry-run] # Write zone files + knot.conf and reload knot-dns
+membrane webhook.listen [--socket PATH]   # UDS webhook listener (Forgejo/GitHub POSTs)
 ```
 
 ---
@@ -266,7 +288,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 155f are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 155k are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -277,7 +299,7 @@ through Wave 155f are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1200 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1255 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -367,7 +389,8 @@ gardens/cellMembrane/
         channels.rs           # Signal / Relay / Surface
         composition.rs        # Relay → RustDesk → Tower → Nest + iter_binaries()
         config/               # membrane.toml parser + validator + DeployPaths
-        credentials.rs        # age / BTSP vault / manual
+        credentials.rs        # age / BTSP vault / manual / step-ca SSH certs
+        dns.rs                # DNS zone + knot config types (zonefile renderer)
         cytoplasm.rs          # ZoneLabel, mesh address, BOOTSTRAP_GATES
         envelope.rs           # K-Derm topology — monoderm/diderm, bonding, channel proteins
         error.rs              # Typed ConfigError (thiserror)
@@ -431,8 +454,9 @@ gardens/cellMembrane/
           download.rs         # SSH + WAN binary download
           toolchain.rs        # ELF validation + NDK cross-compile + strip
         caddy/                # Manifest-driven Caddy config generation + TLS + depot
+        dns/                  # Sovereign DNS (knot-dns zone + config generation)
         gateway/              # Tower HTTP gateway (Caddy replacement)
-        webhook/              # Webhook receiver (Forgejo + GitHub cascade wiring)
+        webhook/              # Webhook receiver + UDS listener (Forgejo + GitHub)
         btsp_client.rs        # BTSP ClientHello handshake (bearDog auth)
         bridge.rs             # Neural API bridge (UDS discovery)
         jsonrpc.rs            # Centralized JSON-RPC client (UDS, TCP, relay)
@@ -456,13 +480,14 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,175 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-enrollment, sovereignty, BTSP, and checksum verification. Tests use both inline
-`#[cfg(test)]` modules and dedicated test files (`gateway_tests.rs`, `harvest_tests.rs`,
-`manifest/tests.rs`, `webhook/tests.rs`) — no external fixtures.
+1,255 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, sovereignty, BTSP, checksum verification, DNS, and user-space deploy.
+Tests use both inline `#[cfg(test)]` modules and dedicated test files
+(`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`, `webhook/tests.rs`)
+— no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1175 tests)
+cargo test                  # Full suite (1255 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

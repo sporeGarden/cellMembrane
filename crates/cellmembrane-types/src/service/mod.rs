@@ -116,12 +116,16 @@ impl ServerContract {
         socket_path: &str,
         security_socket: &str,
     ) -> String {
+        let socket_base = crate::service::env_or(
+            crate::service::ENV_SOCKET_BASE,
+            crate::service::DEFAULT_SOCKET_BASE,
+        );
         match self {
             Self::Full => format!(
-                "{install_base}/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir /run/membrane"
+                "{install_base}/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir {socket_base}"
             ),
             Self::SocketAuditDir => format!(
-                "{install_base}/{binary} server --socket {socket_path} --audit-dir /var/lib/membrane/{binary}"
+                "{install_base}/{binary} server --socket {socket_path} --audit-dir {socket_base}/{binary}"
             ),
             Self::SocketOnly | Self::Tarpc => {
                 format!("{install_base}/{binary} server --socket {socket_path}")

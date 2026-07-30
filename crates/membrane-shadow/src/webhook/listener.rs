@@ -18,7 +18,13 @@ use tracing::{info, warn};
 use super::{verify_provider_signature, PushEvent, WebhookProvider};
 use crate::error::Result;
 
-const DEFAULT_SOCKET_PATH: &str = "/run/membrane/webhook.sock";
+fn default_socket_path() -> String {
+    let base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SOCKET_BASE,
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    );
+    format!("{base}/webhook.sock")
+}
 
 /// Environment variable for webhook HMAC secret.
 const ENV_WEBHOOK_SECRET: &str = "MEMBRANE_WEBHOOK_SECRET";
@@ -29,7 +35,8 @@ const ENV_WEBHOOK_SECRET: &str = "MEMBRANE_WEBHOOK_SECRET";
 /// connection is handled in a separate tokio task.
 #[cfg(unix)]
 pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> Result<()> {
-    let path = socket_path.unwrap_or(DEFAULT_SOCKET_PATH);
+    let default = default_socket_path();
+    let path = socket_path.unwrap_or(&default);
 
     if Path::new(path).exists() {
         let _ = std::fs::remove_file(path);

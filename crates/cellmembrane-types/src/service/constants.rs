@@ -65,6 +65,12 @@ pub const ENV_INSTALL_BASE: &str = "MEMBRANE_INSTALL_BASE";
 pub const ENV_SOCKET_BASE: &str = "MEMBRANE_SOCKET_BASE";
 /// Environment variable for the membrane configuration directory.
 pub const ENV_CONFIG_DIR: &str = "MEMBRANE_CONFIG_DIR";
+/// Environment variable to override init system detection.
+///
+/// Values: `systemd`, `launchd`, `bare`. Enables user-space deploy on
+/// platforms where system systemd is detected but root access is unavailable
+/// (e.g. `SteamOS` Steam Deck: `MEMBRANE_INIT_SCOPE=bare`).
+pub const ENV_INIT_SCOPE: &str = "MEMBRANE_INIT_SCOPE";
 /// Environment variable for the Forgejo SSH host.
 pub const ENV_FORGEJO_SSH_HOST: &str = "FORGEJO_SSH_HOST";
 /// Environment variable for the ecoPrimals workspace root.
@@ -170,8 +176,12 @@ pub const DEFAULT_RUNTIME_DIRECTORY_MODE: &str = "0755";
 /// Neural API cross-primal routing) to connect.
 pub const DEFAULT_SERVICE_UMASK: &str = "0002";
 
-/// Default systemd unit directory.
+/// Default systemd unit directory (system scope).
 pub const SYSTEMD_UNIT_DIR: &str = "/etc/systemd/system";
+/// User-scope systemd unit directory fallback (`$XDG_CONFIG_HOME/systemd/user`).
+pub const SYSTEMD_USER_UNIT_DIR: &str = ".config/systemd/user";
+/// Environment variable to override the systemd unit directory.
+pub const ENV_SYSTEMD_UNIT_DIR: &str = "MEMBRANE_SYSTEMD_UNIT_DIR";
 /// Default secrets environment file path.
 pub const DEFAULT_SECRETS_ENV: &str = "/etc/membrane/secrets.env";
 /// Environment variable for the Forgejo work directory path.
@@ -628,6 +638,28 @@ pub fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.into())
 }
 
+/// Resolve the systemd unit directory, honoring env overrides and init scope.
+///
+/// Priority: `MEMBRANE_SYSTEMD_UNIT_DIR` env → scope-based default.
+/// For user-space deploy (`MEMBRANE_INIT_SCOPE=bare`), this returns
+/// `$HOME/.config/systemd/user` so unit files land in the user session.
+#[must_use]
+pub fn resolve_systemd_unit_dir() -> String {
+    if let Ok(dir) = std::env::var(ENV_SYSTEMD_UNIT_DIR) {
+        return dir;
+    }
+
+    if let Ok(scope) = std::env::var(ENV_INIT_SCOPE) {
+        if scope == "bare" || scope == "user" {
+            if let Ok(home) = std::env::var("HOME") {
+                return format!("{home}/{SYSTEMD_USER_UNIT_DIR}");
+            }
+        }
+    }
+
+    SYSTEMD_UNIT_DIR.into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -685,5 +717,26 @@ mod tests {
     #[test]
     fn post_primordial_count() {
         assert_eq!(POST_PRIMORDIAL_PRIMALS.len(), 6);
+    }
+
+    #[test]
+    fn resolve_systemd_unit_dir_defaults_to_system() {
+        if std::env::var(ENV_SYSTEMD_UNIT_DIR).is_err()
+            && std::env::var(ENV_INIT_SCOPE).is_err()
+        {
+            let dir = resolve_systemd_unit_dir();
+            assert_eq!(dir, SYSTEMD_UNIT_DIR);
+        }
+    }
+
+    #[test]
+    fn env_init_scope_constant_defined() {
+        assert_eq!(ENV_INIT_SCOPE, "MEMBRANE_INIT_SCOPE");
+    }
+
+    #[test]
+    fn systemd_user_unit_dir_is_relative() {
+        assert!(!SYSTEMD_USER_UNIT_DIR.starts_with('/'));
+        assert!(SYSTEMD_USER_UNIT_DIR.contains("systemd/user"));
     }
 }

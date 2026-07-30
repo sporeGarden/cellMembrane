@@ -185,7 +185,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 UMask={umask}
-ExecStart={install_base}/{spine} server --socket {socket_base}/{spine}.sock --audit-dir /var/lib/membrane/{spine}
+ExecStart={install_base}/{spine} server --socket {socket_base}/{spine}.sock --audit-dir {socket_base}/{spine}
 Environment={spine_upper}_NODE_ID={gate_name}
 Environment={spine_upper}_LOG_LEVEL=info
 Restart=on-failure

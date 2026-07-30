@@ -254,8 +254,11 @@ fn permissions_phase(dry_run: bool) -> BootstrapPhase {
     let mut ok = true;
     let mut details = Vec::new();
 
-    let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
-    for dir in [membrane_dir.as_str(), depot_str.as_str(), socket_base] {
+    let socket_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SOCKET_BASE,
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    );
+    for dir in [membrane_dir.as_str(), depot_str.as_str(), socket_base.as_str()] {
         if std::fs::create_dir_all(dir).is_ok() {
             #[cfg(unix)]
             {

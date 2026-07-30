@@ -82,8 +82,22 @@ pub enum InitSystem {
 
 impl InitSystem {
     /// Detect the init system for the current platform.
+    ///
+    /// Honors `MEMBRANE_INIT_SCOPE` env override for user-space deploy:
+    /// `bare` forces bare-process management (no systemd/launchd), enabling
+    /// deployment on read-only rootfs (`SteamOS`), non-root users, or
+    /// environments where system services are unavailable.
     #[must_use]
     pub fn detect() -> Self {
+        if let Ok(scope) = std::env::var(crate::service::ENV_INIT_SCOPE) {
+            match scope.to_lowercase().as_str() {
+                "bare" => return Self::Bare,
+                "systemd" => return Self::Systemd,
+                "launchd" => return Self::Launchd,
+                _ => {}
+            }
+        }
+
         if cfg!(target_os = "linux") {
             if std::path::Path::new("/run/systemd/system").exists() {
                 Self::Systemd
@@ -275,7 +289,7 @@ impl ServiceSpec {
              StartLimitBurst={slb}\n\
              {rtd}\n\
              [Install]\n\
-             WantedBy=multi-user.target\n",
+             WantedBy={wanted_by}\n",
             desc = self.description,
             umask = self.umask,
             exec = self.exec_start,
@@ -284,7 +298,18 @@ impl ServiceSpec {
             restart_sec = self.restart_policy.restart_sec,
             sli = self.restart_policy.start_limit_interval_sec,
             slb = self.restart_policy.start_limit_burst,
+            wanted_by = Self::resolve_wanted_by(),
         )
+    }
+
+    /// User-space deploy uses `default.target`; system scope uses `multi-user.target`.
+    fn resolve_wanted_by() -> &'static str {
+        if let Ok(scope) = std::env::var(crate::service::ENV_INIT_SCOPE) {
+            if scope == "user" || scope == "bare" {
+                return "default.target";
+            }
+        }
+        "multi-user.target"
     }
 
     /// Render as a systemd drop-in override file (`override.conf`).
@@ -688,5 +713,23 @@ mod tests {
         assert_eq!(spec.binary, svc.binary);
         assert!(spec.exec_start.contains(svc.binary));
         assert!(spec.description.contains("NUCLEUS"));
+    }
+
+    #[test]
+    fn init_scope_env_var_name() {
+        assert_eq!(crate::service::ENV_INIT_SCOPE, "MEMBRANE_INIT_SCOPE");
+    }
+
+    #[test]
+    fn init_system_detect_without_env_override() {
+        if std::env::var(crate::service::ENV_INIT_SCOPE).is_err() {
+            let init = InitSystem::detect();
+            if cfg!(target_os = "linux") {
+                assert!(
+                    init == InitSystem::Systemd || init == InitSystem::Bare,
+                    "Linux should detect systemd or bare, got: {init}"
+                );
+            }
+        }
     }
 }

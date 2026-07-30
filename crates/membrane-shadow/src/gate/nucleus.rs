@@ -9,9 +9,16 @@
 
 use super::BootstrapPhase;
 
+/// Whether the current session is user-scope systemd.
+fn is_user_scope() -> bool {
+    std::env::var(cellmembrane_types::service::ENV_INIT_SCOPE)
+        .is_ok_and(|s| s == "user")
+}
+
 /// Run a `systemctl` subcommand. Returns `true` if it exits 0.
 ///
 /// On non-systemd platforms, returns `false` with a trace-level warning.
+/// Automatically injects `--user` flag when `MEMBRANE_INIT_SCOPE=user`.
 pub(crate) fn systemctl(args: &[&str]) -> bool {
     if !matches!(
         cellmembrane_types::InitSystem::detect(),
@@ -20,8 +27,11 @@ pub(crate) fn systemctl(args: &[&str]) -> bool {
         tracing::trace!(args = ?args, "systemctl skipped — not on systemd");
         return false;
     }
-    std::process::Command::new("systemctl")
-        .args(args)
+    let mut cmd = std::process::Command::new("systemctl");
+    if is_user_scope() {
+        cmd.arg("--user");
+    }
+    cmd.args(args)
         .output()
         .is_ok_and(|o| o.status.success())
 }
@@ -29,6 +39,7 @@ pub(crate) fn systemctl(args: &[&str]) -> bool {
 /// Async variant for use in tokio contexts (e.g. cascade-restart).
 ///
 /// On non-systemd platforms, returns `false` with a trace-level warning.
+/// Automatically injects `--user` flag when `MEMBRANE_INIT_SCOPE=user`.
 pub(crate) async fn systemctl_async(args: &[&str]) -> bool {
     if !matches!(
         cellmembrane_types::InitSystem::detect(),
@@ -37,8 +48,11 @@ pub(crate) async fn systemctl_async(args: &[&str]) -> bool {
         tracing::trace!(args = ?args, "systemctl_async skipped — not on systemd");
         return false;
     }
-    tokio::process::Command::new("systemctl")
-        .args(args)
+    let mut cmd = tokio::process::Command::new("systemctl");
+    if is_user_scope() {
+        cmd.arg("--user");
+    }
+    cmd.args(args)
         .output()
         .await
         .is_ok_and(|o| o.status.success())
@@ -66,7 +80,8 @@ fn start_nucleus_systemd(arch: &str) -> super::ProbeResult {
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
     let paths = cellmembrane_types::service::ServicePaths::from_env();
-    let systemd_dir = std::path::Path::new(cellmembrane_types::service::SYSTEMD_UNIT_DIR);
+    let resolved_unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
+    let systemd_dir = std::path::Path::new(&resolved_unit_dir);
 
     prepare_socket_base();
 
@@ -235,10 +250,17 @@ fn start_nucleus_bare(arch: &str, init: cellmembrane_types::InitSystem) -> super
 }
 
 /// Create the socket base directory with appropriate permissions.
+///
+/// Respects `MEMBRANE_SOCKET_BASE` env var for user-space deploy (e.g.
+/// `$XDG_RUNTIME_DIR/membrane` on SteamOS/non-root).
 fn prepare_socket_base() {
-    let socket_base = std::path::Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE);
+    let socket_base_str = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SOCKET_BASE,
+        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
+    );
+    let socket_base = std::path::Path::new(&socket_base_str);
     if let Err(e) = std::fs::create_dir_all(socket_base) {
-        tracing::warn!(error = %e, "failed to create socket base directory");
+        tracing::warn!(error = %e, path = %socket_base.display(), "failed to create socket base directory");
         return;
     }
     #[cfg(unix)]

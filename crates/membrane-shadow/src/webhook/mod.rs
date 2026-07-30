@@ -55,7 +55,6 @@ impl WebhookProvider {
     /// Checks for provider-specific signature headers and returns the
     /// provider + raw signature value.
     #[must_use]
-    #[allow(dead_code, reason = "wired when HTTP webhook endpoint is activated")]
     pub fn detect(headers: &[(String, String)]) -> Option<(Self, String)> {
         for (name, value) in headers {
             let lower = name.to_lowercase();

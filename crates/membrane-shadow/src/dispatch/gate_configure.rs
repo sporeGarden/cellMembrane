@@ -158,7 +158,7 @@ pub(super) async fn dispatch_apply(args: &[&str]) -> crate::Result<ShadowOutcome
 
     match init {
         cellmembrane_types::InitSystem::Systemd => {
-            let unit_dir = cellmembrane_types::service::SYSTEMD_UNIT_DIR;
+            let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
             for spec in &specs {
                 let unit_name = &spec.systemd_unit;
                 let unit_path = format!("{unit_dir}/{unit_name}");
