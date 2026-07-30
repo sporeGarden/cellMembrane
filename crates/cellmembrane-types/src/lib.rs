@@ -35,6 +35,7 @@
 pub mod arch;
 pub mod caddy;
 pub mod channels;
+pub mod dns;
 pub mod composition;
 pub mod config;
 pub mod credentials;

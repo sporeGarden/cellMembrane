@@ -420,16 +420,22 @@ fn resolve_songbird_bin() -> Result<PathBuf> {
 
 fn generate_service_unit(output_dir: &Path) -> String {
     let script_path = output_dir.join("shadow-benchmark.sh");
-    let relay_svc = cellmembrane_types::MembraneService::with_capability(
+    let relay_svc = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::MeshRelay,
+    );
+    let relay_unit = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
     )
-    .map_or("songbird-relay.service", |s| s.systemd_unit);
+    .map_or_else(
+        || format!("{relay_svc}-relay.service"),
+        |s| s.systemd_unit.to_string(),
+    );
 
     format!(
         "\
 [Unit]
 Description=Tower Atomic shadow benchmark — continuous parity metrics
-After={relay_svc}
+After={relay_unit}
 
 [Service]
 Type=oneshot
@@ -596,7 +602,15 @@ mod tests {
         let dir = PathBuf::from("/tmp/benchScale/tower_shadow");
         let unit = generate_service_unit(&dir);
         assert!(unit.contains("shadow-benchmark.sh"));
-        assert!(unit.contains("songbird-relay.service"));
+        let relay_unit = cellmembrane_types::MembraneService::with_capability(
+            cellmembrane_types::ServiceCapability::MeshRelay,
+        )
+        .expect("MeshRelay must exist")
+        .systemd_unit;
+        assert!(
+            unit.contains(relay_unit),
+            "unit should reference relay systemd unit"
+        );
         assert!(unit.contains("Type=oneshot"));
     }
 

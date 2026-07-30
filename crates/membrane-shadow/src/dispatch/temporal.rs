@@ -202,7 +202,10 @@ async fn dispatch_cascade_stress(
         }
 
         if cycle < cycles {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(
+                cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS,
+            ))
+            .await;
         }
     }
 

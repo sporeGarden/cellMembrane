@@ -222,7 +222,9 @@ fn uds_send(socket_path: &Path, request: &str) {
         return;
     };
     if stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .set_write_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
+        )))
         .is_err()
     {
         tracing::debug!(socket = %socket_path.display(), "impulse relay: cannot set write timeout");
@@ -264,7 +266,9 @@ fn uds_send_plain(socket_path: &Path, request: &str) {
     let Ok(mut stream) = UnixStream::connect(socket_path) else {
         return;
     };
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
+    )));
     let _ = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL);
     let _ = writeln!(stream, "{request}");
 }
@@ -276,10 +280,14 @@ fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
 
     let mut stream = UnixStream::connect(socket_path).ok()?;
     stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .set_write_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
+        )))
         .ok()?;
     stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .set_read_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
+        )))
         .ok()?;
 
     if is_beardog_socket(socket_path) {
@@ -311,8 +319,12 @@ fn uds_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     use std::os::unix::net::UnixStream;
 
     let mut stream = UnixStream::connect(socket_path).ok()?;
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
+    )));
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
+    )));
     stream
         .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
         .ok()?;

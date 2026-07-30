@@ -22,7 +22,8 @@ pub(crate) const API_TIMEOUT_WRITE: std::time::Duration =
     std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_API_WRITE_TIMEOUT_SECS);
 pub(crate) const API_TIMEOUT_READ: std::time::Duration =
     std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_API_READ_TIMEOUT_SECS);
-const API_TIMEOUT_FAST: std::time::Duration = std::time::Duration::from_secs(5);
+const API_TIMEOUT_FAST: std::time::Duration =
+    std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS);
 const PAGE_SIZE: usize = cellmembrane_types::service::DEFAULT_API_PAGE_SIZE as usize;
 
 // ── Types ───────────────────────────────────────────────────────────

@@ -10,7 +10,8 @@ use tracing::warn;
 
 use super::detect_target_triple;
 
-const INTER_PRIMAL_DELAY_MS: u64 = 500;
+const INTER_PRIMAL_DELAY_MS: u64 =
+    cellmembrane_types::service::DEFAULT_INTER_PRIMAL_DELAY_MS;
 
 /// Parsed CLI arguments for `plasmid.refresh`.
 pub struct RefreshArgs {

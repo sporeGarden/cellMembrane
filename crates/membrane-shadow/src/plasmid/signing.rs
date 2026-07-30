@@ -171,7 +171,9 @@ pub(super) async fn fetch_wan_signatures() -> SignaturesFile {
         cellmembrane_types::service::SIGNATURES_FILE
     );
 
-    let Ok(client) = crate::http_client(std::time::Duration::from_secs(10)) else {
+    let Ok(client) = crate::http_client(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_API_READ_TIMEOUT_SECS,
+    )) else {
         tracing::debug!("WAN signatures: failed to build HTTP client");
         return SignaturesFile::default();
     };
@@ -305,10 +307,14 @@ fn uds_sign_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
 
     let mut stream = UnixStream::connect(socket_path).ok()?;
     stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .set_write_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
+        )))
         .ok()?;
     stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .set_read_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
+        )))
         .ok()?;
 
     // BTSP handshake — authenticate before sending crypto requests.
@@ -342,10 +348,14 @@ fn uds_sign_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> 
 
     let mut stream = UnixStream::connect(socket_path).ok()?;
     stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+        .set_write_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
+        )))
         .ok()?;
     stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .set_read_timeout(Some(std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
+        )))
         .ok()?;
     writeln!(stream, "{request}").ok()?;
     stream.shutdown(std::net::Shutdown::Write).ok()?;

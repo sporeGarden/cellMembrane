@@ -212,7 +212,10 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
     let mut alive = 0u32;
     let mut dead = 0u32;
 
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(
+        cellmembrane_types::service::MESH_SOCKET_WAIT_INTERVAL_SECS,
+    ))
+    .await;
 
     for primal in &primals {
         let bin_path = bin_dir.join(primal);

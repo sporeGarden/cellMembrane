@@ -58,6 +58,7 @@ pub(crate) mod bridge;
 pub(crate) mod btsp_client;
 pub(crate) mod caddy;
 pub(crate) mod cli;
+pub(crate) mod dns;
 #[cfg(feature = "cloudflare")]
 pub(crate) mod cloudflare;
 pub mod config;

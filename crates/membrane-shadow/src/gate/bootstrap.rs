@@ -134,7 +134,10 @@ pub async fn bootstrap(
     );
 
     if !dry_run {
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(
+            cellmembrane_types::service::MESH_SOCKET_WAIT_INTERVAL_SECS,
+        ))
+        .await;
     }
     phases.push(
         timed_phase(

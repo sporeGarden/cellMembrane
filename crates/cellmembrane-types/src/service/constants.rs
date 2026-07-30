@@ -498,6 +498,24 @@ pub const DEFAULT_WG_PERSISTENT_KEEPALIVE_SECS: u16 = 25;
 /// Default push mirror sync interval (Forgejo -> GitHub).
 pub const DEFAULT_PUSH_MIRROR_INTERVAL: &str = "8h0m0s";
 
+// ── knot-dns paths ──────────────────────────────────────────────────
+
+/// Default knot-dns configuration file path.
+pub const DEFAULT_KNOT_CONF_PATH: &str = "/etc/knot/knot.conf";
+/// Default knot-dns zone file directory.
+pub const DEFAULT_KNOT_ZONE_DIR: &str = "/var/lib/knot/zones";
+
+// ── Process lifecycle ───────────────────────────────────────────────
+
+/// Settle delay after service restart (milliseconds).
+pub const DEFAULT_RESTART_SETTLE_MS: u64 = 500;
+/// Inter-primal delay during batch operations (milliseconds).
+pub const DEFAULT_INTER_PRIMAL_DELAY_MS: u64 = 500;
+/// Dependency wait retries during sandbox provisioning.
+pub const DEFAULT_SANDBOX_DEP_RETRIES: u32 = 10;
+/// Dependency wait max backoff (milliseconds).
+pub const DEFAULT_SANDBOX_DEP_BACKOFF_MS: u64 = 8000;
+
 /// Repo name for the sporePrint Zola site.
 pub const SPOREPRINT_REPO: &str = "sporePrint";
 

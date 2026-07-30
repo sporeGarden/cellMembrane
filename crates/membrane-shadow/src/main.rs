@@ -147,6 +147,10 @@ Caddy (outer membrane TLS / reverse proxy):
   caddy.depot.checksums            Serve checksums.toml from WAN endpoint
   caddy.acme.log [N]              Recent ACME/TLS certificate logs
 
+DNS (sovereign knot-dns zone management):
+  dns.configure [--gate G]         Preview knot-dns config + zone files from manifest
+  dns.apply [--gate G] [--dry-run] Write zone files + knot.conf and reload knot-dns
+
 Forgejo:
   forgejo.version                  Show Forgejo version
 

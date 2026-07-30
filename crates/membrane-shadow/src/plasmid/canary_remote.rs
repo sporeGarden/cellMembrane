@@ -115,7 +115,9 @@ pub async fn remote_health_check(ip: &str) -> bool {
     );
 
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(
+            cellmembrane_types::service::DEFAULT_API_READ_TIMEOUT_SECS,
+        ),
         crate::ssh::exec_on_host(&user, ip, &probe_cmd, 5),
     )
     .await;

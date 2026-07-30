@@ -82,7 +82,9 @@ async fn run_shadow_comparisons(
 
 /// Probe a single HTTPS endpoint, returning timing + status.
 async fn probe_endpoint(url: &str) -> ProbeResult {
-    let client = match crate::http_client_insecure(std::time::Duration::from_secs(10)) {
+    let client = match crate::http_client_insecure(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_API_READ_TIMEOUT_SECS,
+    )) {
         Ok(c) => c,
         Err(e) => return ProbeResult::err(format!("client build: {e}")),
     };

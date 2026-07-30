@@ -389,7 +389,10 @@ async fn download_with_retry(
         return true;
     }
 
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(
+        cellmembrane_types::service::MESH_SOCKET_WAIT_INTERVAL_SECS,
+    ))
+    .await;
     download::download_asset(
         args.source,
         config,

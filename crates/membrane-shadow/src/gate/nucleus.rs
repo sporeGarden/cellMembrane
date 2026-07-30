@@ -315,7 +315,10 @@ fn kill_process(pid: u32) -> bool {
 /// Restart a bare-process primal: stop then re-spawn from the current binary.
 pub(crate) async fn restart_bare_process(binary: &str, arch: &str) -> bool {
     stop_bare_process(binary);
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(
+        cellmembrane_types::service::DEFAULT_RESTART_SETTLE_MS,
+    ))
+    .await;
 
     let install_base = super::resolve_install_base();
     let dest_root = super::resolve_plasmidbin_dir();

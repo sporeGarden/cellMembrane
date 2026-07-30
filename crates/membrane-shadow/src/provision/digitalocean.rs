@@ -25,7 +25,9 @@ fn resolve_token() -> Result<String> {
 }
 
 fn client() -> Result<reqwest::Client> {
-    crate::http_client(std::time::Duration::from_secs(30))
+    crate::http_client(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_API_WRITE_TIMEOUT_SECS,
+    ))
 }
 
 #[derive(Debug, Serialize)]

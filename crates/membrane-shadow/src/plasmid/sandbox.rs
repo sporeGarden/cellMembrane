@@ -21,10 +21,12 @@ const SANDBOX_HEALTH_TIMEOUT_SECS: u64 =
     cellmembrane_types::service::DEFAULT_SANDBOX_HEALTH_TIMEOUT_SECS;
 
 /// How many probe attempts before declaring failure.
-const SANDBOX_PROBE_RETRIES: u32 = 5;
+const SANDBOX_PROBE_RETRIES: u32 =
+    cellmembrane_types::service::DEFAULT_SANDBOX_PROBE_RETRIES;
 
 /// Delay between probe attempts (milliseconds).
-const SANDBOX_PROBE_INTERVAL_MS: u64 = 2000;
+const SANDBOX_PROBE_INTERVAL_MS: u64 =
+    cellmembrane_types::service::DEFAULT_SANDBOX_PROBE_INTERVAL_MS;
 
 use cellmembrane_types::service::{
     DEFAULT_SANDBOX_BIN_DIR, DEFAULT_SANDBOX_SOCKET_DIR, ENV_SANDBOX_BIN_DIR,
@@ -177,7 +179,11 @@ pub(crate) async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
 /// Kill the sandbox process and clean up socket/binary.
 pub(crate) async fn teardown(instance: &SandboxInstance) {
     if let Some(pid) = instance.pid {
-        super::graceful_kill(pid, 500).await;
+        super::graceful_kill(
+            pid,
+            cellmembrane_types::service::DEFAULT_RESTART_SETTLE_MS,
+        )
+        .await;
     }
 
     let _ = tokio::fs::remove_file(&instance.socket_path).await;
@@ -255,12 +261,15 @@ pub async fn validate_with_deps(args: &SandboxArgs) -> crate::Result<SandboxResu
                 primal: dep_binary.to_string(),
                 commit: args.commit.clone(),
                 binary_path: dep_path,
-                timeout_secs: Some(10),
+                timeout_secs: Some(u64::from(
+                    cellmembrane_types::service::DEFAULT_SANDBOX_DEP_RETRIES,
+                )),
             };
             let instance = spin_up(&dep_args).await?;
-            // Wait for dependency to become ready before starting the target
             let dep_ready = tokio::time::timeout(
-                std::time::Duration::from_secs(8),
+                std::time::Duration::from_millis(
+                    cellmembrane_types::service::DEFAULT_SANDBOX_DEP_BACKOFF_MS,
+                ),
                 wait_for_socket(&instance.socket_path),
             )
             .await;
