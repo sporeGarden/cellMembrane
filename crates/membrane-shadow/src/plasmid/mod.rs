@@ -105,16 +105,23 @@ pub(crate) async fn compute_blake3_file_async(
 }
 
 /// Ensure a directory pair exists (socket dir + binary staging dir).
+///
+/// Explicitly sets 0755 permissions on unix to avoid umask-dependent modes
+/// that would prevent non-root processes from traversing the socket dir.
 pub(crate) async fn ensure_staging_dirs(
     socket_dir: &std::path::Path,
     bin_dir: &std::path::Path,
 ) -> crate::Result<()> {
-    tokio::fs::create_dir_all(socket_dir)
-        .await
-        .map_err(|e| crate::error::ShadowError::Build(format!("create socket dir: {e}")))?;
-    tokio::fs::create_dir_all(bin_dir)
-        .await
-        .map_err(|e| crate::error::ShadowError::Build(format!("create bin dir: {e}")))?;
+    for dir in [socket_dir, bin_dir] {
+        tokio::fs::create_dir_all(dir)
+            .await
+            .map_err(|e| crate::error::ShadowError::Build(format!("create dir: {e}")))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = tokio::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).await;
+        }
+    }
     Ok(())
 }
 
@@ -137,13 +144,39 @@ pub(crate) async fn stage_binary(
 }
 
 /// Spawn a primal process on an isolated socket.
+///
+/// Resolves the `ServerContract` from the service registry so that broker
+/// primals (e.g. biomeOS with `BiomeosApi`) get the correct subcommand
+/// (`neural-api`) instead of the generic `server`.
 pub(crate) fn spawn_primal_server(
     binary: &std::path::Path,
     socket: &std::path::Path,
     extra_args: &[(&str, &std::path::Path)],
 ) -> crate::Result<tokio::process::Child> {
+    let bin_name = binary
+        .file_name()
+        .map_or("", |n| n.to_str().unwrap_or(""));
+
+    let (subcmd, socket_flag) =
+        cellmembrane_types::MembraneService::for_binary(bin_name).map_or(
+            ("server", "--socket"),
+            |svc| match svc.server_contract {
+                cellmembrane_types::service::ServerContract::BiomeosApi => {
+                    ("neural-api", "--socket")
+                }
+                cellmembrane_types::service::ServerContract::ServerNoSocket => ("server", ""),
+                cellmembrane_types::service::ServerContract::External => ("", ""),
+                _ => ("server", "--socket"),
+            },
+        );
+
     let mut cmd = tokio::process::Command::new(binary);
-    cmd.arg("server").arg("--socket").arg(socket);
+    if !subcmd.is_empty() {
+        cmd.arg(subcmd);
+    }
+    if !socket_flag.is_empty() {
+        cmd.arg(socket_flag).arg(socket);
+    }
     for (flag, path) in extra_args {
         cmd.arg(flag).arg(path);
     }
@@ -152,12 +185,7 @@ pub(crate) fn spawn_primal_server(
         .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| {
-            crate::error::ShadowError::Build(format!(
-                "spawn {}: {e}",
-                binary
-                    .file_name()
-                    .map_or("?", |n| n.to_str().unwrap_or("?"))
-            ))
+            crate::error::ShadowError::Build(format!("spawn {bin_name}: {e}"))
         })
 }
 

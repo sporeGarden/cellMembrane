@@ -456,14 +456,15 @@ pub(crate) fn resolve_uid() -> String {
 }
 
 /// Probe rootpulse ledger state — checks if a session has been committed on this gate.
+///
+/// A missing session is a soft warning, not a failure — gates that haven't
+/// run cascade with freshness yet are healthy but un-attested.
 fn probe_rootpulse_ledger() -> StatusProbe {
     crate::temporal::post_sync::load_rootpulse_session().map_or_else(
         || StatusProbe {
             name: "rootpulse.ledger".into(),
-            ok: false,
-            detail:
-                "no rootpulse session recorded — run rootpulse.commit or cascade with freshness"
-                    .into(),
+            ok: true,
+            detail: "no session yet — will populate on next cascade with freshness".into(),
         },
         |s| StatusProbe {
             name: "rootpulse.ledger".into(),

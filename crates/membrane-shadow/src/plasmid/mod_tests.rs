@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn spawn_resolves_biomeos_contract() {
+    let svc = cellmembrane_types::MembraneService::for_binary("biomeos").unwrap();
+    assert_eq!(
+        svc.server_contract,
+        cellmembrane_types::service::ServerContract::BiomeosApi,
+        "biomeOS must use BiomeosApi, not generic server"
+    );
+}
+
+#[test]
+fn spawn_resolves_generic_server_contract() {
+    for bin in ["beardog", "songbird", "nestgate", "squirrel"] {
+        let svc = cellmembrane_types::MembraneService::for_binary(bin).unwrap();
+        assert!(
+            !matches!(
+                svc.server_contract,
+                cellmembrane_types::service::ServerContract::BiomeosApi
+            ),
+            "{bin} should not use BiomeosApi contract"
+        );
+    }
+}
+
+#[test]
 fn nucleus_primals_returns_13() {
     let primals = nucleus_primals();
     assert_eq!(primals.len(), 13, "expected 13 nucleus primals");

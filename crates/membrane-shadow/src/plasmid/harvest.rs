@@ -243,8 +243,12 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     Ok(outcome)
 }
 
-/// Post-build: update metadata, sign, publish checksums, notify mesh.
-async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], depot_dir: &Path) {
+/// Post-build: regenerate checksums from disk, update provenance, sign, publish.
+///
+/// Checksums are fully regenerated from all on-disk binaries rather than
+/// partially merged, so stale entries are dropped and new binaries that
+/// weren't in the build list are captured.
+async fn finalize_depot(results: &[HarvestResult], _targets_built: &[String], depot_dir: &Path) {
     let built: Vec<&HarvestResult> = results
         .iter()
         .filter(|r| matches!(r.status, HarvestStatus::Built))
@@ -254,18 +258,19 @@ async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], dep
     }
     let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
 
-    for target in targets_built {
-        let arch_results: Vec<&HarvestResult> = built
-            .iter()
-            .copied()
-            .filter(|r| r.detail.contains(target))
-            .collect();
-        if !arch_results.is_empty() {
-            if let Err(e) = update_depot_metadata(depot_dir, target, &arch_results).await {
-                warn!(target, error = %e, "failed to update depot metadata");
-            }
-        }
+    match super::integrity::generate_checksums(depot_dir) {
+        Ok(report) => info!(
+            binaries = report.total_binaries,
+            architectures = ?report.architectures,
+            "checksums.toml regenerated from depot"
+        ),
+        Err(e) => warn!(error = %e, "failed to regenerate checksums.toml"),
     }
+
+    if let Err(e) = update_provenance(depot_dir, &built).await {
+        warn!(error = %e, "failed to update provenance");
+    }
+
     if super::signing::sign_and_persist(depot_dir) {
         info!("depot signed (BLAKE3 + ed25519)");
     }
@@ -465,9 +470,7 @@ pub(super) async fn stage_to_depot_async(
     Ok((size, blake3))
 }
 
-pub(super) use super::depot::{
-    load_provenance, load_sources, resolve_depot, update_depot_metadata,
-};
+pub(super) use super::depot::{load_provenance, load_sources, resolve_depot, update_provenance};
 
 #[cfg(test)]
 #[path = "harvest_tests.rs"]

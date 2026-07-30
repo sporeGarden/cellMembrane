@@ -104,7 +104,7 @@ fn update_checksums(
     Ok(())
 }
 
-async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result<()> {
+pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]) -> Result<()> {
     let provenance_path = depot_dir.join(cellmembrane_types::service::PROVENANCE_FILE);
     let now = crate::utc_now_iso8601();
     let header_target = detect_target_triple();
