@@ -10,10 +10,11 @@ use super::{CertStatus, caddy_bin_path, caddy_exec, caddyfile_path, parse_days_r
 /// Check TLS certificate status for a domain via Caddy's admin API.
 pub async fn tls_check(config: &ShadowConfig, domain: &str) -> Result<CertStatus> {
     let endpoint = super::caddy_admin_endpoint();
+    let https_port = cellmembrane_types::service::DEFAULT_HTTPS_PORT;
     let cmd = format!(
         "curl -sf {endpoint}/reverse_proxy/upstreams 2>/dev/null; \
          echo '---CERT_CHECK---'; \
-         echo | openssl s_client -servername {domain} -connect {domain}:443 2>/dev/null | \
+         echo | openssl s_client -servername {domain} -connect {domain}:{https_port} 2>/dev/null | \
          openssl x509 -noout -issuer -dates -subject 2>/dev/null || echo 'TLS_PROBE_FAILED'"
     );
     let (out, _) = caddy_exec(config, &cmd).await?;

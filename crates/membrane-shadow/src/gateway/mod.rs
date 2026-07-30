@@ -360,8 +360,10 @@ async fn dispatch_retire_caddy(config: &ShadowConfig, args: &[&str]) -> Result<S
         )));
     }
 
-    let stopped = crate::gate::nucleus::systemctl_async(&["stop", "caddy"]).await;
-    let disabled = crate::gate::nucleus::systemctl_async(&["disable", "caddy"]).await;
+    let caddy_unit = cellmembrane_types::MembraneService::for_binary("caddy")
+        .map_or("caddy", |s| s.systemd_unit);
+    let stopped = crate::gate::nucleus::systemctl_async(&["stop", caddy_unit]).await;
+    let disabled = crate::gate::nucleus::systemctl_async(&["disable", caddy_unit]).await;
 
     let detail = match (stopped, disabled) {
         (true, true) => "caddy.service stopped + disabled".to_owned(),

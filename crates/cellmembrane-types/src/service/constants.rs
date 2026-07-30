@@ -20,6 +20,9 @@ pub const DEFAULT_SOCKET_BASE: &str = "/run/membrane";
 /// Default configuration directory (system-wide config files).
 pub const DEFAULT_CONFIG_DIR: &str = "/etc/membrane";
 
+/// Default TLS certificate directory for externally-provisioned certs.
+pub const DEFAULT_TLS_CERT_DIR: &str = "/etc/membrane/tls";
+
 /// Default ecoPrimals workspace root on VPS deployments.
 /// Override with `ECOPRIMALS_ROOT` env var.
 pub const DEFAULT_ECOPRIMALS_ROOT: &str = "/opt/ecoPrimals";

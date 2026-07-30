@@ -71,7 +71,12 @@ fn parse_url(url: &str) -> Result<ParsedUrl> {
             .map_err(|_| ShadowError::Http(format!("invalid port: {p}")))?;
         (h.to_string(), port)
     } else {
-        (authority.to_string(), if tls { 443 } else { 80 })
+        let default = if tls {
+            cellmembrane_types::service::DEFAULT_HTTPS_PORT
+        } else {
+            cellmembrane_types::service::DEFAULT_HTTP_PORT
+        };
+        (authority.to_string(), default)
     };
 
     Ok(ParsedUrl {
@@ -552,7 +557,10 @@ mod tests {
         let p = parse_url("https://api.example.com/v1/things").unwrap();
         assert!(p.tls);
         assert_eq!(p.host, "api.example.com");
-        assert_eq!(p.port, 443);
+        assert_eq!(
+            p.port,
+            cellmembrane_types::service::DEFAULT_HTTPS_PORT
+        );
         assert_eq!(p.path, "/v1/things");
     }
 
@@ -570,7 +578,10 @@ mod tests {
         let p = parse_url("https://depot.primals.eco").unwrap();
         assert!(p.tls);
         assert_eq!(p.host, "depot.primals.eco");
-        assert_eq!(p.port, 443);
+        assert_eq!(
+            p.port,
+            cellmembrane_types::service::DEFAULT_HTTPS_PORT
+        );
         assert_eq!(p.path, "/");
     }
 

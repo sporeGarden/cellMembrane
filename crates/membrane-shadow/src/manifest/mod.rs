@@ -13,8 +13,7 @@ use cellmembrane_types::DivergencePolicy;
 use std::path::{Path, PathBuf};
 
 pub use types::{
-    BuildEntry, CompositionProfile, EcosystemManifest, GateProfile, ManifestBuildConfig,
-    ManifestMeta, RepoEntry,
+    BuildEntry, CompositionProfile, EcosystemManifest, GateProfile, ManifestBuildConfig, RepoEntry,
 };
 
 impl EcosystemManifest {
@@ -271,7 +270,6 @@ impl EcosystemManifest {
 }
 
 mod validate;
-mod wave;
 
 /// Resolve the federation peer address from the manifest (golgi by default).
 ///

@@ -42,18 +42,20 @@ impl MembraneChannel {
         }
     }
 
-    /// Default primal name for this channel.
+    /// Default binary name for this channel.
     ///
-    /// Signal and Surface map to external services (not in the primal registry).
-    /// Relay resolves via `ServiceCapability::MeshRelay`.
+    /// All names are validated against the service registry.
+    /// Signal and Surface map to symbiotic services; Relay resolves via capability.
     #[must_use]
     pub fn default_primal(&self) -> &'static str {
         match self {
-            Self::Signal => "knot-dns",
+            Self::Signal => crate::MembraneService::for_binary("knot-dns")
+                .map_or("knot-dns", |s| s.binary),
             Self::Relay => crate::MembraneService::binary_for(
                 crate::ServiceCapability::MeshRelay,
             ),
-            Self::Surface => "caddy",
+            Self::Surface => crate::MembraneService::for_binary("caddy")
+                .map_or("caddy", |s| s.binary),
         }
     }
 
@@ -165,7 +167,7 @@ impl TlsProvider {
     /// Default directory where externally-provisioned certs are stored.
     #[must_use]
     pub const fn default_cert_dir() -> &'static str {
-        "/etc/membrane/tls"
+        crate::service::DEFAULT_TLS_CERT_DIR
     }
 
     /// Whether this provider requires Caddy to manage its own ACME.

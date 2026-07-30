@@ -566,8 +566,9 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
 
 /// Check TLS cert days remaining for a domain via local openssl probe.
 fn check_cert_days(domain: &str) -> i64 {
+    let https_port = cellmembrane_types::service::DEFAULT_HTTPS_PORT;
     let cmd = format!(
-        "echo | openssl s_client -connect {domain}:443 -servername {domain} 2>/dev/null \
+        "echo | openssl s_client -connect {domain}:{https_port} -servername {domain} 2>/dev/null \
          | openssl x509 -noout -enddate 2>/dev/null"
     );
     let Ok(result) = std::process::Command::new("sh").args(["-c", &cmd]).output() else {

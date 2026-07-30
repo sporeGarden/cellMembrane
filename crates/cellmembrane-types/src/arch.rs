@@ -74,7 +74,7 @@ impl TargetOs {
     #[must_use]
     pub const fn default_install_base(self) -> &'static str {
         match self {
-            Self::Linux => "/opt/membrane",
+            Self::Linux => crate::service::DEFAULT_INSTALL_BASE,
             Self::MacOs => "/usr/local/bin",
             Self::Windows => "C:\\Program Files\\membrane",
             Self::Android => "/data/local/tmp",
