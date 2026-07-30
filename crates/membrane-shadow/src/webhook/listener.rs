@@ -1,0 +1,226 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! UDS webhook listener — receives Forgejo/GitHub webhook POSTs via Unix socket.
+//!
+//! Architecture: `Forgejo → Caddy reverse proxy → membrane UDS → handle_push()`
+//!
+//! Caddy routes `/webhook` to a `unix//run/membrane/webhook.sock` upstream.
+//! This listener accepts HTTP POST requests on that socket, verifies the
+//! HMAC-SHA256 signature, and dispatches to the existing webhook pipeline.
+//!
+//! The listener runs in a background task and is started by `webhook.listen`.
+
+use std::path::Path;
+
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tracing::{info, warn};
+
+use super::{verify_provider_signature, PushEvent, WebhookProvider};
+use crate::error::Result;
+
+const DEFAULT_SOCKET_PATH: &str = "/run/membrane/webhook.sock";
+
+/// Environment variable for webhook HMAC secret.
+const ENV_WEBHOOK_SECRET: &str = "MEMBRANE_WEBHOOK_SECRET";
+
+/// Start listening for webhook POSTs on a Unix domain socket.
+///
+/// Returns after the listener is shut down (e.g. by signal). Each accepted
+/// connection is handled in a separate tokio task.
+#[cfg(unix)]
+pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> Result<()> {
+    let path = socket_path.unwrap_or(DEFAULT_SOCKET_PATH);
+
+    if Path::new(path).exists() {
+        let _ = std::fs::remove_file(path);
+    }
+
+    if let Some(parent) = Path::new(path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let listener = tokio::net::UnixListener::bind(path).map_err(|e| {
+        crate::error::ShadowError::Io(std::io::Error::other(format!(
+            "webhook listener bind {path}: {e}"
+        )))
+    })?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660));
+    }
+
+    info!(socket = %path, "webhook listener started");
+
+    let config = config.clone();
+    loop {
+        let (stream, _addr) = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                warn!("webhook accept error: {e}");
+                continue;
+            }
+        };
+
+        let config = config.clone();
+        tokio::spawn(async move {
+            if let Err(e) = handle_connection(stream, &config).await {
+                warn!("webhook connection error: {e}");
+            }
+        });
+    }
+}
+
+/// Webhook listener requires Unix domain sockets.
+#[cfg(not(unix))]
+pub async fn listen(
+    _config: &crate::ShadowConfig,
+    _socket_path: Option<&str>,
+) -> Result<()> {
+    Err(crate::error::ShadowError::Config(
+        "webhook UDS listener unavailable on this platform".into(),
+    ))
+}
+
+/// Handle a single HTTP connection on the webhook socket.
+///
+/// Parses the minimal HTTP request (method, headers, body), verifies the
+/// webhook signature, and dispatches to `handle_push()`.
+#[cfg(unix)]
+async fn handle_connection(
+    stream: tokio::net::UnixStream,
+    config: &crate::ShadowConfig,
+) -> Result<()> {
+    let (reader, mut writer) = stream.into_split();
+    let mut buf_reader = tokio::io::BufReader::new(reader);
+
+    let mut request_line = String::new();
+    buf_reader.read_line(&mut request_line).await.map_err(io_err)?;
+
+    if !request_line.starts_with("POST ") {
+        let response = http_response(405, "Method Not Allowed");
+        let _ = writer.write_all(response.as_bytes()).await;
+        return Ok(());
+    }
+
+    let mut headers: Vec<(String, String)> = Vec::new();
+    let mut content_length: usize = 0;
+
+    loop {
+        let mut line = String::new();
+        buf_reader.read_line(&mut line).await.map_err(io_err)?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        if let Some((name, value)) = trimmed.split_once(':') {
+            let name = name.trim().to_string();
+            let value = value.trim().to_string();
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.parse().unwrap_or(0);
+            }
+            headers.push((name, value));
+        }
+    }
+
+    let mut body = vec![0u8; content_length];
+    if content_length > 0 {
+        tokio::io::AsyncReadExt::read_exact(&mut buf_reader, &mut body)
+            .await
+            .map_err(io_err)?;
+    }
+
+    let secret = std::env::var(ENV_WEBHOOK_SECRET).unwrap_or_default();
+    if secret.is_empty() {
+        let response = http_response(500, "webhook secret not configured");
+        let _ = writer.write_all(response.as_bytes()).await;
+        return Ok(());
+    }
+
+    let Some((provider, raw_sig)) = WebhookProvider::detect(&headers) else {
+        let response = http_response(400, "no webhook signature header");
+        let _ = writer.write_all(response.as_bytes()).await;
+        return Ok(());
+    };
+
+    if let Err(e) = verify_provider_signature(provider, secret.as_bytes(), &body, &raw_sig) {
+        warn!(error = %e, "webhook signature verification failed");
+        let response = http_response(401, "signature verification failed");
+        let _ = writer.write_all(response.as_bytes()).await;
+        return Ok(());
+    }
+
+    let event: PushEvent = match serde_json::from_slice(&body) {
+        Ok(e) => e,
+        Err(e) => {
+            let response = http_response(400, &format!("invalid push event: {e}"));
+            let _ = writer.write_all(response.as_bytes()).await;
+            return Ok(());
+        }
+    };
+
+    info!(
+        repo = %event.repository.name,
+        branch = %event.git_ref,
+        provider = ?provider,
+        "webhook received"
+    );
+
+    let outcome = super::handle_push(&event, config, provider).await;
+
+    let response = match outcome {
+        Ok(o) => http_response(200, &o.message),
+        Err(e) => http_response(500, &format!("pipeline error: {e}")),
+    };
+    let _ = writer.write_all(response.as_bytes()).await;
+
+    Ok(())
+}
+
+fn http_response(status: u16, body: &str) -> String {
+    let reason = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        405 => "Method Not Allowed",
+        500 => "Internal Server Error",
+        _ => "Unknown",
+    };
+    format!(
+        "HTTP/1.1 {status} {reason}\r\n\
+         Content-Type: text/plain\r\n\
+         Content-Length: {len}\r\n\
+         Connection: close\r\n\
+         \r\n\
+         {body}",
+        len = body.len(),
+    )
+}
+
+const fn io_err(e: std::io::Error) -> crate::error::ShadowError {
+    crate::error::ShadowError::Io(e)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_response_has_status_line() {
+        let resp = http_response(200, "ok");
+        assert!(resp.starts_with("HTTP/1.1 200 OK"));
+    }
+
+    #[test]
+    fn http_response_has_content_length() {
+        let resp = http_response(200, "hello");
+        assert!(resp.contains("Content-Length: 5"));
+    }
+
+    #[test]
+    fn http_response_401_unauthorized() {
+        let resp = http_response(401, "bad sig");
+        assert!(resp.contains("401 Unauthorized"));
+    }
+}

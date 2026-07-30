@@ -18,6 +18,7 @@
 //!
 //! Transport: UDS behind Caddy — no exposed TCP ports (Tower Atomic posture).
 
+pub(crate) mod listener;
 mod pipeline;
 
 use crate::error::{Result, ShadowError};

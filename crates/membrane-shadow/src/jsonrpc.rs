@@ -72,6 +72,7 @@ pub async fn call_with_policy(
 /// Performs the BTSP `ClientHello` handshake before sending the JSON-RPC
 /// request. Falls back to `call()` if BTSP is unavailable (no `FAMILY_SEED`)
 /// or the handshake fails.
+#[cfg(unix)]
 pub async fn call_btsp(socket_path: &Path, request: &str) -> Result<String> {
     if !crate::btsp_client::is_available() {
         return call(socket_path, request).await;
@@ -152,9 +153,20 @@ pub async fn call_btsp(socket_path: &Path, request: &str) -> Result<String> {
     Ok(line)
 }
 
+/// BTSP handshake requires Unix domain sockets — unavailable on this platform.
+#[cfg(not(unix))]
+pub async fn call_btsp(socket_path: &Path, request: &str) -> Result<String> {
+    let _ = request;
+    Err(rpc_err(format_args!(
+        "BTSP over UDS unavailable on this platform: {}",
+        socket_path.display()
+    )))
+}
+
 /// Send a JSON-RPC request with explicit signal control.
 ///
 /// When `with_signal` is true, prepends `[0xEC, 0x01]` before the JSON payload.
+#[cfg(unix)]
 pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result<String> {
     let stream = tokio::time::timeout(
         DEFAULT_TIMEOUT,
@@ -201,6 +213,15 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
     }
 
     Ok(line)
+}
+
+/// UDS transport unavailable on this platform — use TCP or Named Pipe.
+#[cfg(not(unix))]
+pub async fn raw(socket_path: &Path, _request: &str, _with_signal: bool) -> Result<String> {
+    Err(rpc_err(format_args!(
+        "UDS transport unavailable on this platform: {}",
+        socket_path.display()
+    )))
 }
 
 /// Send a JSON-RPC request through a mesh relay endpoint.
@@ -405,6 +426,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn call_endpoint_dispatches_uds() {
         let ep = cellmembrane_types::TransportEndpoint::Uds {

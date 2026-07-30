@@ -410,12 +410,9 @@ pub(crate) fn resolve_path(
 /// `depot.updated` arrives (or a timeout expires).
 ///
 /// Currently logs to tracing — mesh publish will route through songBird's
-/// `mesh.publish` JSON-RPC when the IPC bridge is wired (pending `mesh.enroll`
-/// songBird integration).
-#[allow(
-    clippy::unused_async,
-    reason = "will be async when mesh.publish IPC is wired"
-)]
+/// Sends `mesh.publish { topic: "depot.build_pending" }` via the local songBird
+/// UDS socket. Consumer gates can delay fetch until `depot.updated` arrives.
+/// Failures are non-fatal — tracing log ensures observability even without mesh.
 pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
     tracing::info!(
         event = "depot.build_pending",
@@ -423,6 +420,44 @@ pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
         "build pending — {} drifted primals queued for rebuild",
         drifted.len()
     );
+
+    let socket_path = std::path::PathBuf::from(cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_SONGBIRD_SOCKET,
+        cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET,
+    ));
+
+    if !socket_path.exists() {
+        tracing::debug!("mesh.publish build_pending skipped — songBird socket not found");
+        return;
+    }
+
+    let gate = crate::gate::resolve_local_gate_identity();
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "mesh.publish",
+        "params": {
+            "topic": "depot.build_pending",
+            "payload": {
+                "primals_pending": drifted,
+                "builder": gate,
+            }
+        },
+        "id": 1
+    });
+
+    let request_str = request.to_string();
+    match crate::jsonrpc::call(&socket_path, &request_str).await {
+        Ok(response) => {
+            tracing::info!(
+                primals = ?drifted,
+                "mesh.publish depot.build_pending sent: {response}"
+            );
+        }
+        Err(e) => {
+            tracing::warn!("mesh.publish depot.build_pending failed (non-fatal): {e}");
+        }
+    }
 }
 
 /// `plasmid.pipeline` — Full zero-touch harvest → refresh cycle.

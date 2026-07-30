@@ -188,6 +188,11 @@ async fn dispatch_webhook(
             let provider = parse_webhook_provider(args)?;
             crate::webhook::handle_push(&event, config, provider).await
         }
+        "webhook.listen" => {
+            let socket = cli::extract_flag_value(args, "--socket");
+            crate::webhook::listener::listen(config, socket).await?;
+            Ok(ShadowOutcome::ok("webhook listener stopped"))
+        }
         "webhook.verify" => {
             let secret = std::env::var(cellmembrane_types::service::ENV_WEBHOOK_SECRET)
                 .map_err(|_| ShadowError::Config("WEBHOOK_SECRET env var required".into()))?;
