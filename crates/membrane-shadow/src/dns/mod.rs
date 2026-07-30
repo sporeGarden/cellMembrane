@@ -330,9 +330,8 @@ fn generate_serial() -> u32 {
     let month = day_of_year / 30 + 1;
     let day = day_of_year % 30 + 1;
 
-    #[allow(clippy::cast_possible_truncation)]
-    let serial = (year * 1_000_000 + month * 10_000 + day * 100) as u32;
-    serial
+    let raw = year * 1_000_000 + month * 10_000 + day * 100;
+    u32::try_from(raw).unwrap_or(u32::MAX)
 }
 
 /// Read the DNSSEC flag from the local `membrane.toml` channel config.

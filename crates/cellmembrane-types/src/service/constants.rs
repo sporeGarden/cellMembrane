@@ -163,6 +163,12 @@ pub const DEFAULT_LAN_SUBNET: &str = "192.168.4.0/22";
 pub const DEFAULT_WG_MESH_SUBNET: &str = "10.13.37.0/24";
 /// Default hub gateway mesh IP (golgiBody `.1` in the WG subnet).
 pub const DEFAULT_HUB_MESH_IP: &str = "10.13.37.1";
+/// Systemd `RuntimeDirectory` name for primal services.
+///
+/// systemd creates `/run/{name}` from this value. Used in all generated
+/// unit files and `ServiceSpec` default construction.
+pub const DEFAULT_RUNTIME_DIRECTORY: &str = "membrane";
+
 /// Systemd `RuntimeDirectoryMode` for primal services.
 ///
 /// `0755` allows non-root processes to traverse `/run/membrane/` and
@@ -649,12 +655,11 @@ pub fn resolve_systemd_unit_dir() -> String {
         return dir;
     }
 
-    if let Ok(scope) = std::env::var(ENV_INIT_SCOPE) {
-        if scope == "bare" || scope == "user" {
-            if let Ok(home) = std::env::var("HOME") {
-                return format!("{home}/{SYSTEMD_USER_UNIT_DIR}");
-            }
-        }
+    if let Ok(scope) = std::env::var(ENV_INIT_SCOPE)
+        && (scope == "bare" || scope == "user")
+        && let Ok(home) = std::env::var("HOME")
+    {
+        return format!("{home}/{SYSTEMD_USER_UNIT_DIR}");
     }
 
     SYSTEMD_UNIT_DIR.into()

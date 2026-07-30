@@ -195,7 +195,7 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     let socket_dir_name = Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE)
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("membrane");
+        .unwrap_or(cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY);
     let xdg = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR).unwrap_or_default();
     if !xdg.is_empty() {
         let p = PathBuf::from(&xdg).join(socket_dir_name).join(socket_name);

@@ -240,7 +240,7 @@ impl ServiceSpec {
             after,
             working_directory: None,
             umask: crate::service::DEFAULT_SERVICE_UMASK.into(),
-            runtime_directory: Some("membrane".into()),
+            runtime_directory: Some(crate::service::DEFAULT_RUNTIME_DIRECTORY.into()),
             runtime_directory_mode: crate::service::DEFAULT_RUNTIME_DIRECTORY_MODE.into(),
         }
     }

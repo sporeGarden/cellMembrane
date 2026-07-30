@@ -177,7 +177,7 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
          RestartSec={restart_delay}\n\
          StartLimitIntervalSec={start_limit_interval}\n\
          StartLimitBurst={start_limit_burst}\n\
-         RuntimeDirectory=membrane\n\
+         RuntimeDirectory={rtd}\n\
          RuntimeDirectoryMode={rtd_mode}\n\
          RuntimeDirectoryPreserve=yes\n\n\
          [Install]\n\
@@ -186,6 +186,7 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
         base = params.install_base,
         socket = params.songbird_socket,
         umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK,
+        rtd = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY,
         rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE,
         restart_delay = cellmembrane_types::service::DEFAULT_RESTART_DELAY_SECS,
         start_limit_interval = cellmembrane_types::service::DEFAULT_START_LIMIT_INTERVAL_SECS,

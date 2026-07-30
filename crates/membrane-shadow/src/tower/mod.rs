@@ -234,7 +234,7 @@ async fn probe_tower(ip: &str, samples: u32) -> TransportProbe {
 /// Generic TCP transport probe: measures connect latency and estimates throughput.
 async fn probe_tcp_transport(transport: &str, ip: &str, port: u16, samples: u32) -> TransportProbe {
     let addr = format!("{ip}:{port}");
-    let mut latencies_us = Vec::with_capacity(samples as usize);
+    let mut latencies_us = Vec::with_capacity(usize::try_from(samples).unwrap_or(10));
 
     for _ in 0..samples {
         let start = Instant::now();

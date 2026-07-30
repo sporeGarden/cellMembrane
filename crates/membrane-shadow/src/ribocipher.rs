@@ -15,7 +15,7 @@
 //! cellMembrane uses Tier 1 (Clear) for all local UDS IPC, since all
 //! connections are same-gate trusted paths over Unix domain sockets.
 
-#![allow(dead_code, clippy::trivially_copy_pass_by_ref)]
+#![allow(clippy::trivially_copy_pass_by_ref)]
 
 /// Signal tier prefix bytes.
 pub mod signal {
@@ -23,16 +23,24 @@ pub mod signal {
     pub const CLEAR: u8 = 0xEC;
 
     /// Mito-obfuscated — cross-gate WAN connections (family seed HMAC).
+    #[allow(dead_code, reason = "Tier 2 wire protocol — activated when cross-gate WAN transport ships")]
     pub const MITO: u8 = 0xED;
 
     /// Nuclear-sealed — privileged protocol negotiation.
+    #[allow(dead_code, reason = "Tier 3 wire protocol — activated for privileged negotiation")]
     pub const NUCLEAR: u8 = 0xEE;
 
     /// All signal tier prefixes, ordered by tier.
+    #[allow(dead_code, reason = "wire protocol spec — used when multi-tier routing ships")]
     pub const ALL: [u8; 3] = [CLEAR, MITO, NUCLEAR];
 }
 
 /// Protocol type identifiers (second byte after the signal prefix).
+///
+/// These constants define the wire protocol registry. Only `NDJSON_JSONRPC`
+/// and `BTSP_JSON_LINE` are currently active; others are reserved for future
+/// transport modes.
+#[allow(dead_code, reason = "wire protocol spec — constants activated as transports ship")]
 pub mod protocol {
     /// Lightweight health probe.
     pub const PROBE: u8 = 0x00;
@@ -81,6 +89,7 @@ pub const CLEAR_JSONRPC_SIGNAL: [u8; 2] = [signal::CLEAR, protocol::NDJSON_JSONR
 ///
 /// Maps to `[transport.ribocipher]` in `membrane.toml`.
 #[derive(Debug, Clone)]
+#[allow(dead_code, reason = "signal_tier and mito_key used by Tier 2/3 transport (not yet active)")]
 pub struct RiboCipherConfig {
     /// Signal tier for outbound connections ("clear", "mito", "nuclear").
     pub signal_tier: SignalTier,
@@ -92,6 +101,7 @@ pub struct RiboCipherConfig {
 
 /// Signal tier for outbound connections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code, reason = "Mito/Nuclear variants activated when cross-gate transport ships")]
 pub enum SignalTier {
     /// Tier 1: clear signal, suitable for local UDS.
     Clear,
@@ -127,6 +137,7 @@ impl Default for RiboCipherConfig {
 impl RiboCipherConfig {
     /// Load from a parsed TOML table (from `membrane.toml`).
     #[must_use]
+    #[allow(dead_code, reason = "Tier 2/3 config parsing — activated when cross-gate transport ships")]
     pub fn from_toml(table: &toml::Table) -> Self {
         let section = table
             .get("transport")
@@ -172,6 +183,7 @@ impl RiboCipherConfig {
 
     /// Construct with an explicit mito key (for testing or pre-derived contexts).
     #[must_use]
+    #[allow(dead_code, reason = "Tier 2 mito key injection — activated when cross-gate transport ships")]
     pub const fn with_mito_key(mut self, key: [u8; 32]) -> Self {
         self.mito_key = Some(key);
         self
@@ -187,6 +199,7 @@ impl RiboCipherConfig {
     }
 
     /// JSON-RPC error code for rejected unsignalled connections.
+    #[allow(dead_code, reason = "used when unsignalled rejection response is wired")]
     pub const REJECT_ERROR_CODE: i32 = -32002;
 
     /// Policy for health probes — allows raw JSON fallback even in Wave 113+.
@@ -204,6 +217,7 @@ impl RiboCipherConfig {
 
     /// Returns the wire prefix bytes for the configured tier and protocol.
     #[must_use]
+    #[allow(dead_code, reason = "Tier 2/3 outbound prefix — activated when cross-gate transport ships")]
     pub fn outbound_prefix(&self, protocol_type: u8) -> Vec<u8> {
         match self.signal_tier {
             SignalTier::Clear => vec![signal::CLEAR, protocol_type],
@@ -226,17 +240,20 @@ impl RiboCipherConfig {
     ///
     /// Returns the protocol type if the tag matches any known type, or `None`.
     #[must_use]
+    #[allow(dead_code, reason = "Tier 2 mito tag verification — activated when cross-gate transport ships")]
     pub fn verify_mito_tag(&self, tag: &[u8; 4]) -> Option<u8> {
         let key = self.mito_key.as_ref()?;
         (0x00..=0x07).find(|&proto| mito_hmac_tag(key, proto) == *tag)
     }
 }
 
-// ── Key derivation ─────────────────────────────────────────────────────
+// ── Key derivation (Tier 2/3 — not yet active) ────────────────────────
 
+#[allow(dead_code, reason = "Tier 2 mito key derivation — activated when cross-gate transport ships")]
 /// HKDF-SHA256 salt for riboCipher key derivation.
 const HKDF_SALT: &[u8] = b"ribocipher-v1";
 
+#[allow(dead_code, reason = "Tier 2 mito key derivation")]
 /// HKDF info parameter for mito-tier signal key.
 const HKDF_INFO_MITO: &[u8] = b"mito-signal";
 
@@ -245,6 +262,7 @@ const HKDF_INFO_MITO: &[u8] = b"mito-signal";
 /// Reads family seed from:
 /// 1. `FAMILY_SEED` env var (may be a path to a key file, or inline seed)
 /// 2. Falls back gracefully to `None` if unavailable.
+#[allow(dead_code, reason = "Tier 2 mito key derivation")]
 fn derive_mito_key_from_env() -> Option<[u8; 32]> {
     let seed_source = std::env::var(cellmembrane_types::service::ENV_FAMILY_SEED).ok()?;
     let seed_bytes = if std::path::Path::new(&seed_source).exists() {
@@ -259,6 +277,7 @@ fn derive_mito_key_from_env() -> Option<[u8; 32]> {
 ///
 /// Produces a 32-byte derived key. Uses HMAC-SHA256 internally per RFC 5869.
 /// HMAC-SHA256 accepts keys of any length, so construction is infallible.
+#[allow(dead_code, reason = "Tier 2 key derivation")]
 fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
     use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
@@ -285,6 +304,7 @@ fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
 /// Compute the 4-byte HMAC tag for a mito-tier signal.
 ///
 /// `tag = HMAC-SHA256(mito_key, [protocol_type])[0..4]`
+#[allow(dead_code, reason = "Tier 2 mito tag computation")]
 fn mito_hmac_tag(mito_key: &[u8; 32], protocol_type: u8) -> [u8; 4] {
     use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;

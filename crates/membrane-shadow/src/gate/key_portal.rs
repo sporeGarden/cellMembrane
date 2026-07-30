@@ -373,7 +373,7 @@ fn parse_inspect_output(text: &str, cert_path: &Path) -> SshCertificate {
 pub fn parse_lifetime_secs(lifetime: &str) -> u64 {
     let trimmed = lifetime.trim();
     let (suffix, body) = trimmed.as_bytes().last().map_or((' ', trimmed), |&b| {
-        (b as char, &trimmed[..trimmed.len() - 1])
+        (char::from(b), &trimmed[..trimmed.len() - 1])
     });
     match suffix {
         'h' => body.parse::<u64>().unwrap_or(8) * 3600,

@@ -43,11 +43,16 @@ impl MembraneChannel {
     }
 
     /// Default primal name for this channel.
+    ///
+    /// Signal and Surface map to external services (not in the primal registry).
+    /// Relay resolves via `ServiceCapability::MeshRelay`.
     #[must_use]
-    pub const fn default_primal(&self) -> &'static str {
+    pub fn default_primal(&self) -> &'static str {
         match self {
             Self::Signal => "knot-dns",
-            Self::Relay => "songbird",
+            Self::Relay => crate::MembraneService::binary_for(
+                crate::ServiceCapability::MeshRelay,
+            ),
             Self::Surface => "caddy",
         }
     }

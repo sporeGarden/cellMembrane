@@ -45,7 +45,6 @@ fn detect_crash_loops(threshold: u32) -> (Vec<DetectedLoop>, u32) {
 ///
 /// Intended for bootstrap/preflight contexts where an async runtime may not
 /// be available or desired.
-#[allow(dead_code, reason = "used in bootstrap/preflight — not yet wired")]
 pub fn scan_and_break(threshold: Option<u32>) -> CrashLoopReport {
     let threshold = threshold.unwrap_or(CRASH_LOOP_RESTART_THRESHOLD);
     let (detected, scanned) = detect_crash_loops(threshold);
@@ -190,7 +189,6 @@ fn query_unit_restart_info(unit: &str) -> (u32, String) {
 }
 
 /// Stop and disable a unit (synchronous).
-#[allow(dead_code, reason = "used by sync scan_and_break")]
 fn disable_unit(unit: &str) -> bool {
     let stopped = systemctl(&["stop", unit]);
     let disabled = systemctl(&["disable", unit]);

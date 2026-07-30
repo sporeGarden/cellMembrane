@@ -84,7 +84,7 @@ async fn setup_directories(ip: &str) -> Result<String> {
         mkdir -p {base} {socket_base} {eco_root} \
                  {base}/sandbox {socket_base}/sandbox \
                  {base}/canary {socket_base}/canary \
-                 /var/lib/membrane/{relay_binary} {config_dir}
+                 {socket_base}/{relay_binary} {config_dir}
         chmod 755 {socket_base} {socket_base}/sandbox {socket_base}/canary
         echo "directories created"
     "#
@@ -168,6 +168,7 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     );
 
     let umask = cellmembrane_types::service::DEFAULT_SERVICE_UMASK;
+    let rtd = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY;
     let rtd_mode = cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE;
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
     let restart_delay = cellmembrane_types::service::DEFAULT_RESTART_DELAY_SECS;
@@ -192,7 +193,7 @@ Restart=on-failure
 RestartSec={restart_delay}
 StartLimitIntervalSec={start_limit_interval}
 StartLimitBurst={start_limit_burst}
-RuntimeDirectory=membrane
+RuntimeDirectory={rtd}
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
 MemoryMax=64M
@@ -233,7 +234,7 @@ Environment={relay_upper}_FEDERATION_ENABLED=true
 Environment={relay_upper}_PEERS={hub_id}@{vps_peer}
 Restart=on-failure
 RestartSec={restart_delay}
-RuntimeDirectory=membrane
+RuntimeDirectory={rtd}
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
 MemoryMax=128M
@@ -257,7 +258,7 @@ Restart=on-failure
 RestartSec={restart_delay}
 StartLimitIntervalSec={start_limit_interval}
 StartLimitBurst={start_limit_burst}
-RuntimeDirectory=membrane
+RuntimeDirectory={rtd}
 RuntimeDirectoryMode={rtd_mode}
 RuntimeDirectoryPreserve=yes
 MemoryMax=128M
@@ -560,10 +561,11 @@ pub(super) async fn write_gate_identity(
 ) -> Result<String> {
     let now = crate::utc_now_rfc3339();
     let arch = crate::plasmid::detect_target_triple();
+    let config_dir = cellmembrane_types::service::DEFAULT_CONFIG_DIR;
     let script = format!(
         r#"
-mkdir -p /etc/membrane
-cat > /etc/membrane/gate_identity << 'IDENTITY'
+mkdir -p {config_dir}
+cat > {config_dir}/gate_identity << 'IDENTITY'
 [gate]
 name = "{gate_name}"
 profile = "{profile}"

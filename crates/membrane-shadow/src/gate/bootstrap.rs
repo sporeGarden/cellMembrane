@@ -91,6 +91,25 @@ pub async fn bootstrap(
     });
 
     phases.push(blocking_phase("permissions.set", move || permissions_phase(dry_run)).await);
+
+    phases.push(blocking_phase("crash_loop.preflight", || {
+        let report = super::crash_loop::scan_and_break(None);
+        let detail = if report.loops.is_empty() {
+            format!("scanned {} units — no crash loops", report.scanned)
+        } else {
+            format!(
+                "scanned {} — disabled {} crash-looping services",
+                report.scanned,
+                report.disabled_count()
+            )
+        };
+        BootstrapPhase {
+            name: "crash_loop.preflight".into(),
+            ok: true,
+            detail,
+        }
+    }).await);
+
     phases.push(blocking_phase("identity.git", identity_phase).await);
 
     phases.push(timed_phase("depot.fetch", fetch_phase(config, transport, dry_run)).await);

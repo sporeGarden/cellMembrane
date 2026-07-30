@@ -60,7 +60,7 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
 
     info!(socket = %path, "webhook listener started");
 
-    let config = config.clone();
+    let config = std::sync::Arc::new(config.clone());
     loop {
         let (stream, _addr) = match listener.accept().await {
             Ok(conn) => conn,
@@ -70,7 +70,7 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
             }
         };
 
-        let config = config.clone();
+        let config = std::sync::Arc::clone(&config);
         tokio::spawn(async move {
             if let Err(e) = handle_connection(stream, &config).await {
                 warn!("webhook connection error: {e}");
