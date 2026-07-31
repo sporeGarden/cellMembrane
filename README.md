@@ -61,7 +61,7 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 155o): ~9k lines types, ~36k lines shadow. Crash-loop breaker
+Current state (Wave 155o): ~11k lines types, ~38k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -70,8 +70,8 @@ All manifest fields type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `Bin
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-10-gate WG mesh (golgi, sporeGate, eastGate, flockGate, ironGate, northGate,
-southGate, blueGate, westGate, grapheneGate).
+10-gate mesh topology (7 WG-enrolled: golgi, sporeGate, eastGate, flockGate,
+ironGate, northGate, southGate; 3 pending: blueGate, westGate, grapheneGate).
 Subdomain standard (`prefix.primals.eco`): `webb.primals.eco` vhost, CSP headers,
 root domain redirect to `sporeprint.primals.eco`, depot at `depot.primals.eco`.
 `gate.enroll` automated mesh enrollment + `hub.peer` hub-side addition.
@@ -129,7 +129,7 @@ types in `cellmembrane-types/src/credentials.rs`. `CredentialModel::StepCa` vari
 step-ca constants (`DEFAULT_STEP_CA_URL`, `ENV_STEP_CA_FINGERPRINT`, etc.) in
 `service/constants.rs`. `gate.enroll` phase 8 (`ssh_cert`) wires cert request into
 enrollment flow (non-fatal if step-ca not deployed). Deployment team handoff for
-step-ca on golgiBody in `infra/wateringHole/handoffs/`.
+step-ca on golgiBody (deployment pending sporeGate team).
 Deep debt (Wave 155d–155f): Tower port `7780` → `DEFAULT_TOWER_PORT` +
 `ENV_TOWER_PORT` constants. Bootstrap `write_gate_identity` arch triple →
 `detect_target_triple()`. duplicate federation port const eliminated
@@ -184,7 +184,7 @@ Systemd unit dir resolves via `MEMBRANE_SYSTEMD_UNIT_DIR` or init scope
 (`multi-user.target` for system, `default.target` for user). Hardcoded
 `/run/membrane` and `/var/lib/membrane` paths replaced with `MEMBRANE_SOCKET_BASE`
 resolution. Bootstrap permissions phase uses env-resolved socket base.
-Zero production `unwrap()` (167 test-only, confirmed via full audit).
+Zero production `unwrap()` (test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
 
@@ -296,7 +296,7 @@ through Wave 155o are **DONE**. Full wave-by-wave audit trail is preserved in
 | Infrastructure | exim4/droplet-agent purged, fail2ban, UFW, SSH key-only, journald persistence | DONE |
 | TLS | Caddy + Let's Encrypt sovereign TLS, Cloudflare removed | DONE |
 | Dark Forest | 21/21 PASS, 5-pillar compliance, stripped static ELF binaries | DONE |
-| NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh, UDS-only, sandbox + canary pipeline | DONE |
+| NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh (10 named, 3 pending), UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
 | Code quality | 1273 tests, zero clippy warnings (pedantic), all files <800L | DONE |
@@ -341,7 +341,7 @@ through Wave 155o are **DONE**. Full wave-by-wave audit trail is preserved in
 - Caddy TLS certificate management and reverse proxy on VPS
 - Sovereign DNS (knot-dns on VPS, replacing commercial DNS)
 - RustDesk self-hosted remote access
-- Multi-gate expansion (7-gate mesh: golgi, sporeGate, eastGate, flockGate, ironGate, northGate, southGate)
+- Multi-gate expansion (10-gate mesh: 7 WG-enrolled + 3 pending enrollment)
 - plasmidBin — binary harvesting, checksums, `sources.toml`, CI workflows
 - VPS deployment ops — systemd units, UDS probes, firewall, refresh cycles
 - Peptidoglycan self-refresh timer and auto-fetch evolution
