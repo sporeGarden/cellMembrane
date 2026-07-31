@@ -39,12 +39,10 @@ impl TargetOs {
     /// Detect the host OS at compile time.
     #[must_use]
     pub const fn detect() -> Self {
-        if cfg!(target_os = "linux") {
-            if cfg!(target_os = "android") {
-                Self::Android
-            } else {
-                Self::Linux
-            }
+        if cfg!(target_os = "android") {
+            Self::Android
+        } else if cfg!(target_os = "linux") {
+            Self::Linux
         } else if cfg!(target_os = "windows") {
             Self::Windows
         } else if cfg!(target_os = "macos") {

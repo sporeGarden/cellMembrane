@@ -307,9 +307,13 @@ fn resolve_primals_from_manifest(gate: &str) -> Vec<String> {
         .unwrap_or_else(|| nucleus_primals().into_iter().map(String::from).collect())
 }
 
-/// Detect the local platform's default Rust target triple (musl static).
+/// Detect the local platform's default Rust target triple.
+///
+/// Uses compile-time `Platform::detect()` which resolves OS, arch, and link
+/// model from `cfg!` directives — correct for both native and cross-compiled
+/// binaries (e.g. `x86_64-pc-windows-gnu` when `--target` is set).
 pub(crate) const fn detect_target_triple() -> &'static str {
-    cellmembrane_types::TargetArch::detect_host().triple()
+    cellmembrane_types::Platform::detect().triple()
 }
 
 /// Check NDK toolchain availability for Android cross-compilation.

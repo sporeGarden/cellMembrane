@@ -34,11 +34,17 @@ fn nucleus_primals_returns_13() {
 }
 
 #[test]
-fn detect_target_triple_contains_musl() {
+fn detect_target_triple_matches_platform() {
     let triple = detect_target_triple();
+    let platform = cellmembrane_types::Platform::detect();
+    assert_eq!(
+        triple,
+        platform.triple(),
+        "detect_target_triple must agree with Platform::detect"
+    );
     assert!(
-        triple.ends_with("-unknown-linux-musl"),
-        "expected musl target, got: {triple}"
+        !triple.is_empty(),
+        "triple should be a non-empty target string"
     );
 }
 

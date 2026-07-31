@@ -1,13 +1,26 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155s)
+**Last updated:** 2026-07-31 (Wave 155t)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155t (P2 fix: platform detection — detect_target_triple uses Platform::detect):**
+Fixed membrane.exe embedding `x86_64-unknown-linux-musl` on Windows cross-compiled
+builds. Root cause: `detect_target_triple()` delegated to `TargetArch::detect_host()`
+which only has Linux variants and uses `cfg!(target_arch)` without OS dimension.
+Fix: rewired to `Platform::detect().triple()` which uses `cfg!(target_os)` +
+`cfg!(target_arch)` — correctly returns `x86_64-pc-windows-gnu` when cross-compiled
+with `--target x86_64-pc-windows-gnu`. Also fixed `TargetOs::detect()` Android
+detection: Android check was nested inside Linux branch but `target_os = "android"`
+is distinct from `target_os = "linux"`, so it never matched. Moved Android check
+first. Test `detect_target_triple_contains_musl` evolved to platform-agnostic
+`detect_target_triple_matches_platform`. Unblocks J12 (blueGate sub-builder).
+Sandbox composition test hardened for dev-machine biomeOS. 1,281 tests, 0 clippy.
 
 **Wave 155s (registry API evolution — require_capability/require_binary):**
 Collapsed 6 redundant `.expect()` calls on `MembraneService` lookups into two
