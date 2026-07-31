@@ -41,7 +41,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart={install_base}/membrane temporal.cascade --source {source}
-Environment=GATE_NAME={gate_name}
+Environment=MEMBRANE_GATE_NAME={gate_name}
 TimeoutStartSec={cascade_timeout}
 StandardOutput=journal
 StandardError=journal
@@ -150,7 +150,7 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    let mut env_lines = format!("Environment=GATE_NAME={}\n", params.gate_name);
+    let mut env_lines = format!("Environment=MEMBRANE_GATE_NAME={}\n", params.gate_name);
     if !params.proxy_routes.is_empty() {
         let _ = writeln!(
             env_lines,
@@ -206,12 +206,9 @@ pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
     );
     let relay_svc = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-    let relay_gateway_unit = relay_svc.map_or("songbird-gateway.service", |s| {
-        s.extra_ports
-            .first()
-            .map_or(s.systemd_unit, |_| "songbird-gateway.service")
-    });
+    )
+    .expect("MeshRelay must exist in service registry");
+    let relay_gateway_unit = format!("{}-gateway.service", relay_svc.binary);
 
     format!(
         "[Unit]\n\
@@ -224,7 +221,7 @@ pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
          ExecStart={base}/{crypto_binary} serve-https \
          --upstream {socket} \
          --bind {bind}\n\
-         Environment=GATE_NAME={gate}\n\
+         Environment=MEMBRANE_GATE_NAME={gate}\n\
          Restart=on-failure\n\
          RestartSec={restart_delay}\n\
          StartLimitIntervalSec={start_limit_interval}\n\

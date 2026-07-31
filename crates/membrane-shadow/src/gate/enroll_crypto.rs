@@ -17,7 +17,7 @@ use super::bootstrap::BootstrapPhase;
 /// algorithm bearDog's `enrollment.verify` checks) and calls songBird's
 /// `mesh.enroll` JSON-RPC to complete cryptographic enrollment into the mesh.
 ///
-/// Requires: `FAMILY_SEED` or `BEARDOG_FAMILY_SEED` env var set.
+/// Requires: `MEMBRANE_FAMILY_SEED` (or legacy `BEARDOG_FAMILY_SEED`/`FAMILY_SEED`) env var set.
 /// Requires: songBird running locally with its UDS socket reachable.
 pub(super) async fn mesh_enroll_phase(
     gate_name: &str,
@@ -30,8 +30,7 @@ pub(super) async fn mesh_enroll_phase(
         return BootstrapPhase {
             name: "mesh.enroll".into(),
             ok: false,
-            detail: "FAMILY_SEED or BEARDOG_FAMILY_SEED not set — cannot compute enrollment proof"
-                .into(),
+            detail: "MEMBRANE_FAMILY_SEED not set — cannot compute enrollment proof".into(),
         };
     }
     let family_seed = family_seed.unwrap_or_default();
@@ -124,21 +123,15 @@ pub(super) async fn mesh_enroll_phase(
     }
 }
 
-/// Load `FAMILY_SEED` from environment (same precedence as bearDog).
+/// Load family seed from environment (same precedence as bearDog).
 fn load_family_seed() -> Option<Vec<u8>> {
-    for var in ["BEARDOG_FAMILY_SEED", "FAMILY_SEED"] {
-        if let Ok(val) = std::env::var(var) {
-            if !val.is_empty() {
-                return Some(val.into_bytes());
-            }
-        }
-    }
-    None
+    cellmembrane_types::service::resolve_family_seed_env().map(String::into_bytes)
 }
 
 /// Load enrollment seed generation from environment (default 0).
 pub(super) fn load_seed_generation() -> u32 {
-    std::env::var("BEARDOG_ENROLLMENT_SEED_GENERATION")
+    std::env::var(cellmembrane_types::service::ENV_ENROLLMENT_SEED_GEN)
+        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_ENROLLMENT_SEED_GEN_LEGACY))
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(0)
@@ -165,7 +158,9 @@ pub(super) fn compute_enrollment_proof(
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let family_id = std::env::var("FAMILY_ID").unwrap_or_else(|_| "default".into());
+    let family_id = std::env::var(cellmembrane_types::service::ENV_FAMILY_ID)
+        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_FAMILY_ID_LEGACY))
+        .unwrap_or_else(|_| "default".into());
 
     let info = format!("enrollment-v{generation}");
     let mut extract_mac = HmacSha256::new_from_slice(family_id.as_bytes()).expect("HMAC key init");

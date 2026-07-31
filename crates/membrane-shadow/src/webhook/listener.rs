@@ -26,9 +26,6 @@ fn default_socket_path() -> String {
     format!("{base}/webhook.sock")
 }
 
-/// Environment variable for webhook HMAC secret.
-const ENV_WEBHOOK_SECRET: &str = "MEMBRANE_WEBHOOK_SECRET";
-
 /// Start listening for webhook POSTs on a Unix domain socket.
 ///
 /// Returns after the listener is shut down (e.g. by signal). Each accepted
@@ -138,7 +135,7 @@ async fn handle_connection(
             .map_err(io_err)?;
     }
 
-    let secret = std::env::var(ENV_WEBHOOK_SECRET).unwrap_or_default();
+    let secret = cellmembrane_types::service::resolve_webhook_secret_env().unwrap_or_default();
     if secret.is_empty() {
         let response = http_response(500, "webhook secret not configured");
         let _ = writer.write_all(response.as_bytes()).await;

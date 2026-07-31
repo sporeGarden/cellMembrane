@@ -176,7 +176,7 @@ fn service_spec_environment_vars() {
         exec_start: "/opt/membrane/songbird server".into(),
         extra_args: String::new(),
         environment: vec![
-            ("GATE_NAME".into(), "sporeGate".into()),
+            ("MEMBRANE_GATE_NAME".into(), "sporeGate".into()),
             ("MESH_IP".into(), "10.13.37.1".into()),
         ],
         env_file: None,
@@ -188,7 +188,7 @@ fn service_spec_environment_vars() {
         runtime_directory_mode: "0755".into(),
     };
     let unit = spec.to_systemd_unit();
-    assert!(unit.contains("Environment=GATE_NAME=sporeGate"));
+    assert!(unit.contains("Environment=MEMBRANE_GATE_NAME=sporeGate"));
     assert!(unit.contains("Environment=MESH_IP=10.13.37.1"));
 }
 

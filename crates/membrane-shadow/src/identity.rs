@@ -3,7 +3,7 @@
 //! Gate identity resolution — capability-based, no hostname heuristics.
 //!
 //! Resolution priority:
-//! 1. `GATE_NAME` environment variable
+//! 1. `MEMBRANE_GATE_NAME` / `GATE_NAME` environment variable
 //! 2. `$ECOPRIMALS_ROOT/.gate` file (one line, trimmed)
 //! 3. Error — the gate must declare itself, not be guessed
 
@@ -23,7 +23,7 @@ pub struct GateIdentity {
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IdentitySource {
-    /// From `GATE_NAME` environment variable.
+    /// From `MEMBRANE_GATE_NAME` (or legacy `GATE_NAME`) environment variable.
     Environment,
     /// From `.gate` file in workspace root.
     GateFile,
@@ -47,17 +47,14 @@ impl std::fmt::Display for IdentitySource {
 /// Resolve the gate identity for a workspace.
 ///
 /// # Errors
-/// Returns `ShadowError::Parse` if no identity can be resolved — the gate
-/// must declare itself via `GATE_NAME` or a `.gate` file.
+/// Returns `ShadowError::Config` if no identity can be resolved — the gate
+/// must declare itself via `MEMBRANE_GATE_NAME` or a `.gate` file.
 pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
-    if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        let name = name.trim().to_string();
-        if !name.is_empty() {
-            return Ok(GateIdentity {
-                name,
-                source: IdentitySource::Environment,
-            });
-        }
+    if let Some(name) = cellmembrane_types::service::resolve_gate_name_env() {
+        return Ok(GateIdentity {
+            name,
+            source: IdentitySource::Environment,
+        });
     }
 
     let gate_file = workspace_root.join(".gate");
@@ -73,7 +70,7 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
     }
 
     Err(ShadowError::Config(
-        "cannot resolve gate identity — set GATE_NAME or create .gate file".into(),
+        "cannot resolve gate identity — set MEMBRANE_GATE_NAME or create .gate file".into(),
     ))
 }
 
@@ -82,14 +79,11 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
 /// # Errors
 /// Returns `ShadowError::Config` if no identity can be resolved.
 pub async fn resolve_async(workspace_root: &Path) -> Result<GateIdentity> {
-    if let Ok(name) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        let name = name.trim().to_string();
-        if !name.is_empty() {
-            return Ok(GateIdentity {
-                name,
-                source: IdentitySource::Environment,
-            });
-        }
+    if let Some(name) = cellmembrane_types::service::resolve_gate_name_env() {
+        return Ok(GateIdentity {
+            name,
+            source: IdentitySource::Environment,
+        });
     }
 
     let gate_file = workspace_root.join(".gate");
@@ -104,7 +98,7 @@ pub async fn resolve_async(workspace_root: &Path) -> Result<GateIdentity> {
     }
 
     Err(ShadowError::Config(
-        "cannot resolve gate identity — set GATE_NAME or create .gate file".into(),
+        "cannot resolve gate identity — set MEMBRANE_GATE_NAME or create .gate file".into(),
     ))
 }
 
@@ -122,7 +116,7 @@ mod tests {
         writeln!(f, "eastGate").unwrap();
         drop(f);
 
-        if std::env::var(cellmembrane_types::service::ENV_GATE_NAME).is_err() {
+        if cellmembrane_types::service::resolve_gate_name_env().is_none() {
             let result = resolve(&dir);
             let identity = result.unwrap();
             assert_eq!(identity.name, "eastGate");
@@ -134,7 +128,7 @@ mod tests {
 
     #[test]
     fn resolve_fails_without_identity() {
-        if std::env::var(cellmembrane_types::service::ENV_GATE_NAME).is_err() {
+        if cellmembrane_types::service::resolve_gate_name_env().is_none() {
             let result = resolve(Path::new("/tmp/nonexistent-gate-identity-test"));
             assert!(result.is_err());
         }

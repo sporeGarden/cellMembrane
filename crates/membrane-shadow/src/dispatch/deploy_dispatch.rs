@@ -214,7 +214,8 @@ async fn route_to_gate(
 fn local_gate_name() -> &'static str {
     static GATE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     GATE.get_or_init(|| {
-        std::env::var("GATE_NAME").unwrap_or_else(|_| crate::gate::resolve_local_gate_identity())
+        cellmembrane_types::service::resolve_gate_name_env()
+            .unwrap_or_else(crate::gate::resolve_local_gate_identity)
     })
 }
 

@@ -195,8 +195,10 @@ async fn dispatch_webhook(
             Ok(ShadowOutcome::ok("webhook listener stopped"))
         }
         "webhook.verify" => {
-            let secret = std::env::var(cellmembrane_types::service::ENV_WEBHOOK_SECRET)
-                .map_err(|_| ShadowError::Config("WEBHOOK_SECRET env var required".into()))?;
+            let secret =
+                cellmembrane_types::service::resolve_webhook_secret_env().ok_or_else(|| {
+                    ShadowError::Config("MEMBRANE_WEBHOOK_SECRET env var required".into())
+                })?;
             let body = cli::require_arg(args, 0, "body")?;
             let sig = cli::extract_flag_value(args, "--signature")
                 .ok_or_else(|| ShadowError::Config("--signature flag required".into()))?;

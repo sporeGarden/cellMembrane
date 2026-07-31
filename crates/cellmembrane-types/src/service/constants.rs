@@ -79,11 +79,36 @@ pub const ENV_FORGEJO_SSH_HOST: &str = "FORGEJO_SSH_HOST";
 /// Environment variable for the ecoPrimals workspace root.
 pub const ENV_ECOPRIMALS_ROOT: &str = "ECOPRIMALS_ROOT";
 /// Environment variable for the gate identity.
-pub const ENV_GATE_NAME: &str = "GATE_NAME";
+///
+/// Uses `MEMBRANE_GATE_NAME` (standard `MEMBRANE_*` prefix) as the primary
+/// name. The legacy `GATE_NAME` is still checked as a fallback by
+/// `resolve_gate_name_env()`.
+pub const ENV_GATE_NAME: &str = "MEMBRANE_GATE_NAME";
+/// Legacy environment variable for gate identity (pre-Wave 155m).
+pub const ENV_GATE_NAME_LEGACY: &str = "GATE_NAME";
 /// Environment variable for the webhook secret (HMAC-SHA256).
-pub const ENV_WEBHOOK_SECRET: &str = "WEBHOOK_SECRET";
+pub const ENV_WEBHOOK_SECRET: &str = "MEMBRANE_WEBHOOK_SECRET";
+/// Legacy environment variable for webhook secret (pre-Wave 155m).
+pub const ENV_WEBHOOK_SECRET_LEGACY: &str = "WEBHOOK_SECRET";
 /// Environment variable for the `NeuralBridge` API socket path.
 pub const ENV_NEURAL_API_SOCKET: &str = "NEURAL_API_SOCKET";
+
+// ── Family / enrollment ──────────────────────────────────────────────
+
+/// Environment variable for the family seed (BTSP/enrollment crypto).
+pub const ENV_FAMILY_SEED: &str = "MEMBRANE_FAMILY_SEED";
+/// Legacy environment variable for family seed.
+pub const ENV_FAMILY_SEED_LEGACY: &str = "BEARDOG_FAMILY_SEED";
+/// Additional legacy environment variable for family seed.
+pub const ENV_FAMILY_SEED_LEGACY2: &str = "FAMILY_SEED";
+/// Environment variable for the family ID (enrollment HKDF salt).
+pub const ENV_FAMILY_ID: &str = "MEMBRANE_FAMILY_ID";
+/// Legacy environment variable for family ID.
+pub const ENV_FAMILY_ID_LEGACY: &str = "FAMILY_ID";
+/// Environment variable for enrollment seed generation counter.
+pub const ENV_ENROLLMENT_SEED_GEN: &str = "MEMBRANE_ENROLLMENT_SEED_GENERATION";
+/// Legacy environment variable for enrollment seed generation.
+pub const ENV_ENROLLMENT_SEED_GEN_LEGACY: &str = "BEARDOG_ENROLLMENT_SEED_GENERATION";
 
 /// Default socket filename for the biomeOS Neural API.
 pub const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
@@ -245,9 +270,6 @@ pub const ENV_BIOMEOS_SOCKET_DIR: &str = "BIOMEOS_SOCKET_DIR";
 pub const ENV_NM_DISPATCHER_DIR: &str = "NM_DISPATCHER_DIR";
 /// Default `NetworkManager` dispatcher directory.
 pub const DEFAULT_NM_DISPATCHER_DIR: &str = "/etc/NetworkManager/dispatcher.d";
-
-/// Environment variable for the family seed (ribocipher key derivation).
-pub const ENV_FAMILY_SEED: &str = "FAMILY_SEED";
 
 /// Default VPS host (golgiBody sovereign surface).
 ///
@@ -701,6 +723,64 @@ fn resolve_uid_best_effort() -> String {
         .unwrap_or_else(|_| "1000".into())
 }
 
+/// Resolve the gate name from environment variables.
+///
+/// Checks `MEMBRANE_GATE_NAME` first (standard prefix), then falls back to
+/// the legacy `GATE_NAME` for backward compatibility with existing
+/// `/etc/environment` configurations.
+///
+/// Returns `None` if neither is set or both are empty.
+#[must_use]
+pub fn resolve_gate_name_env() -> Option<String> {
+    resolve_env_with_legacy(ENV_GATE_NAME, ENV_GATE_NAME_LEGACY)
+}
+
+/// Resolve the webhook secret from environment variables.
+///
+/// Checks `MEMBRANE_WEBHOOK_SECRET` first, then falls back to legacy
+/// `WEBHOOK_SECRET` for backward compatibility.
+///
+/// Returns `None` if neither is set or both are empty.
+#[must_use]
+pub fn resolve_webhook_secret_env() -> Option<String> {
+    resolve_env_with_legacy(ENV_WEBHOOK_SECRET, ENV_WEBHOOK_SECRET_LEGACY)
+}
+
+/// Resolve the family seed from environment variables.
+///
+/// Checks `MEMBRANE_FAMILY_SEED` first, then legacy `BEARDOG_FAMILY_SEED`
+/// and `FAMILY_SEED`. The value may be an inline seed or a path to a key file.
+///
+/// Returns `None` if no seed is configured.
+#[must_use]
+pub fn resolve_family_seed_env() -> Option<String> {
+    resolve_env_chain(&[
+        ENV_FAMILY_SEED,
+        ENV_FAMILY_SEED_LEGACY,
+        ENV_FAMILY_SEED_LEGACY2,
+    ])
+}
+
+/// Resolve an environment variable with a legacy fallback.
+///
+/// Shared helper for the `MEMBRANE_*` + legacy dual-read pattern.
+fn resolve_env_with_legacy(primary: &str, legacy: &str) -> Option<String> {
+    resolve_env_chain(&[primary, legacy])
+}
+
+/// Check an ordered list of env var names, returning the first non-empty value.
+fn resolve_env_chain(keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Ok(val) = std::env::var(key) {
+            let trimmed = val.trim().to_string();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -819,5 +899,25 @@ mod tests {
             base.starts_with('/'),
             "socket base must be absolute: {base}"
         );
+    }
+
+    #[test]
+    fn env_gate_name_uses_membrane_prefix() {
+        assert!(
+            ENV_GATE_NAME.starts_with("MEMBRANE_"),
+            "ENV_GATE_NAME must use MEMBRANE_ prefix: {ENV_GATE_NAME}"
+        );
+    }
+
+    #[test]
+    fn env_gate_name_legacy_is_backward_compat() {
+        assert_eq!(ENV_GATE_NAME_LEGACY, "GATE_NAME");
+    }
+
+    #[test]
+    fn resolve_gate_name_env_returns_none_when_unset() {
+        if std::env::var(ENV_GATE_NAME).is_err() && std::env::var(ENV_GATE_NAME_LEGACY).is_err() {
+            assert!(resolve_gate_name_env().is_none());
+        }
     }
 }

@@ -83,7 +83,7 @@ fn generate_petaltongue_unit(params: &SporePrintDeployParams<'_>) -> String {
          [Service]\n\
          Type=simple\n\
          ExecStart={base}/{content} server --bind {bind} --content-dir {content_root}\n\
-         Environment=GATE_NAME={gate}\n\
+         Environment=MEMBRANE_GATE_NAME={gate}\n\
          Restart=on-failure\n\
          RestartSec=3\n\
          WorkingDirectory={content_root}\n\n\
@@ -112,7 +112,7 @@ fn generate_nestgate_unit(params: &SporePrintDeployParams<'_>) -> String {
          Type=simple\n\
          UMask={umask}\n\
          ExecStart={base}/{cas} server\n\
-         Environment=GATE_NAME={gate}\n\
+         Environment=MEMBRANE_GATE_NAME={gate}\n\
          Environment=NESTGATE_SOCKET={socket_base}/{cas}.sock\n\
          Restart=on-failure\n\
          RestartSec=3\n\
@@ -152,7 +152,7 @@ fn generate_beardog_acme_unit(params: &SporePrintDeployParams<'_>) -> String {
          --upstream {upstream} \
          --domain {domain} \
          --acme-email {email}\n\
-         Environment=GATE_NAME={gate}\n\
+         Environment=MEMBRANE_GATE_NAME={gate}\n\
          Restart=on-failure\n\
          RestartSec={restart_delay}\n\
          StartLimitIntervalSec={start_limit_interval}\n\

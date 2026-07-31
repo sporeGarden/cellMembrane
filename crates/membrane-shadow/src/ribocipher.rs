@@ -293,14 +293,14 @@ const HKDF_SALT: &[u8] = b"ribocipher-v1";
 /// HKDF info parameter for mito-tier signal key.
 const HKDF_INFO_MITO: &[u8] = b"mito-signal";
 
-/// Derive the mito key from the `FAMILY_SEED` environment variable.
+/// Derive the mito key from the family seed environment variable.
 ///
-/// Reads family seed from:
-/// 1. `FAMILY_SEED` env var (may be a path to a key file, or inline seed)
-/// 2. Falls back gracefully to `None` if unavailable.
+/// Reads family seed from `MEMBRANE_FAMILY_SEED` (or legacy
+/// `BEARDOG_FAMILY_SEED`/`FAMILY_SEED`). Value may be a path to a key
+/// file or an inline seed. Falls back gracefully to `None` if unavailable.
 #[allow(dead_code, reason = "Tier 2 mito key derivation")]
 fn derive_mito_key_from_env() -> Option<[u8; 32]> {
-    let seed_source = std::env::var(cellmembrane_types::service::ENV_FAMILY_SEED).ok()?;
+    let seed_source = cellmembrane_types::service::resolve_family_seed_env()?;
     let seed_bytes = if std::path::Path::new(&seed_source).exists() {
         std::fs::read(&seed_source).ok()?
     } else {

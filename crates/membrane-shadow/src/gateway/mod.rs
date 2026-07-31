@@ -168,7 +168,7 @@ fn dispatch_env(args: &[&str]) -> Result<ShadowOutcome> {
             "{}={routes_env}",
             cellmembrane_types::service::ENV_SONGBIRD_PROXY_ROUTES
         ),
-        format!("GATE_NAME={gate_name}"),
+        format!("MEMBRANE_GATE_NAME={gate_name}"),
     ];
 
     Ok(ShadowOutcome::ok(format!(
@@ -193,11 +193,13 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
     let relay_unit = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
     )
-    .map_or("songbird-relay.service", |s| s.systemd_unit);
+    .expect("MeshRelay must exist in service registry")
+    .systemd_unit;
     let signer_unit = cellmembrane_types::MembraneService::with_capability(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     )
-    .map_or("beardog-membrane.service", |s| s.systemd_unit);
+    .expect("CryptoSigner must exist in service registry")
+    .systemd_unit;
     let mut lines = vec![format!("--- {relay_unit} ---")];
     lines.extend(songbird_unit.lines().map(String::from));
     lines.push(String::new());

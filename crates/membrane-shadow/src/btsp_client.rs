@@ -195,12 +195,12 @@ fn generate_ephemeral_pub() -> String {
     hex::encode(bytes)
 }
 
-/// Derive the BTSP challenge-response key from `FAMILY_SEED`.
+/// Derive the BTSP challenge-response key from the family seed.
 ///
 /// Uses HKDF-SHA256 with a BTSP-specific info parameter, so the derived
 /// key is distinct from riboCipher mito keys.
 fn derive_btsp_key() -> Option<[u8; 32]> {
-    let seed_source = std::env::var(cellmembrane_types::service::ENV_FAMILY_SEED).ok()?;
+    let seed_source = cellmembrane_types::service::resolve_family_seed_env()?;
     let seed_bytes = if std::path::Path::new(&seed_source).exists() {
         std::fs::read(&seed_source).ok()?
     } else {
@@ -251,7 +251,7 @@ pub const BTSP_JSONLINE_SIGNAL: [u8; 2] = [
     crate::ribocipher::protocol::BTSP_JSON_LINE,
 ];
 
-/// Whether BTSP is available (`FAMILY_SEED` is set).
+/// Whether BTSP is available (family seed is configured).
 #[must_use]
 pub fn is_available() -> bool {
     derive_btsp_key().is_some()

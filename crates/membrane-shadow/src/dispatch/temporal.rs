@@ -82,26 +82,19 @@ pub(super) async fn dispatch_temporal(
 async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Result<ShadowOutcome> {
     let root = temporal::resolve_workspace_root()?;
 
-    let gate_name = cli::extract_flag_value(args, "--gate")
-        .or_else(|| {
-            std::env::var(cellmembrane_types::service::ENV_GATE_NAME)
-                .ok()
-                .as_deref()
-                .map(|_| "")
-        })
-        .unwrap_or("auto");
-
-    let gate_name = if gate_name == "auto" || gate_name.is_empty() {
+    let gate_name = if let Some(explicit) = cli::extract_flag_value(args, "--gate") {
+        explicit.to_string()
+    } else if let Some(env_name) = cellmembrane_types::service::resolve_gate_name_env() {
+        env_name
+    } else {
         identity::resolve_async(&root)
             .await
             .map_err(|e| {
                 crate::ShadowError::Config(format!(
-                    "cannot resolve gate identity — set GATE_NAME or configure identity: {e}"
+                    "cannot resolve gate identity — set MEMBRANE_GATE_NAME or configure identity: {e}"
                 ))
             })?
             .name
-    } else {
-        gate_name.to_string()
     };
 
     let source: cellmembrane_types::CascadeSource = cli::extract_flag_value(args, "--source")

@@ -1,7 +1,7 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155m)
+**Last updated:** 2026-07-31 (Wave 155n)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
@@ -31,6 +31,28 @@ implementations (gate_configure, dispatch/mod, freshness) into single shared
 `plasmid/mod.rs` (727→417L, -310L). Mesh notify now uses capability-resolved
 socket via `resolve_mesh_relay_socket()` instead of hardcoded constant.
 1,266 tests (+7 new), 0 clippy, 0 fmt drift.
+
+**Wave 155n (MEMBRANE_* env var standardization + env secret unification):**
+Standardized all cellMembrane env vars to `MEMBRANE_*` prefix convention with
+legacy fallback chains for backward compatibility:
+- `GATE_NAME` → `MEMBRANE_GATE_NAME` (+`GATE_NAME` legacy): fixed P3 mismatch
+  where VPS `/etc/environment` had `MEMBRANE_GATE_NAME` but code read `GATE_NAME`.
+  Introduced `resolve_gate_name_env()` shared helper; all 6 consumers updated
+  (identity.rs, local.rs, temporal.rs, deploy_dispatch.rs + 2 test guards).
+- `WEBHOOK_SECRET` → `MEMBRANE_WEBHOOK_SECRET` (+`WEBHOOK_SECRET` legacy): fixed
+  live split where `webhook/listener.rs` read `MEMBRANE_WEBHOOK_SECRET` but
+  `dispatch/mod.rs webhook.verify` read `WEBHOOK_SECRET`. Introduced
+  `resolve_webhook_secret_env()`.
+- `FAMILY_SEED`/`BEARDOG_FAMILY_SEED` → `MEMBRANE_FAMILY_SEED` (+2 legacy):
+  centralized into `resolve_family_seed_env()`; all 3 consumers (enroll_crypto,
+  btsp_client, ribocipher) updated. `FAMILY_ID` → `MEMBRANE_FAMILY_ID`,
+  `BEARDOG_ENROLLMENT_SEED_GENERATION` → `MEMBRANE_ENROLLMENT_SEED_GENERATION`.
+- Replaced hardcoded systemd unit names in `gateway/mod.rs` (songbird-relay,
+  beardog-membrane) + `systemd_units.rs` (songbird-gateway) with registry
+  `expect()` lookups, matching the pattern established in Wave 155m.
+- All 14 systemd unit templates now emit `MEMBRANE_GATE_NAME` instead of `GATE_NAME`.
+- Added `resolve_env_chain()` DRY helper for multi-key env resolution.
+1,269 tests (+3 new), 0 clippy, 0 fmt drift.
 
 **Wave 155k (sovereign HTTP client + deep debt sweep):**
 Purged `reqwest` — sovereign HTTP/1.1 client built on `tokio-rustls` + `webpki-roots`

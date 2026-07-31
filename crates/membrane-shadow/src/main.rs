@@ -134,7 +134,7 @@ Webhook (push-driven cascade):
   webhook.listen [--socket PATH]   Start UDS listener for Forgejo/GitHub webhook POSTs
   webhook.test <json_body>         Process a push event (dry-run: selective harvest)
   webhook.verify <body> --signature <hex>
-                                   Verify HMAC-SHA256 signature (requires WEBHOOK_SECRET)
+                                   Verify HMAC-SHA256 signature (requires MEMBRANE_WEBHOOK_SECRET)
 
 Caddy (outer membrane TLS / reverse proxy):
   caddy.status                     Service health and vhost count
