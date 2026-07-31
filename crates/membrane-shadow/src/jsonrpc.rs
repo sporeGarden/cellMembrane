@@ -233,7 +233,7 @@ pub async fn raw(socket_path: &Path, _request: &str, _with_signal: bool) -> Resu
 /// This is the transport graduation for `TransportEndpoint::MeshRelay` — the
 /// abstraction boundary where physical topology becomes invisible.
 pub async fn call_via_relay(peer_id: &str, capability: &str, request: &str) -> Result<String> {
-    let relay_socket = crate::gate::health::resolve_primal_socket_paths(
+    let relay_socket = crate::gate::sockets::resolve_primal_socket_paths(
         cellmembrane_types::MembraneService::binary_for(
             cellmembrane_types::service::ServiceCapability::MeshRelay,
         ),

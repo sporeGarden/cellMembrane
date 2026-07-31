@@ -195,7 +195,7 @@ pub(super) fn resolve_relay_socket() -> std::path::PathBuf {
     let relay = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
-    let paths = super::health::resolve_primal_socket_paths(relay);
+    let paths = super::sockets::resolve_primal_socket_paths(relay);
     std::path::PathBuf::from(&paths[0])
 }
 

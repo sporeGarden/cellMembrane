@@ -40,7 +40,7 @@ impl ResolutionContext {
             cellmembrane_types::service::DEFAULT_SOCKET_BASE,
         );
         let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
-            .unwrap_or_else(|_| format!("/run/user/{}", crate::gate::health::resolve_uid()));
+            .unwrap_or_else(|_| format!("/run/user/{}", crate::gate::sockets::resolve_uid()));
         Self {
             local_gate,
             socket_base,

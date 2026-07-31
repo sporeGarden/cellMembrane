@@ -437,16 +437,16 @@ pub(crate) fn resolve_path(
 /// are stale and a rebuild is in progress. Consumers should delay fetch until
 /// `depot.updated` arrives (or a timeout expires).
 ///
-/// Currently logs to tracing — mesh publish will route through songBird's
-/// Sends `mesh.publish { topic: "depot.build_pending" }` via the local songBird
-/// UDS socket. Consumer gates can delay fetch until `depot.updated` arrives.
+/// Publish a depot event to the local songBird mesh.
+///
+/// Sends `mesh.publish { topic, payload }` via the local songBird UDS socket.
 /// Failures are non-fatal — tracing log ensures observability even without mesh.
-pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
+pub(crate) async fn notify_mesh(topic: &str, primals_key: &str, primals: &[String]) {
     tracing::info!(
-        event = "depot.build_pending",
-        primals = ?drifted,
-        "build pending — {} drifted primals queued for rebuild",
-        drifted.len()
+        event = topic,
+        primals = ?primals,
+        "{topic} — {} primals",
+        primals.len()
     );
 
     let socket_path = std::path::PathBuf::from(cellmembrane_types::service::env_or(
@@ -455,7 +455,7 @@ pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
     ));
 
     if !socket_path.exists() {
-        tracing::debug!("mesh.publish build_pending skipped — songBird socket not found");
+        tracing::debug!("mesh.publish {topic} skipped — songBird socket not found");
         return;
     }
 
@@ -465,9 +465,9 @@ pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
         "jsonrpc": "2.0",
         "method": "mesh.publish",
         "params": {
-            "topic": "depot.build_pending",
+            "topic": topic,
             "payload": {
-                "primals_pending": drifted,
+                primals_key: primals,
                 "builder": gate,
             }
         },
@@ -477,15 +477,17 @@ pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
     let request_str = request.to_string();
     match crate::jsonrpc::call(&socket_path, &request_str).await {
         Ok(response) => {
-            tracing::info!(
-                primals = ?drifted,
-                "mesh.publish depot.build_pending sent: {response}"
-            );
+            tracing::info!("mesh.publish {topic} sent: {response}");
         }
         Err(e) => {
-            tracing::warn!("mesh.publish depot.build_pending failed (non-fatal): {e}");
+            tracing::warn!("mesh.publish {topic} failed (non-fatal): {e}");
         }
     }
+}
+
+/// Notify mesh that primals are queued for rebuild.
+pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
+    notify_mesh("depot.build_pending", "primals_pending", drifted).await;
 }
 
 /// `plasmid.pipeline` — Full zero-touch harvest → refresh cycle.

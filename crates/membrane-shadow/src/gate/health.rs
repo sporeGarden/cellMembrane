@@ -12,7 +12,6 @@ const SECS_PER_DAY: u64 = 86_400;
 const SECS_PER_HOUR: u64 = 3_600;
 const CERT_WARNING_THRESHOLD_DAYS: i64 = 14;
 const MAX_CERT_PROBE_DOMAINS: usize = 5;
-const DEFAULT_FALLBACK_UID: &str = "1000";
 
 /// A single status probe (e.g. depot integrity, mesh connectivity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -414,46 +413,10 @@ async fn git_rev_parse(repo_dir: &Path, refspec: &str) -> Option<String> {
     crate::git_ops::git_output_opt(repo_dir, &["rev-parse", refspec]).await
 }
 
-// ── Native UDS JSON-RPC client (delegates to crate::jsonrpc) ──────────
+// ── Socket resolution (delegated to gate/sockets.rs) ──────────
 
-pub(crate) async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> crate::Result<String> {
-    let policy = crate::ribocipher::RiboCipherConfig::probe_policy();
-    crate::jsonrpc::call_with_policy(Path::new(socket_path), request, &policy).await
-}
-
-/// Resolve the mesh relay UDS socket path via capability discovery.
-fn resolve_mesh_relay_socket() -> String {
-    let binary_name = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::MeshRelay,
-    );
-    let paths = resolve_primal_socket_paths(binary_name);
-    paths
-        .into_iter()
-        .find(|p| Path::new(p).exists())
-        .unwrap_or_else(|| {
-            let socket_dir = resolve_biomeos_socket_dir();
-            format!("{socket_dir}/{binary_name}.sock")
-        })
-}
-
-pub(crate) fn resolve_biomeos_socket_dir() -> String {
-    std::env::var(cellmembrane_types::service::ENV_BIOMEOS_SOCKET_DIR).unwrap_or_else(|_| {
-        let uid = resolve_uid();
-        let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
-        format!("/run/user/{uid}/{ns}")
-    })
-}
-
-pub(crate) fn resolve_uid() -> String {
-    std::env::var("UID")
-        .or_else(|_| std::env::var("EUID"))
-        .unwrap_or_else(|_| {
-            std::fs::read_to_string("/proc/self/loginuid")
-                .unwrap_or_else(|_| DEFAULT_FALLBACK_UID.into())
-                .trim()
-                .to_string()
-        })
-}
+pub(crate) use super::sockets::{resolve_primal_socket_paths, uds_jsonrpc_call};
+use super::sockets::resolve_mesh_relay_socket;
 
 /// Probe rootpulse ledger state — checks if a session has been committed on this gate.
 ///
@@ -474,30 +437,6 @@ fn probe_rootpulse_ledger() -> StatusProbe {
     )
 }
 
-pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
-    let socket_base = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
-    let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
-        .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
-    let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
-    let mut paths = vec![
-        format!("{socket_base}/{primal}.sock"),
-        format!("{xdg_runtime}/{ns}/{primal}.sock"),
-    ];
-    if let Some(svc) = cellmembrane_types::MembraneService::for_binary(primal) {
-        if let Some(api) = svc.api_socket {
-            paths.insert(0, format!("{socket_base}/{api}.sock"));
-            paths.insert(0, format!("{socket_base}/{api}-default.sock"));
-            paths.push(format!("{xdg_runtime}/{ns}/{api}-default.sock"));
-        }
-        for alias in svc.socket_aliases {
-            paths.push(format!("{socket_base}/{alias}.sock"));
-        }
-    }
-    paths
-}
 
 /// Probe TLS cert expiry for publicly-served domains.
 ///
@@ -670,22 +609,9 @@ mod tests {
     }
 
     #[test]
-    fn resolve_primal_socket_paths_includes_socket_base() {
-        let paths = resolve_primal_socket_paths("beardog");
-        assert!(paths.iter().any(|p| p.contains("beardog.sock")));
-        assert!(paths.len() >= 2);
-    }
-
-    #[test]
     fn check_cert_days_unreachable_returns_negative() {
         let days = check_cert_days("unreachable.invalid.test");
         assert!(days <= 0, "unreachable domain should return <=0 days");
     }
 
-    #[test]
-    fn resolve_uid_returns_non_empty() {
-        let uid = resolve_uid();
-        assert!(!uid.is_empty());
-        assert!(uid.parse::<u32>().is_ok(), "UID should be numeric");
-    }
 }

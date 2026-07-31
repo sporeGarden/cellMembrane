@@ -16,6 +16,7 @@ pub(crate) mod enroll;
 mod enroll_crypto;
 pub mod health;
 mod interface;
+pub(crate) mod sockets;
 pub(crate) mod key_portal;
 mod local;
 mod mesh;

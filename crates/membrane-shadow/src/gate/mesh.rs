@@ -107,7 +107,7 @@ async fn configure_mesh(
         return super::ProbeResult::fail(format!("{relay_binary} binary not found"));
     }
 
-    let socket_dir = super::health::resolve_biomeos_socket_dir();
+    let socket_dir = super::sockets::resolve_biomeos_socket_dir();
     let socket_path = std::path::PathBuf::from(&socket_dir)
         .join(format!("{relay_binary}.sock"))
         .display()
