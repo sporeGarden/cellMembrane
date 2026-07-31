@@ -1,13 +1,27 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-30 (Wave 155k)
+**Last updated:** 2026-07-30 (Wave 155m)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155m (smart refactoring + registry-enforced self-knowledge):**
+Smart refactoring: extracted `gate/sockets.rs` from `health.rs` (shared socket
+resolution used by 4+ modules), consolidated duplicate mesh notify functions into
+single parameterized `notify_mesh()`, externalized inline tests from `process.rs`
+(-279L), `depot.rs` (-237L), `relay.rs` (-133L). Registry-enforced self-knowledge:
+replaced silent `map_or` fallbacks with `expect()` on static registry lookups
+(`channels.rs`, `gateway/mod.rs`, `sporeprint.rs`), `binary_for()` now panics on
+missing capability instead of returning `"unknown"`. Unified socket resolution:
+`tower/timer.rs` delegates to `gate/sockets.rs` for full registry-aware resolution
+(api_socket aliases, XDG paths, socket_aliases). Renamed `BEARDOG_SONGBIRD_SOCKET`
+to `MEMBRANE_MESH_RELAY_SOCKET` (capability-neutral). Split `dispatch/gate.rs`
+(750→570L): firewall + WireGuard generators extracted to `gate_network.rs`.
+1,263 tests (+4 new including registry consistency), 0 clippy, 0 fmt drift.
 
 **Wave 155k (sovereign HTTP client + deep debt sweep):**
 Purged `reqwest` — sovereign HTTP/1.1 client built on `tokio-rustls` + `webpki-roots`
