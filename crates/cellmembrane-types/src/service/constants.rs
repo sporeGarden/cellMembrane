@@ -439,8 +439,10 @@ pub const ENV_GATEWAY_BIND: &str = "BEARDOG_GATEWAY_BIND";
 pub const ENV_GATEWAY_DOMAINS: &str = "BEARDOG_GATEWAY_DOMAINS";
 /// Environment variable for the ACME directory URL.
 pub const ENV_ACME_DIRECTORY: &str = "BEARDOG_ACME_DIRECTORY";
-/// Environment variable for the songBird socket path.
-pub const ENV_SONGBIRD_SOCKET: &str = "BEARDOG_SONGBIRD_SOCKET";
+/// Environment variable for the mesh relay socket path.
+///
+/// Capability-neutral name — resolves to whatever binary provides `MeshRelay`.
+pub const ENV_SONGBIRD_SOCKET: &str = "MEMBRANE_MESH_RELAY_SOCKET";
 /// Environment variable for songBird proxy route table (comma-separated `host/path=capability`).
 pub const ENV_SONGBIRD_PROXY_ROUTES: &str = "SONGBIRD_PROXY_ROUTES";
 
@@ -746,5 +748,29 @@ mod tests {
     fn systemd_user_unit_dir_is_relative() {
         assert!(!SYSTEMD_USER_UNIT_DIR.starts_with('/'));
         assert!(SYSTEMD_USER_UNIT_DIR.contains("systemd/user"));
+    }
+
+    #[test]
+    fn songbird_socket_matches_registry() {
+        let relay_binary = crate::MembraneService::binary_for(
+            crate::ServiceCapability::MeshRelay,
+        );
+        let expected = format!("{DEFAULT_SOCKET_BASE}/{relay_binary}.sock");
+        assert_eq!(
+            DEFAULT_SONGBIRD_SOCKET, expected,
+            "DEFAULT_SONGBIRD_SOCKET must match registry-derived path"
+        );
+    }
+
+    #[test]
+    fn env_songbird_socket_is_capability_neutral() {
+        assert!(
+            !ENV_SONGBIRD_SOCKET.contains("BEARDOG"),
+            "env var should not embed primal names"
+        );
+        assert!(
+            !ENV_SONGBIRD_SOCKET.contains("SONGBIRD"),
+            "env var should use capability-neutral naming"
+        );
     }
 }

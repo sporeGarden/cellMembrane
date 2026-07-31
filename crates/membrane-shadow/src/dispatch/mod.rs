@@ -20,6 +20,7 @@ mod deploy_dispatch;
 mod gate;
 mod gate_configure;
 mod gate_keys;
+mod gate_network;
 mod impulse;
 mod infra;
 mod plasmid_dispatch;

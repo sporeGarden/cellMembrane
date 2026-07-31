@@ -441,11 +441,17 @@ impl MembraneService {
     /// Resolve the binary name for a given capability.
     ///
     /// The registry is compile-time complete — every standard capability has
-    /// exactly one canonical provider. This eliminates the need for `FALLBACK_*`
-    /// constants and hardcoded primal names at call sites.
+    /// exactly one canonical provider.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no service is registered for the given capability,
+    /// which indicates a registry definition gap.
     #[must_use]
     pub fn binary_for(cap: ServiceCapability) -> &'static str {
-        Self::with_capability(cap).map_or("unknown", |svc| svc.binary)
+        Self::with_capability(cap)
+            .unwrap_or_else(|| panic!("no service registered for capability {cap:?}"))
+            .binary
     }
 
     /// All services declaring a given capability (for multi-provider scenarios).

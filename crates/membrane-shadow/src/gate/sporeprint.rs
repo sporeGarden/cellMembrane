@@ -21,9 +21,11 @@ use super::systemd_units::{GatewayUnitParams, generate_songbird_unit};
 fn sporeprint_binaries() -> SporePrintBinaries {
     SporePrintBinaries {
         content: cellmembrane_types::MembraneService::for_binary("petaltongue")
-            .map_or("petaltongue", |s| s.binary),
+            .expect("petaltongue must exist in service registry")
+            .binary,
         cas: cellmembrane_types::MembraneService::for_binary("nestgate")
-            .map_or("nestgate", |s| s.binary),
+            .expect("nestgate must exist in service registry")
+            .binary,
         crypto: cellmembrane_types::MembraneService::binary_for(
             cellmembrane_types::ServiceCapability::CryptoSigner,
         ),

@@ -346,17 +346,20 @@ async fn run_songbird_benchmark(
 
 // ── Socket probing ───────────────────────────────────────────────────
 
-/// Resolve the UDS socket path for any primal by binary name.
+/// Resolve the UDS socket path for a primal by binary name.
 ///
-/// Checks `MEMBRANE_SOCKET_{UPPER}` env var first, falls back to
-/// `{DEFAULT_SOCKET_BASE}/{binary}.sock`.
+/// Delegates to `gate::sockets::resolve_primal_socket_paths` for full
+/// registry-aware resolution (`api_socket` aliases, XDG paths, `socket_aliases`),
+/// then picks the first path that exists on disk.
 fn resolve_primal_socket(binary: &str) -> PathBuf {
-    let env_key = format!("MEMBRANE_SOCKET_{}", binary.to_ascii_uppercase());
-    let default = format!(
-        "{}/{binary}.sock",
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
-    PathBuf::from(cellmembrane_types::service::env_or(&env_key, &default))
+    let paths = crate::gate::sockets::resolve_primal_socket_paths(binary);
+    paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map_or_else(
+            || PathBuf::from(&paths[0]),
+            PathBuf::from,
+        )
 }
 
 async fn probe_socket(path: &Path) -> bool {

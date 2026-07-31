@@ -45,17 +45,24 @@ impl MembraneChannel {
     /// Default binary name for this channel.
     ///
     /// All names are validated against the service registry.
-    /// Signal and Surface map to symbiotic services; Relay resolves via capability.
+    /// `Signal` and `Surface` map to symbiotic services; `Relay` resolves via capability.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the static service registry is missing a required entry
+    /// (`knot-dns` or `caddy`). This is a compile-time invariant.
     #[must_use]
     pub fn default_primal(&self) -> &'static str {
         match self {
             Self::Signal => crate::MembraneService::for_binary("knot-dns")
-                .map_or("knot-dns", |s| s.binary),
+                .expect("knot-dns must exist in service registry")
+                .binary,
             Self::Relay => crate::MembraneService::binary_for(
                 crate::ServiceCapability::MeshRelay,
             ),
             Self::Surface => crate::MembraneService::for_binary("caddy")
-                .map_or("caddy", |s| s.binary),
+                .expect("caddy must exist in service registry")
+                .binary,
         }
     }
 
