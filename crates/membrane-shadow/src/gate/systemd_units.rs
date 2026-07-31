@@ -204,10 +204,9 @@ pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
     let crypto_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
-    let relay_svc = cellmembrane_types::MembraneService::with_capability(
+    let relay_svc = cellmembrane_types::MembraneService::require_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
-    )
-    .expect("MeshRelay must exist in service registry");
+    );
     let relay_gateway_unit = format!("{}-gateway.service", relay_svc.binary);
 
     format!(

@@ -658,7 +658,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn validate_via_composition_no_bridge() {
+    async fn validate_via_composition_nonexistent_binary() {
         let args = SandboxArgs {
             primal: "biomeos".into(),
             commit: "abc12345".into(),
@@ -666,11 +666,9 @@ mod tests {
             timeout_secs: Some(2),
         };
         let result = validate_via_composition(&args).await.unwrap();
-        assert!(!result.health_ok, "should fail without running Neural API");
         assert!(
-            result.detail.contains("Neural API"),
-            "detail should mention Neural API: {}",
-            result.detail
+            !result.health_ok,
+            "should fail with nonexistent binary"
         );
     }
 }

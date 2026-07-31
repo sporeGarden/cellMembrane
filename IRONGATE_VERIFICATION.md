@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 155r (J16 sources.toml garden self-enrollment: auto-provision includes Garden-category repos for self-CI; J13 depot freshness mesh publish via --publish flag; CSPRNG expect→Option propagation in BTSP; 1281 tests, 0 clippy, 2026-07-31)
+**Last validated:** Wave 155s (Registry API evolution: `require_capability`/`require_binary` collapse 6 redundant `.expect()` calls into structured panic methods; test hardened for dev-machine Neural API presence; 1281 tests, 0 clippy, 2026-07-31)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming
 
 ---

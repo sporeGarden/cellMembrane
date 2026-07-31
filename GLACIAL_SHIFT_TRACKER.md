@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155r)
+**Last updated:** 2026-07-31 (Wave 155s)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155s (registry API evolution — require_capability/require_binary):**
+Collapsed 6 redundant `.expect()` calls on `MembraneService` lookups into two
+new registry methods: `require_capability(cap)` returns `&'static MembraneService`
+(panics on missing capability with structured message), `require_binary(name)`
+does the same for named composition roles. `binary_for(cap)` is now a thin
+wrapper around `require_capability`. Updated callers in `gateway/mod.rs` (3x),
+`gate/systemd_units.rs` (1x), and `gate/sporeprint.rs` (2x). Hardened
+`validate_via_composition` test: the original test assumed no running Neural API
+on dev machine but eastGate runs biomeOS — evolved assertion to be environment-
+agnostic. 1,281 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155r (J16 sources.toml + J13 freshness probe + CSPRNG safety):**
 J16 sources.toml self-enrollment: extended `provision_sources_from_manifest()`

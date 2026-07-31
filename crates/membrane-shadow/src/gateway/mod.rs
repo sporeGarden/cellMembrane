@@ -190,15 +190,13 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
 
     let (songbird_unit, beardog_unit) = crate::gate::systemd_units::generate_gateway_units(&params);
 
-    let relay_unit = cellmembrane_types::MembraneService::with_capability(
+    let relay_unit = cellmembrane_types::MembraneService::require_capability(
         cellmembrane_types::ServiceCapability::MeshRelay,
     )
-    .expect("MeshRelay must exist in service registry")
     .systemd_unit;
-    let signer_unit = cellmembrane_types::MembraneService::with_capability(
+    let signer_unit = cellmembrane_types::MembraneService::require_capability(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     )
-    .expect("CryptoSigner must exist in service registry")
     .systemd_unit;
     let mut lines = vec![format!("--- {relay_unit} ---")];
     lines.extend(songbird_unit.lines().map(String::from));
@@ -362,9 +360,7 @@ async fn dispatch_retire_caddy(config: &ShadowConfig, args: &[&str]) -> Result<S
         )));
     }
 
-    let caddy_unit = cellmembrane_types::MembraneService::for_binary("caddy")
-        .expect("caddy must exist in service registry")
-        .systemd_unit;
+    let caddy_unit = cellmembrane_types::MembraneService::require_binary("caddy").systemd_unit;
     let stopped = crate::gate::nucleus::systemctl_async(&["stop", caddy_unit]).await;
     let disabled = crate::gate::nucleus::systemctl_async(&["disable", caddy_unit]).await;
 

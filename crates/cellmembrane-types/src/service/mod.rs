@@ -435,7 +435,7 @@ impl MembraneService {
         ALL_SERVICES.iter().find(|s| s.has_capability(cap))
     }
 
-    /// Resolve the binary name for a given capability.
+    /// Resolve the full service entry for a given capability.
     ///
     /// The registry is compile-time complete — every standard capability has
     /// exactly one canonical provider.
@@ -445,10 +445,35 @@ impl MembraneService {
     /// Panics if no service is registered for the given capability,
     /// which indicates a registry definition gap.
     #[must_use]
-    pub fn binary_for(cap: ServiceCapability) -> &'static str {
+    pub fn require_capability(cap: ServiceCapability) -> &'static Self {
         Self::with_capability(cap)
             .unwrap_or_else(|| panic!("no service registered for capability {cap:?}"))
-            .binary
+    }
+
+    /// Resolve the binary name for a given capability.
+    ///
+    /// Convenience wrapper around [`require_capability`](Self::require_capability).
+    ///
+    /// # Panics
+    ///
+    /// Panics if no service is registered for the given capability.
+    #[must_use]
+    pub fn binary_for(cap: ServiceCapability) -> &'static str {
+        Self::require_capability(cap).binary
+    }
+
+    /// Look up a service by binary name, panicking if absent.
+    ///
+    /// Use for named-composition patterns where the binary name is an
+    /// architectural constant (e.g. sporePrint roles).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the binary is not in the registry.
+    #[must_use]
+    pub fn require_binary(name: &str) -> &'static Self {
+        Self::for_binary(name)
+            .unwrap_or_else(|| panic!("binary {name:?} must exist in service registry"))
     }
 
     /// All services declaring a given capability (for multi-provider scenarios).
