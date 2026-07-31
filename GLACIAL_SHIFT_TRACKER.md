@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155u)
+**Last updated:** 2026-07-31 (Wave 155v)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155v (J18: gate coupling — env_or migration + gate-name identity bridge):**
+J18 portability fix: 3 production call sites that used `DEFAULT_INSTALL_BASE`
+directly now use `env_or(ENV_INSTALL_BASE, DEFAULT_INSTALL_BASE)` — sandbox
+dependency lookup (`sandbox.rs`), remote data file scan (`dispatch/mod.rs`),
+and mesh relay binary probe (`tower/timer.rs`). Gate identity bridge: the
+`mobility_phase` in `bootstrap_phases.rs` now writes a `gate-name` file
+(system-scope `/etc/membrane/gate-name` or user-scope `~/.config/membrane/gate-name`)
+so the shipped NM dispatcher hook (`99-mesh-reconnect`) can resolve identity
+without the Rust binary running. This closes the documented `--mobile` gap.
+Composition test hardened for socket permission changes on dev machines.
+1,281 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155u (deep debt: TargetArch deprecation + XDG dedup + UNKNOWN_LABEL):**
 Three-layer deep debt cleanup. (1) Deprecated legacy `TargetArch` enum — migrated

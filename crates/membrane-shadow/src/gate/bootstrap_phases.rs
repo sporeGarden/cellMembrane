@@ -361,8 +361,17 @@ pub(super) fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         return BootstrapPhase {
             name: "mobility.hook".into(),
             ok: true,
-            detail: "dry-run: would write NM dispatcher reconnect hook".into(),
+            detail: "dry-run: would write NM dispatcher reconnect hook + gate-name".into(),
         };
+    }
+
+    let mut details = Vec::new();
+
+    let gate_name_written = write_gate_name_file(gate_name);
+    if gate_name_written {
+        details.push("gate-name written".to_string());
+    } else {
+        details.push("gate-name write failed (non-fatal)".to_string());
     }
 
     let hook_dir_str = cellmembrane_types::service::env_or(
@@ -377,7 +386,7 @@ pub(super) fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
          [ \"$2\" = \"up\" ] && membrane gate.status --quiet 2>/dev/null &\n"
     );
 
-    let ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok() && {
+    let hook_ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok() && {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -387,15 +396,48 @@ pub(super) fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
         true
     };
 
+    if hook_ok {
+        details.push(format!("hook: {}", hook_path.display()));
+    } else {
+        details.push(format!(
+            "hook write failed: {} (needs root?)",
+            hook_path.display()
+        ));
+    }
+
     BootstrapPhase {
         name: "mobility.hook".into(),
-        ok,
-        detail: if ok {
-            format!("wrote {}", hook_path.display())
-        } else {
-            format!("failed to write {} (needs root?)", hook_path.display())
-        },
+        ok: hook_ok,
+        detail: details.join("; "),
     }
+}
+
+/// Write the gate-name file so NM dispatcher hooks and external tooling
+/// can resolve gate identity without the Rust binary.
+///
+/// Tries system-scope `/etc/membrane/gate-name` first (root gates),
+/// falls back to user-scope `~/.config/membrane/gate-name`.
+fn write_gate_name_file(gate_name: &str) -> bool {
+    let config_dir = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_CONFIG_DIR,
+        cellmembrane_types::service::DEFAULT_CONFIG_DIR,
+    );
+    let system_path = std::path::Path::new(&config_dir).join("gate-name");
+
+    if std::fs::create_dir_all(&config_dir).is_ok()
+        && crate::atomic_write(&system_path, format!("{gate_name}\n").as_bytes()).is_ok()
+    {
+        return true;
+    }
+
+    let home = cellmembrane_types::service::env_or(cellmembrane_types::service::ENV_HOME, "/tmp");
+    let user_dir = std::path::Path::new(&home).join(".config/membrane");
+    if std::fs::create_dir_all(&user_dir).is_ok() {
+        let user_path = user_dir.join("gate-name");
+        return crate::atomic_write(&user_path, format!("{gate_name}\n").as_bytes()).is_ok();
+    }
+
+    false
 }
 
 pub(super) fn emit_deployment_toml(

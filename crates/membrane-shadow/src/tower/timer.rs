@@ -407,8 +407,11 @@ fn resolve_songbird_bin() -> Result<PathBuf> {
         return Ok(bin);
     }
 
-    let system_bin = PathBuf::from(cellmembrane_types::service::DEFAULT_INSTALL_BASE)
-        .join(format!("primals/{arch}/{relay_binary}"));
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
+    );
+    let system_bin = PathBuf::from(install_base).join(format!("primals/{arch}/{relay_binary}"));
     if system_bin.exists() {
         return Ok(system_bin);
     }

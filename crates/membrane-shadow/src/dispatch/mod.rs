@@ -304,10 +304,12 @@ async fn run_composition_checks(
     let tower_ok = tower_code == 0;
     checks.push(("tower.env", tower_ok, tower_env_path));
 
-    let find_cmd = format!(
-        "find {} -name '*.db' -o -name '*.sqlite' 2>/dev/null | wc -l",
-        cellmembrane_types::service::DEFAULT_INSTALL_BASE
+    let install_base = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_INSTALL_BASE,
+        cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
+    let find_cmd =
+        format!("find {install_base} -name '*.db' -o -name '*.sqlite' 2>/dev/null | wc -l");
     let (data_out, _) = crate::ssh::exec_raw(target_config, &find_cmd).await?;
     let data_files: u32 = data_out.trim().parse().unwrap_or(99);
     let stores_nothing = matches!(
