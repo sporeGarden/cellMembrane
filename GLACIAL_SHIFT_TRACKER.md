@@ -1,13 +1,28 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155o)
+**Last updated:** 2026-07-31 (Wave 155p)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155p (sandbox P2 fix + socket-base init-scope migration):**
+Sandbox biomeOS false positive fix: added `strip_sandbox_suffix()` to
+`plasmid/mod.rs` so commit-suffixed binaries (e.g. `biomeos-abc12345`) resolve
+to the correct `BiomeosApi` server contract instead of the default `server
+--socket`. All 5 pipeline sandbox call sites (`sovereign.rs`, `pipeline.rs`,
+`commands.rs`, `plasmid_dispatch.rs`, `bootstrap_phases.rs`) migrated from
+`validate()` to `validate_with_deps()` so broker primals like biomeOS get their
+bearDog dependency chain provisioned during sandbox validation. Socket-base
+init-scope migration: 10 runtime call sites migrated from hardcoded
+`env_or(ENV_SOCKET_BASE, DEFAULT_SOCKET_BASE)` to `resolve_socket_base()` which
+is init-scope-aware (system/user/bare). Systemd unit generation paths
+intentionally kept on `DEFAULT_SOCKET_BASE`. New constants: `ENV_BUILD_SHA`,
+`ENV_HOME` usage in `resolve_systemd_unit_dir`. 1,277 tests (+4 new), 0 clippy,
+0 fmt drift.
 
 **Wave 155o (smart file splits + crypto dedup + constants sweep):**
 Smart refactoring of the two remaining >700L files: extracted

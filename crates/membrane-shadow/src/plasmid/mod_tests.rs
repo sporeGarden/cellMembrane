@@ -98,6 +98,38 @@ fn lineage_result_variants_exhaustive() {
     assert!(matches!(w, LineageResult::Warned(_)));
 }
 
+#[test]
+fn strip_sandbox_suffix_removes_commit_hash() {
+    assert_eq!(strip_sandbox_suffix("biomeos-abc12345"), "biomeos");
+    assert_eq!(strip_sandbox_suffix("beardog-deadbeef"), "beardog");
+    assert_eq!(strip_sandbox_suffix("squirrel-0a1b2c3d"), "squirrel");
+}
+
+#[test]
+fn strip_sandbox_suffix_preserves_bare_names() {
+    assert_eq!(strip_sandbox_suffix("biomeos"), "biomeos");
+    assert_eq!(strip_sandbox_suffix("beardog"), "beardog");
+    assert_eq!(strip_sandbox_suffix("membrane"), "membrane");
+}
+
+#[test]
+fn strip_sandbox_suffix_preserves_short_or_non_hex() {
+    assert_eq!(strip_sandbox_suffix("coral-reef"), "coral-reef");
+    assert_eq!(strip_sandbox_suffix("sweet-grass"), "sweet-grass");
+    assert_eq!(strip_sandbox_suffix("beardog-abc"), "beardog-abc");
+}
+
+#[test]
+fn strip_sandbox_suffix_resolves_biomeos_contract() {
+    let stripped = strip_sandbox_suffix("biomeos-abc12345");
+    let svc = cellmembrane_types::MembraneService::for_binary(stripped).unwrap();
+    assert_eq!(
+        svc.server_contract,
+        cellmembrane_types::service::ServerContract::BiomeosApi,
+        "commit-suffixed biomeos must still resolve to BiomeosApi"
+    );
+}
+
 #[tokio::test]
 async fn status_reports_depot_state() {
     let result = status().await;

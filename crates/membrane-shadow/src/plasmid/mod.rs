@@ -157,7 +157,8 @@ pub(crate) fn spawn_primal_server(
     socket: &std::path::Path,
     extra_args: &[(&str, &std::path::Path)],
 ) -> crate::Result<tokio::process::Child> {
-    let bin_name = binary.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let raw_name = binary.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let bin_name = strip_sandbox_suffix(raw_name);
 
     let svc = cellmembrane_types::MembraneService::for_binary(bin_name);
     if svc.is_none() {
@@ -188,6 +189,21 @@ pub(crate) fn spawn_primal_server(
         .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| crate::error::ShadowError::Build(format!("spawn {bin_name}: {e}")))
+}
+
+/// Strip sandbox commit suffix from a binary name.
+///
+/// Sandbox stages binaries as `{primal}-{commit_short}` (e.g. `biomeos-abc12345`).
+/// This strips the suffix so registry lookup finds the correct `ServerContract`.
+/// If the name has no recognizable suffix (not hex, <6 chars), returns as-is.
+fn strip_sandbox_suffix(name: &str) -> &str {
+    if let Some((base, suffix)) = name.rsplit_once('-') {
+        let is_hex_suffix = suffix.len() >= 6 && suffix.bytes().all(|b| b.is_ascii_hexdigit());
+        if is_hex_suffix {
+            return base;
+        }
+    }
+    name
 }
 
 /// Detect primals where source HEAD has advanced past depot provenance.

@@ -163,7 +163,7 @@ pub(super) async fn run_sandbox(
         timeout_secs: None,
     };
 
-    match crate::plasmid::sandbox::validate(&sandbox_args).await {
+    match crate::plasmid::sandbox::validate_with_deps(&sandbox_args).await {
         Ok(result) if !result.health_ok => {
             error!(
                 primal = %primal_lower,

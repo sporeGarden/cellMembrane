@@ -76,10 +76,7 @@ fn build_service_specs(
         cellmembrane_types::service::ENV_INSTALL_BASE,
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
     );
-    let socket_base = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
+    let socket_base = cellmembrane_types::service::resolve_socket_base();
     let config_dir = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_CONFIG_DIR,
         cellmembrane_types::service::DEFAULT_CONFIG_DIR,

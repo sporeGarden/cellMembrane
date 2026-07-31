@@ -285,7 +285,7 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
             Err(e) => Ok(ShadowOutcome::fail(format!("sandbox+promote error: {e}"))),
         }
     } else {
-        match plasmid::sandbox::validate(&sandbox_args).await {
+        match plasmid::sandbox::validate_with_deps(&sandbox_args).await {
             Ok(result) => {
                 let ok = result.health_ok;
                 let msg = format!(

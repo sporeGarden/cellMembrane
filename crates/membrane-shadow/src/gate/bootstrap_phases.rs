@@ -85,10 +85,7 @@ pub(super) fn permissions_phase(dry_run: bool) -> BootstrapPhase {
     let mut ok = true;
     let mut details = Vec::new();
 
-    let socket_base = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
+    let socket_base = cellmembrane_types::service::resolve_socket_base();
     for dir in [
         membrane_dir.as_str(),
         depot_str.as_str(),
@@ -319,7 +316,7 @@ pub(super) async fn sandbox_phase(arch: &str, dry_run: bool) -> BootstrapPhase {
             binary_path,
             timeout_secs: Some(20),
         };
-        match crate::plasmid::sandbox::validate(&args).await {
+        match crate::plasmid::sandbox::validate_with_deps(&args).await {
             Ok(result) if result.health_ok => {
                 passed += 1;
                 details.push(format!("{primal}:PASS"));

@@ -19,10 +19,7 @@ use super::{PushEvent, WebhookProvider, verify_provider_signature};
 use crate::error::Result;
 
 fn default_socket_path() -> String {
-    let base = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
+    let base = cellmembrane_types::service::resolve_socket_base();
     format!("{base}/webhook.sock")
 }
 

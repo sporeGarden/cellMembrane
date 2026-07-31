@@ -73,7 +73,7 @@ pub async fn pipeline(
             timeout_secs: None,
         };
 
-        if let Ok(result) = sandbox::validate(&sandbox_args).await {
+        if let Ok(result) = sandbox::validate_with_deps(&sandbox_args).await {
             if !result.health_ok {
                 return Ok(crate::ShadowOutcome {
                     ok: false,

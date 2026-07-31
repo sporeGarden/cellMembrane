@@ -251,10 +251,7 @@ fn start_nucleus_bare(arch: &str, init: cellmembrane_types::InitSystem) -> super
 /// Respects `MEMBRANE_SOCKET_BASE` env var for user-space deploy (e.g.
 /// `$XDG_RUNTIME_DIR/membrane` on SteamOS/non-root).
 fn prepare_socket_base() {
-    let socket_base_str = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
+    let socket_base_str = cellmembrane_types::service::resolve_socket_base();
     let socket_base = std::path::Path::new(&socket_base_str);
     if let Err(e) = std::fs::create_dir_all(socket_base) {
         tracing::warn!(error = %e, path = %socket_base.display(), "failed to create socket base directory");
@@ -282,7 +279,7 @@ pub(crate) fn resolve_security_socket(paths: &cellmembrane_types::service::Servi
     .unwrap_or_else(|| {
         format!(
             "{}/{security_binary}.sock",
-            cellmembrane_types::service::DEFAULT_SOCKET_BASE
+            cellmembrane_types::service::resolve_socket_base()
         )
     })
 }

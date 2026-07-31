@@ -283,6 +283,9 @@ pub const ENV_EUID: &str = "EUID";
 /// Environment variable for the Android NDK home directory.
 pub const ENV_ANDROID_NDK_HOME: &str = "ANDROID_NDK_HOME";
 
+/// Environment variable for the build commit SHA embedded at compile time.
+pub const ENV_BUILD_SHA: &str = "MEMBRANE_BUILD_SHA";
+
 /// Default VPS host (golgiBody sovereign surface).
 ///
 /// Last-resort fallback only. Production code should resolve via
@@ -698,7 +701,7 @@ pub fn resolve_systemd_unit_dir() -> String {
 
     if let Ok(scope) = std::env::var(ENV_INIT_SCOPE)
         && (scope == "bare" || scope == "user")
-        && let Ok(home) = std::env::var("HOME")
+        && let Ok(home) = std::env::var(ENV_HOME)
     {
         return format!("{home}/{SYSTEMD_USER_UNIT_DIR}");
     }

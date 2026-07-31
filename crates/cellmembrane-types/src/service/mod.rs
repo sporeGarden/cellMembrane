@@ -116,10 +116,7 @@ impl ServerContract {
         socket_path: &str,
         security_socket: &str,
     ) -> String {
-        let socket_base = crate::service::env_or(
-            crate::service::ENV_SOCKET_BASE,
-            crate::service::DEFAULT_SOCKET_BASE,
-        );
+        let socket_base = crate::service::resolve_socket_base();
         match self {
             Self::Full => format!(
                 "{install_base}/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir {socket_base}"
