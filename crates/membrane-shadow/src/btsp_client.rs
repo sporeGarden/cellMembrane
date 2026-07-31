@@ -69,7 +69,7 @@ pub struct HandshakeComplete {
 pub fn handshake_sync(stream: &mut std::os::unix::net::UnixStream) -> Option<HandshakeComplete> {
     use std::io::{BufRead, BufReader, Write};
 
-    let ephemeral_pub = generate_ephemeral_pub();
+    let ephemeral_pub = generate_ephemeral_pub()?;
     let btsp_key = derive_btsp_key()?;
 
     // Step 1: Send ClientHello
@@ -127,7 +127,7 @@ pub fn handshake_sync(stream: &mut std::os::unix::net::UnixStream) -> Option<Han
 pub async fn handshake_async(stream: &mut tokio::net::UnixStream) -> Option<HandshakeComplete> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-    let ephemeral_pub = generate_ephemeral_pub();
+    let ephemeral_pub = generate_ephemeral_pub()?;
     let btsp_key = derive_btsp_key()?;
 
     // Step 1: Send ClientHello
@@ -189,10 +189,13 @@ pub async fn handshake_async(stream: &mut tokio::net::UnixStream) -> Option<Hand
 // ── Crypto helpers ────────────────────────────────────────────────────
 
 /// Generate a 32-byte random ephemeral public key (hex-encoded).
-fn generate_ephemeral_pub() -> String {
+///
+/// Returns `None` if the OS CSPRNG is unavailable (should never happen on
+/// supported platforms, but propagating beats panicking).
+fn generate_ephemeral_pub() -> Option<String> {
     let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).expect("CSPRNG unavailable");
-    hex::encode(bytes)
+    getrandom::fill(&mut bytes).ok()?;
+    Some(hex::encode(bytes))
 }
 
 /// Derive the BTSP challenge-response key from the family seed.
@@ -237,15 +240,15 @@ mod tests {
 
     #[test]
     fn ephemeral_pub_is_64_hex_chars() {
-        let pub_key = generate_ephemeral_pub();
+        let pub_key = generate_ephemeral_pub().expect("CSPRNG should be available");
         assert_eq!(pub_key.len(), 64);
         assert!(pub_key.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
     fn ephemeral_pub_is_random() {
-        let k1 = generate_ephemeral_pub();
-        let k2 = generate_ephemeral_pub();
+        let k1 = generate_ephemeral_pub().expect("CSPRNG should be available");
+        let k2 = generate_ephemeral_pub().expect("CSPRNG should be available");
         assert_ne!(k1, k2);
     }
 

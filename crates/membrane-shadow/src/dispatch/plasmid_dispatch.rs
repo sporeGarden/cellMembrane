@@ -86,7 +86,7 @@ pub(super) async fn dispatch_plasmid(
         }
         "plasmid.status" => plasmid::status().await,
         "plasmid.composition" => dispatch_composition(args),
-        "plasmid.staleness" => dispatch_staleness(),
+        "plasmid.staleness" => dispatch_staleness(args).await,
         "plasmid.auto_fetch" => {
             let payload_str = args.first().copied().unwrap_or("{}");
             let payload: serde_json::Value = serde_json::from_str(payload_str)
@@ -103,7 +103,7 @@ pub(super) async fn dispatch_plasmid(
     }
 }
 
-fn dispatch_staleness() -> crate::Result<ShadowOutcome> {
+async fn dispatch_staleness(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let report = plasmid::detect_depot_staleness()?;
     let stale_names: Vec<&str> = report
         .entries
@@ -111,6 +111,12 @@ fn dispatch_staleness() -> crate::Result<ShadowOutcome> {
         .filter(|e| e.stale)
         .map(|e| e.name.as_str())
         .collect();
+
+    if args.contains(&"--publish") && !stale_names.is_empty() {
+        let stale_owned: Vec<String> = stale_names.iter().map(|s| (*s).to_string()).collect();
+        plasmid::notify_mesh_build_pending(&stale_owned).await;
+    }
+
     Ok(ShadowOutcome::ok_with(
         report.to_string(),
         serde_json::json!({

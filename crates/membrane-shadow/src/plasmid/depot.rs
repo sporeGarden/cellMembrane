@@ -253,7 +253,13 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
 
     for (name, entry) in &manifest.repos {
         let slug = name.to_lowercase();
-        if !registry.contains(&slug.as_str()) {
+
+        // Include primals from the service registry, plus garden repos that
+        // produce deployable binaries (e.g. cellMembrane → membrane). This
+        // enables self-CI for garden tooling alongside primals.
+        let is_registry_primal = registry.contains(&slug.as_str());
+        let is_garden = entry.category == cellmembrane_types::RepoCategory::Garden;
+        if !is_registry_primal && !is_garden {
             continue;
         }
 
@@ -265,8 +271,13 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
             format!("{}/{name}", entry.org)
         };
 
+        let build_args = entry.package.as_ref().map(|p| format!("-p {p}"));
+
         let _ = writeln!(toml_out, "[sources.{slug}]");
         let _ = writeln!(toml_out, "repo = \"{repo}\"");
+        if let Some(ref args) = build_args {
+            let _ = writeln!(toml_out, "build_args = \"{args}\"");
+        }
         if entry.gpu {
             let _ = writeln!(toml_out, "gpu = true");
         }
@@ -277,7 +288,7 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
             SourceEntry {
                 repo,
                 private: false,
-                build_args: None,
+                build_args,
                 binary_name: None,
                 gpu: entry.gpu,
             },
@@ -286,7 +297,7 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
 
     if sources.is_empty() {
         return Err(ShadowError::Config(
-            "auto-provision: no primal repos found in manifest".into(),
+            "auto-provision: no buildable repos found in manifest".into(),
         ));
     }
 

@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 10-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155q) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 155r) |
 
 ---
 
@@ -61,7 +61,7 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 155q): ~11k lines types, ~38k lines shadow. Crash-loop breaker
+Current state (Wave 155r): ~11k lines types, ~38k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -288,7 +288,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 155q are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 155r are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |

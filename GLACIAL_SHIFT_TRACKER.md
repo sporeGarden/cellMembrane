@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155q)
+**Last updated:** 2026-07-31 (Wave 155r)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155r (J16 sources.toml + J13 freshness probe + CSPRNG safety):**
+J16 sources.toml self-enrollment: extended `provision_sources_from_manifest()`
+to include `Garden`-category repos alongside registry primals, so cellMembrane
+(and other garden tooling) can be built via sovereign CI. The `build_args` from
+repo `package` field is propagated, and `enrich_sources_from_manifest()` applies
+`[build.*]` overrides as before. J13 depot freshness: `plasmid.staleness
+--publish` now publishes stale primals to mesh via `depot.build_pending` so
+consumer gates know a rebuild is pending. BTSP CSPRNG safety: evolved
+`generate_ephemeral_pub()` from `expect()` to `Option` propagation — callers
+already return `Option`, so the `?` operator propagates naturally. 1,281 tests,
+0 clippy, 0 fmt drift.
 
 **Wave 155q (coevolution contract — composition.test_swap wired):**
 Wired `composition.test_swap` for broker primals (biomeOS). The sandbox
