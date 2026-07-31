@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155p)
+**Last updated:** 2026-07-31 (Wave 155q)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155q (coevolution contract — composition.test_swap wired):**
+Wired `composition.test_swap` for broker primals (biomeOS). The sandbox
+`validate_with_deps` function now auto-detects `BiomeosApi` contract primals
+and delegates validation to the running biomeOS Neural API via
+`composition.test_swap { binary_path }` instead of spawning a standalone
+sandbox (which fails because biomeOS can't self-validate in isolation).
+The running biomeOS spawns the candidate on a temp socket, probes via
+`composition.self_test`, and returns `{ validated: true/false }`. On API
+error, graceful fallback to standalone sandbox preserves non-broker
+primal behavior. Resolves J19 (sandbox false positive blocking depot
+deploy). 1,281 tests (+4: broker detection + composition path), 0 clippy.
 
 **Wave 155p (sandbox P2 fix + socket-base init-scope migration):**
 Sandbox biomeOS false positive fix: added `strip_sandbox_suffix()` to

@@ -237,15 +237,135 @@ fn resolve_security_dependency(primal: &str) -> Option<&'static str> {
     Some(signer.binary)
 }
 
+/// Check if a primal is a broker (composition authority) that cannot self-validate
+/// in a standalone sandbox.
+///
+/// Broker primals (`BiomeosApi` contract) are orchestrators — they need a running
+/// composition to validate against. Use `validate_via_composition` instead.
+#[must_use]
+fn is_broker_primal(primal: &str) -> bool {
+    cellmembrane_types::MembraneService::for_binary(primal).is_some_and(|svc| {
+        svc.server_contract == cellmembrane_types::service::ServerContract::BiomeosApi
+    })
+}
+
+/// Validate a broker primal via the running biomeOS `composition.test_swap` capability.
+///
+/// Instead of spawning the candidate in an isolated sandbox (which fails for
+/// orchestrators that can't self-validate in isolation), this delegates to the
+/// **running** biomeOS instance via Neural API:
+///
+/// 1. cellMembrane calls `composition.test_swap { binary_path }` on the live Neural API
+/// 2. Running biomeOS spawns the candidate on a temp socket
+/// 3. biomeOS probes via `composition.self_test`
+/// 4. Returns `{ validated: true/false }` — cellMembrane can push to depot
+/// 5. Candidate is torn down (no leaks)
+async fn validate_via_composition(args: &SandboxArgs) -> crate::Result<SandboxResult> {
+    let start = std::time::Instant::now();
+
+    let Some(bridge) = crate::bridge::NeuralBridge::discover() else {
+        return Ok(SandboxResult {
+            primal: args.primal.clone(),
+            commit: args.commit.clone(),
+            health_ok: false,
+            detail: "composition.test_swap: no running Neural API found".into(),
+            elapsed_ms: millis_u64(start.elapsed()),
+        });
+    };
+
+    let params = serde_json::json!({
+        "binary_path": args.binary_path.to_string_lossy(),
+    });
+
+    let timeout =
+        std::time::Duration::from_secs(args.timeout_secs.unwrap_or(SANDBOX_HEALTH_TIMEOUT_SECS));
+
+    let call_result = tokio::time::timeout(
+        timeout,
+        bridge.capability_call("composition", "test_swap", params),
+    )
+    .await;
+
+    match call_result {
+        Ok(crate::bridge::BridgeResult::Handled(result)) => {
+            let validated = result
+                .get("validated")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            let detail = result
+                .get("detail")
+                .and_then(|v| v.as_str())
+                .unwrap_or(if validated {
+                    "composition validated"
+                } else {
+                    "composition rejected"
+                });
+            Ok(SandboxResult {
+                primal: args.primal.clone(),
+                commit: args.commit.clone(),
+                health_ok: validated,
+                detail: detail.to_string(),
+                elapsed_ms: millis_u64(start.elapsed()),
+            })
+        }
+        Ok(crate::bridge::BridgeResult::ApiError(e)) => {
+            tracing::warn!(
+                primal = %args.primal,
+                error = %e,
+                "composition.test_swap API error — falling back to standalone sandbox"
+            );
+            Err(e)
+        }
+        Ok(crate::bridge::BridgeResult::Fallthrough) => Ok(SandboxResult {
+            primal: args.primal.clone(),
+            commit: args.commit.clone(),
+            health_ok: false,
+            detail: "composition.test_swap: Neural API unreachable (fallthrough)".into(),
+            elapsed_ms: millis_u64(start.elapsed()),
+        }),
+        Err(_) => Ok(SandboxResult {
+            primal: args.primal.clone(),
+            commit: args.commit.clone(),
+            health_ok: false,
+            detail: format!(
+                "composition.test_swap: timeout after {}s",
+                timeout.as_secs()
+            ),
+            elapsed_ms: millis_u64(timeout),
+        }),
+    }
+}
+
 /// Full validation cycle with automatic dependency provisioning.
 ///
-/// If the target primal requires bearDog (security spine), a sandbox bearDog is
-/// started first and its socket path is injected as `--security-socket`. After
-/// validation completes, both the target and its dependencies are torn down.
+/// For **broker primals** (`BiomeosApi` contract, e.g. biomeOS), delegates to the
+/// running biomeOS via `composition.test_swap` — the orchestrator validates its
+/// own replacement in context rather than in isolation.
 ///
-/// This is the preferred entry point for pipeline integration — handles the
-/// SANDBOX-DEPENDENCY-CHAIN scenario transparently.
+/// For all other primals, spins up a standalone sandbox with dependency
+/// provisioning (bearDog security spine injection).
+///
+/// This is the preferred entry point for pipeline integration — handles both
+/// broker-primal composition validation and the SANDBOX-DEPENDENCY-CHAIN
+/// scenario transparently.
 pub async fn validate_with_deps(args: &SandboxArgs) -> crate::Result<SandboxResult> {
+    if is_broker_primal(&args.primal) {
+        tracing::info!(
+            primal = %args.primal,
+            "broker primal detected — routing through composition.test_swap"
+        );
+        match validate_via_composition(args).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                tracing::warn!(
+                    primal = %args.primal,
+                    error = %e,
+                    "composition.test_swap failed — falling back to standalone sandbox"
+                );
+            }
+        }
+    }
+
     let timeout =
         std::time::Duration::from_secs(args.timeout_secs.unwrap_or(SANDBOX_HEALTH_TIMEOUT_SECS));
 
@@ -513,5 +633,44 @@ mod tests {
     #[test]
     fn resolve_dependency_unknown_returns_none() {
         assert!(resolve_security_dependency("nonexistent-primal").is_none());
+    }
+
+    #[test]
+    fn broker_primal_detection_biomeos() {
+        assert!(is_broker_primal("biomeos"), "biomeOS is a broker primal");
+    }
+
+    #[test]
+    fn broker_primal_detection_non_brokers() {
+        assert!(!is_broker_primal("beardog"));
+        assert!(!is_broker_primal("songbird"));
+        assert!(!is_broker_primal("squirrel"));
+        assert!(!is_broker_primal("nestgate"));
+        assert!(!is_broker_primal("toadstool"));
+    }
+
+    #[test]
+    fn broker_primal_detection_unknown() {
+        assert!(
+            !is_broker_primal("nonexistent_primal"),
+            "unknown primal is not a broker"
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_via_composition_no_bridge() {
+        let args = SandboxArgs {
+            primal: "biomeos".into(),
+            commit: "abc12345".into(),
+            binary_path: PathBuf::from("/tmp/nonexistent-test-binary"),
+            timeout_secs: Some(2),
+        };
+        let result = validate_via_composition(&args).await.unwrap();
+        assert!(!result.health_ok, "should fail without running Neural API");
+        assert!(
+            result.detail.contains("Neural API"),
+            "detail should mention Neural API: {}",
+            result.detail
+        );
     }
 }
