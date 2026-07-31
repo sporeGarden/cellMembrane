@@ -39,9 +39,8 @@ async fn probe_s1_tls() -> StatusProbe {
     let url = format!("https://{domain}/");
     let start = std::time::Instant::now();
 
-    let timeout = std::time::Duration::from_secs(
-        cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS,
-    );
+    let timeout =
+        std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS);
 
     let result = tokio::time::timeout(timeout, async {
         crate::http_client(timeout)
@@ -144,9 +143,8 @@ async fn probe_s3_content() -> StatusProbe {
     let url = format!("https://{domain}/depot/{arch}/{probe_binary}");
     let start = std::time::Instant::now();
 
-    let timeout = std::time::Duration::from_secs(
-        cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS,
-    );
+    let timeout =
+        std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS);
 
     let result = tokio::time::timeout(timeout, async {
         crate::http_client(timeout)
@@ -275,9 +273,7 @@ async fn probe_s4_auth() -> StatusProbe {
 /// TCP reachability check.
 async fn tcp_reachable(addr: &str) -> bool {
     tokio::time::timeout(
-        std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_TCP_PROBE_TIMEOUT_SECS,
-        ),
+        std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_TCP_PROBE_TIMEOUT_SECS),
         tokio::net::TcpStream::connect(addr),
     )
     .await

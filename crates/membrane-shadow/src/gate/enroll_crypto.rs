@@ -49,13 +49,8 @@ pub(super) async fn mesh_enroll_phase(
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
 
-    let proof = compute_enrollment_proof(
-        &family_seed,
-        gate_name,
-        &pubkey,
-        timestamp,
-        seed_generation,
-    );
+    let proof =
+        compute_enrollment_proof(&family_seed, gate_name, &pubkey, timestamp, seed_generation);
 
     if dry_run {
         return BootstrapPhase {

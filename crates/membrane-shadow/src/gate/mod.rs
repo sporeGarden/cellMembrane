@@ -16,12 +16,12 @@ pub(crate) mod enroll;
 mod enroll_crypto;
 pub mod health;
 mod interface;
-pub(crate) mod sockets;
 pub(crate) mod key_portal;
 mod local;
 mod mesh;
 pub(crate) mod nucleus;
 pub mod preflight;
+pub(crate) mod sockets;
 pub(crate) mod sovereignty;
 pub(crate) mod sporeprint;
 pub(crate) mod systemd_units;
@@ -56,7 +56,7 @@ impl ProbeResult {
 
 use local::resolve_install_base;
 pub use local::resolve_local_gate_identity;
-pub(crate) use local::resolve_plasmidbin_dir;
+pub(crate) use local::{resolve_gate_name_async, resolve_plasmidbin_dir};
 
 use crate::config::ShadowConfig;
 use crate::error::Result;

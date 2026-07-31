@@ -58,12 +58,12 @@ pub(crate) mod bridge;
 pub(crate) mod btsp_client;
 pub(crate) mod caddy;
 pub(crate) mod cli;
-pub(crate) mod dns;
 #[cfg(feature = "cloudflare")]
 pub(crate) mod cloudflare;
 pub mod config;
 pub(crate) mod context;
 pub mod dispatch;
+pub(crate) mod dns;
 pub mod error;
 pub mod forgejo;
 pub(crate) mod freshness;

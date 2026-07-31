@@ -426,22 +426,10 @@ fn checks_to_json(
     })
 }
 
-/// Resolve gate name from `--gate` flag, `GATE_NAME` env var, or identity file.
+/// Resolve gate name from `--gate` flag, env, `.gate` file, or identity.
 async fn resolve_gate_name(args: &[&str], root: &std::path::Path) -> String {
-    if let Some(g) = cli::extract_flag_value(args, "--gate") {
-        return g.to_string();
-    }
-    if let Ok(g) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        if !g.is_empty() {
-            return g;
-        }
-    }
-    let root = root.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        crate::identity::resolve(&root).map_or_else(|_| "unknown".into(), |id| id.name)
-    })
-    .await
-    .unwrap_or_else(|_| "unknown".into())
+    let explicit = cli::extract_flag_value(args, "--gate");
+    crate::gate::resolve_gate_name_async(explicit, Some(root)).await
 }
 
 /// Dispatch rootpulse sovereignty ledger commands.

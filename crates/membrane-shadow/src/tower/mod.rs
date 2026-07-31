@@ -169,9 +169,7 @@ async fn discover_reachable_gates(local_gate: &str) -> Vec<(String, String)> {
 async fn is_gate_reachable(ip: &str) -> bool {
     let addr = format!("{ip}:{SONGBIRD_FEDERATION_PORT}");
     tokio::time::timeout(
-        std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_TCP_PROBE_TIMEOUT_SECS,
-        ),
+        std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_TCP_PROBE_TIMEOUT_SECS),
         tokio::net::TcpStream::connect(&addr),
     )
     .await
@@ -239,9 +237,7 @@ async fn probe_tcp_transport(transport: &str, ip: &str, port: u16, samples: u32)
     for _ in 0..samples {
         let start = Instant::now();
         let result = tokio::time::timeout(
-            std::time::Duration::from_secs(
-                cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS,
-            ),
+            std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_PROBE_TIMEOUT_SECS),
             tokio::net::TcpStream::connect(&addr),
         )
         .await;

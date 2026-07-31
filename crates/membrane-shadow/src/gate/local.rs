@@ -106,6 +106,39 @@ pub(super) fn resolve_install_base() -> String {
     )
 }
 
+/// Resolve the gate name through a unified priority chain.
+///
+/// Resolution order:
+///   1. `explicit` — caller-extracted name from CLI (`--gate`, positional, etc.)
+///   2. `GATE_NAME` environment variable
+///   3. `.gate` file at `root` (async read)
+///   4. Multi-root `resolve_local_gate_identity()` (canonical fallback)
+///
+/// Callers are responsible for extracting the explicit name from their own
+/// CLI conventions — this function handles everything after that.
+pub async fn resolve_gate_name_async(
+    explicit: Option<&str>,
+    root: Option<&std::path::Path>,
+) -> String {
+    if let Some(name) = explicit {
+        return name.to_string();
+    }
+    if let Ok(g) = std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
+        if !g.is_empty() {
+            return g;
+        }
+    }
+    if let Some(r) = root {
+        if let Ok(content) = tokio::fs::read_to_string(r.join(".gate")).await {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    resolve_local_gate_identity()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

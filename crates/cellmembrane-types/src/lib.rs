@@ -35,11 +35,11 @@
 pub mod arch;
 pub mod caddy;
 pub mod channels;
-pub mod dns;
 pub mod composition;
 pub mod config;
 pub mod credentials;
 pub mod cytoplasm;
+pub mod dns;
 pub mod envelope;
 pub mod error;
 pub mod firewall;

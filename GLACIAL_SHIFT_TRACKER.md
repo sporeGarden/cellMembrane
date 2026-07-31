@@ -1,7 +1,7 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-30 (Wave 155m)
+**Last updated:** 2026-07-31 (Wave 155m)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
@@ -21,7 +21,16 @@ missing capability instead of returning `"unknown"`. Unified socket resolution:
 (api_socket aliases, XDG paths, socket_aliases). Renamed `BEARDOG_SONGBIRD_SOCKET`
 to `MEMBRANE_MESH_RELAY_SOCKET` (capability-neutral). Split `dispatch/gate.rs`
 (750→570L): firewall + WireGuard generators extracted to `gate_network.rs`.
-1,263 tests (+4 new including registry consistency), 0 clippy, 0 fmt drift.
+Init-scope-aware socket discovery: `resolve_socket_base()` auto-adapts to
+`MEMBRANE_INIT_SCOPE=user` (defaults to `$XDG_RUNTIME_DIR/biomeos`), fixing
+impulse XDG namespace mismatch (`membrane` → `biomeos`) that would miss user-session
+sockets on steamGate-style deploys. Consolidated 3 divergent `resolve_gate_name`
+implementations (gate_configure, dispatch/mod, freshness) into single shared
+`resolve_gate_name_async()` in `gate/local.rs`. Extracted `plasmid/lineage.rs`
+(lineage validation) + `plasmid/commands.rs` (pipeline/trigger/status) from
+`plasmid/mod.rs` (727→417L, -310L). Mesh notify now uses capability-resolved
+socket via `resolve_mesh_relay_socket()` instead of hardcoded constant.
+1,266 tests (+7 new), 0 clippy, 0 fmt drift.
 
 **Wave 155k (sovereign HTTP client + deep debt sweep):**
 Purged `reqwest` — sovereign HTTP/1.1 client built on `tokio-rustls` + `webpki-roots`

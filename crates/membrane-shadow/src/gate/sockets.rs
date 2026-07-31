@@ -19,7 +19,16 @@ pub(crate) async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> crate:
 }
 
 /// Resolve the mesh relay UDS socket path via capability discovery.
+///
+/// Honors `MEMBRANE_MESH_RELAY_SOCKET` env override first, then probes
+/// the candidate list from `resolve_primal_socket_paths` using the binary
+/// registered for `MeshRelay` capability.
 pub(crate) fn resolve_mesh_relay_socket() -> String {
+    if let Ok(env_path) = std::env::var(cellmembrane_types::service::ENV_SONGBIRD_SOCKET) {
+        if Path::new(&env_path).exists() {
+            return env_path;
+        }
+    }
     let binary_name = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::MeshRelay,
     );
@@ -56,13 +65,12 @@ pub(crate) fn resolve_uid() -> String {
 
 /// Build the candidate socket paths for a primal, ordered by priority.
 ///
-/// Checks the service registry for `api_socket` aliases and `socket_aliases`,
-/// then falls back to `{socket_base}/{binary}.sock` and XDG runtime directory.
+/// Uses `resolve_socket_base()` which auto-adapts to init scope (system vs
+/// user-space deploy), then adds XDG/`biomeos` namespace paths for user
+/// session discovery. Checks the service registry for `api_socket` aliases
+/// and `socket_aliases`.
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
-    let socket_base = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
+    let socket_base = cellmembrane_types::service::resolve_socket_base();
     let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
         .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
     let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;

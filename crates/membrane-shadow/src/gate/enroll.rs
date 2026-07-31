@@ -21,9 +21,8 @@ use super::bootstrap::BootstrapPhase;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
-const ENROLL_PHASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
-    cellmembrane_types::service::DEFAULT_ENROLL_PHASE_TIMEOUT_SECS,
-);
+const ENROLL_PHASE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(cellmembrane_types::service::DEFAULT_ENROLL_PHASE_TIMEOUT_SECS);
 
 const DEFAULT_SSH_PORT: &str = "22";
 
@@ -148,8 +147,8 @@ fn resolve_hub_ip() -> Option<String> {
 
 /// Verify mesh connectivity by pinging the hub gateway.
 async fn mesh_verify_phase(mesh_ip: &str, dry_run: bool) -> BootstrapPhase {
-    let hub_ip = resolve_hub_ip()
-        .unwrap_or_else(|| cellmembrane_types::service::DEFAULT_HUB_MESH_IP.into());
+    let hub_ip =
+        resolve_hub_ip().unwrap_or_else(|| cellmembrane_types::service::DEFAULT_HUB_MESH_IP.into());
 
     if dry_run {
         return BootstrapPhase {
@@ -207,7 +206,9 @@ async fn forgejo_verify_phase(dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let (host, port) = git_addr.split_once(':').unwrap_or((&git_addr, DEFAULT_SSH_PORT));
+    let (host, port) = git_addr
+        .split_once(':')
+        .unwrap_or((&git_addr, DEFAULT_SSH_PORT));
 
     let ssh_result = tokio::process::Command::new("ssh")
         .args([

@@ -88,7 +88,15 @@ pub async fn bootstrap_ca(dry_run: bool) -> Result<String> {
     }
 
     run_step(
-        &["ca", "bootstrap", "--ca-url", &ca_url, "--fingerprint", &fingerprint, "--force"],
+        &[
+            "ca",
+            "bootstrap",
+            "--ca-url",
+            &ca_url,
+            "--fingerprint",
+            &fingerprint,
+            "--force",
+        ],
         "step ca bootstrap failed",
     )
     .await?;
@@ -134,9 +142,19 @@ pub async fn request_ssh_certificate(gate_name: &str, dry_run: bool) -> Result<S
     let key_str = key_path.to_string_lossy();
     run_step(
         &[
-            "ssh", "certificate", &principal, &key_str,
-            "--ca-url", &ca_url, "--provisioner", &provisioner,
-            "--not-after", &lifetime, "--force", "--no-password", "--insecure",
+            "ssh",
+            "certificate",
+            &principal,
+            &key_str,
+            "--ca-url",
+            &ca_url,
+            "--provisioner",
+            &provisioner,
+            "--not-after",
+            &lifetime,
+            "--force",
+            "--no-password",
+            "--insecure",
         ],
         "step ssh certificate failed",
     )
@@ -217,9 +235,17 @@ pub async fn install_host_certificate(hostname: &str, dry_run: bool) -> Result<S
     let host_key_str = host_key.to_string_lossy();
     run_step(
         &[
-            "ssh", "certificate", hostname, &host_key_str,
-            "--host", "--sign", "--ca-url", &ca_url,
-            "--provisioner", &provisioner, "--force",
+            "ssh",
+            "certificate",
+            hostname,
+            &host_key_str,
+            "--host",
+            "--sign",
+            "--ca-url",
+            &ca_url,
+            "--provisioner",
+            &provisioner,
+            "--force",
         ],
         "host certificate request failed",
     )
@@ -302,11 +328,7 @@ async fn inspect_single_cert(label: &str, cert_path: &Path, _key_path: &Path) ->
 /// Parse certificate metadata using `step ssh inspect`.
 async fn parse_certificate_info(cert_path: &Path) -> Result<SshCertificate> {
     let cert_str = cert_path.to_string_lossy();
-    let output = run_step(
-        &["ssh", "inspect", &cert_str],
-        "step ssh inspect failed",
-    )
-    .await?;
+    let output = run_step(&["ssh", "inspect", &cert_str], "step ssh inspect failed").await?;
 
     let text = String::from_utf8_lossy(&output.stdout);
     Ok(parse_inspect_output(&text, cert_path))

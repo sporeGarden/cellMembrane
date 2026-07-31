@@ -98,32 +98,6 @@ fn lineage_result_variants_exhaustive() {
     assert!(matches!(w, LineageResult::Warned(_)));
 }
 
-#[test]
-fn parse_staleness_recent() {
-    let ts = crate::utc_now_iso8601();
-    let days = parse_staleness_days(&ts);
-    assert_eq!(days, Some(0), "today's timestamp should be 0 days old");
-}
-
-#[test]
-fn parse_staleness_old() {
-    let days = parse_staleness_days("2020-01-01T00:00:00Z");
-    assert!(days.is_some());
-    assert!(days.unwrap() > 365, "2020 should be years ago");
-}
-
-#[test]
-fn parse_staleness_unparseable() {
-    assert!(parse_staleness_days("unknown").is_none());
-    assert!(parse_staleness_days("").is_none());
-    assert!(parse_staleness_days("not-a-date").is_none());
-}
-
-#[test]
-fn stale_threshold_is_7_days() {
-    assert_eq!(DEPOT_STALE_THRESHOLD_DAYS, 7);
-}
-
 #[tokio::test]
 async fn status_reports_depot_state() {
     let result = status().await;

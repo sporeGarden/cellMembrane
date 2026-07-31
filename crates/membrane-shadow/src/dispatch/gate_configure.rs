@@ -7,9 +7,9 @@
 
 use crate::{ShadowOutcome, gate};
 
-/// Resolve the gate name from CLI args or local identity.
-/// Skips flag values (e.g. the `K=V` after `--env`).
-pub(super) fn resolve_gate_name(args: &[&str]) -> String {
+/// Extract the positional gate name from CLI args, skipping flag values
+/// (e.g. the `K=V` after `--env`). Returns `None` if no positional found.
+fn extract_positional_gate<'a>(args: &[&'a str]) -> Option<&'a str> {
     let mut skip_next = false;
     for arg in args {
         if skip_next {
@@ -21,10 +21,16 @@ pub(super) fn resolve_gate_name(args: &[&str]) -> String {
             continue;
         }
         if !arg.starts_with('-') {
-            return arg.to_string();
+            return Some(arg);
         }
     }
-    gate::resolve_local_gate_identity()
+    None
+}
+
+/// Resolve the gate name from positional CLI args, env, `.gate`, or identity.
+pub(super) async fn resolve_gate_name(args: &[&str]) -> String {
+    let explicit = extract_positional_gate(args);
+    crate::gate::resolve_gate_name_async(explicit, None).await
 }
 
 /// Parse `--env K=V` flags from CLI args into key-value pairs.
@@ -107,10 +113,10 @@ fn build_service_specs(
 }
 
 /// `gate.configure` — preview service configs for a gate's composition.
-pub(super) fn dispatch_configure(args: &[&str]) -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_configure(args: &[&str]) -> crate::Result<ShadowOutcome> {
     use std::fmt::Write;
 
-    let gate_name = resolve_gate_name(args);
+    let gate_name = resolve_gate_name(args).await;
     let env_overrides = parse_env_overrides(args);
     let (specs, comp_name) = build_service_specs(&gate_name, &env_overrides)?;
 
@@ -147,7 +153,7 @@ pub(super) fn dispatch_configure(args: &[&str]) -> crate::Result<ShadowOutcome> 
 
 /// `gate.apply` — write service configs to the init system config directory.
 pub(super) async fn dispatch_apply(args: &[&str]) -> crate::Result<ShadowOutcome> {
-    let gate_name = resolve_gate_name(args);
+    let gate_name = resolve_gate_name(args).await;
     let env_overrides = parse_env_overrides(args);
     let (specs, comp_name) = build_service_specs(&gate_name, &env_overrides)?;
 
@@ -253,15 +259,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_gate_name_from_args() {
-        let name = resolve_gate_name(&["eastGate"]);
-        assert_eq!(name, "eastGate");
+    fn extract_positional_gate_from_args() {
+        assert_eq!(extract_positional_gate(&["eastGate"]), Some("eastGate"));
     }
 
     #[test]
-    fn resolve_gate_name_skips_flags() {
-        let name = resolve_gate_name(&["--env", "K=V", "westGate"]);
-        assert_eq!(name, "westGate");
+    fn extract_positional_gate_skips_flags() {
+        assert_eq!(
+            extract_positional_gate(&["--env", "K=V", "westGate"]),
+            Some("westGate")
+        );
+    }
+
+    #[test]
+    fn extract_positional_gate_none_when_empty() {
+        assert_eq!(extract_positional_gate(&[]), None);
     }
 
     #[test]
@@ -278,9 +290,9 @@ mod tests {
         assert!(envs.is_empty());
     }
 
-    #[test]
-    fn configure_generates_specs_for_local_gate() {
-        let result = dispatch_configure(&[]);
+    #[tokio::test]
+    async fn configure_generates_specs_for_local_gate() {
+        let result = dispatch_configure(&[]).await;
         if let Ok(outcome) = result {
             assert!(outcome.ok);
             let data = outcome.data.unwrap();
@@ -290,9 +302,9 @@ mod tests {
         }
     }
 
-    #[test]
-    fn configure_with_env_overrides() {
-        let result = dispatch_configure(&["--env", "MEMBRANE_LOG=debug"]);
+    #[tokio::test]
+    async fn configure_with_env_overrides() {
+        let result = dispatch_configure(&["--env", "MEMBRANE_LOG=debug"]).await;
         if let Ok(outcome) = result {
             assert!(outcome.ok);
             let preview = outcome.data.unwrap()["preview"]

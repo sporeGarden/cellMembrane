@@ -51,7 +51,12 @@ pub fn scan_and_break(threshold: Option<u32>) -> CrashLoopReport {
     let mut loops = Vec::new();
 
     for d in detected {
-        tracing::warn!(unit = d.unit, d.restart_count, threshold, "crash-loop detected — disabling");
+        tracing::warn!(
+            unit = d.unit,
+            d.restart_count,
+            threshold,
+            "crash-loop detected — disabling"
+        );
         let action = if disable_unit(&d.unit) {
             CrashLoopAction::Disabled
         } else {
@@ -66,7 +71,11 @@ pub fn scan_and_break(threshold: Option<u32>) -> CrashLoopReport {
         });
     }
 
-    CrashLoopReport { loops, threshold, scanned }
+    CrashLoopReport {
+        loops,
+        threshold,
+        scanned,
+    }
 }
 
 /// Async variant for cascade/temporal contexts.
@@ -76,7 +85,12 @@ pub async fn scan_and_break_async(threshold: Option<u32>) -> CrashLoopReport {
     let mut loops = Vec::new();
 
     for d in detected {
-        tracing::warn!(unit = d.unit, d.restart_count, threshold, "crash-loop detected — disabling");
+        tracing::warn!(
+            unit = d.unit,
+            d.restart_count,
+            threshold,
+            "crash-loop detected — disabling"
+        );
         let action = if disable_unit_async(&d.unit).await {
             CrashLoopAction::Disabled
         } else {
@@ -91,7 +105,11 @@ pub async fn scan_and_break_async(threshold: Option<u32>) -> CrashLoopReport {
         });
     }
 
-    CrashLoopReport { loops, threshold, scanned }
+    CrashLoopReport {
+        loops,
+        threshold,
+        scanned,
+    }
 }
 
 /// Scan without disabling — report only (dry-run).
@@ -108,7 +126,11 @@ pub fn scan_only(threshold: Option<u32>) -> CrashLoopReport {
         })
         .collect();
 
-    CrashLoopReport { loops, threshold, scanned }
+    CrashLoopReport {
+        loops,
+        threshold,
+        scanned,
+    }
 }
 
 /// Discover systemd units matching the membrane service filter.

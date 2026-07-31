@@ -5,8 +5,8 @@
 //! Extracted from `gate.rs` for independent testability. These are pure
 //! manifest-to-config renderers with no async I/O beyond manifest loading.
 
-use crate::cli;
 use crate::ShadowOutcome;
+use crate::cli;
 
 pub(super) fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     use cellmembrane_types::composition::MembraneComposition;

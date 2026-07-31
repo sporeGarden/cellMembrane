@@ -8,8 +8,8 @@
 //! Records are derived from gate profiles (IPs, roles, domains) and the
 //! surface domain constants — no manual zone editing required.
 
-use crate::error::Result;
 use crate::ShadowOutcome;
+use crate::error::Result;
 use cellmembrane_types::dns::{DnsRecord, DnsZone, KnotConfig};
 
 /// Dispatch entry point for `dns.*` commands.
@@ -170,10 +170,7 @@ const KNOT_ZONE_DIR: &str = cellmembrane_types::service::DEFAULT_KNOT_ZONE_DIR;
 // ── Zone builders ──────────────────────────────────────────────────
 
 /// Build the public zone (e.g. `primals.eco`) from manifest gates and roles.
-fn build_public_zone(
-    m: &crate::manifest::EcosystemManifest,
-    hub_ip: &str,
-) -> DnsZone {
+fn build_public_zone(m: &crate::manifest::EcosystemManifest, hub_ip: &str) -> DnsZone {
     use cellmembrane_types::service;
 
     let origin = service::SURFACE_DOMAIN;
@@ -255,9 +252,7 @@ fn build_public_zone(
 }
 
 /// Build the mesh zone (`primals.local`) from gate WG IPs.
-fn build_mesh_zone(
-    m: &crate::manifest::EcosystemManifest,
-) -> DnsZone {
+fn build_mesh_zone(m: &crate::manifest::EcosystemManifest) -> DnsZone {
     use cellmembrane_types::service;
 
     let origin = service::LAN_DNS_DOMAIN;
@@ -292,8 +287,7 @@ fn build_mesh_zone(
         rdata: hub_ip.into(),
     });
 
-    let mut gate_entries: Vec<(&String, &crate::manifest::GateProfile)> =
-        m.gates.iter().collect();
+    let mut gate_entries: Vec<(&String, &crate::manifest::GateProfile)> = m.gates.iter().collect();
     gate_entries.sort_by_key(|(name, _)| name.to_lowercase());
 
     for (gate_name, profile) in gate_entries {
@@ -409,7 +403,10 @@ mod tests {
     #[test]
     fn generate_serial_is_reasonable() {
         let serial = generate_serial();
-        assert!(serial >= 2_026_010_100, "serial should be >= 2026: {serial}");
+        assert!(
+            serial >= 2_026_010_100,
+            "serial should be >= 2026: {serial}"
+        );
         assert!(serial < 2_100_123_199, "serial should be < 2100: {serial}");
     }
 
@@ -429,7 +426,9 @@ mod tests {
             "public zone must have NS record"
         );
         assert!(
-            zone.records.iter().any(|r| r.name == "ns1" && r.rtype == "A"),
+            zone.records
+                .iter()
+                .any(|r| r.name == "ns1" && r.rtype == "A"),
             "public zone must have ns1 A record"
         );
         assert!(

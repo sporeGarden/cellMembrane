@@ -415,8 +415,8 @@ async fn git_rev_parse(repo_dir: &Path, refspec: &str) -> Option<String> {
 
 // ── Socket resolution (delegated to gate/sockets.rs) ──────────
 
-pub(crate) use super::sockets::{resolve_primal_socket_paths, uds_jsonrpc_call};
 use super::sockets::resolve_mesh_relay_socket;
+pub(crate) use super::sockets::{resolve_primal_socket_paths, uds_jsonrpc_call};
 
 /// Probe rootpulse ledger state — checks if a session has been committed on this gate.
 ///
@@ -436,7 +436,6 @@ fn probe_rootpulse_ledger() -> StatusProbe {
         },
     )
 }
-
 
 /// Probe TLS cert expiry for publicly-served domains.
 ///
@@ -613,5 +612,4 @@ mod tests {
         let days = check_cert_days("unreachable.invalid.test");
         assert!(days <= 0, "unreachable domain should return <=0 days");
     }
-
 }

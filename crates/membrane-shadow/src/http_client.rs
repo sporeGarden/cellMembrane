@@ -63,7 +63,9 @@ fn parse_url(url: &str) -> Result<ParsedUrl> {
         _ => return Err(ShadowError::Http(format!("unsupported scheme: {scheme}"))),
     };
 
-    let (authority, path) = rest.find('/').map_or((rest, "/"), |i| (&rest[..i], &rest[i..]));
+    let (authority, path) = rest
+        .find('/')
+        .map_or((rest, "/"), |i| (&rest[..i], &rest[i..]));
 
     let (host, port) = if let Some((h, p)) = authority.rsplit_once(':') {
         let port = p
@@ -253,8 +255,7 @@ impl RequestBuilder {
                 .await
                 .map_err(|e| ShadowError::Http(format!("TLS handshake {addr}: {e}")))?;
 
-            self.exchange(tls_stream, &parsed.host, &parsed.path)
-                .await
+            self.exchange(tls_stream, &parsed.host, &parsed.path).await
         } else {
             self.exchange(tcp, &parsed.host, &parsed.path).await
         }
@@ -286,17 +287,20 @@ impl RequestBuilder {
         }
         request.push_str("\r\n");
 
-        writer.write_all(request.as_bytes()).await.map_err(|e| {
-            ShadowError::Http(format!("write request: {e}"))
-        })?;
+        writer
+            .write_all(request.as_bytes())
+            .await
+            .map_err(|e| ShadowError::Http(format!("write request: {e}")))?;
         if let Some(ref body) = self.body {
-            writer.write_all(body).await.map_err(|e| {
-                ShadowError::Http(format!("write body: {e}"))
-            })?;
+            writer
+                .write_all(body)
+                .await
+                .map_err(|e| ShadowError::Http(format!("write body: {e}")))?;
         }
-        writer.flush().await.map_err(|e| {
-            ShadowError::Http(format!("flush: {e}"))
-        })?;
+        writer
+            .flush()
+            .await
+            .map_err(|e| ShadowError::Http(format!("flush: {e}")))?;
 
         parse_response(reader, matches!(self.method, Method::Head)).await
     }
@@ -424,9 +428,7 @@ async fn parse_response<R: tokio::io::AsyncRead + Unpin>(
 fn parse_status_line(line: &str) -> Result<u16> {
     let parts: Vec<&str> = line.splitn(3, ' ').collect();
     if parts.len() < 2 {
-        return Err(ShadowError::Http(format!(
-            "malformed status line: {line}"
-        )));
+        return Err(ShadowError::Http(format!("malformed status line: {line}")));
     }
     parts[1]
         .parse::<u16>()
@@ -557,10 +559,7 @@ mod tests {
         let p = parse_url("https://api.example.com/v1/things").unwrap();
         assert!(p.tls);
         assert_eq!(p.host, "api.example.com");
-        assert_eq!(
-            p.port,
-            cellmembrane_types::service::DEFAULT_HTTPS_PORT
-        );
+        assert_eq!(p.port, cellmembrane_types::service::DEFAULT_HTTPS_PORT);
         assert_eq!(p.path, "/v1/things");
     }
 
@@ -578,10 +577,7 @@ mod tests {
         let p = parse_url("https://depot.primals.eco").unwrap();
         assert!(p.tls);
         assert_eq!(p.host, "depot.primals.eco");
-        assert_eq!(
-            p.port,
-            cellmembrane_types::service::DEFAULT_HTTPS_PORT
-        );
+        assert_eq!(p.port, cellmembrane_types::service::DEFAULT_HTTPS_PORT);
         assert_eq!(p.path, "/");
     }
 
@@ -604,7 +600,10 @@ mod tests {
     #[test]
     fn parse_status_line_ok() {
         assert_eq!(parse_status_line("HTTP/1.1 200 OK\r\n").unwrap(), 200);
-        assert_eq!(parse_status_line("HTTP/1.1 404 Not Found\r\n").unwrap(), 404);
+        assert_eq!(
+            parse_status_line("HTTP/1.1 404 Not Found\r\n").unwrap(),
+            404
+        );
         assert_eq!(parse_status_line("HTTP/1.0 301 Moved\r\n").unwrap(), 301);
     }
 

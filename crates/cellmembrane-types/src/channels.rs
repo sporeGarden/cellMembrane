@@ -38,7 +38,10 @@ impl MembraneChannel {
         match self {
             Self::Signal => &[crate::service::DEFAULT_DNS_PORT],
             Self::Relay => &[crate::service::DEFAULT_TURN_PORT],
-            Self::Surface => &[crate::service::DEFAULT_HTTP_PORT, crate::service::DEFAULT_HTTPS_PORT],
+            Self::Surface => &[
+                crate::service::DEFAULT_HTTP_PORT,
+                crate::service::DEFAULT_HTTPS_PORT,
+            ],
         }
     }
 
@@ -54,15 +57,17 @@ impl MembraneChannel {
     #[must_use]
     pub fn default_primal(&self) -> &'static str {
         match self {
-            Self::Signal => crate::MembraneService::for_binary("knot-dns")
-                .expect("knot-dns must exist in service registry")
-                .binary,
-            Self::Relay => crate::MembraneService::binary_for(
-                crate::ServiceCapability::MeshRelay,
-            ),
-            Self::Surface => crate::MembraneService::for_binary("caddy")
-                .expect("caddy must exist in service registry")
-                .binary,
+            Self::Signal => {
+                crate::MembraneService::for_binary("knot-dns")
+                    .expect("knot-dns must exist in service registry")
+                    .binary
+            }
+            Self::Relay => crate::MembraneService::binary_for(crate::ServiceCapability::MeshRelay),
+            Self::Surface => {
+                crate::MembraneService::for_binary("caddy")
+                    .expect("caddy must exist in service registry")
+                    .binary
+            }
         }
     }
 

@@ -15,7 +15,7 @@ use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tracing::{info, warn};
 
-use super::{verify_provider_signature, PushEvent, WebhookProvider};
+use super::{PushEvent, WebhookProvider, verify_provider_signature};
 use crate::error::Result;
 
 fn default_socket_path() -> String {
@@ -81,10 +81,7 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
 
 /// Webhook listener requires Unix domain sockets.
 #[cfg(not(unix))]
-pub async fn listen(
-    _config: &crate::ShadowConfig,
-    _socket_path: Option<&str>,
-) -> Result<()> {
+pub async fn listen(_config: &crate::ShadowConfig, _socket_path: Option<&str>) -> Result<()> {
     Err(crate::error::ShadowError::Config(
         "webhook UDS listener unavailable on this platform".into(),
     ))
@@ -103,7 +100,10 @@ async fn handle_connection(
     let mut buf_reader = tokio::io::BufReader::new(reader);
 
     let mut request_line = String::new();
-    buf_reader.read_line(&mut request_line).await.map_err(io_err)?;
+    buf_reader
+        .read_line(&mut request_line)
+        .await
+        .map_err(io_err)?;
 
     if !request_line.starts_with("POST ") {
         let response = http_response(405, "Method Not Allowed");

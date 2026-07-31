@@ -184,9 +184,8 @@ pub async fn cache_purge(
         .await
         .map_err(|e| cf_request_err("cache_purge", e))?;
 
-    let body: CfResponse<serde_json::Value> = resp
-        .json()
-        .map_err(|e| cf_parse_err("cache_purge", e))?;
+    let body: CfResponse<serde_json::Value> =
+        resp.json().map_err(|e| cf_parse_err("cache_purge", e))?;
 
     body.into_result().map(|_: serde_json::Value| ())?;
 
@@ -215,9 +214,7 @@ pub async fn ssl_settings(cf: &CloudflareConfig, zone: &str) -> Result<SslSettin
         .await
         .map_err(|e| cf_request_err("ssl_settings", e))?;
 
-    let body: CfResponse<SslSettings> = resp
-        .json()
-        .map_err(|e| cf_parse_err("ssl_settings", e))?;
+    let body: CfResponse<SslSettings> = resp.json().map_err(|e| cf_parse_err("ssl_settings", e))?;
 
     body.into_result()
 }
@@ -237,9 +234,8 @@ pub async fn zone_settings(cf: &CloudflareConfig, zone: &str) -> Result<Vec<Zone
         .await
         .map_err(|e| cf_request_err("zone_settings", e))?;
 
-    let body: CfResponse<Vec<ZoneSetting>> = resp
-        .json()
-        .map_err(|e| cf_parse_err("zone_settings", e))?;
+    let body: CfResponse<Vec<ZoneSetting>> =
+        resp.json().map_err(|e| cf_parse_err("zone_settings", e))?;
 
     body.into_result_or_default()
 }

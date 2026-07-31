@@ -243,9 +243,10 @@ fn service_spec_to_launchd_plist() {
 
 #[test]
 fn service_spec_from_membrane_service() {
-    let svc =
-        cellmembrane_types::MembraneService::with_capability(cellmembrane_types::ServiceCapability::CryptoSigner)
-            .expect("CryptoSigner must exist");
+    let svc = cellmembrane_types::MembraneService::with_capability(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    )
+    .expect("CryptoSigner must exist");
     let spec = ServiceSpec::from_membrane_service(
         svc,
         "/opt/membrane",
@@ -260,7 +261,10 @@ fn service_spec_from_membrane_service() {
 
 #[test]
 fn init_scope_env_var_name() {
-    assert_eq!(cellmembrane_types::service::ENV_INIT_SCOPE, "MEMBRANE_INIT_SCOPE");
+    assert_eq!(
+        cellmembrane_types::service::ENV_INIT_SCOPE,
+        "MEMBRANE_INIT_SCOPE"
+    );
 }
 
 #[test]

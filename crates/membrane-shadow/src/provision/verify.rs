@@ -93,8 +93,10 @@ echo "canary.audit: stale=$STALE"
 
     let identity_result = ssh_exec(
         ip,
-        &format!("cat {}/gate_identity 2>/dev/null || echo 'no identity file'",
-            cellmembrane_types::service::DEFAULT_CONFIG_DIR),
+        &format!(
+            "cat {}/gate_identity 2>/dev/null || echo 'no identity file'",
+            cellmembrane_types::service::DEFAULT_CONFIG_DIR
+        ),
     )
     .await;
     match identity_result {

@@ -670,6 +670,37 @@ pub fn resolve_systemd_unit_dir() -> String {
     SYSTEMD_UNIT_DIR.into()
 }
 
+/// Resolve the socket base directory, honoring env overrides and init scope.
+///
+/// Priority: `MEMBRANE_SOCKET_BASE` env → `BIOMEOS_SOCKET_DIR` env →
+/// scope-adapted default. For user-space deploy (`MEMBRANE_INIT_SCOPE`
+/// = `user` or `bare`), defaults to `$XDG_RUNTIME_DIR/biomeos` to match
+/// the user systemd unit template (`%t/biomeos/%i.sock`).
+#[must_use]
+pub fn resolve_socket_base() -> String {
+    if let Ok(base) = std::env::var(ENV_SOCKET_BASE) {
+        return base;
+    }
+    if let Ok(dir) = std::env::var(ENV_BIOMEOS_SOCKET_DIR) {
+        return dir;
+    }
+    if let Ok(scope) = std::env::var(ENV_INIT_SCOPE)
+        && (scope == "user" || scope == "bare")
+    {
+        let xdg = std::env::var(ENV_XDG_RUNTIME_DIR)
+            .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid_best_effort()));
+        return format!("{xdg}/{NEURAL_API_NAMESPACE}");
+    }
+    DEFAULT_SOCKET_BASE.into()
+}
+
+/// Best-effort UID resolution for socket path construction.
+fn resolve_uid_best_effort() -> String {
+    std::env::var("UID")
+        .or_else(|_| std::env::var("EUID"))
+        .unwrap_or_else(|_| "1000".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -731,9 +762,7 @@ mod tests {
 
     #[test]
     fn resolve_systemd_unit_dir_defaults_to_system() {
-        if std::env::var(ENV_SYSTEMD_UNIT_DIR).is_err()
-            && std::env::var(ENV_INIT_SCOPE).is_err()
-        {
+        if std::env::var(ENV_SYSTEMD_UNIT_DIR).is_err() && std::env::var(ENV_INIT_SCOPE).is_err() {
             let dir = resolve_systemd_unit_dir();
             assert_eq!(dir, SYSTEMD_UNIT_DIR);
         }
@@ -752,9 +781,7 @@ mod tests {
 
     #[test]
     fn songbird_socket_matches_registry() {
-        let relay_binary = crate::MembraneService::binary_for(
-            crate::ServiceCapability::MeshRelay,
-        );
+        let relay_binary = crate::MembraneService::binary_for(crate::ServiceCapability::MeshRelay);
         let expected = format!("{DEFAULT_SOCKET_BASE}/{relay_binary}.sock");
         assert_eq!(
             DEFAULT_SONGBIRD_SOCKET, expected,
@@ -771,6 +798,26 @@ mod tests {
         assert!(
             !ENV_SONGBIRD_SOCKET.contains("SONGBIRD"),
             "env var should use capability-neutral naming"
+        );
+    }
+
+    #[test]
+    fn resolve_socket_base_defaults_to_system() {
+        if std::env::var(ENV_SOCKET_BASE).is_err()
+            && std::env::var(ENV_BIOMEOS_SOCKET_DIR).is_err()
+            && std::env::var(ENV_INIT_SCOPE).is_err()
+        {
+            let base = resolve_socket_base();
+            assert_eq!(base, DEFAULT_SOCKET_BASE);
+        }
+    }
+
+    #[test]
+    fn resolve_socket_base_returns_absolute() {
+        let base = resolve_socket_base();
+        assert!(
+            base.starts_with('/'),
+            "socket base must be absolute: {base}"
         );
     }
 }

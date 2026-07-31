@@ -16,6 +16,7 @@ pub mod build;
 pub(crate) mod canary;
 pub(crate) mod canary_remote;
 pub(crate) mod checksum;
+mod commands;
 pub(crate) mod depot;
 mod depot_sync;
 mod download;
@@ -25,6 +26,7 @@ mod harvest;
 mod harvest_manifest;
 mod harvest_support;
 pub(crate) mod integrity;
+pub(crate) mod lineage;
 mod refresh;
 pub(crate) mod sandbox;
 pub(crate) mod signing;
@@ -33,12 +35,14 @@ pub(crate) mod toolchain;
 pub use build::BuildArgs;
 pub use checksum::fetch_wan_checksums;
 pub use fetch::*;
-pub use harvest::{HarvestArgs, HarvestResult, HarvestStatus, harvest};
+pub use harvest::{HarvestArgs, harvest};
 pub use refresh::{RefreshArgs, refresh};
 
+pub use commands::{pipeline, status, trigger};
 pub use depot::StalenessReport;
 pub use depot_sync::depot_sync;
 pub(crate) use depot_sync::depot_sync_push_standalone;
+pub(crate) use lineage::{LineageResult, validate_lineage};
 
 /// Gracefully stop a process: SIGTERM → grace period → SIGKILL (Unix),
 /// or `TerminateProcess` (Windows).
@@ -153,22 +157,17 @@ pub(crate) fn spawn_primal_server(
     socket: &std::path::Path,
     extra_args: &[(&str, &std::path::Path)],
 ) -> crate::Result<tokio::process::Child> {
-    let bin_name = binary
-        .file_name()
-        .map_or("", |n| n.to_str().unwrap_or(""));
+    let bin_name = binary.file_name().map_or("", |n| n.to_str().unwrap_or(""));
 
-    let (subcmd, socket_flag) =
-        cellmembrane_types::MembraneService::for_binary(bin_name).map_or(
-            ("server", "--socket"),
-            |svc| match svc.server_contract {
-                cellmembrane_types::service::ServerContract::BiomeosApi => {
-                    ("neural-api", "--socket")
-                }
-                cellmembrane_types::service::ServerContract::ServerNoSocket => ("server", ""),
-                cellmembrane_types::service::ServerContract::External => ("", ""),
-                _ => ("server", "--socket"),
-            },
-        );
+    let (subcmd, socket_flag) = cellmembrane_types::MembraneService::for_binary(bin_name).map_or(
+        ("server", "--socket"),
+        |svc| match svc.server_contract {
+            cellmembrane_types::service::ServerContract::BiomeosApi => ("neural-api", "--socket"),
+            cellmembrane_types::service::ServerContract::ServerNoSocket => ("server", ""),
+            cellmembrane_types::service::ServerContract::External => ("", ""),
+            _ => ("server", "--socket"),
+        },
+    );
 
     let mut cmd = tokio::process::Command::new(binary);
     if !subcmd.is_empty() {
@@ -184,9 +183,7 @@ pub(crate) fn spawn_primal_server(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| {
-            crate::error::ShadowError::Build(format!("spawn {bin_name}: {e}"))
-        })
+        .map_err(|e| crate::error::ShadowError::Build(format!("spawn {bin_name}: {e}")))
 }
 
 /// Detect primals where source HEAD has advanced past depot provenance.
@@ -212,86 +209,6 @@ pub(crate) async fn detect_commit_drift() -> Vec<String> {
         }
     }
     drifted
-}
-
-/// Result of lineage validation for a primal binary.
-#[derive(Debug, Clone)]
-pub(crate) enum LineageResult {
-    /// Checksum, provenance, and builder all verified.
-    Verified,
-    /// `PostPrimordial` primal with broken lineage — must not be installed.
-    Blocked(String),
-    /// Non-critical primal with incomplete lineage — warn but allow.
-    Warned(String),
-}
-
-/// Validate depot lineage for a primal: BLAKE3 checksum, provenance commit,
-/// and builder authority. `PostPrimordial` primals are hard-blocked on failure;
-/// other primals get a warning.
-pub(crate) fn validate_lineage(primal: &str, depot_dir: &std::path::Path) -> LineageResult {
-    let is_critical = cellmembrane_types::service::is_post_primordial(primal);
-    let arch = detect_target_triple();
-    let bin_path = depot_dir.join("primals").join(arch).join(primal);
-
-    let checksum_ok = if bin_path.exists() {
-        verify_checksum_against_depot(primal, &bin_path, depot_dir, arch)
-    } else {
-        false
-    };
-
-    let provenance = depot::load_provenance(depot_dir);
-    let provenance_ok = provenance
-        .as_ref()
-        .and_then(|p| p.entries.get(primal))
-        .and_then(|e| e.commit.as_ref())
-        .is_some();
-
-    let builder_ok = provenance
-        .as_ref()
-        .is_some_and(|p| !p.builder.as_ref().is_some_and(String::is_empty));
-
-    if checksum_ok && provenance_ok && builder_ok {
-        return LineageResult::Verified;
-    }
-
-    let mut reasons = Vec::new();
-    if !checksum_ok {
-        reasons.push("BLAKE3 mismatch or missing");
-    }
-    if !provenance_ok {
-        reasons.push("no provenance commit");
-    }
-    if !builder_ok {
-        reasons.push("no builder identity");
-    }
-    let detail = format!("{primal}: lineage incomplete — {}", reasons.join(", "));
-
-    if is_critical {
-        LineageResult::Blocked(format!(
-            "{primal} is postPrimordial — depot lineage validation FAILED ({detail})"
-        ))
-    } else {
-        LineageResult::Warned(detail)
-    }
-}
-
-fn verify_checksum_against_depot(
-    primal: &str,
-    bin_path: &std::path::Path,
-    depot_dir: &std::path::Path,
-    arch: &str,
-) -> bool {
-    let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
-    let Ok(content) = std::fs::read_to_string(&checksums_path) else {
-        return false;
-    };
-
-    let map = checksum::parse_checksums_toml(&content, arch);
-    let Some(expected) = map.get(primal) else {
-        return false;
-    };
-
-    compute_blake3_file(bin_path).is_ok_and(|actual| actual == *expected)
 }
 
 /// Detect stale primals in the depot. Resolves depot path from env/defaults.
@@ -449,13 +366,10 @@ pub(crate) async fn notify_mesh(topic: &str, primals_key: &str, primals: &[Strin
         primals.len()
     );
 
-    let socket_path = std::path::PathBuf::from(cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SONGBIRD_SOCKET,
-        cellmembrane_types::service::DEFAULT_SONGBIRD_SOCKET,
-    ));
+    let socket_path = std::path::PathBuf::from(crate::gate::sockets::resolve_mesh_relay_socket());
 
     if !socket_path.exists() {
-        tracing::debug!("mesh.publish {topic} skipped — songBird socket not found");
+        tracing::debug!("mesh.publish {topic} skipped — mesh relay socket not found");
         return;
     }
 
@@ -488,240 +402,6 @@ pub(crate) async fn notify_mesh(topic: &str, primals_key: &str, primals: &[Strin
 /// Notify mesh that primals are queued for rebuild.
 pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
     notify_mesh("depot.build_pending", "primals_pending", drifted).await;
-}
-
-/// `plasmid.pipeline` — Full zero-touch harvest → refresh cycle.
-///
-/// Detects upstream changes, rebuilds, checksums, pushes to VPS,
-/// and reports aggregated outcome. This is the end-to-end command
-/// that replaces manual harvest+refresh cycles.
-pub async fn pipeline(
-    config: &crate::ShadowConfig,
-    primal: Option<&str>,
-    dry_run: bool,
-) -> crate::error::Result<crate::ShadowOutcome> {
-    let harvest_args = HarvestArgs {
-        primal: primal.map(Into::into),
-        force: false,
-        dry_run,
-        depot_dir: None,
-        target: None,
-        local: false,
-        push: false,
-    };
-
-    let harvest_outcome = harvest(&harvest_args).await?;
-
-    if dry_run {
-        return Ok(harvest_outcome);
-    }
-
-    let results: Vec<HarvestResult> = harvest_outcome
-        .data
-        .as_ref()
-        .and_then(|d| serde_json::from_value(d.clone()).ok())
-        .unwrap_or_default();
-
-    let built_any = results
-        .iter()
-        .any(|r| matches!(r.status, HarvestStatus::Built));
-
-    if !built_any {
-        return Ok(crate::ShadowOutcome {
-            ok: harvest_outcome.ok,
-            message: format!("{} — no new binaries to push", harvest_outcome.message),
-            data: harvest_outcome.data,
-        });
-    }
-
-    let arch = detect_target_triple();
-    let depot_dir = depot::resolve_depot(None)?;
-    let bin_dir = depot_dir.join("primals").join(arch);
-
-    for entry in results
-        .iter()
-        .filter(|r| matches!(r.status, HarvestStatus::Built))
-    {
-        let binary_path = bin_dir.join(&entry.binary);
-        if !binary_path.exists() {
-            continue;
-        }
-
-        let sandbox_args = sandbox::SandboxArgs {
-            primal: entry.binary.clone(),
-            commit: entry.detail.clone(),
-            binary_path,
-            timeout_secs: None,
-        };
-
-        if let Ok(result) = sandbox::validate(&sandbox_args).await {
-            if !result.health_ok {
-                return Ok(crate::ShadowOutcome {
-                    ok: false,
-                    message: format!(
-                        "{} | sandbox FAIL for {} — {} ({}ms). Refresh aborted.",
-                        harvest_outcome.message, entry.binary, result.detail, result.elapsed_ms
-                    ),
-                    data: Some(serde_json::to_value(&result).unwrap_or_default()),
-                });
-            }
-        }
-    }
-
-    let depot_source = Some(bin_dir.to_string_lossy().into_owned());
-
-    let refresh_args = RefreshArgs {
-        primal: primal.map(Into::into),
-        dry_run: false,
-        source_dir: depot_source,
-    };
-
-    let refresh_outcome = refresh(config, &refresh_args).await?;
-
-    Ok(crate::ShadowOutcome {
-        ok: refresh_outcome.ok,
-        message: format!(
-            "{} | sandbox: PASS | {}",
-            harvest_outcome.message, refresh_outcome.message
-        ),
-        data: refresh_outcome.data,
-    })
-}
-
-/// `plasmid.trigger` — Remotely trigger the VPS pipeline via SSH.
-///
-/// Kicks `systemctl start plasmid-pipeline.service` on the VPS, causing
-/// an immediate harvest→refresh cycle there. Useful when an operator wants
-/// the VPS to converge without running the full pipeline locally.
-pub async fn trigger(config: &crate::ShadowConfig) -> crate::error::Result<crate::ShadowOutcome> {
-    let cmd = "systemctl start plasmid-pipeline.service 2>&1; \
-               sleep 1; \
-               systemctl is-active plasmid-pipeline.service 2>&1 || \
-               journalctl -u plasmid-pipeline.service --no-pager -n 3 2>&1";
-
-    let (output, code) = crate::ssh::exec_raw(config, cmd).await?;
-
-    if code == 0 || output.contains("activating") || output.contains("active") {
-        Ok(crate::ShadowOutcome::ok(format!(
-            "trigger: plasmid-pipeline.service started on {}\n{output}",
-            config.ssh_host
-        )))
-    } else {
-        Ok(crate::ShadowOutcome {
-            ok: false,
-            message: format!(
-                "trigger: failed to start on {} (exit {code})\n{output}",
-                config.ssh_host
-            ),
-            data: None,
-        })
-    }
-}
-
-/// Maximum age (in days) before `plasmid.status` flags the depot as stale.
-const DEPOT_STALE_THRESHOLD_DAYS: u64 = 7;
-
-/// Parse an ISO-8601 `generated` timestamp into days since that date.
-///
-/// Returns `None` if the timestamp is unparseable or missing.
-fn parse_staleness_days(generated: &str) -> Option<u64> {
-    let date_part = generated.split('T').next()?;
-    let parts: Vec<&str> = date_part.split('-').collect();
-    if parts.len() < 3 {
-        return None;
-    }
-    let year: i64 = parts[0].parse().ok()?;
-    let month: i64 = parts[1].parse().ok()?;
-    let day: i64 = parts[2].parse().ok()?;
-
-    let now = crate::utc_now_iso8601();
-    let now_date = now.split('T').next()?;
-    let now_parts: Vec<&str> = now_date.split('-').collect();
-    if now_parts.len() < 3 {
-        return None;
-    }
-    let now_year: i64 = now_parts[0].parse().ok()?;
-    let now_month: i64 = now_parts[1].parse().ok()?;
-    let now_day: i64 = now_parts[2].parse().ok()?;
-
-    let gen_days = year * 365 + month * 30 + day;
-    let now_days = now_year * 365 + now_month * 30 + now_day;
-    let diff = now_days.saturating_sub(gen_days);
-    u64::try_from(diff).ok()
-}
-
-/// `plasmid.status` — Report depot freshness and upstream drift.
-///
-/// Reads provenance.toml for last build timestamp, then checks each
-/// primal's HEAD against the recorded commit to identify drift.
-/// Warns when the depot is older than `DEPOT_STALE_THRESHOLD_DAYS`.
-pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
-    let depot_dir = harvest::resolve_depot(None)?;
-    let sources = harvest::load_sources(&depot_dir)?;
-    let provenance = harvest::load_provenance(&depot_dir);
-
-    let generated = provenance
-        .as_ref()
-        .and_then(|p| p.generated.clone())
-        .unwrap_or_else(|| "unknown".into());
-
-    let target = provenance
-        .as_ref()
-        .and_then(|p| p.target.clone())
-        .unwrap_or_else(|| "unknown".into());
-
-    let registry_primals = nucleus_primals();
-    let total = registry_primals.len();
-
-    let mut drifted: Vec<String> = Vec::new();
-    let mut current = 0usize;
-
-    for &primal in &registry_primals {
-        if let Some(source) = sources.get(primal) {
-            let changed = drift::has_upstream_changes_lenient(
-                primal,
-                source,
-                provenance.as_ref(),
-                &depot_dir,
-            )
-            .await;
-            if changed {
-                drifted.push(primal.to_string());
-            } else {
-                current += 1;
-            }
-        }
-    }
-
-    let stale_days = parse_staleness_days(&generated);
-    let stale_warning = stale_days.is_some_and(|d| d > DEPOT_STALE_THRESHOLD_DAYS);
-
-    let age_suffix = match stale_days {
-        Some(d) if d > DEPOT_STALE_THRESHOLD_DAYS => format!(" | ⚠ STALE ({d} days old)"),
-        Some(d) => format!(" | age: {d}d"),
-        None => String::new(),
-    };
-
-    let msg = format!(
-        "depot: {current}/{total} current, {} drifted | built: {generated} | target: {target}{age_suffix}",
-        drifted.len()
-    );
-
-    let data = serde_json::json!({
-        "total": total,
-        "current": current,
-        "drifted": drifted,
-        "generated": generated,
-        "target": target,
-        "stale_days": stale_days,
-        "stale": stale_warning,
-    });
-
-    Ok(crate::ShadowOutcome {
-        ok: drifted.is_empty() && !stale_warning,
-        message: msg,
-        data: Some(data),
-    })
 }
 
 #[cfg(test)]

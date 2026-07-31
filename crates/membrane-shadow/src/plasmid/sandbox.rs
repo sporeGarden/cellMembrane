@@ -21,8 +21,7 @@ const SANDBOX_HEALTH_TIMEOUT_SECS: u64 =
     cellmembrane_types::service::DEFAULT_SANDBOX_HEALTH_TIMEOUT_SECS;
 
 /// How many probe attempts before declaring failure.
-const SANDBOX_PROBE_RETRIES: u32 =
-    cellmembrane_types::service::DEFAULT_SANDBOX_PROBE_RETRIES;
+const SANDBOX_PROBE_RETRIES: u32 = cellmembrane_types::service::DEFAULT_SANDBOX_PROBE_RETRIES;
 
 /// Delay between probe attempts (milliseconds).
 const SANDBOX_PROBE_INTERVAL_MS: u64 =
@@ -179,11 +178,7 @@ pub(crate) async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
 /// Kill the sandbox process and clean up socket/binary.
 pub(crate) async fn teardown(instance: &SandboxInstance) {
     if let Some(pid) = instance.pid {
-        super::graceful_kill(
-            pid,
-            cellmembrane_types::service::DEFAULT_RESTART_SETTLE_MS,
-        )
-        .await;
+        super::graceful_kill(pid, cellmembrane_types::service::DEFAULT_RESTART_SETTLE_MS).await;
     }
 
     let _ = tokio::fs::remove_file(&instance.socket_path).await;

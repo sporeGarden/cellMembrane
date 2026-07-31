@@ -80,8 +80,7 @@ pub async fn dispatch_tower_status() -> Result<ShadowOutcome> {
     for binary in &spec.primals {
         let socket = resolve_primal_socket(binary);
         let svc = MembraneService::for_binary(binary);
-        let needs_btsp =
-            svc.is_some_and(|s| s.has_capability(ServiceCapability::CryptoSigner));
+        let needs_btsp = svc.is_some_and(|s| s.has_capability(ServiceCapability::CryptoSigner));
         let ok = if needs_btsp {
             probe_socket_btsp(&socket).await
         } else {
@@ -99,9 +98,12 @@ pub async fn dispatch_tower_status() -> Result<ShadowOutcome> {
     }
 
     let mesh_info = match mesh_socket {
-        Some(ref path) if statuses.get(
-            MembraneService::binary_for(ServiceCapability::MeshRelay)
-        ).and_then(serde_json::Value::as_bool) == Some(true) => {
+        Some(ref path)
+            if statuses
+                .get(MembraneService::binary_for(ServiceCapability::MeshRelay))
+                .and_then(serde_json::Value::as_bool)
+                == Some(true) =>
+        {
             probe_mesh(path).await
         }
         _ => None,
@@ -356,10 +358,7 @@ fn resolve_primal_socket(binary: &str) -> PathBuf {
     paths
         .iter()
         .find(|p| std::path::Path::new(p).exists())
-        .map_or_else(
-            || PathBuf::from(&paths[0]),
-            PathBuf::from,
-        )
+        .map_or_else(|| PathBuf::from(&paths[0]), PathBuf::from)
 }
 
 async fn probe_socket(path: &Path) -> bool {
@@ -505,8 +504,7 @@ async fn write_unit_file(path: &str, content: &str) -> Result<()> {
 }
 
 fn is_user_scope() -> bool {
-    std::env::var(cellmembrane_types::service::ENV_INIT_SCOPE)
-        .is_ok_and(|s| s == "user")
+    std::env::var(cellmembrane_types::service::ENV_INIT_SCOPE).is_ok_and(|s| s == "user")
 }
 
 async fn systemctl(args: &[&str]) -> Result<()> {

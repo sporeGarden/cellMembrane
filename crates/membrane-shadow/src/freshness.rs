@@ -274,17 +274,9 @@ async fn pull_ff_only(wh_dir: &Path) {
     }
 }
 
-/// Resolve the local gate name from env or `.gate` file.
+/// Resolve the local gate name from env, `.gate` file, or identity.
 async fn resolve_gate_name(root: &Path) -> String {
-    match std::env::var(cellmembrane_types::service::ENV_GATE_NAME) {
-        Ok(g) => g,
-        Err(_) => tokio::fs::read_to_string(root.join(".gate"))
-            .await
-            .map_or_else(
-                |_| crate::gate::resolve_local_gate_identity(),
-                |s| s.trim().to_string(),
-            ),
-    }
+    crate::gate::resolve_gate_name_async(None, Some(root)).await
 }
 
 /// Parse the wave ID from a freshness.toml file. Returns 0 if unreadable.

@@ -11,8 +11,7 @@ use super::BootstrapPhase;
 
 /// Whether the current session is user-scope systemd.
 fn is_user_scope() -> bool {
-    std::env::var(cellmembrane_types::service::ENV_INIT_SCOPE)
-        .is_ok_and(|s| s == "user")
+    std::env::var(cellmembrane_types::service::ENV_INIT_SCOPE).is_ok_and(|s| s == "user")
 }
 
 /// Run a `systemctl` subcommand. Returns `true` if it exits 0.
@@ -31,9 +30,7 @@ pub(crate) fn systemctl(args: &[&str]) -> bool {
     if is_user_scope() {
         cmd.arg("--user");
     }
-    cmd.args(args)
-        .output()
-        .is_ok_and(|o| o.status.success())
+    cmd.args(args).output().is_ok_and(|o| o.status.success())
 }
 
 /// Async variant for use in tokio contexts (e.g. cascade-restart).

@@ -164,9 +164,9 @@ pub(super) fn try_sign_impulse(
 ///
 /// Resolution chain (production → development):
 ///   1. `MEMBRANE_SOCKET_{NAME}` env var (e.g. `MEMBRANE_SOCKET_SONGBIRD`)
-///   2. `$MEMBRANE_SOCKET_BASE/{socket_name}` (VPS standard, default `/run/membrane/`)
-///   3. `$XDG_RUNTIME_DIR/membrane/{socket_name}` (user session)
-///   4. `/tmp/membrane/{socket_name}` (last-resort dev fallback)
+///   2. Resolved socket base (`resolve_socket_base()`) — adapts to init scope
+///   3. `$XDG_RUNTIME_DIR/biomeos/{socket_name}` (user session, matches systemd template)
+///   4. `/tmp/biomeos/{socket_name}` (last-resort dev fallback)
 #[must_use]
 pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     let env_key = format!(
@@ -183,28 +183,22 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
         }
     }
 
-    let socket_base = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_SOCKET_BASE,
-        cellmembrane_types::service::DEFAULT_SOCKET_BASE,
-    );
-    let vps_path = PathBuf::from(&socket_base).join(socket_name);
-    if vps_path.exists() {
-        return Some(vps_path);
+    let socket_base = cellmembrane_types::service::resolve_socket_base();
+    let base_path = PathBuf::from(&socket_base).join(socket_name);
+    if base_path.exists() {
+        return Some(base_path);
     }
 
-    let socket_dir_name = Path::new(cellmembrane_types::service::DEFAULT_SOCKET_BASE)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or(cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY);
+    let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
     let xdg = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR).unwrap_or_default();
     if !xdg.is_empty() {
-        let p = PathBuf::from(&xdg).join(socket_dir_name).join(socket_name);
+        let p = PathBuf::from(&xdg).join(ns).join(socket_name);
         if p.exists() {
             return Some(p);
         }
     }
 
-    let fallback = std::env::temp_dir().join(socket_dir_name).join(socket_name);
+    let fallback = std::env::temp_dir().join(ns).join(socket_name);
     if fallback.exists() {
         return Some(fallback);
     }

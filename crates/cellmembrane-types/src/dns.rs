@@ -105,11 +105,7 @@ impl DnsZone {
                     rec.name, rec.ttl, rec.rtype, rec.rdata
                 );
             } else {
-                let _ = writeln!(
-                    out,
-                    "{:<16} IN  {:<6} {}",
-                    rec.name, rec.rtype, rec.rdata
-                );
+                let _ = writeln!(out, "{:<16} IN  {:<6} {}", rec.name, rec.rtype, rec.rdata);
             }
         }
 
@@ -138,7 +134,7 @@ impl KnotConfig {
     /// (those are gate-specific and managed separately).
     #[must_use]
     pub fn to_knot_conf(&self) -> String {
-        use crate::service::{DEFAULT_KNOT_ZONE_DIR};
+        use crate::service::DEFAULT_KNOT_ZONE_DIR;
 
         let mut out = String::with_capacity(1024);
 
@@ -197,7 +193,11 @@ impl KnotConfig {
 impl fmt::Display for DnsRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.ttl > 0 {
-            write!(f, "{} {} IN {} {}", self.name, self.ttl, self.rtype, self.rdata)
+            write!(
+                f,
+                "{} {} IN {} {}",
+                self.name, self.ttl, self.rtype, self.rdata
+            )
         } else {
             write!(f, "{} IN {} {}", self.name, self.rtype, self.rdata)
         }

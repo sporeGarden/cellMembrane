@@ -187,7 +187,7 @@ fn compute_blake3_file_on_empty() {
 
 #[test]
 fn update_checksums_preserves_other_targets() {
-    use crate::plasmid::{HarvestResult, HarvestStatus};
+    use crate::plasmid::harvest::{HarvestResult, HarvestStatus};
 
     let tmp = std::env::temp_dir().join("checksums_multi_target_test");
     let _ = std::fs::remove_dir_all(&tmp);

@@ -165,7 +165,10 @@ fn generate_unit_content_songbird_depends_on_beardog() {
     assert!(
         content.contains(beardog_svc.systemd_unit),
         "songbird unit should have After= dependency on beardog: {}",
-        content.lines().find(|l| l.starts_with("After=")).unwrap_or("no After= line")
+        content
+            .lines()
+            .find(|l| l.starts_with("After="))
+            .unwrap_or("no After= line")
     );
 }
 

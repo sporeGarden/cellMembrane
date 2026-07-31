@@ -105,9 +105,7 @@ pub async fn dns_create(
         .await
         .map_err(|e| cf_request_err("dns_create", e))?;
 
-    let body: CfResponse<DnsRecord> = resp
-        .json()
-        .map_err(|e| cf_parse_err("dns_create", e))?;
+    let body: CfResponse<DnsRecord> = resp.json().map_err(|e| cf_parse_err("dns_create", e))?;
 
     body.into_result()
 }
@@ -140,9 +138,7 @@ pub async fn dns_update(
         .await
         .map_err(|e| cf_request_err("dns_update", e))?;
 
-    let body: CfResponse<DnsRecord> = resp
-        .json()
-        .map_err(|e| cf_parse_err("dns_update", e))?;
+    let body: CfResponse<DnsRecord> = resp.json().map_err(|e| cf_parse_err("dns_update", e))?;
 
     body.into_result()
 }
@@ -162,9 +158,8 @@ pub async fn dns_delete(cf: &CloudflareConfig, zone: &str, record_id: &str) -> R
         .await
         .map_err(|e| cf_request_err("dns_delete", e))?;
 
-    let body: CfResponse<serde_json::Value> = resp
-        .json()
-        .map_err(|e| cf_parse_err("dns_delete", e))?;
+    let body: CfResponse<serde_json::Value> =
+        resp.json().map_err(|e| cf_parse_err("dns_delete", e))?;
 
     body.into_result().map(|_: serde_json::Value| ())
 }
