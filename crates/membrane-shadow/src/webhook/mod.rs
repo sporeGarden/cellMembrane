@@ -176,21 +176,7 @@ pub fn verify_provider_signature(
 /// Both Forgejo and GitHub use HMAC-SHA256 — only the header format differs.
 /// Returns `Ok(())` if valid, `Err` if signature mismatch.
 pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Result<()> {
-    use hmac::{Hmac, KeyInit, Mac};
-    use sha2::Sha256;
-    use std::fmt::Write;
-
-    type HmacSha256 = Hmac<Sha256>;
-
-    let mut mac =
-        HmacSha256::new_from_slice(secret).map_err(|e| ShadowError::Config(e.to_string()))?;
-    mac.update(body);
-    let result = mac.finalize().into_bytes();
-
-    let mut expected = String::with_capacity(64);
-    for byte in result.as_slice() {
-        write!(expected, "{byte:02x}").ok();
-    }
+    let expected = crate::crypto::hmac_sha256_hex(secret, body);
 
     if constant_time_eq(expected.as_bytes(), signature_hex.as_bytes()) {
         Ok(())

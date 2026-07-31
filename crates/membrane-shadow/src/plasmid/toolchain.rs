@@ -15,8 +15,8 @@ use crate::error::ShadowError;
 /// Android NDK target triple for native grapheneGate binaries.
 pub const ANDROID_TARGET: &str = "aarch64-linux-android";
 
-/// Environment variable pointing to the Android NDK root.
-pub const ENV_ANDROID_NDK_HOME: &str = "ANDROID_NDK_HOME";
+/// Re-export from `cellmembrane-types` for local ergonomics.
+pub const ENV_ANDROID_NDK_HOME: &str = cellmembrane_types::service::ENV_ANDROID_NDK_HOME;
 
 /// ELF magic bytes.
 const ELF_MAGIC: [u8; 4] = [0x7f, b'E', b'L', b'F'];

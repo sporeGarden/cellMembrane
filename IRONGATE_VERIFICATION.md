@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 155n (MEMBRANE_* env var standardization: GATE_NAME→MEMBRANE_GATE_NAME, WEBHOOK_SECRET→MEMBRANE_WEBHOOK_SECRET, FAMILY_SEED→MEMBRANE_FAMILY_SEED with legacy fallbacks; registry-enforced systemd unit names in gateway + systemd_units; 1269 tests, 0 clippy, 2026-07-31)
+**Last validated:** Wave 155o (smart file splits: bootstrap 738→291L, post_sync 718→3-file submodule; crypto.rs dedup HKDF/HMAC from 3 modules; registry fail-closed spawn; constants sweep ENV_UID/EUID/ANDROID_NDK_HOME; 1273 tests, 0 clippy, 2026-07-31)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming
 
 ---

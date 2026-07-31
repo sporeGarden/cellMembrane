@@ -206,43 +206,16 @@ fn derive_btsp_key() -> Option<[u8; 32]> {
     } else {
         seed_source.into_bytes()
     };
-    Some(hkdf_sha256(&seed_bytes, HKDF_SALT, HKDF_INFO_BTSP))
+    Some(crate::crypto::hkdf_sha256(
+        &seed_bytes,
+        HKDF_SALT,
+        HKDF_INFO_BTSP,
+    ))
 }
 
 /// Compute `HMAC-SHA256(btsp_key, challenge)` and return hex-encoded result.
 fn compute_challenge_hmac(btsp_key: &[u8; 32], challenge: &str) -> String {
-    use hmac::{Hmac, KeyInit, Mac};
-    use sha2::Sha256;
-
-    type HmacSha256 = Hmac<Sha256>;
-
-    let mut mac = HmacSha256::new_from_slice(btsp_key).expect("HMAC-SHA256 accepts any key length");
-    mac.update(challenge.as_bytes());
-    let result = mac.finalize().into_bytes();
-    hex::encode(result)
-}
-
-/// HKDF-SHA256 key derivation (extract-then-expand, single output block).
-fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
-    use hmac::{Hmac, KeyInit, Mac};
-    use sha2::Sha256;
-
-    type HmacSha256 = Hmac<Sha256>;
-
-    let mut extract_mac =
-        HmacSha256::new_from_slice(salt).expect("HMAC-SHA256 accepts any key length");
-    extract_mac.update(ikm);
-    let prk = extract_mac.finalize().into_bytes();
-
-    let mut expand_mac =
-        HmacSha256::new_from_slice(&prk).expect("HMAC-SHA256 accepts any key length");
-    expand_mac.update(info);
-    expand_mac.update(&[0x01]);
-    let okm = expand_mac.finalize().into_bytes();
-
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&okm);
-    key
+    crate::crypto::hmac_sha256_hex(btsp_key, challenge.as_bytes())
 }
 
 /// BTSP signal prefix: `[0xEC, 0x03]` (Clear tier, BTSP JSON-line protocol).
@@ -260,6 +233,7 @@ pub fn is_available() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::hkdf_sha256;
 
     #[test]
     fn ephemeral_pub_is_64_hex_chars() {

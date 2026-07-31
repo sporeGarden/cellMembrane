@@ -271,6 +271,18 @@ pub const ENV_NM_DISPATCHER_DIR: &str = "NM_DISPATCHER_DIR";
 /// Default `NetworkManager` dispatcher directory.
 pub const DEFAULT_NM_DISPATCHER_DIR: &str = "/etc/NetworkManager/dispatcher.d";
 
+// ── System identity ─────────────────────────────────────────────────
+
+/// Environment variable for the real user ID (system-provided).
+pub const ENV_UID: &str = "UID";
+/// Environment variable for the effective user ID (system-provided).
+pub const ENV_EUID: &str = "EUID";
+
+// ── Cross-compilation ───────────────────────────────────────────────
+
+/// Environment variable for the Android NDK home directory.
+pub const ENV_ANDROID_NDK_HOME: &str = "ANDROID_NDK_HOME";
+
 /// Default VPS host (golgiBody sovereign surface).
 ///
 /// Last-resort fallback only. Production code should resolve via
@@ -377,6 +389,8 @@ pub const DEFAULT_DEPOT_HOSTNAME: &str = "depot.primals.eco";
 pub const ENV_SOVEREIGN_REMOTE: &str = "MEMBRANE_SOVEREIGN_REMOTE";
 /// Default sovereign remote name.
 pub const DEFAULT_SOVEREIGN_REMOTE: &str = "forgejo";
+/// Default GitHub mirror remote name for relay operations.
+pub const DEFAULT_RELAY_GITHUB_REMOTE: &str = "origin";
 
 /// When set to `1`/`true`/`yes`, cascade auto-triggers harvest+sandbox+refresh
 /// when depot staleness is detected (production gates only).
@@ -718,8 +732,8 @@ pub fn resolve_socket_base() -> String {
 
 /// Best-effort UID resolution for socket path construction.
 fn resolve_uid_best_effort() -> String {
-    std::env::var("UID")
-        .or_else(|_| std::env::var("EUID"))
+    std::env::var(ENV_UID)
+        .or_else(|_| std::env::var(ENV_EUID))
         .unwrap_or_else(|_| "1000".into())
 }
 

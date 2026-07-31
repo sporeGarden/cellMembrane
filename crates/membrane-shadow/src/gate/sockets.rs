@@ -53,8 +53,8 @@ pub(crate) fn resolve_biomeos_socket_dir() -> String {
 
 /// Resolve the current user's UID from environment or `/proc`.
 pub(crate) fn resolve_uid() -> String {
-    std::env::var("UID")
-        .or_else(|_| std::env::var("EUID"))
+    std::env::var(cellmembrane_types::service::ENV_UID)
+        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_EUID))
         .unwrap_or_else(|_| {
             std::fs::read_to_string("/proc/self/loginuid")
                 .unwrap_or_else(|_| DEFAULT_FALLBACK_UID.into())

@@ -153,29 +153,17 @@ pub(super) fn compute_enrollment_proof(
     generation: u32,
 ) -> String {
     use base64::Engine;
-    use hmac::{Hmac, KeyInit, Mac};
-    use sha2::Sha256;
-
-    type HmacSha256 = Hmac<Sha256>;
 
     let family_id = std::env::var(cellmembrane_types::service::ENV_FAMILY_ID)
         .or_else(|_| std::env::var(cellmembrane_types::service::ENV_FAMILY_ID_LEGACY))
         .unwrap_or_else(|_| "default".into());
 
     let info = format!("enrollment-v{generation}");
-    let mut extract_mac = HmacSha256::new_from_slice(family_id.as_bytes()).expect("HMAC key init");
-    extract_mac.update(family_seed);
-    let prk = extract_mac.finalize().into_bytes();
-
-    let mut expand_mac = HmacSha256::new_from_slice(&prk).expect("HMAC key init");
-    expand_mac.update(info.as_bytes());
-    expand_mac.update(&[1u8]);
-    let enrollment_key: [u8; 32] = expand_mac.finalize().into_bytes().into();
+    let enrollment_key =
+        crate::crypto::hkdf_sha256(family_seed, family_id.as_bytes(), info.as_bytes());
 
     let message = format!("{node_id}|{public_key}|{timestamp}|{generation}");
-    let mut proof_mac = HmacSha256::new_from_slice(&enrollment_key).expect("HMAC key init");
-    proof_mac.update(message.as_bytes());
-    let proof_bytes = proof_mac.finalize().into_bytes();
+    let proof_bytes = crate::crypto::hmac_sha256(&enrollment_key, message.as_bytes());
 
     base64::engine::general_purpose::STANDARD.encode(proof_bytes)
 }

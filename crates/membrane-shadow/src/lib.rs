@@ -62,6 +62,7 @@ pub(crate) mod cli;
 pub(crate) mod cloudflare;
 pub mod config;
 pub(crate) mod context;
+pub(crate) mod crypto;
 pub mod dispatch;
 pub(crate) mod dns;
 pub mod error;

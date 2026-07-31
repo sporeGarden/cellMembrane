@@ -306,35 +306,11 @@ fn derive_mito_key_from_env() -> Option<[u8; 32]> {
     } else {
         seed_source.into_bytes()
     };
-    Some(hkdf_sha256(&seed_bytes, HKDF_SALT, HKDF_INFO_MITO))
-}
-
-/// HKDF-SHA256 key derivation (extract-then-expand, single output block).
-///
-/// Produces a 32-byte derived key. Uses HMAC-SHA256 internally per RFC 5869.
-/// HMAC-SHA256 accepts keys of any length, so construction is infallible.
-#[allow(dead_code, reason = "Tier 2 key derivation")]
-fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
-    use hmac::{Hmac, KeyInit, Mac};
-    use sha2::Sha256;
-
-    type HmacSha256 = Hmac<Sha256>;
-
-    // Extract: PRK = HMAC-SHA256(salt, IKM)
-    let mut extract_mac =
-        HmacSha256::new_from_slice(salt).expect("HMAC-SHA256 accepts any key length");
-    extract_mac.update(ikm);
-    let prk = extract_mac.finalize().into_bytes();
-
-    let mut expand_mac =
-        HmacSha256::new_from_slice(&prk).expect("HMAC-SHA256 accepts any key length");
-    expand_mac.update(info);
-    expand_mac.update(&[0x01]);
-    let okm = expand_mac.finalize().into_bytes();
-
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&okm);
-    key
+    Some(crate::crypto::hkdf_sha256(
+        &seed_bytes,
+        HKDF_SALT,
+        HKDF_INFO_MITO,
+    ))
 }
 
 /// Compute the 4-byte HMAC tag for a mito-tier signal.
@@ -342,23 +318,16 @@ fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
 /// `tag = HMAC-SHA256(mito_key, [protocol_type])[0..4]`
 #[allow(dead_code, reason = "Tier 2 mito tag computation")]
 fn mito_hmac_tag(mito_key: &[u8; 32], protocol_type: u8) -> [u8; 4] {
-    use hmac::{Hmac, KeyInit, Mac};
-    use sha2::Sha256;
-
-    type HmacSha256 = Hmac<Sha256>;
-
-    let mut mac = HmacSha256::new_from_slice(mito_key).expect("HMAC-SHA256 accepts any key length");
-    mac.update(&[protocol_type]);
-    let result = mac.finalize().into_bytes();
-
+    let digest = crate::crypto::hmac_sha256(mito_key, &[protocol_type]);
     let mut tag = [0u8; 4];
-    tag.copy_from_slice(&result[..4]);
+    tag.copy_from_slice(&digest[..4]);
     tag
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::hkdf_sha256;
 
     #[test]
     fn clear_signal_is_two_bytes() {

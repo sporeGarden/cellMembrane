@@ -157,17 +157,21 @@ pub(crate) fn spawn_primal_server(
     socket: &std::path::Path,
     extra_args: &[(&str, &std::path::Path)],
 ) -> crate::Result<tokio::process::Child> {
-    let bin_name = binary.file_name().map_or("", |n| n.to_str().unwrap_or(""));
+    let bin_name = binary.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-    let (subcmd, socket_flag) = cellmembrane_types::MembraneService::for_binary(bin_name).map_or(
-        ("server", "--socket"),
-        |svc| match svc.server_contract {
-            cellmembrane_types::service::ServerContract::BiomeosApi => ("neural-api", "--socket"),
-            cellmembrane_types::service::ServerContract::ServerNoSocket => ("server", ""),
-            cellmembrane_types::service::ServerContract::External => ("", ""),
-            _ => ("server", "--socket"),
-        },
-    );
+    let svc = cellmembrane_types::MembraneService::for_binary(bin_name);
+    if svc.is_none() {
+        tracing::warn!(
+            binary = bin_name,
+            "binary not in service registry — defaulting to `server --socket`"
+        );
+    }
+    let (subcmd, socket_flag) = match svc.map(|s| s.server_contract) {
+        Some(cellmembrane_types::service::ServerContract::BiomeosApi) => ("neural-api", "--socket"),
+        Some(cellmembrane_types::service::ServerContract::ServerNoSocket) => ("server", ""),
+        Some(cellmembrane_types::service::ServerContract::External) => ("", ""),
+        _ => ("server", "--socket"),
+    };
 
     let mut cmd = tokio::process::Command::new(binary);
     if !subcmd.is_empty() {

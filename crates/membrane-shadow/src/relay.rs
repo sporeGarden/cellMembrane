@@ -99,7 +99,10 @@ impl RelayConfig {
                         .as_ref()
                         .and_then(|c| c.github_remote.clone())
                 })
-                .map_or(Cow::Borrowed("origin"), Cow::Owned);
+                .map_or(
+                    Cow::Borrowed(cellmembrane_types::service::DEFAULT_RELAY_GITHUB_REMOTE),
+                    Cow::Owned,
+                );
 
         let golgi_ext_host: Cow<'static, str> =
             std::env::var(cellmembrane_types::service::ENV_GOLGI_EXT_HOST)

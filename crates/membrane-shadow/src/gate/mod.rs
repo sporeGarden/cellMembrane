@@ -11,6 +11,7 @@
 //!   - `gate.provision` → cloud droplet provisioning (fieldMouse canary)
 
 pub mod bootstrap;
+mod bootstrap_phases;
 pub(crate) mod crash_loop;
 pub(crate) mod enroll;
 mod enroll_crypto;

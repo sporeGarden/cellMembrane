@@ -14,6 +14,8 @@
 pub(super) mod cascade;
 mod nucleus_restart;
 pub(crate) mod post_sync;
+mod post_sync_content;
+mod post_sync_harvest;
 mod resolve;
 mod sync_engine;
 pub mod types;

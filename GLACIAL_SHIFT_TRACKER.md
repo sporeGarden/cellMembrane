@@ -1,13 +1,28 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155n)
+**Last updated:** 2026-07-31 (Wave 155o)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155o (smart file splits + crypto dedup + constants sweep):**
+Smart refactoring of the two remaining >700L files: extracted
+`gate/bootstrap_phases.rs` from `bootstrap.rs` (738→291L orchestrator + 348L
+phases), split `temporal/post_sync.rs` (718L) into three-file submodule
+(`post_sync.rs` orchestrator + `post_sync_harvest.rs` + `post_sync_content.rs`).
+Created shared `crypto.rs` module consolidating identical HKDF-SHA256 and
+HMAC-SHA256 implementations from `btsp_client.rs`, `ribocipher.rs`, and
+`enroll_crypto.rs` (~60L dedup, 4 new tests). Webhook signature verification
+(`webhook/mod.rs`) also consolidated to use `crypto::hmac_sha256_hex`.
+Registry fail-closed: `spawn_primal_server` now logs a warning on unregistered
+binaries instead of silently defaulting. Constants sweep: added `ENV_UID`,
+`ENV_EUID`, `DEFAULT_RELAY_GITHUB_REMOTE`, `ENV_ANDROID_NDK_HOME` to types
+crate; all raw string env reads eliminated from production code.
+1,273 tests (+4 new), 0 clippy, 0 fmt drift.
 
 **Wave 155m (smart refactoring + registry-enforced self-knowledge):**
 Smart refactoring: extracted `gate/sockets.rs` from `health.rs` (shared socket
