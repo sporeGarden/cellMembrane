@@ -362,6 +362,7 @@ impl FromStr for Platform {
 /// - Depot directory path (`primals/{triple}/`)
 /// - ELF validation policy (static musl vs dynamic gnu)
 /// - Build toolchain selection
+#[deprecated(since = "0.1.0", note = "use `Platform` + `Platform::gpu()` instead")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetArch {
@@ -373,6 +374,7 @@ pub enum TargetArch {
     Aarch64Musl,
 }
 
+#[allow(deprecated)]
 impl TargetArch {
     /// Rust target triple string.
     #[must_use]
@@ -432,12 +434,14 @@ impl TargetArch {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for TargetArch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.triple())
     }
 }
 
+#[allow(deprecated)]
 impl From<TargetArch> for Platform {
     fn from(arch: TargetArch) -> Self {
         arch.to_platform()
@@ -449,6 +453,7 @@ impl From<TargetArch> for Platform {
 #[error("unknown target arch: {0}")]
 pub struct ArchParseError(pub String);
 
+#[allow(deprecated)]
 impl FromStr for TargetArch {
     type Err = ArchParseError;
 
@@ -478,6 +483,7 @@ pub fn is_gpu_primal(name: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

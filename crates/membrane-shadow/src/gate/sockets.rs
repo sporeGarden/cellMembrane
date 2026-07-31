@@ -10,8 +10,6 @@
 
 use std::path::Path;
 
-const DEFAULT_FALLBACK_UID: &str = "1000";
-
 /// Native UDS JSON-RPC call with riboCipher policy probe.
 pub(crate) async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> crate::Result<String> {
     let policy = crate::ribocipher::RiboCipherConfig::probe_policy();
@@ -45,22 +43,10 @@ pub(crate) fn resolve_mesh_relay_socket() -> String {
 /// Resolve the biomeOS neural-api socket directory.
 pub(crate) fn resolve_biomeos_socket_dir() -> String {
     std::env::var(cellmembrane_types::service::ENV_BIOMEOS_SOCKET_DIR).unwrap_or_else(|_| {
-        let uid = resolve_uid();
+        let xdg = cellmembrane_types::service::resolve_xdg_runtime_dir();
         let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
-        format!("/run/user/{uid}/{ns}")
+        format!("{xdg}/{ns}")
     })
-}
-
-/// Resolve the current user's UID from environment or `/proc`.
-pub(crate) fn resolve_uid() -> String {
-    std::env::var(cellmembrane_types::service::ENV_UID)
-        .or_else(|_| std::env::var(cellmembrane_types::service::ENV_EUID))
-        .unwrap_or_else(|_| {
-            std::fs::read_to_string("/proc/self/loginuid")
-                .unwrap_or_else(|_| DEFAULT_FALLBACK_UID.into())
-                .trim()
-                .to_string()
-        })
 }
 
 /// Build the candidate socket paths for a primal, ordered by priority.
@@ -71,8 +57,7 @@ pub(crate) fn resolve_uid() -> String {
 /// and `socket_aliases`.
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     let socket_base = cellmembrane_types::service::resolve_socket_base();
-    let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
-        .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid()));
+    let xdg_runtime = cellmembrane_types::service::resolve_xdg_runtime_dir();
     let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
     let mut paths = vec![
         format!("{socket_base}/{primal}.sock"),
@@ -103,9 +88,12 @@ mod tests {
     }
 
     #[test]
-    fn resolve_uid_returns_non_empty() {
-        let uid = resolve_uid();
-        assert!(!uid.is_empty());
-        assert!(uid.parse::<u32>().is_ok(), "UID should be numeric");
+    fn xdg_runtime_dir_returns_non_empty() {
+        let dir = cellmembrane_types::service::resolve_xdg_runtime_dir();
+        assert!(!dir.is_empty());
+        assert!(
+            dir.starts_with('/'),
+            "XDG runtime dir should be absolute: {dir}"
+        );
     }
 }

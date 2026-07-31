@@ -182,12 +182,12 @@ pub async fn status() -> crate::error::Result<crate::ShadowOutcome> {
     let generated = provenance
         .as_ref()
         .and_then(|p| p.generated.clone())
-        .unwrap_or_else(|| "unknown".into());
+        .unwrap_or_else(|| cellmembrane_types::service::UNKNOWN_LABEL.into());
 
     let target = provenance
         .as_ref()
         .and_then(|p| p.target.clone())
-        .unwrap_or_else(|| "unknown".into());
+        .unwrap_or_else(|| cellmembrane_types::service::UNKNOWN_LABEL.into());
 
     let registry_primals = super::nucleus_primals();
     let total = registry_primals.len();

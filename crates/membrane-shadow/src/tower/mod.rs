@@ -348,7 +348,7 @@ fn resolve_wave() -> String {
                 .ok()
                 .map(|m| m.meta.wave.to_string())
         })
-        .unwrap_or_else(|| "unknown".into())
+        .unwrap_or_else(|| cellmembrane_types::service::UNKNOWN_LABEL.into())
 }
 
 #[cfg(test)]

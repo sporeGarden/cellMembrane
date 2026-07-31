@@ -27,7 +27,7 @@ pub async fn verify_remote_gate(
     if expected_healthy > 0 {
         phases.push(format!(
             "profile: expects {expected_healthy} healthy ({})",
-            profile.unwrap_or("unknown")
+            profile.unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL)
         ));
     }
 

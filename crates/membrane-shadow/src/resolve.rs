@@ -36,8 +36,7 @@ impl ResolutionContext {
     pub fn from_env() -> Self {
         let local_gate = crate::gate::resolve_local_gate_identity();
         let socket_base = cellmembrane_types::service::resolve_socket_base();
-        let xdg_runtime = std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR)
-            .unwrap_or_else(|_| format!("/run/user/{}", crate::gate::sockets::resolve_uid()));
+        let xdg_runtime = cellmembrane_types::service::resolve_xdg_runtime_dir();
         Self {
             local_gate,
             socket_base,

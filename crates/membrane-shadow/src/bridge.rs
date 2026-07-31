@@ -125,7 +125,7 @@ impl NeuralBridge {
             let msg = error
                 .get("message")
                 .and_then(|m| m.as_str())
-                .unwrap_or("unknown");
+                .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
             return Err(ShadowError::Rpc(msg.to_owned()));
         }
 

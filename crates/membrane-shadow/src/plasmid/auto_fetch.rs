@@ -55,7 +55,7 @@ impl DepotUpdatedNotification {
         let builder = payload
             .get("builder")
             .and_then(serde_json::Value::as_str)
-            .unwrap_or("unknown")
+            .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL)
             .to_string();
 
         Self {

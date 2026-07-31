@@ -204,7 +204,11 @@ pub(super) async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<Sh
     let gate = cli::extract_flag_value(args, "--gate");
 
     let (target_ip, gate_name) = match (ip, gate) {
-        (Some(ip), name) => (ip.to_string(), name.unwrap_or("unknown").to_string()),
+        (Some(ip), name) => (
+            ip.to_string(),
+            name.unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL)
+                .to_string(),
+        ),
         (None, Some(name)) => {
             let registry = canary::load_remote_canaries().await;
             let entry = registry

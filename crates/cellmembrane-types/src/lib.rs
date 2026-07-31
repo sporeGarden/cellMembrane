@@ -56,6 +56,7 @@ pub mod transport;
 pub mod validation;
 pub mod wireguard;
 
+#[allow(deprecated)]
 pub use arch::{CpuArch, LinkModel, Platform, TargetArch, TargetOs};
 pub use channels::{ChannelConfig, CryptoLayer, MembraneChannel, TlsProvider, TrustLevel};
 pub use composition::{CompositionSpec, MembraneComposition};

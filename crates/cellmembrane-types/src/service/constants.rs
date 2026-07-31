@@ -10,6 +10,9 @@ pub const BIND_ALL: &str = "0.0.0.0";
 /// Bind to loopback only (not externally reachable).
 pub const BIND_LOOPBACK: &str = "127.0.0.1";
 
+/// Display fallback for missing diagnostic data (gate names, commit SHAs, etc.).
+pub const UNKNOWN_LABEL: &str = "unknown";
+
 /// Default base path for primal binary installations.
 /// Override with `MEMBRANE_INSTALL_BASE` env var or membrane.toml config.
 pub const DEFAULT_INSTALL_BASE: &str = "/opt/membrane";
@@ -726,8 +729,7 @@ pub fn resolve_socket_base() -> String {
     if let Ok(scope) = std::env::var(ENV_INIT_SCOPE)
         && (scope == "user" || scope == "bare")
     {
-        let xdg = std::env::var(ENV_XDG_RUNTIME_DIR)
-            .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid_best_effort()));
+        let xdg = resolve_xdg_runtime_dir();
         return format!("{xdg}/{NEURAL_API_NAMESPACE}");
     }
     DEFAULT_SOCKET_BASE.into()
@@ -738,6 +740,17 @@ fn resolve_uid_best_effort() -> String {
     std::env::var(ENV_UID)
         .or_else(|_| std::env::var(ENV_EUID))
         .unwrap_or_else(|_| "1000".into())
+}
+
+/// Resolve `XDG_RUNTIME_DIR`, falling back to `/run/user/{uid}`.
+///
+/// Checks `XDG_RUNTIME_DIR` env first, then constructs the standard
+/// path from the best-effort UID. This is the single source of truth
+/// for XDG runtime directory resolution across all crates.
+#[must_use]
+pub fn resolve_xdg_runtime_dir() -> String {
+    std::env::var(ENV_XDG_RUNTIME_DIR)
+        .unwrap_or_else(|_| format!("/run/user/{}", resolve_uid_best_effort()))
 }
 
 /// Resolve the gate name from environment variables.

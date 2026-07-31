@@ -164,13 +164,14 @@ async fn topology_resolve(gate_name: &str) -> crate::Result<ShadowOutcome> {
     let transport = profile.and_then(|p| p.transport).unwrap_or_default();
     let composition = profile
         .and_then(|p| p.composition.as_deref())
-        .unwrap_or("unknown");
+        .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
     let target = profile
         .and_then(|p| p.target.as_deref())
-        .unwrap_or("unknown");
-    let mobility = profile
-        .and_then(|p| p.mobility)
-        .map_or_else(|| "unknown".to_string(), |m| m.to_string());
+        .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
+    let mobility = profile.and_then(|p| p.mobility).map_or_else(
+        || cellmembrane_types::service::UNKNOWN_LABEL.to_string(),
+        |m| m.to_string(),
+    );
     let mesh_ip = profile
         .and_then(|p| p.wg_ip.as_deref())
         .or_else(|| mesh_address(gate_name))

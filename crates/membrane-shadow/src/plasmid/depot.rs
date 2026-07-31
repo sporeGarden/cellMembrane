@@ -175,7 +175,7 @@ async fn rustc_version() -> String {
                 None
             }
         })
-        .unwrap_or_else(|| "unknown".into())
+        .unwrap_or_else(|| cellmembrane_types::service::UNKNOWN_LABEL.into())
 }
 
 pub(crate) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {

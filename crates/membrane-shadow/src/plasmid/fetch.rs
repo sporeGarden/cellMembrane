@@ -239,7 +239,7 @@ async fn fetch_gpu_primals(
     args: &FetchArgs,
     config: &crate::ShadowConfig,
 ) -> Vec<FetchResult> {
-    let gnu_arch = cellmembrane_types::TargetArch::X86_64Gnu.triple();
+    let gnu_arch = cellmembrane_types::Platform::gpu().triple();
     let gnu_bin_dir = dest_root.join("primals").join(gnu_arch);
     if let Err(e) = tokio::fs::create_dir_all(&gnu_bin_dir).await {
         tracing::warn!(

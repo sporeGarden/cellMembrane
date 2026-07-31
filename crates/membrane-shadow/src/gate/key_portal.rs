@@ -374,7 +374,7 @@ fn parse_inspect_output(text: &str, cert_path: &Path) -> SshCertificate {
         .lines()
         .find(|l| l.contains("Signing CA:") || l.contains("CA:"))
         .and_then(|l| l.split_whitespace().find(|w| w.starts_with("SHA256:")))
-        .unwrap_or("unknown")
+        .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL)
         .to_string();
 
     let key_path = cert_path.to_string_lossy().replace("-cert.pub", "");

@@ -1,7 +1,7 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (sporeGate team)
-**Last updated:** 2026-07-31 (Wave 155t)
+**Last updated:** 2026-07-31 (Wave 155u)
 **VPS_IP:** Set from `ecosystem_manifest.toml` topology → `MEMBRANE_VPS_IP`.
 
 > **Note (Wave 127):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`

@@ -136,7 +136,7 @@ fn targets_for_primal(
         manifest_targets.to_vec()
     };
     if source.gpu && cfg!(target_arch = "x86_64") {
-        let gnu = cellmembrane_types::TargetArch::X86_64Gnu.triple();
+        let gnu = cellmembrane_types::Platform::gpu().triple();
         if !targets.iter().any(|t| t == gnu) {
             targets.push(gnu.to_string());
         }

@@ -352,7 +352,7 @@ fn dispatch_composition(args: &[&str]) -> crate::Result<ShadowOutcome> {
             .gates
             .get(gate)
             .and_then(|g| g.composition.as_deref())
-            .unwrap_or("unknown");
+            .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
 
         return comp.map_or_else(
             || {

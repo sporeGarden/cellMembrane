@@ -106,7 +106,7 @@ pub(super) async fn mesh_enroll_phase(
                             .and_then(serde_json::Value::as_str)
                             .map(String::from)
                     })
-                    .unwrap_or_else(|| "unknown".into());
+                    .unwrap_or_else(|| cellmembrane_types::service::UNKNOWN_LABEL.into());
 
                 BootstrapPhase {
                     name: "mesh.enroll".into(),

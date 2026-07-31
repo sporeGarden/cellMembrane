@@ -1,13 +1,27 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155t)
+**Last updated:** 2026-07-31 (Wave 155u)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 155u (deep debt: TargetArch deprecation + XDG dedup + UNKNOWN_LABEL):**
+Three-layer deep debt cleanup. (1) Deprecated legacy `TargetArch` enum — migrated
+last 2 production callers (`harvest.rs`, `fetch.rs`) from `TargetArch::X86_64Gnu`
+to `Platform::gpu().triple()`, added `#[deprecated]` attribute with migration note.
+(2) Added `resolve_xdg_runtime_dir()` to `cellmembrane-types/service/constants.rs`
+as single source of truth for `XDG_RUNTIME_DIR` resolution with `/run/user/{uid}`
+fallback. Deduplicated 3 independent implementations (constants.rs, resolve.rs,
+sockets.rs). Removed now-dead `resolve_uid()` and `DEFAULT_FALLBACK_UID` from
+`gate/sockets.rs`. (3) Added `UNKNOWN_LABEL` constant and migrated 15 scattered
+`"unknown"` display fallbacks across 10 files: bridge.rs, data.rs, commands.rs,
+depot.rs, plasmid_dispatch.rs, deploy_dispatch.rs, provision_dispatch.rs,
+verify.rs, key_portal.rs, auto_fetch.rs, tower/mod.rs, enroll_crypto.rs.
+1,281 tests, 0 clippy, 0 fmt drift.
 
 **Wave 155t (P2 fix: platform detection — detect_target_triple uses Platform::detect):**
 Fixed membrane.exe embedding `x86_64-unknown-linux-musl` on Windows cross-compiled

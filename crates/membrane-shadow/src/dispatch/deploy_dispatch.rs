@@ -125,7 +125,7 @@ async fn deploy_resurrect(args: &[&str]) -> crate::Result<ShadowOutcome> {
                 let status = value
                     .get("status")
                     .and_then(|s| s.as_str())
-                    .unwrap_or("unknown");
+                    .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
                 Ok(ShadowOutcome::ok_with(
                     format!("{primal} on {gate}: {status}"),
                     value,
@@ -202,7 +202,7 @@ async fn route_to_gate(
         let msg = error
             .get("message")
             .and_then(|m| m.as_str())
-            .unwrap_or("unknown");
+            .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
         return Err(crate::error::ShadowError::Rpc(format!(
             "{target_gate}: {dotted}: {msg}"
         )));
@@ -264,7 +264,10 @@ fn format_lifecycle_status(
     if let Some(primals) = value.get("primals").and_then(|p| p.as_array()) {
         for p in primals {
             let name = p.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-            let state = p.get("state").and_then(|s| s.as_str()).unwrap_or("unknown");
+            let state = p
+                .get("state")
+                .and_then(|s| s.as_str())
+                .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
             let pid = p
                 .get("pid")
                 .and_then(serde_json::Value::as_u64)
