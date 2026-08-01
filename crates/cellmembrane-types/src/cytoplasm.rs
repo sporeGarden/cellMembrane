@@ -72,9 +72,9 @@ impl ZoneLabel {
     #[must_use]
     pub fn for_gate(gate_name: &str) -> Self {
         match gate_name {
-            "eastGate" | "sporeGate" | "ironGate" | "blueGate" => Self::Backbone,
-            "northGate" | "westGate" => Self::House1,
-            "strandGate" | "southGate" | "swiftGate" | "fieldGate" => Self::House2,
+            "eastGate" | "sporeGate" | "ironGate" => Self::Backbone,
+            "northGate" => Self::House1,
+            "strandGate" | "southGate" | "westGate" | "blueGate" | "swiftGate" | "fieldGate" => Self::House2,
             "golgi" | "pepti" | "flockGate" => Self::Wan,
             _ => Self::Unassigned,
         }
@@ -204,7 +204,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "blueGate",
         wg_ip: None,
-        lan_ip: None,
+        lan_ip: Some("192.168.4.210"),
         aliases: &[],
     },
     MeshEntry {
@@ -315,6 +315,8 @@ mod tests {
     fn zone_for_gate_house2() {
         assert_eq!(ZoneLabel::for_gate("strandGate"), ZoneLabel::House2);
         assert_eq!(ZoneLabel::for_gate("southGate"), ZoneLabel::House2);
+        assert_eq!(ZoneLabel::for_gate("westGate"), ZoneLabel::House2);
+        assert_eq!(ZoneLabel::for_gate("blueGate"), ZoneLabel::House2);
         assert_eq!(ZoneLabel::for_gate("swiftGate"), ZoneLabel::House2);
         assert_eq!(ZoneLabel::for_gate("fieldGate"), ZoneLabel::House2);
     }

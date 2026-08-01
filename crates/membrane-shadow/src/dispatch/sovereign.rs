@@ -18,6 +18,23 @@ use crate::error::{Result, ShadowError};
 use crate::{ShadowConfig, ShadowOutcome};
 use tracing::{error, info, warn};
 
+/// Sub-builder gate configuration for cross-target dispatch.
+struct SubBuilder {
+    gate: &'static str,
+    target: &'static str,
+    ssh_host: &'static str,
+    membrane_bin: &'static str,
+}
+
+/// Known sub-builders. The foreman (sporeGate) dispatches to these gates
+/// for target triples it cannot build locally.
+const SUB_BUILDERS: &[SubBuilder] = &[SubBuilder {
+    gate: "blueGate",
+    target: "x86_64-pc-windows-gnu",
+    ssh_host: "blueGate",
+    membrane_bin: "membrane.exe",
+}];
+
 /// Route `sovereign.*` commands.
 pub(super) async fn dispatch_sovereign(
     config: &ShadowConfig,
@@ -86,6 +103,7 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
         "sovereign CI trigger"
     );
 
+    // Phase 1a: Local harvest (musl/gnu on this gate)
     let harvest_outcome = run_harvest(&primal_lower, trigger.dry_run).await?;
 
     if !harvest_outcome.ok {
@@ -100,23 +118,52 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
         });
     }
 
+    // Phase 1b: Sub-builder dispatch (Windows via blueGate, etc.)
+    let sub_results =
+        run_sub_builder_harvests(&primal_lower, trigger.commit, trigger.dry_run).await;
+
+    let sub_summary: Vec<String> = sub_results
+        .iter()
+        .map(|(gate, o)| {
+            format!("{}:{}", gate, if o.ok { "OK" } else { "FAIL" })
+        })
+        .collect();
+
+    let sub_all_ok = sub_results.iter().all(|(_, o)| o.ok);
+
+    if !sub_summary.is_empty() {
+        if sub_all_ok {
+            info!(sub_builders = ?sub_summary, "all sub-builder harvests completed");
+        } else {
+            warn!(sub_builders = ?sub_summary, "some sub-builder harvests failed");
+        }
+    }
+
     if trigger.dry_run {
+        let dry_data = serde_json::json!({
+            "harvest": harvest_outcome.data,
+            "sub_builders": sub_summary,
+        });
         return Ok(ShadowOutcome {
             ok: true,
             message: format!(
-                "sovereign.ci.trigger: {} (dry-run) — {}",
-                trigger.primal, harvest_outcome.message
+                "sovereign.ci.trigger: {} (dry-run) — {} | sub-builders: [{}]",
+                trigger.primal,
+                harvest_outcome.message,
+                sub_summary.join(", ")
             ),
-            data: harvest_outcome.data,
+            data: Some(dry_data),
         });
     }
 
+    // Phase 2: Sandbox validation (local binary only)
     if let Some(sandbox_fail) =
         run_sandbox_phase(&primal_lower, trigger.primal, trigger.commit).await?
     {
         return Ok(sandbox_fail);
     }
 
+    // Phase 3: Refresh (atomic deploy + depot sync)
     let refresh_outcome = run_refresh(config, &primal_lower).await?;
 
     let provenance = serde_json::json!({
@@ -124,18 +171,172 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
         "git_ref": trigger.git_ref,
         "commit": trigger.commit,
         "harvest": harvest_outcome.message,
+        "sub_builders": sub_summary,
         "refresh": refresh_outcome.message,
         "pipeline": "sovereign.ci.trigger",
     });
 
+    let sub_label = if sub_summary.is_empty() {
+        String::new()
+    } else {
+        format!(" | sub-builders: [{}]", sub_summary.join(", "))
+    };
+
     Ok(ShadowOutcome {
-        ok: refresh_outcome.ok,
+        ok: refresh_outcome.ok && sub_all_ok,
         message: format!(
-            "sovereign.ci.trigger: {} — harvest: {} | sandbox: PASS | refresh: {}",
-            trigger.primal, harvest_outcome.message, refresh_outcome.message
+            "sovereign.ci.trigger: {} — harvest: {} | sandbox: PASS | refresh: {}{}",
+            trigger.primal, harvest_outcome.message, refresh_outcome.message, sub_label
         ),
         data: Some(provenance),
     })
+}
+
+/// Dispatch remote harvests to sub-builder gates for cross-target binaries.
+///
+/// For each sub-builder, SSHes to the gate and runs `membrane plasmid.harvest`
+/// for the primal on that gate's native target triple. Results are collected
+/// and returned as a merged outcome.
+async fn run_sub_builder_harvests(
+    primal: &str,
+    commit: Option<&str>,
+    dry_run: bool,
+) -> Vec<(String, ShadowOutcome)> {
+    let mut results = Vec::new();
+
+    for sb in SUB_BUILDERS {
+        info!(
+            primal,
+            gate = sb.gate,
+            target = sb.target,
+            "sub-builder dispatch"
+        );
+
+        if dry_run {
+            results.push((
+                sb.gate.to_string(),
+                ShadowOutcome {
+                    ok: true,
+                    message: format!(
+                        "sub-builder {}: {} (dry-run) — would SSH to {} and harvest {} for {}",
+                        sb.gate, primal, sb.ssh_host, primal, sb.target
+                    ),
+                    data: None,
+                },
+            ));
+            continue;
+        }
+
+        let outcome = dispatch_to_sub_builder(sb, primal, commit).await;
+        results.push((sb.gate.to_string(), outcome));
+    }
+
+    results
+}
+
+/// SSH to a sub-builder gate and run `membrane plasmid.harvest`.
+async fn dispatch_to_sub_builder(
+    sb: &SubBuilder,
+    primal: &str,
+    commit: Option<&str>,
+) -> ShadowOutcome {
+    let mut cmd_parts = vec![
+        sb.membrane_bin.to_string(),
+        "plasmid.harvest".to_string(),
+        "--primal".to_string(),
+        primal.to_string(),
+        "--force".to_string(),
+        "--push".to_string(),
+    ];
+
+    if let Some(c) = commit {
+        cmd_parts.push("--commit".to_string());
+        cmd_parts.push(c.to_string());
+    }
+
+    let remote_cmd = cmd_parts.join(" ");
+
+    info!(
+        gate = sb.gate,
+        target = sb.target,
+        cmd = %remote_cmd,
+        "dispatching to sub-builder via SSH"
+    );
+
+    let output = tokio::process::Command::new("ssh")
+        .args([
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
+            sb.ssh_host,
+            &remote_cmd,
+        ])
+        .output()
+        .await;
+
+    match output {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+
+            if out.status.success() {
+                info!(
+                    gate = sb.gate,
+                    stdout = %stdout.trim(),
+                    "sub-builder harvest completed"
+                );
+                ShadowOutcome {
+                    ok: true,
+                    message: format!(
+                        "sub-builder {}: {} harvest OK for {} — {}",
+                        sb.gate,
+                        primal,
+                        sb.target,
+                        stdout.lines().last().unwrap_or("done")
+                    ),
+                    data: Some(serde_json::json!({
+                        "gate": sb.gate,
+                        "target": sb.target,
+                        "stdout": stdout.trim(),
+                    })),
+                }
+            } else {
+                error!(
+                    gate = sb.gate,
+                    exit_code = out.status.code(),
+                    stderr = %stderr.trim(),
+                    "sub-builder harvest failed"
+                );
+                ShadowOutcome {
+                    ok: false,
+                    message: format!(
+                        "sub-builder {}: {} harvest FAILED for {} — {}",
+                        sb.gate,
+                        primal,
+                        sb.target,
+                        stderr.lines().last().unwrap_or("unknown error")
+                    ),
+                    data: Some(serde_json::json!({
+                        "gate": sb.gate,
+                        "target": sb.target,
+                        "stderr": stderr.trim(),
+                    })),
+                }
+            }
+        }
+        Err(e) => {
+            error!(gate = sb.gate, error = %e, "SSH to sub-builder failed");
+            ShadowOutcome {
+                ok: false,
+                message: format!(
+                    "sub-builder {}: SSH connection failed — {}",
+                    sb.gate, e
+                ),
+                data: None,
+            }
+        }
+    }
 }
 
 /// Phase 1: Manifest-driven build.
@@ -352,5 +553,30 @@ mod tests {
             result.message.contains("sovereign.ci.status"),
             "should contain command prefix"
         );
+    }
+
+    #[test]
+    fn sub_builders_configured() {
+        assert!(
+            !SUB_BUILDERS.is_empty(),
+            "should have at least one sub-builder"
+        );
+        let bg = &SUB_BUILDERS[0];
+        assert_eq!(bg.gate, "blueGate");
+        assert_eq!(bg.target, "x86_64-pc-windows-gnu");
+    }
+
+    #[test]
+    fn sub_builder_dry_run_reports_all_gates() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let results = rt.block_on(run_sub_builder_harvests("squirrel", None, true));
+        assert_eq!(results.len(), SUB_BUILDERS.len());
+        for (gate, outcome) in &results {
+            assert!(outcome.ok, "dry-run should always succeed for {gate}");
+            assert!(outcome.message.contains("dry-run"));
+        }
     }
 }

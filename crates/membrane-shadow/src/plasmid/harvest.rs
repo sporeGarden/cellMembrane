@@ -390,11 +390,16 @@ async fn harvest_one(
     }
 
     let binary_name = source.binary_name.as_deref().unwrap_or(primal);
+    let file_name = if target.contains("windows") {
+        format!("{binary_name}.exe")
+    } else {
+        binary_name.to_string()
+    };
     let bin_path = source_dir
         .join("target")
         .join(target)
         .join("release")
-        .join(binary_name);
+        .join(&file_name);
 
     if !bin_path.exists() {
         return HarvestResult {
@@ -404,15 +409,16 @@ async fn harvest_one(
         };
     }
 
-    if let Err(e) = validate_elf_arch(&bin_path, target).await {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: e.to_string(),
-        };
+    if !target.contains("windows") {
+        if let Err(e) = validate_elf_arch(&bin_path, target).await {
+            return HarvestResult {
+                binary: primal.into(),
+                status: HarvestStatus::Failed,
+                detail: e.to_string(),
+            };
+        }
+        toolchain::strip_binary(&bin_path, primal, target).await;
     }
-
-    toolchain::strip_binary(&bin_path, primal, target).await;
 
     match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
