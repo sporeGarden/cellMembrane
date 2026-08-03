@@ -29,6 +29,7 @@ pub(crate) mod integrity;
 pub(crate) mod lineage;
 mod refresh;
 pub(crate) mod sandbox;
+pub(crate) mod scheduler;
 pub(crate) mod signing;
 pub(crate) mod toolchain;
 

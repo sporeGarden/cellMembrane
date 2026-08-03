@@ -145,6 +145,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("dns.") => crate::dns::dispatch(config, cmd, args).await,
         c if c.starts_with("tower.") => crate::tower::dispatch(config, cmd, args).await,
         c if c.starts_with("gateway.") => crate::gateway::dispatch(config, cmd, args).await,
+        c if c.starts_with("harvest.") => dispatch_harvest(cmd, args).await,
         c if c.starts_with("webhook.") => dispatch_webhook(config, cmd, args).await,
         "pepti.validate" => {
             tracing::warn!("pepti.* namespace deprecated (Wave 120) — use gate.validate");
@@ -165,6 +166,97 @@ fn spawn_blocking_err(e: &tokio::task::JoinError) -> ShadowError {
     ShadowError::Io(std::io::Error::other(format!(
         "spawn_blocking panicked: {e}"
     )))
+}
+
+/// Dispatch harvest scheduler commands (CI-EVO-01).
+async fn dispatch_harvest(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
+    use crate::plasmid::scheduler;
+
+    match cmd {
+        "harvest.ingest" => {
+            let primal = cli::require_arg(args, 0, "primal_name")?;
+            let commit = cli::extract_flag_value(args, "--commit").unwrap_or("HEAD");
+            let pusher = cli::extract_flag_value(args, "--pusher").unwrap_or("operator");
+            let queue = scheduler::ingest(primal, commit, pusher)?;
+            Ok(ShadowOutcome::ok(format!(
+                "harvest.ingest: {} queued ({})",
+                primal,
+                scheduler::format_queue(&queue)
+            )))
+        }
+        "harvest.request" => {
+            let primal = cli::require_arg(args, 0, "primal_name")?;
+            let queue = scheduler::request_build(primal)?;
+            Ok(ShadowOutcome::ok(format!(
+                "harvest.request: {} → BUILD_REQUESTED\n{}",
+                primal,
+                scheduler::format_queue(&queue)
+            )))
+        }
+        "harvest.queue" => {
+            let queue = scheduler::load_queue();
+            Ok(ShadowOutcome::ok(scheduler::format_queue(&queue)))
+        }
+        "harvest.schedule" => {
+            let dry_run = args.contains(&"--dry-run");
+            let mut queue = scheduler::load_queue();
+            let decision = scheduler::evaluate(&mut queue);
+
+            if decision.build_now.is_empty() {
+                return Ok(ShadowOutcome::ok(format!(
+                    "harvest.schedule: nothing to build — {}",
+                    decision.reason
+                )));
+            }
+
+            if dry_run {
+                return Ok(ShadowOutcome::ok(format!(
+                    "harvest.schedule (dry-run): would build [{}] — {}",
+                    decision.build_now.join(", "),
+                    decision.reason
+                )));
+            }
+
+            scheduler::mark_building(&mut queue, &decision.build_now);
+            scheduler::save_queue(&queue)?;
+
+            let build_list = decision.build_now.join(", ");
+            let harvest_args = crate::plasmid::HarvestArgs {
+                primal: None,
+                force: false,
+                dry_run: false,
+                depot_dir: None,
+                target: None,
+                local: true,
+                push: false,
+            };
+
+            let result = crate::plasmid::harvest(&harvest_args).await;
+
+            let mut queue = scheduler::load_queue();
+            match &result {
+                Ok(outcome) if outcome.ok => {
+                    scheduler::mark_complete(&mut queue, &decision.build_now);
+                    tracing::info!(built = %build_list, "harvest.schedule: batch build complete");
+                }
+                _ => {
+                    scheduler::mark_failed(&mut queue, &decision.build_now);
+                    tracing::warn!(primals = %build_list, "harvest.schedule: batch build failed, re-queued");
+                }
+            }
+            scheduler::save_queue(&queue)?;
+
+            result
+        }
+        "harvest.clear" => {
+            let queue = scheduler::HarvestQueue::default();
+            scheduler::save_queue(&queue)?;
+            Ok(ShadowOutcome::ok("harvest queue cleared"))
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown harvest command: {cmd}"
+        ))),
+    }
 }
 
 fn parse_webhook_provider(args: &[&str]) -> Result<crate::webhook::WebhookProvider> {

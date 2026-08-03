@@ -304,14 +304,38 @@ pub async fn handle_push(
         return pipeline::run_cascade_pipeline(&action, config).await;
     }
 
-    info!(
-        pusher = %event.pusher.username,
-        branch = %action.branch,
-        repo = %action.repo_name,
-        "selective harvest triggered"
-    );
+    let has_signal = crate::plasmid::scheduler::has_harvest_signal(&event.commits);
 
-    pipeline::run_harvest_pipeline(&action, event, config).await
+    if has_signal {
+        info!(
+            pusher = %event.pusher.username,
+            branch = %action.branch,
+            repo = %action.repo_name,
+            "immediate harvest triggered by [harvest] signal"
+        );
+        pipeline::run_harvest_pipeline(&action, event, config).await
+    } else {
+        info!(
+            pusher = %event.pusher.username,
+            branch = %action.branch,
+            repo = %action.repo_name,
+            "push queued for scheduled harvest (no [harvest] signal)"
+        );
+        let commit_short = if event.after.len() >= 12 {
+            &event.after[..12]
+        } else {
+            &event.after
+        };
+        crate::plasmid::scheduler::ingest(
+            &action.repo_name,
+            commit_short,
+            &event.pusher.username,
+        )?;
+        Ok(crate::ShadowOutcome::ok(format!(
+            "webhook: {} push queued for batch harvest (commit {})",
+            action.repo_name, commit_short
+        )))
+    }
 }
 
 // ── Constant-time comparison ─────────────────────────────────────────
