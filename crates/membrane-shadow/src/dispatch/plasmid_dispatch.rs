@@ -53,6 +53,7 @@ pub(super) async fn dispatch_plasmid(
                 target: cli::extract_flag_value(args, "--target").map(Into::into),
                 local: args.contains(&"--local"),
                 push: args.contains(&"--push"),
+                with_restart: args.contains(&"--with-restart"),
             };
             plasmid::harvest(&harvest_args).await
         }

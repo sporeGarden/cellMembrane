@@ -229,6 +229,7 @@ async fn dispatch_harvest(cmd: &str, args: &[&str]) -> Result<ShadowOutcome> {
                 target: None,
                 local: true,
                 push: false,
+                with_restart: false,
             };
 
             let result = crate::plasmid::harvest(&harvest_args).await;

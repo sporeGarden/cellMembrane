@@ -27,6 +27,7 @@ pub async fn pipeline(
         target: None,
         local: false,
         push: false,
+        with_restart: false,
     };
 
     let harvest_outcome = super::harvest(&harvest_args).await?;

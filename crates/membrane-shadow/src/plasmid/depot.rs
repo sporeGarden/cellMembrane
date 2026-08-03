@@ -355,8 +355,12 @@ pub struct StalenessEntry {
     pub binary_exists: bool,
     /// Recorded commit from provenance (if any).
     pub provenance_commit: Option<String>,
-    /// Whether this primal is considered stale (provenance missing or binary absent).
+    /// Local source HEAD commit (if workspace available).
+    pub source_commit: Option<String>,
+    /// Whether this primal is considered stale (provenance missing, binary absent, or commit drift).
     pub stale: bool,
+    /// Reason for staleness (if stale).
+    pub reason: Option<String>,
 }
 
 /// Full staleness report across the depot.
@@ -380,23 +384,30 @@ impl std::fmt::Display for StalenessReport {
             self.current_count, self.total, self.stale_count
         )?;
         if self.stale_count > 0 {
-            let stale_names: Vec<&str> = self
+            let stale_details: Vec<String> = self
                 .entries
                 .iter()
                 .filter(|e| e.stale)
-                .map(|e| e.name.as_str())
+                .map(|e| {
+                    if let Some(reason) = &e.reason {
+                        format!("{} ({})", e.name, reason)
+                    } else {
+                        e.name.clone()
+                    }
+                })
                 .collect();
-            write!(f, " [{}]", stale_names.join(", "))?;
+            write!(f, " [{}]", stale_details.join(", "))?;
         }
         Ok(())
     }
 }
 
-/// Detect stale primals by comparing depot binary presence and provenance records
-/// against the sources registry. A primal is stale if:
+/// Detect stale primals by comparing depot binary presence, provenance records,
+/// and local source HEAD commits. A primal is stale if:
 /// - It has no provenance entry (never built)
 /// - It has no binary in the depot staging directory
 /// - Its provenance has no commit recorded
+/// - Its provenance commit differs from the local source HEAD (commit drift)
 ///
 /// This is a local-only check — no network calls.
 /// If `depot_dir` is `None`, resolves depot from env/defaults.
@@ -422,7 +433,23 @@ pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> 
             .and_then(|p| p.entries.get(primal))
             .and_then(|e| e.commit.clone());
 
-        let stale = !binary_exists || provenance_commit.is_none();
+        let source_commit = resolve_source_head(primal);
+
+        let (stale, reason) = if !binary_exists {
+            (true, Some("binary missing".to_string()))
+        } else if provenance_commit.is_none() {
+            (true, Some("no provenance commit".to_string()))
+        } else if let (Some(prov), Some(src)) = (&provenance_commit, &source_commit) {
+            let prov_short = &prov[..prov.len().min(8)];
+            let src_short = &src[..src.len().min(8)];
+            if prov_short != src_short {
+                (true, Some(format!("commit drift: depot={prov_short} src={src_short}")))
+            } else {
+                (false, None)
+            }
+        } else {
+            (false, None)
+        };
 
         if stale {
             stale_count += 1;
@@ -434,7 +461,9 @@ pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> 
             name: primal.to_string(),
             binary_exists,
             provenance_commit,
+            source_commit,
             stale,
+            reason,
         });
     }
 
@@ -444,6 +473,25 @@ pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> 
         stale_count,
         current_count,
     })
+}
+
+/// Resolve local source HEAD commit for a primal (best-effort).
+///
+/// Returns `Some("abc12345")` if the primal's local source dir exists and
+/// is a git repo; `None` otherwise. Never fails — staleness detection
+/// should degrade gracefully when workspace isn't available.
+fn resolve_source_head(primal: &str) -> Option<String> {
+    let source_dir = super::harvest_manifest::resolve_local_source_dir(primal).ok()?;
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(&source_dir)
+        .output()
+        .ok()?;
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

@@ -43,6 +43,8 @@ pub struct HarvestArgs {
     pub local: bool,
     /// Push to remote depot after successful harvest (combines harvest + push).
     pub push: bool,
+    /// After successful harvest, atomically install to NUCLEUS and restart services.
+    pub with_restart: bool,
 }
 
 /// Outcome of harvesting a single primal.
@@ -240,6 +242,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
         append_push_outcome(&mut outcome, &results, &depot_dir).await;
     }
 
+    if args.with_restart && !args.dry_run && outcome.ok {
+        let install_msg = install_and_restart(&results, &depot_dir).await;
+        outcome.message = format!("{} | {install_msg}", outcome.message);
+    }
+
     Ok(outcome)
 }
 
@@ -302,6 +309,111 @@ async fn append_push_outcome(
             outcome.message = format!("{}\npush: failed — {e}", outcome.message);
             outcome.ok = false;
         }
+    }
+}
+
+/// Stop NUCLEUS, atomically install built binaries, restart NUCLEUS.
+///
+/// The harvest depot and NUCLEUS install path are different directories
+/// (CI-DIV-03). This bridges them: for each built primal, copies the
+/// binary from the harvest depot to the NUCLEUS install path using
+/// atomic rename (write .new, mv over original).
+async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> String {
+    let built: Vec<&str> = results
+        .iter()
+        .filter(|r| matches!(r.status, HarvestStatus::Built))
+        .map(|r| r.binary.as_str())
+        .collect();
+
+    if built.is_empty() {
+        return "install: nothing to install".to_string();
+    }
+
+    let target = super::detect_target_triple();
+    let harvest_staging = depot_dir.join("primals").join(target);
+    let install_dir = crate::resolve_xdg_data_home()
+        .join("ecoPrimals")
+        .join(cellmembrane_types::service::PLASMID_BIN_DIR)
+        .join("primals")
+        .join(target);
+
+    if !install_dir.exists() {
+        if let Err(e) = std::fs::create_dir_all(&install_dir) {
+            return format!("install: failed to create install dir — {e}");
+        }
+    }
+
+    // Stop NUCLEUS
+    let stop_ok = std::process::Command::new("sudo")
+        .args(["systemctl", "stop", "membrane-nucleus.target"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !stop_ok {
+        warn!("NUCLEUS stop returned non-zero — continuing with pkill fallback");
+    }
+
+    // Kill lingering processes
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    for &primal in &built {
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", primal])
+            .status();
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Atomic copy
+    let mut installed = 0usize;
+    let mut failed = Vec::new();
+    for &primal in &built {
+        let src = harvest_staging.join(primal);
+        let dst = install_dir.join(primal);
+        let tmp = install_dir.join(format!("{primal}.new"));
+
+        if !src.exists() {
+            failed.push(format!("{primal}: not in harvest depot"));
+            continue;
+        }
+
+        match std::fs::copy(&src, &tmp) {
+            Ok(_) => match std::fs::rename(&tmp, &dst) {
+                Ok(()) => {
+                    installed += 1;
+                }
+                Err(e) => {
+                    failed.push(format!("{primal}: rename failed — {e}"));
+                    let _ = std::fs::remove_file(&tmp);
+                }
+            },
+            Err(e) => {
+                failed.push(format!("{primal}: copy failed — {e}"));
+            }
+        }
+    }
+
+    // Restart NUCLEUS
+    let start_ok = std::process::Command::new("sudo")
+        .args(["systemctl", "start", "membrane-nucleus.target"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if failed.is_empty() && start_ok {
+        info!(installed, "NUCLEUS install + restart complete");
+        format!("install: {installed}/{} installed, NUCLEUS restarted", built.len())
+    } else {
+        let fail_msg = if failed.is_empty() {
+            String::new()
+        } else {
+            format!(" failures=[{}]", failed.join("; "))
+        };
+        let restart_msg = if start_ok { "" } else { " NUCLEUS restart FAILED" };
+        warn!(installed, failures = failed.len(), "install completed with issues");
+        format!(
+            "install: {installed}/{} installed{fail_msg}{restart_msg}",
+            built.len()
+        )
     }
 }
 

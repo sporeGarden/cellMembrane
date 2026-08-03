@@ -228,6 +228,7 @@ pub(super) async fn run_commit_drift_pipeline(lines: &mut Vec<String>) {
             target: None,
             local: true,
             push: false,
+            with_restart: false,
         };
         match crate::plasmid::harvest(&harvest_args).await {
             Ok(o) => lines.push(format!("  [drift] {primal}: {}", o.message)),

@@ -7,7 +7,9 @@ fn staleness_report_display_all_current() {
             name: "beardog".into(),
             binary_exists: true,
             provenance_commit: Some("abc123".into()),
+            source_commit: Some("abc123".into()),
             stale: false,
+            reason: None,
         }],
         total: 1,
         stale_count: 0,
@@ -27,13 +29,17 @@ fn staleness_report_display_with_stale() {
                 name: "beardog".into(),
                 binary_exists: true,
                 provenance_commit: Some("abc".into()),
+                source_commit: Some("abc".into()),
                 stale: false,
+                reason: None,
             },
             StalenessEntry {
                 name: "songbird".into(),
                 binary_exists: false,
                 provenance_commit: None,
+                source_commit: None,
                 stale: true,
+                reason: Some("binary missing".into()),
             },
         ],
         total: 2,
@@ -43,7 +49,7 @@ fn staleness_report_display_with_stale() {
     let s = report.to_string();
     assert!(s.contains("1/2 current"));
     assert!(s.contains("1 stale"));
-    assert!(s.contains("[songbird]"));
+    assert!(s.contains("songbird (binary missing)"));
 }
 
 #[test]
@@ -68,10 +74,15 @@ fn detect_stale_primals_with_tempdir() {
     std::fs::write(staging.join("beardog"), b"binary").unwrap();
 
     let report = detect_stale_primals(&tmp).unwrap();
-    assert_eq!(report.current_count, 1);
-    assert_eq!(report.stale_count, 1);
-    assert_eq!(report.entries[1].name, "songbird");
-    assert!(report.entries[1].stale);
+    // beardog: binary exists + provenance present. May be stale if workspace
+    // is available and source HEAD != "aaa" (drift detection).
+    // songbird: no binary, no provenance → always stale.
+    let songbird = report.entries.iter().find(|e| e.name == "songbird").unwrap();
+    assert!(songbird.stale, "songbird should be stale (no binary)");
+    let beardog = report.entries.iter().find(|e| e.name == "beardog").unwrap();
+    assert!(beardog.binary_exists, "beardog binary should exist");
+    assert!(beardog.provenance_commit.is_some(), "beardog should have provenance");
+    assert!(report.stale_count >= 1, "at least songbird should be stale");
 
     let _ = std::fs::remove_dir_all(&tmp);
 }

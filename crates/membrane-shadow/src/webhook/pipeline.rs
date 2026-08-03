@@ -18,6 +18,7 @@ pub(super) async fn run_harvest_pipeline(
         target: None,
         local: false,
         push: false,
+        with_restart: false,
     };
 
     let harvest_outcome = crate::plasmid::harvest(&harvest_args).await?;

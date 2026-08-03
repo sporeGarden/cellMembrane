@@ -82,18 +82,27 @@ pub(super) fn resolve_local_source_dir(primal: &str) -> Result<PathBuf> {
     );
     let workspace_path = std::path::Path::new(&workspace);
 
-    if let Ok(manifest) = crate::manifest::load_from_workspace(workspace_path) {
-        for (name, entry) in &manifest.repos {
-            if name.to_lowercase() == primal {
-                let dir = workspace_path.join(&entry.local_path);
-                if dir.exists() {
-                    return Ok(dir);
+    match crate::manifest::load_from_workspace(workspace_path) {
+        Ok(manifest) => {
+            for (name, entry) in &manifest.repos {
+                if name.to_lowercase() == primal {
+                    let dir = workspace_path.join(&entry.local_path);
+                    if dir.exists() {
+                        return Ok(dir);
+                    }
+                    return Err(ShadowError::Config(format!(
+                        "--local: workspace dir does not exist: {}",
+                        dir.display()
+                    )));
                 }
-                return Err(ShadowError::Config(format!(
-                    "--local: workspace dir does not exist: {}",
-                    dir.display()
-                )));
             }
+        }
+        Err(e) => {
+            tracing::warn!(
+                workspace = %workspace,
+                error = %e,
+                "ecosystem manifest parse failed — --local harvest will not find primals"
+            );
         }
     }
 

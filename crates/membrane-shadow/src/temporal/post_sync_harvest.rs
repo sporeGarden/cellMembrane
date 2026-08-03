@@ -81,6 +81,7 @@ pub(super) async fn run_post_cascade_harvest(
         target: None,
         local: false,
         push: false,
+        with_restart: false,
     };
 
     let outcome = crate::plasmid::harvest(&harvest_args).await?;
