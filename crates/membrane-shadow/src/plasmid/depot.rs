@@ -440,10 +440,11 @@ pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> 
         } else if provenance_commit.is_none() {
             (true, Some("no provenance commit".to_string()))
         } else if let (Some(prov), Some(src)) = (&provenance_commit, &source_commit) {
-            let prov_short = &prov[..prov.len().min(8)];
-            let src_short = &src[..src.len().min(8)];
-            if prov_short != src_short {
-                (true, Some(format!("commit drift: depot={prov_short} src={src_short}")))
+            let cmp_len = prov.len().min(src.len()).min(8);
+            let prov_prefix = &prov[..cmp_len];
+            let src_prefix = &src[..cmp_len];
+            if prov_prefix != src_prefix {
+                (true, Some(format!("commit drift: depot={prov_prefix} src={src_prefix}")))
             } else {
                 (false, None)
             }
