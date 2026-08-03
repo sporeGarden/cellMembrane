@@ -201,9 +201,19 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
         for target in &targets {
             if args.dry_run {
                 let mode = if args.local {
-                    "build from local"
+                    match resolve_local_source_dir(primal) {
+                        Ok(dir) => format!("build from local ({})", dir.display()),
+                        Err(e) => {
+                            results.push(HarvestResult {
+                                binary: primal.clone(),
+                                status: HarvestStatus::Failed,
+                                detail: format!("dry-run: --local validation failed — {e}"),
+                            });
+                            continue;
+                        }
+                    }
                 } else {
-                    "clone"
+                    "clone".to_string()
                 };
                 results.push(HarvestResult {
                     binary: primal.clone(),
