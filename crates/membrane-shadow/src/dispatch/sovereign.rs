@@ -18,22 +18,46 @@ use crate::error::{Result, ShadowError};
 use crate::{ShadowConfig, ShadowOutcome};
 use tracing::{error, info, warn};
 
-/// Sub-builder gate configuration for cross-target dispatch.
-struct SubBuilder {
-    gate: &'static str,
-    target: &'static str,
-    ssh_host: &'static str,
-    membrane_bin: &'static str,
+/// Resolved sub-builder for dispatch.
+struct ResolvedSubBuilder {
+    gate: String,
+    target: String,
+    ssh_host: String,
+    membrane_bin: String,
 }
 
-/// Known sub-builders. The foreman (sporeGate) dispatches to these gates
-/// for target triples it cannot build locally.
-const SUB_BUILDERS: &[SubBuilder] = &[SubBuilder {
-    gate: "blueGate",
-    target: "x86_64-pc-windows-gnu",
-    ssh_host: "blueGate",
-    membrane_bin: "membrane.exe",
-}];
+/// Load sub-builders from the ecosystem manifest.
+///
+/// Falls back to a hardcoded blueGate entry if the manifest is unavailable
+/// or has no `[sub_builders]` section — preserving nanowire compatibility.
+fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
+    let workspace = cellmembrane_types::service::env_or(
+        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
+        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
+    );
+
+    if let Ok(manifest) = crate::manifest::load_from_workspace(std::path::Path::new(&workspace)) {
+        if !manifest.sub_builders.is_empty() {
+            return manifest
+                .sub_builders
+                .into_iter()
+                .map(|(target, entry)| ResolvedSubBuilder {
+                    gate: entry.gate,
+                    target,
+                    ssh_host: entry.ssh_host,
+                    membrane_bin: entry.membrane_bin,
+                })
+                .collect();
+        }
+    }
+
+    vec![ResolvedSubBuilder {
+        gate: "blueGate".into(),
+        target: "x86_64-pc-windows-gnu".into(),
+        ssh_host: "blueGate".into(),
+        membrane_bin: "membrane.exe".into(),
+    }]
+}
 
 /// Route `sovereign.*` commands.
 pub(super) async fn dispatch_sovereign(
@@ -118,9 +142,11 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
         });
     }
 
-    // Phase 1b: Sub-builder dispatch (Windows via blueGate, etc.)
+    // Phase 1b: Sub-builder dispatch (manifest-driven, nanowire/SSH transport)
+    let sub_builders = load_sub_builders();
     let sub_results =
-        run_sub_builder_harvests(&primal_lower, trigger.commit, trigger.dry_run).await;
+        run_sub_builder_harvests(&sub_builders, &primal_lower, trigger.commit, trigger.dry_run)
+            .await;
 
     let sub_summary: Vec<String> = sub_results
         .iter()
@@ -197,24 +223,28 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
 /// For each sub-builder, SSHes to the gate and runs `membrane plasmid.harvest`
 /// for the primal on that gate's native target triple. Results are collected
 /// and returned as a merged outcome.
+///
+/// Sub-builders are loaded from the ecosystem manifest `[sub_builders]` section,
+/// falling back to the hardcoded blueGate entry for nanowire compatibility.
 async fn run_sub_builder_harvests(
+    sub_builders: &[ResolvedSubBuilder],
     primal: &str,
     commit: Option<&str>,
     dry_run: bool,
 ) -> Vec<(String, ShadowOutcome)> {
     let mut results = Vec::new();
 
-    for sb in SUB_BUILDERS {
+    for sb in sub_builders {
         info!(
             primal,
-            gate = sb.gate,
-            target = sb.target,
+            gate = %sb.gate,
+            target = %sb.target,
             "sub-builder dispatch"
         );
 
         if dry_run {
             results.push((
-                sb.gate.to_string(),
+                sb.gate.clone(),
                 ShadowOutcome {
                     ok: true,
                     message: format!(
@@ -228,15 +258,15 @@ async fn run_sub_builder_harvests(
         }
 
         let outcome = dispatch_to_sub_builder(sb, primal, commit).await;
-        results.push((sb.gate.to_string(), outcome));
+        results.push((sb.gate.clone(), outcome));
     }
 
     results
 }
 
-/// SSH to a sub-builder gate and run `membrane plasmid.harvest`.
+/// SSH to a sub-builder gate and run `membrane plasmid.harvest` (nanowire transport).
 async fn dispatch_to_sub_builder(
-    sb: &SubBuilder,
+    sb: &ResolvedSubBuilder,
     primal: &str,
     commit: Option<&str>,
 ) -> ShadowOutcome {
@@ -269,7 +299,7 @@ async fn dispatch_to_sub_builder(
             "ConnectTimeout=10",
             "-o",
             "BatchMode=yes",
-            sb.ssh_host,
+            &sb.ssh_host,
             &remote_cmd,
         ])
         .output()
@@ -557,14 +587,14 @@ mod tests {
     }
 
     #[test]
-    fn sub_builders_configured() {
+    fn sub_builders_load_from_manifest_or_fallback() {
+        let builders = load_sub_builders();
         assert!(
-            !SUB_BUILDERS.is_empty(),
-            "should have at least one sub-builder"
+            !builders.is_empty(),
+            "should have at least one sub-builder (manifest or fallback)"
         );
-        let bg = &SUB_BUILDERS[0];
-        assert_eq!(bg.gate, "blueGate");
-        assert_eq!(bg.target, "x86_64-pc-windows-gnu");
+        let has_windows = builders.iter().any(|b| b.target == "x86_64-pc-windows-gnu");
+        assert!(has_windows, "should include windows-gnu sub-builder");
     }
 
     #[test]
@@ -573,8 +603,9 @@ mod tests {
             .enable_all()
             .build()
             .unwrap();
-        let results = rt.block_on(run_sub_builder_harvests("squirrel", None, true));
-        assert_eq!(results.len(), SUB_BUILDERS.len());
+        let builders = load_sub_builders();
+        let results = rt.block_on(run_sub_builder_harvests(&builders, "squirrel", None, true));
+        assert_eq!(results.len(), builders.len());
         for (gate, outcome) in &results {
             assert!(outcome.ok, "dry-run should always succeed for {gate}");
             assert!(outcome.message.contains("dry-run"));

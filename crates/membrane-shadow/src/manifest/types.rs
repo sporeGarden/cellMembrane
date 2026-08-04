@@ -29,6 +29,10 @@ pub struct EcosystemManifest {
     /// Gate profiles keyed by gate name (e.g. `eastGate`).
     #[serde(default)]
     pub gates: BTreeMap<String, GateProfile>,
+    /// Sub-builder dispatch table keyed by target triple.
+    /// Replaces the hardcoded `SUB_BUILDERS` const in `sovereign.rs`.
+    #[serde(default)]
+    pub sub_builders: BTreeMap<String, SubBuilderEntry>,
 }
 
 /// Build metadata for a single primal — sovereign CI pipeline config.
@@ -258,6 +262,30 @@ pub struct CompositionProfile {
     /// Example gates using this composition.
     #[serde(default)]
     pub examples: Vec<String>,
+}
+
+/// Sub-builder entry — manifest-driven cross-target dispatch configuration.
+///
+/// Keyed by target triple in `ecosystem_manifest.toml`:
+/// ```toml
+/// [sub_builders."x86_64-pc-windows-gnu"]
+/// gate = "blueGate"
+/// ssh_host = "blueGate"
+/// membrane_bin = "membrane.exe"
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubBuilderEntry {
+    /// Gate name that handles this target (e.g., `"blueGate"`).
+    pub gate: String,
+    /// SSH host or alias for nanowire dispatch.
+    pub ssh_host: String,
+    /// Membrane binary name on the remote gate (e.g., `"membrane.exe"`).
+    #[serde(default = "default_membrane_bin")]
+    pub membrane_bin: String,
+}
+
+fn default_membrane_bin() -> String {
+    "membrane".into()
 }
 
 /// Gate profile — topology-aware configuration for deterministic deployment.
