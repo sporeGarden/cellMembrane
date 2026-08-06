@@ -104,7 +104,7 @@ pub(crate) fn resolve_by_role(ctx: &ResolutionContext, role: &str) -> Option<Tra
 
 /// Map a role name to its service capability via `GateRole::as_capability()`.
 #[must_use]
-pub(crate) fn role_to_capability(role: &str) -> Option<ServiceCapability> {
+fn role_to_capability(role: &str) -> Option<ServiceCapability> {
     cellmembrane_types::GateRole::from(role).as_capability()
 }
 

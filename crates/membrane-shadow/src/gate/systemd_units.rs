@@ -144,7 +144,7 @@ impl<'a> GatewayUnitParams<'a> {
 /// `capability.call` IPC and routes to the correct backend. The `http.proxy`
 /// method enables it to also serve as a reverse proxy.
 #[must_use]
-pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
+pub(super) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
     use std::fmt::Write as _;
 
     let relay_binary = cellmembrane_types::MembraneService::binary_for(
@@ -200,7 +200,7 @@ pub(crate) fn generate_songbird_unit(params: &GatewayUnitParams<'_>) -> String {
 /// the mesh relay's `http.proxy` method. It manages ACME certificate renewal
 /// via HTTP-01.
 #[must_use]
-pub(crate) fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
+fn generate_beardog_unit(params: &GatewayUnitParams<'_>) -> String {
     let crypto_binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );

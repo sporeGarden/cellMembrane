@@ -53,8 +53,8 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     let impulse = ImpulseFile {
         impulse: ImpulseMeta {
             id: impulse_id.clone(),
-            impulse_type: args.impulse_type.clone(),
-            priority: args.priority.clone(),
+            impulse_type: args.impulse_type,
+            priority: args.priority,
             wave,
         },
         from: ImpulseFrom {

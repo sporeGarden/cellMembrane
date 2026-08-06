@@ -78,7 +78,7 @@ pub struct FocusStrand {
 }
 
 /// Focus status values.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum FocusStatus {
     /// Actively being worked on.
@@ -267,7 +267,7 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
         strands: BraidStrands {
             focus: FocusStrand {
                 summary: args.summary.to_string(),
-                status: args.status.clone(),
+                status: args.status,
             },
             breadcrumbs,
             next,

@@ -13,7 +13,7 @@ use tracing::warn;
 /// handles both the struct format `{ blake3 = "...", size = N }` and legacy
 /// plain-string format `"hash"` — ensuring all depot formats parse correctly.
 #[must_use]
-pub(crate) fn verify_local_depot(arch: &str) -> super::ProbeResult {
+pub(super) fn verify_local_depot(arch: &str) -> super::ProbeResult {
     let dest_root = resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 

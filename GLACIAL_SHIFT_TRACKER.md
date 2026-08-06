@@ -1,13 +1,26 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-06 (Wave 156j-c)
+**Last updated:** 2026-08-06 (Wave 156l)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 156l (visibility narrowing + Copy enums + signing extraction + base64 bump):**
+Deep encapsulation and API hygiene pass. (1) Visibility narrowing: 5 `pub(crate)` fns
+narrowed to private (`parse_topology_map`, `role_to_capability`, `resolve_ndk_strip`,
+`generate_beardog_unit`, `resolve_primal_tarpc_socket_paths`) and 9 narrowed to
+`pub(super)` (`validate_lineage`, `summarize_depot_freshness`, `resolve_ndk_linker`,
+`spawn_primal_server`, `verify_local_depot`, `load_gateway_config`,
+`resolve_canary_bin_dir`, `generate_songbird_unit`, `resolve_biomeos_socket_dir`).
+(2) `Copy` derive added to fieldless enums `ImpulseType`, `Priority`, `FocusStatus` —
+eliminates 3 unnecessary `.clone()` calls. (3) `plasmid/signing.rs` extracted:
+`signing_crypto.rs` (164L) contains ed25519 verify + bearDog UDS signing client;
+`signing.rs` reduced from 676L to 521L. (4) `base64` dependency bumped from 0.22.1 to
+0.23.1. Zero clippy (pedantic), zero fmt drift, 1293 tests pass.
 
 **Wave 156j-c (dispatch extraction + typed error constructors + error API consolidation):**
 Smart refactoring and API evolution pass. (1) `dispatch/mod.rs` extracted from 713L

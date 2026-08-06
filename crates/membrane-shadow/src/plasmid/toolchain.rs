@@ -134,7 +134,7 @@ pub(super) async fn validate_elf_arch(bin_path: &Path, target: &str) -> crate::R
 ///
 /// Searches for the linker at `$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/`.
 /// Returns `None` if NDK is not installed or the linker is not found.
-pub(crate) fn resolve_ndk_linker() -> Option<std::path::PathBuf> {
+pub(super) fn resolve_ndk_linker() -> Option<std::path::PathBuf> {
     let ndk_home = std::env::var(ENV_ANDROID_NDK_HOME).ok()?;
     let ndk_path = std::path::Path::new(&ndk_home);
 
@@ -156,7 +156,7 @@ pub(crate) fn resolve_ndk_linker() -> Option<std::path::PathBuf> {
 }
 
 /// Resolve the NDK `llvm-strip` path for Android targets.
-pub(crate) fn resolve_ndk_strip() -> Option<String> {
+fn resolve_ndk_strip() -> Option<String> {
     let ndk_home = std::env::var(ENV_ANDROID_NDK_HOME).ok()?;
     let strip = std::path::Path::new(&ndk_home)
         .join("toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip");

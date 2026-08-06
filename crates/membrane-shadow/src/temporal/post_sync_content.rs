@@ -65,7 +65,7 @@ pub async fn collect_cascade_heads(
 }
 
 /// Quick depot freshness summary — reports how many binaries exist and are recent.
-pub(crate) fn summarize_depot_freshness() -> String {
+pub(super) fn summarize_depot_freshness() -> String {
     let depot_dir = crate::plasmid::resolve_path(
         None,
         cellmembrane_types::service::ENV_PLASMIDBIN_DEPOT,

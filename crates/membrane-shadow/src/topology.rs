@@ -34,7 +34,7 @@ pub(crate) fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
 /// The TOML uses nested `[cytoplasm.zones.<id>]` and `[segments.<id>]` sections
 /// which don't map to a flat serde struct directly. This function extracts each
 /// section manually for resilience against upstream TOML schema evolution.
-pub(crate) fn parse_topology_map(contents: &str) -> Result<TopologyMap> {
+fn parse_topology_map(contents: &str) -> Result<TopologyMap> {
     let table: toml::Table = contents.parse().map_err(ShadowError::Toml)?;
 
     let meta = table

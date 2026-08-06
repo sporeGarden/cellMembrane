@@ -31,6 +31,7 @@ mod refresh;
 pub(crate) mod sandbox;
 pub(crate) mod scheduler;
 pub(crate) mod signing;
+mod signing_crypto;
 pub(crate) mod toolchain;
 
 pub use build::BuildArgs;
@@ -153,7 +154,7 @@ pub(crate) async fn stage_binary(
 /// Resolves the `ServerContract` from the service registry so that broker
 /// primals (e.g. biomeOS with `BiomeosApi`) get the correct subcommand
 /// (`neural-api`) instead of the generic `server`.
-pub(crate) fn spawn_primal_server(
+pub(super) fn spawn_primal_server(
     binary: &std::path::Path,
     socket: &std::path::Path,
     extra_args: &[(&str, &std::path::Path)],

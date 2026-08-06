@@ -41,7 +41,7 @@ pub(crate) fn resolve_mesh_relay_socket() -> String {
 }
 
 /// Resolve the biomeOS neural-api socket directory.
-pub(crate) fn resolve_biomeos_socket_dir() -> String {
+pub(super) fn resolve_biomeos_socket_dir() -> String {
     std::env::var(cellmembrane_types::service::ENV_BIOMEOS_SOCKET_DIR).unwrap_or_else(|_| {
         let xdg = cellmembrane_types::service::resolve_xdg_runtime_dir();
         let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
@@ -88,7 +88,7 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
 /// Not yet called from production code — primals are shipping dual-socket
 /// incrementally. Will be wired once tarpc health probing is added.
 #[allow(dead_code)]
-pub(crate) fn resolve_primal_tarpc_socket_paths(primal: &str) -> Vec<String> {
+fn resolve_primal_tarpc_socket_paths(primal: &str) -> Vec<String> {
     let svc = match cellmembrane_types::MembraneService::for_binary(primal) {
         Some(s) if s.has_tarpc => s,
         _ => return Vec::new(),

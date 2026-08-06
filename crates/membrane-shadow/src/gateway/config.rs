@@ -214,7 +214,7 @@ pub(super) fn generate_from_manifest(gate_name: &str) -> Result<GatewayConfig> {
 }
 
 /// Load gateway config from a TOML file path (first arg) or default location.
-pub(crate) fn load_gateway_config(args: &[&str]) -> Result<GatewayConfig> {
+pub(super) fn load_gateway_config(args: &[&str]) -> Result<GatewayConfig> {
     let path = args.first().map_or_else(
         || {
             let config_dir = cellmembrane_types::service::env_or(

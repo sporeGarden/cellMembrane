@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Impulse types following the `IMPULSE_POTENTIAL_STANDARD`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ImpulseType {
     /// Amends a standing order — action required.
@@ -52,7 +52,7 @@ impl std::str::FromStr for ImpulseType {
 }
 
 /// Priority levels for impulses.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Priority {
     /// Normal workflow coordination.
