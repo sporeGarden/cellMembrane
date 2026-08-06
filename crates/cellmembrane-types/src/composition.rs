@@ -351,7 +351,7 @@ impl CompositionSpec {
     ///
     /// Returns `(binary_name, socket_path, is_tarpc)` triples for all UDS-only
     /// services. Tarpc sockets are appended after the JSON-RPC socket for each
-    /// primal that has `has_tarpc: true`.
+    /// primal that supports tarpc.
     #[must_use]
     pub fn all_socket_paths_resolved(
         &self,

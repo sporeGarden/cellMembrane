@@ -81,8 +81,8 @@ pub use process::{
 };
 pub use provider::{ProviderConfig, SubstrateProfile};
 pub use service::{
-    BinaryIntegrity, HashAlgorithm, MembraneService, ServerContract, ServiceCapability,
-    binary_integrity_for,
+    BinaryIntegrity, HashAlgorithm, IpcProtocol, MembraneService, ServerContract,
+    ServiceCapability, binary_integrity_for,
 };
 pub use signing::{DepotSignature, DepotTrustPolicy, SignatureAlgorithm, SignaturesFile};
 pub use sync::{

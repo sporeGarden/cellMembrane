@@ -8,7 +8,72 @@
 //!   3. `{XDG_RUNTIME_DIR}/{namespace}/{binary}.sock`
 //!   4. Additional `socket_aliases` from the service registry
 
+use cellmembrane_types::service::IpcProtocol;
 use std::path::Path;
+
+/// Result of a G65 protocol negotiation probe.
+#[derive(Debug, Clone)]
+pub(crate) struct NegotiationResult {
+    /// The protocol selected by the server (or `JsonRpc` if no negotiation).
+    pub selected: IpcProtocol,
+    /// Whether the server actually replied with a `PROTOCOL:` line (true G65).
+    /// `false` means the server didn't negotiate — legacy JSON-RPC assumed.
+    pub negotiated: bool,
+}
+
+/// Probe a primal's UDS socket with G65 protocol negotiation.
+///
+/// Sends `PROTOCOLS: tarpc,jsonrpc\n` and waits up to the negotiation
+/// timeout for a `PROTOCOL: <name>\n` response. If the server responds,
+/// it supports G65 and the selected protocol is returned. If the timeout
+/// fires or the server sends non-negotiation data, the connection is
+/// assumed to be legacy JSON-RPC.
+pub(crate) async fn negotiate_protocol(
+    socket_path: &str,
+    client_prefs: &[IpcProtocol],
+) -> crate::Result<NegotiationResult> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let stream = tokio::net::UnixStream::connect(socket_path).await?;
+    let (reader, mut writer) = tokio::io::split(stream);
+
+    let wire: Vec<&str> = client_prefs.iter().map(|p| p.wire_name()).collect();
+    let request_line = format!(
+        "{}{}\n",
+        cellmembrane_types::service::PROTOCOL_NEGOTIATION_PREFIX,
+        wire.join(",")
+    );
+    writer.write_all(request_line.as_bytes()).await?;
+
+    let timeout = std::time::Duration::from_millis(
+        cellmembrane_types::service::PROTOCOL_NEGOTIATION_TIMEOUT_MS,
+    );
+    let mut buf_reader = BufReader::new(reader);
+    let mut line = String::new();
+
+    let fallback = || NegotiationResult {
+        selected: IpcProtocol::JsonRpc,
+        negotiated: false,
+    };
+
+    let Ok(Ok(n)) = tokio::time::timeout(timeout, buf_reader.read_line(&mut line)).await else {
+        return Ok(fallback());
+    };
+    if n == 0 {
+        return Ok(fallback());
+    }
+
+    let trimmed = line.trim();
+    Ok(trimmed
+        .strip_prefix(cellmembrane_types::service::PROTOCOL_NEGOTIATION_RESPONSE)
+        .map_or_else(fallback, |proto_name| {
+            let selected = IpcProtocol::from_wire(proto_name).unwrap_or(IpcProtocol::JsonRpc);
+            NegotiationResult {
+                selected,
+                negotiated: true,
+            }
+        }))
+}
 
 /// Native UDS JSON-RPC call with riboCipher policy probe.
 pub(crate) async fn uds_jsonrpc_call(socket_path: &str, request: &str) -> crate::Result<String> {
@@ -49,15 +114,15 @@ pub(super) fn resolve_biomeos_socket_dir() -> String {
     })
 }
 
-/// Build the candidate JSON-RPC socket paths for a primal, ordered by priority.
+/// Build the candidate socket paths for a primal, ordered by priority.
 ///
 /// Uses `resolve_socket_base()` which auto-adapts to init scope (system vs
 /// user-space deploy), then adds XDG/`biomeos` namespace paths for user
 /// session discovery. Checks the service registry for `api_socket` aliases
 /// and `socket_aliases`.
 ///
-/// Returns only JSON-RPC sockets — use [`resolve_primal_tarpc_socket_paths`]
-/// for tarpc binary-protocol sockets.
+/// Under G65, these are the only sockets needed — protocol negotiation
+/// selects `tarpc` or `jsonrpc` at connection time on a single socket.
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     let socket_base = cellmembrane_types::service::resolve_socket_base();
     let xdg_runtime = cellmembrane_types::service::resolve_xdg_runtime_dir();
@@ -81,7 +146,7 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
 
 /// Build candidate tarpc socket paths for a dual-protocol primal (G64).
 ///
-/// Returns an empty vec if the primal has `has_tarpc: false` or is unknown
+/// Returns an empty vec if the primal has no tarpc support or is unknown
 /// to the registry. Probes `{socket_base}/{binary}.tarpc.sock` and
 /// `{xdg}/{namespace}/{binary}.tarpc.sock`.
 ///
@@ -90,7 +155,7 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
 #[allow(dead_code)]
 fn resolve_primal_tarpc_socket_paths(primal: &str) -> Vec<String> {
     let svc = match cellmembrane_types::MembraneService::for_binary(primal) {
-        Some(s) if s.has_tarpc => s,
+        Some(s) if s.has_tarpc() => s,
         _ => return Vec::new(),
     };
     let socket_base = cellmembrane_types::service::resolve_socket_base();
@@ -133,11 +198,17 @@ mod tests {
     }
 
     #[test]
-    fn tarpc_socket_paths_empty_for_non_serving() {
+    fn tarpc_socket_paths_empty_for_non_primal() {
+        let paths = resolve_primal_tarpc_socket_paths("caddy");
+        assert!(paths.is_empty(), "caddy is external — should return empty");
+    }
+
+    #[test]
+    fn tarpc_socket_paths_non_empty_for_primal() {
         let paths = resolve_primal_tarpc_socket_paths("beardog");
         assert!(
-            paths.is_empty(),
-            "beardog has_tarpc=false — should return empty"
+            !paths.is_empty(),
+            "beardog supports tarpc — should return paths"
         );
     }
 

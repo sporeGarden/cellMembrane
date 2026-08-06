@@ -250,6 +250,9 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
 /// orchestration stack. Falls back to direct UDS when neuralAPI is unavailable.
 /// Any valid JSON-RPC response (including method-not-found errors) proves
 /// the primal is alive.
+///
+/// Under G65, also attempts protocol negotiation on the primary socket to
+/// discover which protocols the primal supports at runtime.
 async fn probe_primal_jsonrpc(primal: &str) -> bool {
     match crate::bridge::try_bridge(primal, "health", serde_json::json!({})).await {
         Ok(Some(result)) => return result.get("status").is_some() || result.is_object(),
@@ -263,6 +266,25 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
     for socket_path in &socket_paths {
         if !Path::new(socket_path).exists() {
             continue;
+        }
+
+        if let Ok(neg) = super::sockets::negotiate_protocol(
+            socket_path,
+            &[
+                cellmembrane_types::IpcProtocol::Tarpc,
+                cellmembrane_types::IpcProtocol::JsonRpc,
+            ],
+        )
+        .await
+        {
+            if neg.negotiated {
+                tracing::info!(
+                    primal = %primal,
+                    selected = %neg.selected,
+                    "G65 negotiation succeeded"
+                );
+                return true;
+            }
         }
 
         if let Ok(response) = uds_jsonrpc_call(socket_path, request).await

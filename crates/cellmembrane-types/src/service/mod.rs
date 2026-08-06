@@ -24,6 +24,73 @@ use crate::composition::MembraneComposition;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// IPC protocol for UDS communication (G65 Protocol Negotiation Standard).
+///
+/// Each primal declares which protocols it supports. Under G65, a single
+/// socket negotiates the best mutual protocol at connection time.
+/// `JsonRpc` is always the fallback — if no negotiation occurs, the
+/// connection proceeds as JSON-RPC (full backward compatibility).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IpcProtocol {
+    /// JSON-RPC 2.0 — text-based, human-readable, default fallback.
+    JsonRpc,
+    /// tarpc — binary, type-safe, high-performance Rust RPC.
+    Tarpc,
+}
+
+impl IpcProtocol {
+    /// Wire name used in the G65 `PROTOCOLS:` negotiation line.
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::JsonRpc => "jsonrpc",
+            Self::Tarpc => "tarpc",
+        }
+    }
+
+    /// Parse from a G65 wire name.
+    #[must_use]
+    pub fn from_wire(s: &str) -> Option<Self> {
+        match s.trim() {
+            "jsonrpc" | "json-rpc" | "json_rpc" => Some(Self::JsonRpc),
+            "tarpc" => Some(Self::Tarpc),
+            _ => None,
+        }
+    }
+
+    /// Select the best mutual protocol (client preference order wins).
+    ///
+    /// Returns `JsonRpc` as fallback if no mutual match is found.
+    #[must_use]
+    pub fn negotiate(client: &[Self], server: &[Self]) -> Self {
+        for c in client {
+            if server.contains(c) {
+                return *c;
+            }
+        }
+        Self::JsonRpc
+    }
+}
+
+impl fmt::Display for IpcProtocol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.wire_name())
+    }
+}
+
+/// G65 protocol negotiation wire prefix.
+pub const PROTOCOL_NEGOTIATION_PREFIX: &str = "PROTOCOLS: ";
+
+/// G65 protocol negotiation response prefix.
+pub const PROTOCOL_NEGOTIATION_RESPONSE: &str = "PROTOCOL: ";
+
+/// Timeout for the first line read during negotiation (milliseconds).
+///
+/// If no `PROTOCOLS:` line arrives within this window, the connection
+/// proceeds as JSON-RPC.
+pub const PROTOCOL_NEGOTIATION_TIMEOUT_MS: u64 = 100;
+
 /// Transport protocol for a service port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -102,8 +169,10 @@ pub enum ServerContract {
     /// Used by: hbbs, hbbr, caddy
     External,
     /// Tarpc-primary server — accepts both `--socket` (JSON-RPC) and
-    /// `--tarpc-socket` (binary protocol) under Cephalization (G64).
-    /// Used by: loamspine, rhizocrypt
+    /// `--tarpc-socket` (binary protocol) under C2 dual-socket pattern.
+    /// Under G65, these primals transition to `SocketOnly` as negotiation
+    /// replaces the separate tarpc socket.
+    /// Used by: loamspine, rhizocrypt (transitional — will be `SocketOnly` post-G65)
     Tarpc,
 }
 
@@ -317,11 +386,11 @@ impl ServicePaths {
 
     /// Resolve tarpc socket path for a dual-protocol service.
     ///
-    /// Returns `None` if the service doesn't support tarpc (`has_tarpc: false`).
+    /// Returns `None` if the service doesn't support tarpc.
     /// Path follows the Cephalization convention: `{socket_base}/{binary}.tarpc.sock`.
     #[must_use]
     pub fn tarpc_socket_path(&self, service: &MembraneService) -> Option<String> {
-        if !service.has_tarpc {
+        if !service.has_tarpc() {
             return None;
         }
         Some(format!(
@@ -378,13 +447,13 @@ pub struct MembraneService {
     /// Alternative socket name for JSON-RPC probing (e.g. `"neural-api"` for biomeOS).
     /// When `Some`, health probes prefer this over `{binary}.sock`.
     pub api_socket: Option<&'static str>,
-    /// Whether this service also provides a tarpc binary-protocol socket.
+    /// IPC protocols this primal supports (G65 Cephalization).
     ///
-    /// Under Cephalization (G64), dual-socket primals expose both JSON-RPC on
-    /// `{binary}.sock` and tarpc on `{binary}.tarpc.sock`. The tarpc socket
-    /// carries high-frequency composition traffic (provenance braiding, CAS ops,
-    /// GPU dispatch) while JSON-RPC handles discovery and diagnostic probes.
-    pub has_tarpc: bool,
+    /// Primals that support protocol negotiation list all protocols they can
+    /// serve. During the C2→G65 transition, `has_tarpc()` is derived from this.
+    /// Under G65, a single socket negotiates the best protocol at connection
+    /// time. All primals implicitly support `JsonRpc` (the fallback).
+    pub protocols: &'static [IpcProtocol],
     /// Capability socket aliases this primal exposes (in addition to `{binary}.sock`).
     ///
     /// Each primal may create additional sockets named by capability rather than
@@ -431,6 +500,23 @@ impl MembraneService {
         matches!(self.vps_transport, TransportMode::UdsOnly)
     }
 
+    /// Whether this primal supports tarpc (derived from `protocols` field).
+    ///
+    /// Backward-compatible accessor for the C2→G65 transition period.
+    #[must_use]
+    pub fn has_tarpc(&self) -> bool {
+        self.protocols.contains(&IpcProtocol::Tarpc)
+    }
+
+    /// Whether this primal supports G65 protocol negotiation.
+    ///
+    /// A primal supports G65 if it declares more than just `JsonRpc` in its
+    /// protocols list. G65 primals serve all protocols on a single socket.
+    #[must_use]
+    pub const fn supports_negotiation(&self) -> bool {
+        self.protocols.len() > 1
+    }
+
     /// Resolve install path using configurable `ServicePaths` (capability-based).
     ///
     /// Uses `system_install_path` for system services, otherwise derives
@@ -448,7 +534,8 @@ impl MembraneService {
 
     /// Resolve tarpc socket path using configurable `ServicePaths`.
     ///
-    /// Returns `None` if the primal doesn't serve tarpc (`has_tarpc: false`).
+    /// Returns `None` if the primal doesn't support tarpc.
+    /// Under G65, this path is deprecated — all protocols share one socket.
     #[must_use]
     pub fn resolved_tarpc_socket_path(&self, paths: &ServicePaths) -> Option<String> {
         paths.tarpc_socket_path(self)
@@ -574,5 +661,107 @@ impl MembraneService {
         }
         parts.dedup();
         parts.join("|")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ipc_protocol_wire_roundtrip() {
+        assert_eq!(
+            IpcProtocol::from_wire("jsonrpc"),
+            Some(IpcProtocol::JsonRpc)
+        );
+        assert_eq!(IpcProtocol::from_wire("tarpc"), Some(IpcProtocol::Tarpc));
+        assert_eq!(
+            IpcProtocol::from_wire("json-rpc"),
+            Some(IpcProtocol::JsonRpc)
+        );
+        assert_eq!(
+            IpcProtocol::from_wire("json_rpc"),
+            Some(IpcProtocol::JsonRpc)
+        );
+        assert_eq!(IpcProtocol::from_wire("unknown"), None);
+    }
+
+    #[test]
+    fn ipc_protocol_display() {
+        assert_eq!(IpcProtocol::JsonRpc.to_string(), "jsonrpc");
+        assert_eq!(IpcProtocol::Tarpc.to_string(), "tarpc");
+    }
+
+    #[test]
+    fn negotiate_client_preference_wins() {
+        let client = [IpcProtocol::Tarpc, IpcProtocol::JsonRpc];
+        let server = [IpcProtocol::JsonRpc, IpcProtocol::Tarpc];
+        assert_eq!(IpcProtocol::negotiate(&client, &server), IpcProtocol::Tarpc);
+    }
+
+    #[test]
+    fn negotiate_fallback_to_jsonrpc() {
+        let client = [IpcProtocol::Tarpc];
+        let server = [IpcProtocol::JsonRpc];
+        assert_eq!(
+            IpcProtocol::negotiate(&client, &server),
+            IpcProtocol::JsonRpc
+        );
+    }
+
+    #[test]
+    fn negotiate_empty_client_falls_back() {
+        assert_eq!(
+            IpcProtocol::negotiate(&[], &[IpcProtocol::Tarpc]),
+            IpcProtocol::JsonRpc
+        );
+    }
+
+    #[test]
+    fn has_tarpc_derived_from_protocols() {
+        let svc = MembraneService::for_binary("loamspine").expect("loamspine in registry");
+        assert!(svc.has_tarpc());
+
+        let ext = MembraneService::for_binary("caddy").expect("caddy in registry");
+        assert!(!ext.has_tarpc());
+    }
+
+    #[test]
+    fn supports_negotiation_dual_protocol() {
+        let svc = MembraneService::for_binary("beardog").expect("beardog in registry");
+        assert!(svc.supports_negotiation());
+
+        let ext = MembraneService::for_binary("hbbs").expect("hbbs in registry");
+        assert!(!ext.supports_negotiation());
+    }
+
+    #[test]
+    fn all_primals_support_dual_protocol() {
+        for svc in MembraneService::all() {
+            if svc.is_primal {
+                assert!(
+                    svc.has_tarpc(),
+                    "{} is a primal but doesn't support tarpc",
+                    svc.binary
+                );
+                assert!(
+                    svc.protocols.contains(&IpcProtocol::JsonRpc),
+                    "{} missing JsonRpc",
+                    svc.binary
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn g65_shipped_primals_use_socket_only_contract() {
+        for name in ["squirrel", "beardog", "sweetgrass", "rhizocrypt"] {
+            let svc = MembraneService::for_binary(name).expect(name);
+            assert_ne!(
+                svc.server_contract,
+                ServerContract::Tarpc,
+                "{name} shipped G65 but still has Tarpc contract"
+            );
+        }
     }
 }

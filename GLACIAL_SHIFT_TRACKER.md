@@ -1,13 +1,29 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-06 (Wave 156m)
+**Last updated:** 2026-08-06 (Wave 156p)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 156p (G65 protocol negotiation — cellMembrane discovery evolution):**
+G65 Phase 3 of Cephalization. (1) New `IpcProtocol` enum (`JsonRpc`, `Tarpc`) with
+G65 wire format (`PROTOCOLS:`/`PROTOCOL:` negotiation), `negotiate()` selection,
+and `wire_name()`/`from_wire()` roundtrip. Constants: `PROTOCOL_NEGOTIATION_PREFIX`,
+`PROTOCOL_NEGOTIATION_RESPONSE`, `PROTOCOL_NEGOTIATION_TIMEOUT_MS`. (2) `MembraneService`
+evolves: `has_tarpc: bool` → `protocols: &'static [IpcProtocol]`; backward-compatible
+`has_tarpc()` derived method retained; new `supports_negotiation()` for G65-aware
+callers. (3) Registry: all 15 primals declared `DUAL_PROTOCOL` (`[JsonRpc, Tarpc]`),
+external services `JSONRPC_ONLY`. bearDog corrected from false to true (shipped G65
+with 30 tarpc methods). rhizoCrypt `ServerContract` evolved from `Tarpc` to `SocketOnly`
+(G65 shipped). (4) `negotiate_protocol()` async client in `gate/sockets.rs` — sends
+G65 handshake, reads response with timeout, returns `NegotiationResult { selected,
+negotiated }`. (5) Health sweep enhanced: `probe_primal_jsonrpc()` attempts G65
+negotiation before JSON-RPC fallback, logging successful negotiations. Zero clippy
+(pedantic), zero fmt drift, 1303 tests pass (+10 new).
 
 **Wave 156m (type-safe constants + #[from] error propagation + scheduler diagnostics):**
 Safe constant types and idiomatic error propagation. (1) `DEFAULT_SSH_TIMEOUT_SECS`
