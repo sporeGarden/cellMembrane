@@ -46,7 +46,7 @@ sed -i '/^{escaped_hostname} {{/r /tmp/depot-snippet.caddy' {caddyfile} && rm -f
 
     let (out, code) = caddy_exec(config, &inject_cmd).await?;
     if code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Failed to inject depot route: {}",
             out.trim()
         )));
@@ -68,7 +68,7 @@ sed -i '/^{escaped_hostname} {{/r /tmp/depot-snippet.caddy' {caddyfile} && rm -f
         if let Err(e) = caddy_exec(config, &rollback_cmd).await {
             tracing::warn!(error = %e, "Caddyfile rollback also failed");
         }
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Caddyfile validation/reload failed (rolled back): {}",
             reload_out.trim()
         )));
@@ -110,7 +110,7 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
 
     let (out, code) = caddy_exec(config, &inject_cmd).await?;
     if code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Failed to inject checksums route: {}",
             out.trim()
         )));
@@ -123,7 +123,7 @@ pub async fn depot_checksums_provision(config: &ShadowConfig) -> Result<String> 
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
     if reload_code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Caddyfile validation/reload failed after checksums route: {}",
             reload_out.trim()
         )));

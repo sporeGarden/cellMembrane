@@ -13,7 +13,7 @@ pub(super) async fn dispatch_provision(args: &[&str]) -> crate::Result<ShadowOut
     let provider_str = cli::extract_flag_value(args, "--provider").unwrap_or("digitalocean");
     let provider: provision::Provider = provider_str
         .parse()
-        .map_err(|e: provision::ProviderParseError| crate::ShadowError::Config(e.to_string()))?;
+        .map_err(|e: provision::ProviderParseError| crate::ShadowError::config(e))?;
 
     if matches!(provider, provision::Provider::Hetzner) {
         return Ok(ShadowOutcome::fail(
@@ -100,7 +100,7 @@ pub(super) async fn dispatch_provision_status(args: &[&str]) -> crate::Result<Sh
 
     if let Some(id_str) = cli::extract_flag_value(args, "--id") {
         let id: u64 = id_str.parse().map_err(|e| {
-            crate::ShadowError::Config(format!("invalid droplet id '{id_str}': {e}"))
+            crate::ShadowError::config(format!("invalid droplet id '{id_str}': {e}"))
         })?;
         let state = digitalocean::get_droplet(id).await?;
         let msg = format!(
@@ -166,11 +166,11 @@ pub(super) async fn dispatch_provision_destroy(args: &[&str]) -> crate::Result<S
     use crate::provision::digitalocean;
 
     let id_str = cli::extract_flag_value(args, "--id").ok_or_else(|| {
-        crate::ShadowError::Config("gate.provision.destroy requires --id <droplet-id>".into())
+        crate::ShadowError::config("gate.provision.destroy requires --id <droplet-id>")
     })?;
     let id: u64 = id_str
         .parse()
-        .map_err(|e| crate::ShadowError::Config(format!("invalid droplet id '{id_str}': {e}")))?;
+        .map_err(|e| crate::ShadowError::config(format!("invalid droplet id '{id_str}': {e}")))?;
 
     let gate_name = cli::extract_flag_value(args, "--gate");
 
@@ -216,15 +216,15 @@ pub(super) async fn dispatch_provision_verify(args: &[&str]) -> crate::Result<Sh
                 .iter()
                 .find(|e| e.gate_name == name)
                 .ok_or_else(|| {
-                    crate::ShadowError::Config(format!(
+                    crate::ShadowError::config(format!(
                         "gate '{name}' not found in remote canary registry"
                     ))
                 })?;
             (entry.ip.clone(), name.to_string())
         }
         (None, None) => {
-            return Err(crate::ShadowError::Config(
-                "gate.provision.verify requires --ip <addr> or --gate <name>".into(),
+            return Err(crate::ShadowError::config(
+                "gate.provision.verify requires --ip <addr> or --gate <name>",
             ));
         }
     };

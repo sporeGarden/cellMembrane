@@ -77,7 +77,7 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
     let (setup_out, _) = caddy_exec(config, &setup_cmd).await?;
 
     if setup_out.trim() == "MISSING_CERTS" {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "cert files not found at {cert_dir}/{domain}/. \
              BearDog must provision fullchain.pem + privkey.pem before cutover."
         )));
@@ -91,7 +91,7 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
     );
     let (out, code) = caddy_exec(config, &sed_cmd).await?;
     if code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "failed to rewrite TLS directive: {}",
             out.trim()
         )));
@@ -111,7 +111,7 @@ pub async fn tls_external(config: &ShadowConfig, domain: &str) -> Result<String>
         if let Err(e) = caddy_exec(config, &rollback).await {
             tracing::warn!(error = %e, "TLS cutover rollback also failed");
         }
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Caddyfile invalid after TLS cutover (rolled back): {}",
             reload_out.trim()
         )));
@@ -141,7 +141,7 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
     let sed_cmd = format!("sed -i '/^{domain}/,/^}}/ {{ /^[[:space:]]*tls \\//d; }}' {caddyfile}");
     let (out, code) = caddy_exec(config, &sed_cmd).await?;
     if code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "failed to remove external TLS directive: {}",
             out.trim()
         )));
@@ -154,7 +154,7 @@ pub async fn tls_revert_acme(config: &ShadowConfig, domain: &str) -> Result<Stri
     let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
 
     if reload_code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Caddyfile validation/reload failed after revert: {}",
             reload_out.trim()
         )));

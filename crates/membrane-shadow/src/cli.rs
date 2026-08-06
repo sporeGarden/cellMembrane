@@ -11,13 +11,13 @@ use crate::{ShadowError, ShadowOutcome, context, impulse};
 pub(crate) fn require_arg<'a>(args: &[&'a str], idx: usize, name: &str) -> crate::Result<&'a str> {
     args.get(idx)
         .copied()
-        .ok_or_else(|| ShadowError::Config(format!("{name} required")))
+        .ok_or_else(|| ShadowError::config(format!("{name} required")))
 }
 
 /// Split `"org/name"` into `("org", "name")`.
 pub(crate) fn split_repo_path(path: &str) -> crate::Result<(&str, &str)> {
     path.split_once('/')
-        .ok_or_else(|| ShadowError::Config(format!("expected org/name format, got: {path}")))
+        .ok_or_else(|| ShadowError::config(format!("expected org/name format, got: {path}")))
 }
 
 /// Extract `--flag value` from a flat args slice.
@@ -33,9 +33,9 @@ pub(crate) fn parse_impulse_post_args<'a>(
     args: &[&'a str],
 ) -> crate::Result<impulse::PostArgs<'a>> {
     let to_str = extract_flag_value(args, "--to")
-        .ok_or_else(|| ShadowError::Config("--to <gate> required".into()))?;
+        .ok_or_else(|| ShadowError::config("--to <gate> required"))?;
     let subject = extract_flag_value(args, "--subject")
-        .ok_or_else(|| ShadowError::Config("--subject required".into()))?;
+        .ok_or_else(|| ShadowError::config("--subject required"))?;
 
     let type_str = extract_flag_value(args, "--type").unwrap_or("status");
     let impulse_type: impulse::ImpulseType = type_str.parse().map_err(ShadowError::Config)?;
@@ -61,9 +61,9 @@ pub(crate) fn parse_context_weave_args<'a>(
     args: &[&'a str],
 ) -> crate::Result<context::WeaveArgs<'a>> {
     let project = extract_flag_value(args, "--project")
-        .ok_or_else(|| ShadowError::Config("--project <path> required".into()))?;
+        .ok_or_else(|| ShadowError::config("--project <path> required"))?;
     let summary = extract_flag_value(args, "--summary")
-        .ok_or_else(|| ShadowError::Config("--summary required".into()))?;
+        .ok_or_else(|| ShadowError::config("--summary required"))?;
 
     let status_str = extract_flag_value(args, "--status").unwrap_or("active");
     let status: context::FocusStatus = status_str.parse().map_err(ShadowError::Config)?;

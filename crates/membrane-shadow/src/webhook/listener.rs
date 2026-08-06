@@ -76,8 +76,8 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
 /// Webhook listener requires Unix domain sockets.
 #[cfg(not(unix))]
 pub async fn listen(_config: &crate::ShadowConfig, _socket_path: Option<&str>) -> Result<()> {
-    Err(crate::error::ShadowError::Config(
-        "webhook UDS listener unavailable on this platform".into(),
+    Err(crate::error::ShadowError::config(
+        "webhook UDS listener unavailable on this platform",
     ))
 }
 

@@ -60,7 +60,7 @@ pub(super) fn find_impulse_by_id(
             }
         }
     }
-    Err(ShadowError::Parse(format!(
+    Err(ShadowError::parse(format!(
         "impulse not found: {impulse_id}"
     )))
 }

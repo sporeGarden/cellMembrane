@@ -181,7 +181,7 @@ pub fn verify_signature(secret: &[u8], body: &[u8], signature_hex: &str) -> Resu
     if constant_time_eq(expected.as_bytes(), signature_hex.as_bytes()) {
         Ok(())
     } else {
-        Err(ShadowError::Config("webhook signature mismatch".into()))
+        Err(ShadowError::config("webhook signature mismatch"))
     }
 }
 

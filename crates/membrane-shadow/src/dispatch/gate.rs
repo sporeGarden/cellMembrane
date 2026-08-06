@@ -84,8 +84,8 @@ pub(super) async fn dispatch(
         "gate.status" => dispatch_status().await,
         "gate.profile" => {
             let gate_name = args.first().ok_or_else(|| {
-                crate::error::ShadowError::Config(
-                    "gate.profile requires gate name: membrane gate.profile <gate>".into(),
+                crate::error::ShadowError::config(
+                    "gate.profile requires gate name: membrane gate.profile <gate>",
                 )
             })?;
             dispatch_profile(gate_name)
@@ -97,7 +97,7 @@ pub(super) async fn dispatch(
         "gate.crash-loop" => dispatch_crash_loop(args).await,
         "gate.preflight" => dispatch_preflight(args).await,
         "firewall.generate" => dispatch_firewall_generate(args),
-        "gate.validate" => super::gate_validate(config, args, None).await,
+        "gate.validate" => super::dispatch_validate::gate_validate(config, args, None).await,
         "gate.quorum" => dispatch_quorum(args),
         "wireguard.generate" => dispatch_wireguard_generate(args).await,
         #[cfg(feature = "http")]

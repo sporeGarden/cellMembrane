@@ -75,7 +75,7 @@ async fn dispatch_shadow_export(args: &[&str]) -> Result<ShadowOutcome> {
 
     tokio::fs::create_dir_all(&export_dir)
         .await
-        .map_err(|e| ShadowError::Build(format!("create export dir: {e}")))?;
+        .map_err(|e| ShadowError::build(format!("create export dir: {e}")))?;
 
     let filename = format!(
         "shadow_{}_{}_{}.json",
@@ -94,7 +94,7 @@ async fn dispatch_shadow_export(args: &[&str]) -> Result<ShadowOutcome> {
 
     tokio::fs::write(&path, &json)
         .await
-        .map_err(|e| ShadowError::Build(format!("write export: {e}")))?;
+        .map_err(|e| ShadowError::build(format!("write export: {e}")))?;
 
     let summary = format!(
         "tower.shadow.export: {}/{} exceed (verdict={}), exported to {}",

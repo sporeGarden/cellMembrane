@@ -203,7 +203,7 @@ async fn route_to_gate(
             .get("message")
             .and_then(|m| m.as_str())
             .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
-        return Err(crate::error::ShadowError::Rpc(format!(
+        return Err(crate::error::ShadowError::rpc(format!(
             "{target_gate}: {dotted}: {msg}"
         )));
     }

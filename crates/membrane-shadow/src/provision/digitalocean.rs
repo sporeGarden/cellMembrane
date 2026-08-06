@@ -18,8 +18,8 @@ fn resolve_token() -> Result<String> {
     std::env::var(cellmembrane_types::service::ENV_DIGITALOCEAN_TOKEN)
         .or_else(|_| std::env::var(cellmembrane_types::service::ENV_DO_TOKEN_COMPAT))
         .map_err(|_| {
-            ShadowError::Config(
-                "DIGITALOCEAN_TOKEN or DO_TOKEN not set — required for cloud provisioning".into(),
+            ShadowError::config(
+                "DIGITALOCEAN_TOKEN or DO_TOKEN not set — required for cloud provisioning",
             )
         })
 }
@@ -147,7 +147,7 @@ pub async fn create_droplet(req: &ProvisionRequest) -> Result<DropletState> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().unwrap_or_default();
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "DO API create failed ({status}): {body_text}"
         )));
     }
@@ -166,7 +166,7 @@ pub async fn wait_until_active(droplet_id: u64, profile: &str) -> Result<Droplet
 
     loop {
         if tokio::time::Instant::now() >= deadline {
-            return Err(ShadowError::Config(format!(
+            return Err(ShadowError::config(format!(
                 "droplet {droplet_id} did not become active within {POLL_TIMEOUT_SECS}s"
             )));
         }
@@ -209,7 +209,7 @@ pub async fn get_droplet(droplet_id: u64) -> Result<DropletState> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().unwrap_or_default();
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "DO API get droplet failed ({status}): {body_text}"
         )));
     }
@@ -235,7 +235,7 @@ pub async fn destroy_droplet(droplet_id: u64) -> Result<()> {
         Ok(())
     } else {
         let body_text = resp.text().unwrap_or_default();
-        Err(ShadowError::Config(format!(
+        Err(ShadowError::config(format!(
             "DO API destroy failed ({status}): {body_text}"
         )))
     }
@@ -255,7 +255,7 @@ pub async fn list_ssh_keys() -> Result<Vec<SshKeyInfo>> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().unwrap_or_default();
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "DO API keys list failed ({status}): {body_text}"
         )));
     }
@@ -292,7 +292,7 @@ pub async fn list_membrane_droplets() -> Result<Vec<DropletState>> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().unwrap_or_default();
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "DO API list failed ({status}): {body_text}"
         )));
     }

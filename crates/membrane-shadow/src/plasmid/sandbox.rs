@@ -455,7 +455,7 @@ fn resolve_dependency_binary_path(binary: &str) -> crate::Result<PathBuf> {
         }
     }
 
-    Err(ShadowError::Build(format!(
+    Err(ShadowError::build(format!(
         "dependency binary '{binary}' not found in production, depot, or local"
     )))
 }
@@ -489,7 +489,7 @@ pub(crate) async fn validate_and_promote(
     let new_path = production_path.with_extension("new");
     tokio::fs::copy(&args.binary_path, &new_path)
         .await
-        .map_err(|e| ShadowError::Build(format!("copy to production staging: {e}")))?;
+        .map_err(|e| ShadowError::build(format!("copy to production staging: {e}")))?;
 
     // Preserve the old binary path for canary retirement
     let old_binary = if production_path.exists() {
@@ -514,7 +514,7 @@ pub(crate) async fn validate_and_promote(
 
     tokio::fs::rename(&new_path, production_path)
         .await
-        .map_err(|e| ShadowError::Build(format!("atomic promote rename: {e}")))?;
+        .map_err(|e| ShadowError::build(format!("atomic promote rename: {e}")))?;
 
     Ok((result, old_binary))
 }

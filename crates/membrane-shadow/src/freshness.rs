@@ -162,8 +162,8 @@ pub async fn auto_commit_gate_heads(
 ) -> Result<()> {
     let wh_dir = root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     if !wh_dir.join(".git").exists() {
-        return Err(ShadowError::Config(
-            "wateringHole not a git repo — cannot auto-commit heads".into(),
+        return Err(ShadowError::config(
+            "wateringHole not a git repo — cannot auto-commit heads",
         ));
     }
 
@@ -304,7 +304,7 @@ pub(crate) fn check_installed_freshness() -> Result<String> {
     }
 
     let root = crate::temporal::resolve_workspace_root()?;
-    let mut report = String::from("=== Binary Freshness Check ===\n");
+    let mut report = "=== Binary Freshness Check ===\n".to_string();
     let mut fresh = 0u32;
     let mut stale = 0u32;
     let mut unknown = 0u32;

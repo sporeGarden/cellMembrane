@@ -43,7 +43,7 @@ impl std::str::FromStr for FetchSource {
             "vps" => Ok(Self::Vps),
             "forgejo" => Ok(Self::Forgejo),
             "wan" => Ok(Self::Wan),
-            _ => Err(ShadowError::Parse(format!(
+            _ => Err(ShadowError::parse(format!(
                 "unknown source '{s}' (expected: github, vps, forgejo, wan)"
             ))),
         }
@@ -352,7 +352,7 @@ async fn resolve_tag(
 ) -> Result<String> {
     explicit
         .map(ToString::to_string)
-        .ok_or_else(|| ShadowError::Config("cannot resolve latest tag without http feature".into()))
+        .ok_or_else(|| ShadowError::config("cannot resolve latest tag without http feature"))
 }
 
 use super::checksum;

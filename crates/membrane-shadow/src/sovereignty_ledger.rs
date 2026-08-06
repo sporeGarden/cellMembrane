@@ -22,9 +22,7 @@ pub async fn rootpulse_commit(
     heads: &BTreeMap<String, String>,
 ) -> Result<String> {
     let endpoint = resolve_neural_api_endpoint().ok_or_else(|| {
-        ShadowError::Config(
-            "NUCLEUS neural-api endpoint not found — rootpulse commit skipped".into(),
-        )
+        ShadowError::config("NUCLEUS neural-api endpoint not found — rootpulse commit skipped")
     })?;
 
     let session_id = format!("wave-{wave_id}-cascade-{}", crate::utc_now_compact());
@@ -56,7 +54,7 @@ pub async fn rootpulse_commit(
 
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
         if parsed.get("error").is_some() && parsed.get("result").is_none() {
-            return Err(ShadowError::Config(format!(
+            return Err(ShadowError::config(format!(
                 "rootpulse commit graph error: {response}"
             )));
         }

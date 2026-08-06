@@ -87,8 +87,8 @@ fn parse_ci_trigger_args<'a>(args: &[&'a str]) -> Result<CiTriggerArgs<'a>> {
     let primal = cli::extract_flag_value(args, "--primal")
         .or_else(|| args.first().copied().filter(|a| !a.starts_with('-')))
         .ok_or_else(|| {
-            ShadowError::Config(
-                "sovereign.ci.trigger requires --primal <name> or positional primal name".into(),
+            ShadowError::config(
+                "sovereign.ci.trigger requires --primal <name> or positional primal name",
             )
         })?;
 

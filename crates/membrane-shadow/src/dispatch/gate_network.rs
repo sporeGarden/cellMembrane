@@ -28,7 +28,7 @@ pub(super) fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowO
         .or_else(|| profile.and_then(|p| p.composition.as_deref()))
         .unwrap_or("relay");
     let composition = MembraneComposition::parse_name(comp_str).ok_or_else(|| {
-        crate::error::ShadowError::Config(format!(
+        crate::error::ShadowError::config(format!(
             "unknown composition: {comp_str} (expected: {})",
             MembraneComposition::all()
                 .iter()
@@ -82,7 +82,7 @@ pub(super) fn dispatch_firewall_generate(args: &[&str]) -> crate::Result<ShadowO
         "ufw" => fw.to_ufw_script(),
         "nftables" | "nft" => fw.to_nftables_script(nft_config.as_ref()),
         other => {
-            return Err(crate::error::ShadowError::Config(format!(
+            return Err(crate::error::ShadowError::config(format!(
                 "unknown format: {other} (expected: nftables, ufw)"
             )));
         }
@@ -108,7 +108,7 @@ pub(super) async fn dispatch_wireguard_generate(args: &[&str]) -> crate::Result<
         .unwrap_or(cellmembrane_types::service::DEFAULT_WG_MESH_SUBNET);
 
     let local_ip = m.mesh_ip_for(&gate_name).map(String::from).ok_or_else(|| {
-        crate::error::ShadowError::Config(format!(
+        crate::error::ShadowError::config(format!(
             "gate '{gate_name}' has no WG mesh IP — add wg_ip to its manifest profile"
         ))
     })?;

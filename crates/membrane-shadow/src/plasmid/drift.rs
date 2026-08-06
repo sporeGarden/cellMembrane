@@ -93,12 +93,12 @@ pub(super) async fn clone_source(
     }
 
     if source.private {
-        Err(crate::error::ShadowError::Git(format!(
+        Err(crate::error::ShadowError::git(format!(
             "private repo — neither Forgejo SSH nor GitHub accessible ({primal})"
         )))
     } else {
-        Err(crate::error::ShadowError::Git(
-            "git clone failed on both Forgejo and GitHub".into(),
+        Err(crate::error::ShadowError::git(
+            "git clone failed on both Forgejo and GitHub",
         ))
     }
 }

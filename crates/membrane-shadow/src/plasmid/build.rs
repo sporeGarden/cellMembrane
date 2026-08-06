@@ -49,7 +49,7 @@ pub async fn build(args: &BuildArgs) -> Result<ShadowOutcome> {
         .unwrap_or_else(|| detect_target_triple().to_string());
 
     let source = sources.get(&args.primal).ok_or_else(|| {
-        ShadowError::Config(format!("primal '{}' not in sources.toml", args.primal))
+        ShadowError::config(format!("primal '{}' not in sources.toml", args.primal))
     })?;
 
     if args.dry_run {
@@ -75,7 +75,7 @@ pub async fn build(args: &BuildArgs) -> Result<ShadowOutcome> {
                 data: serde_json::to_value(&result).ok(),
             })
         }
-        HarvestStatus::Failed => Err(ShadowError::Build(format!(
+        HarvestStatus::Failed => Err(ShadowError::build(format!(
             "plasmid.build failed for {}: {}",
             args.primal, result.detail
         ))),

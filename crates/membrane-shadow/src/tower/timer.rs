@@ -416,8 +416,8 @@ fn resolve_songbird_bin() -> Result<PathBuf> {
         return Ok(system_bin);
     }
 
-    Err(ShadowError::Config(
-        "mesh relay binary not found in depot or install base".into(),
+    Err(ShadowError::config(
+        "mesh relay binary not found in depot or install base",
     ))
 }
 

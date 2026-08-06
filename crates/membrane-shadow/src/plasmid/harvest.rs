@@ -442,7 +442,7 @@ fn determine_primals(
 ) -> Result<Vec<String>> {
     if let Some(name) = args.primal.as_deref() {
         if !sources.contains_key(name) {
-            return Err(ShadowError::Config(format!(
+            return Err(ShadowError::config(format!(
                 "'{name}' not found in sources.toml"
             )));
         }
@@ -614,17 +614,17 @@ pub(super) async fn stage_to_depot_async(
 ) -> crate::Result<(u64, String)> {
     let staging_dir = depot_dir.join("primals").join(target);
     tokio::fs::create_dir_all(&staging_dir).await.map_err(|e| {
-        crate::error::ShadowError::Build(format!("depot staging dir create failed: {e}"))
+        crate::error::ShadowError::build(format!("depot staging dir create failed: {e}"))
     })?;
     let dest = staging_dir.join(primal);
     let tmp = staging_dir.join(format!(".{primal}.new"));
 
     tokio::fs::copy(bin_path, &tmp)
         .await
-        .map_err(|e| crate::error::ShadowError::Build(format!("copy to depot failed: {e}")))?;
+        .map_err(|e| crate::error::ShadowError::build(format!("copy to depot failed: {e}")))?;
     tokio::fs::rename(&tmp, &dest)
         .await
-        .map_err(|e| crate::error::ShadowError::Build(format!("atomic rename failed: {e}")))?;
+        .map_err(|e| crate::error::ShadowError::build(format!("atomic rename failed: {e}")))?;
 
     let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
     let blake3 = super::compute_blake3_file_async(dest).await?;

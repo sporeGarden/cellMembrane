@@ -197,7 +197,7 @@ fn query_unit_restart_info(unit: &str) -> (u32, String) {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut restart_count = 0u32;
-    let mut sub_state = String::from("unknown");
+    let mut sub_state = cellmembrane_types::service::UNKNOWN_LABEL.to_string();
 
     for line in stdout.lines() {
         if let Some(val) = line.strip_prefix("NRestarts=") {

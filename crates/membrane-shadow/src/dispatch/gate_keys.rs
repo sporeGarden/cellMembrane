@@ -12,7 +12,7 @@ pub(super) async fn dispatch_keys() -> crate::Result<ShadowOutcome> {
     let lifetime_secs = crate::gate::key_portal::parse_lifetime_secs(&lifetime_str);
 
     let statuses = crate::gate::key_portal::inspect_certificates().await;
-    let mut msg = String::from("SSH Certificate Status\n");
+    let mut msg = "SSH Certificate Status\n".to_string();
     for s in &statuses {
         let _ = write!(msg, "\n  {}: {} — {}", s.label, s.cert_path, s.status);
         if let Some(ref cert) = s.certificate {

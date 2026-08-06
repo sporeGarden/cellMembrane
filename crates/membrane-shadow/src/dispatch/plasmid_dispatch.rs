@@ -61,8 +61,8 @@ pub(super) async fn dispatch_plasmid(
             let primal = cli::extract_flag_value(args, "--primal")
                 .or_else(|| args.iter().find(|a| !a.starts_with('-')).copied());
             let Some(primal) = primal else {
-                return Err(ShadowError::Config(
-                    "plasmid.build requires --primal <name> or positional primal name".into(),
+                return Err(ShadowError::config(
+                    "plasmid.build requires --primal <name> or positional primal name",
                 ));
             };
             let build_args = plasmid::BuildArgs {
@@ -173,9 +173,8 @@ async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<S
             ))
         }
         "plasmid.canary.promote" => {
-            let primal = cli::extract_flag_value(args, "--primal").ok_or_else(|| {
-                ShadowError::Config("plasmid.canary.promote requires --primal".into())
-            })?;
+            let primal = cli::extract_flag_value(args, "--primal")
+                .ok_or_else(|| ShadowError::config("plasmid.canary.promote requires --primal"))?;
             let install_dir = cellmembrane_types::service::env_or(
                 cellmembrane_types::service::ENV_INSTALL_BASE,
                 cellmembrane_types::service::DEFAULT_INSTALL_BASE,
@@ -231,7 +230,7 @@ async fn dispatch_plasmid_lifecycle(cmd: &str, args: &[&str]) -> crate::Result<S
 
 async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let primal = cli::extract_flag_value(args, "--primal")
-        .ok_or_else(|| ShadowError::Config("plasmid.sandbox requires --primal".into()))?;
+        .ok_or_else(|| ShadowError::config("plasmid.sandbox requires --primal"))?;
     let commit = cli::extract_flag_value(args, "--commit")
         .unwrap_or("HEAD")
         .to_string();

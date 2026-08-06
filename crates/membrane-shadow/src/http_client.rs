@@ -55,12 +55,12 @@ struct ParsedUrl {
 fn parse_url(url: &str) -> Result<ParsedUrl> {
     let (scheme, rest) = url
         .split_once("://")
-        .ok_or_else(|| ShadowError::Http(format!("invalid URL (no scheme): {url}")))?;
+        .ok_or_else(|| ShadowError::http(format!("invalid URL (no scheme): {url}")))?;
 
     let tls = match scheme {
         "https" => true,
         "http" => false,
-        _ => return Err(ShadowError::Http(format!("unsupported scheme: {scheme}"))),
+        _ => return Err(ShadowError::http(format!("unsupported scheme: {scheme}"))),
     };
 
     let (authority, path) = rest
@@ -70,7 +70,7 @@ fn parse_url(url: &str) -> Result<ParsedUrl> {
     let (host, port) = if let Some((h, p)) = authority.rsplit_once(':') {
         let port = p
             .parse::<u16>()
-            .map_err(|_| ShadowError::Http(format!("invalid port: {p}")))?;
+            .map_err(|_| ShadowError::http(format!("invalid port: {p}")))?;
         (h.to_string(), port)
     } else {
         let default = if tls {
@@ -108,7 +108,7 @@ impl HttpClient {
             rustls::crypto::ring::default_provider(),
         ))
         .with_safe_default_protocol_versions()
-        .map_err(|e| ShadowError::Http(format!("TLS config: {e}")))?
+        .map_err(|e| ShadowError::http(format!("TLS config: {e}")))?
         .with_root_certificates(root_store)
         .with_no_client_auth();
 
@@ -126,7 +126,7 @@ impl HttpClient {
             rustls::crypto::ring::default_provider(),
         ))
         .with_safe_default_protocol_versions()
-        .map_err(|e| ShadowError::Http(format!("TLS config: {e}")))?
+        .map_err(|e| ShadowError::http(format!("TLS config: {e}")))?
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
         .with_no_client_auth();
@@ -233,7 +233,7 @@ impl RequestBuilder {
         let timeout = self.timeout_override.unwrap_or(self.client.timeout);
         tokio::time::timeout(timeout, self.send_inner())
             .await
-            .map_err(|_| ShadowError::Http("request timed out".into()))?
+            .map_err(|_| ShadowError::http("request timed out"))?
     }
 
     async fn send_inner(self) -> Result<HttpResponse> {
@@ -242,18 +242,18 @@ impl RequestBuilder {
         let addr = format!("{}:{}", parsed.host, parsed.port);
         let tcp = tokio::net::TcpStream::connect(&addr)
             .await
-            .map_err(|e| ShadowError::Http(format!("connect {addr}: {e}")))?;
+            .map_err(|e| ShadowError::http(format!("connect {addr}: {e}")))?;
 
         if parsed.tls {
             let server_name = rustls::pki_types::ServerName::try_from(parsed.host.as_str())
-                .map_err(|e| ShadowError::Http(format!("invalid SNI: {e}")))?
+                .map_err(|e| ShadowError::http(format!("invalid SNI: {e}")))?
                 .to_owned();
 
             let connector = tokio_rustls::TlsConnector::from(self.client.tls_config.clone());
             let tls_stream = connector
                 .connect(server_name, tcp)
                 .await
-                .map_err(|e| ShadowError::Http(format!("TLS handshake {addr}: {e}")))?;
+                .map_err(|e| ShadowError::http(format!("TLS handshake {addr}: {e}")))?;
 
             self.exchange(tls_stream, &parsed.host, &parsed.path).await
         } else {
@@ -290,17 +290,17 @@ impl RequestBuilder {
         writer
             .write_all(request.as_bytes())
             .await
-            .map_err(|e| ShadowError::Http(format!("write request: {e}")))?;
+            .map_err(|e| ShadowError::http(format!("write request: {e}")))?;
         if let Some(ref body) = self.body {
             writer
                 .write_all(body)
                 .await
-                .map_err(|e| ShadowError::Http(format!("write body: {e}")))?;
+                .map_err(|e| ShadowError::http(format!("write body: {e}")))?;
         }
         writer
             .flush()
             .await
-            .map_err(|e| ShadowError::Http(format!("flush: {e}")))?;
+            .map_err(|e| ShadowError::http(format!("flush: {e}")))?;
 
         parse_response(reader, matches!(self.method, Method::Head)).await
     }
@@ -325,7 +325,7 @@ impl HttpResponse {
     /// Response body as UTF-8 text.
     pub fn text(self) -> std::result::Result<String, ShadowError> {
         String::from_utf8(self.body)
-            .map_err(|e| ShadowError::Http(format!("response not UTF-8: {e}")))
+            .map_err(|e| ShadowError::http(format!("response not UTF-8: {e}")))
     }
 
     /// Deserialize response body as JSON.
@@ -386,7 +386,7 @@ async fn parse_response<R: tokio::io::AsyncRead + Unpin>(
     buf_reader
         .read_line(&mut status_line)
         .await
-        .map_err(|e| ShadowError::Http(format!("read status: {e}")))?;
+        .map_err(|e| ShadowError::http(format!("read status: {e}")))?;
 
     let status = parse_status_line(&status_line)?;
 
@@ -396,7 +396,7 @@ async fn parse_response<R: tokio::io::AsyncRead + Unpin>(
         buf_reader
             .read_line(&mut line)
             .await
-            .map_err(|e| ShadowError::Http(format!("read header: {e}")))?;
+            .map_err(|e| ShadowError::http(format!("read header: {e}")))?;
 
         let trimmed = line.trim_end_matches(['\r', '\n']);
         if trimmed.is_empty() {
@@ -428,11 +428,11 @@ async fn parse_response<R: tokio::io::AsyncRead + Unpin>(
 fn parse_status_line(line: &str) -> Result<u16> {
     let parts: Vec<&str> = line.splitn(3, ' ').collect();
     if parts.len() < 2 {
-        return Err(ShadowError::Http(format!("malformed status line: {line}")));
+        return Err(ShadowError::http(format!("malformed status line: {line}")));
     }
     parts[1]
         .parse::<u16>()
-        .map_err(|_| ShadowError::Http(format!("invalid status code: {}", parts[1])))
+        .map_err(|_| ShadowError::http(format!("invalid status code: {}", parts[1])))
 }
 
 async fn read_body<R: tokio::io::AsyncBufRead + Unpin>(
@@ -460,14 +460,14 @@ async fn read_body<R: tokio::io::AsyncBufRead + Unpin>(
         reader
             .read_exact(&mut body)
             .await
-            .map_err(|e| ShadowError::Http(format!("read body ({len} bytes): {e}")))?;
+            .map_err(|e| ShadowError::http(format!("read body ({len} bytes): {e}")))?;
         Ok(body)
     } else {
         let mut body = Vec::new();
         reader
             .read_to_end(&mut body)
             .await
-            .map_err(|e| ShadowError::Http(format!("read body: {e}")))?;
+            .map_err(|e| ShadowError::http(format!("read body: {e}")))?;
         Ok(body)
     }
 }
@@ -480,11 +480,11 @@ async fn read_chunked<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Res
         reader
             .read_line(&mut size_line)
             .await
-            .map_err(|e| ShadowError::Http(format!("read chunk size: {e}")))?;
+            .map_err(|e| ShadowError::http(format!("read chunk size: {e}")))?;
 
         let size_str = size_line.trim();
         let chunk_size = usize::from_str_radix(size_str, 16)
-            .map_err(|_| ShadowError::Http(format!("invalid chunk size: {size_str}")))?;
+            .map_err(|_| ShadowError::http(format!("invalid chunk size: {size_str}")))?;
 
         if chunk_size == 0 {
             let mut trailer = String::new();
@@ -496,7 +496,7 @@ async fn read_chunked<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Res
         reader
             .read_exact(&mut chunk)
             .await
-            .map_err(|e| ShadowError::Http(format!("read chunk ({chunk_size} bytes): {e}")))?;
+            .map_err(|e| ShadowError::http(format!("read chunk ({chunk_size} bytes): {e}")))?;
         body.extend_from_slice(&chunk);
 
         let mut crlf = [0u8; 2];

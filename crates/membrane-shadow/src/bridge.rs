@@ -126,13 +126,13 @@ impl NeuralBridge {
                 .get("message")
                 .and_then(|m| m.as_str())
                 .unwrap_or(cellmembrane_types::service::UNKNOWN_LABEL);
-            return Err(ShadowError::Rpc(msg.to_owned()));
+            return Err(ShadowError::rpc(msg));
         }
 
         response
             .get("result")
             .cloned()
-            .ok_or_else(|| ShadowError::Rpc("rpc response missing result".into()))
+            .ok_or_else(|| ShadowError::rpc("rpc response missing result"))
     }
 }
 
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn bridge_result_api_error_variant() {
-        let err = ShadowError::Rpc("method not found".into());
+        let err = ShadowError::rpc("method not found");
         let result = BridgeResult::ApiError(err);
         assert!(matches!(result, BridgeResult::ApiError(_)));
     }

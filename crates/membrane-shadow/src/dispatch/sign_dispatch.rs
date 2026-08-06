@@ -108,7 +108,7 @@ fn dispatch_verify(args: &[&str]) -> crate::Result<ShadowOutcome> {
             cellmembrane_types::DepotTrustPolicy::VerifyIfPresent
         }
         Some(other) => {
-            return Err(ShadowError::Config(format!(
+            return Err(ShadowError::config(format!(
                 "unknown trust policy: {other} (expected: require-signed, verify-if-present, integrity-only)"
             )));
         }

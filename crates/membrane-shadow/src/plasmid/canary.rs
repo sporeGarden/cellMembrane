@@ -267,11 +267,11 @@ pub(crate) async fn promote_canary(
         .slots
         .iter()
         .find(|s| s.primal == primal)
-        .ok_or_else(|| ShadowError::Build(format!("no canary found for {primal}")))?
+        .ok_or_else(|| ShadowError::build(format!("no canary found for {primal}")))?
         .clone();
 
     if !slot.binary_path.exists() {
-        return Err(ShadowError::Build(format!(
+        return Err(ShadowError::build(format!(
             "canary binary missing: {}",
             slot.binary_path.display()
         )));
@@ -281,10 +281,10 @@ pub(crate) async fn promote_canary(
     let staging = production_path.with_extension("new");
     tokio::fs::copy(&slot.binary_path, &staging)
         .await
-        .map_err(|e| ShadowError::Build(format!("copy canary to production staging: {e}")))?;
+        .map_err(|e| ShadowError::build(format!("copy canary to production staging: {e}")))?;
     tokio::fs::rename(&staging, production_path)
         .await
-        .map_err(|e| ShadowError::Build(format!("atomic canary promote: {e}")))?;
+        .map_err(|e| ShadowError::build(format!("atomic canary promote: {e}")))?;
 
     // Kill the canary instance (it's now production)
     kill_canary(&slot).await;

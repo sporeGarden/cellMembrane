@@ -59,11 +59,11 @@ async fn run_step(args: &[&str], context: &str) -> Result<std::process::Output> 
         .args(args)
         .output()
         .await
-        .map_err(|e| ShadowError::Config(format!("step CLI not found: {e}")))?;
+        .map_err(|e| ShadowError::config(format!("step CLI not found: {e}")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ShadowError::Config(format!("{context}: {stderr}")));
+        return Err(ShadowError::config(format!("{context}: {stderr}")));
     }
 
     Ok(output)
@@ -76,7 +76,7 @@ async fn run_step(args: &[&str], context: &str) -> Result<std::process::Output> 
 pub async fn bootstrap_ca(dry_run: bool) -> Result<String> {
     let ca_url = resolve_ca_url();
     let Some(fingerprint) = resolve_fingerprint() else {
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "set {ENV_STEP_CA_FINGERPRINT} to the root CA SHA256 fingerprint"
         )));
     };
@@ -116,7 +116,7 @@ pub async fn request_ssh_certificate(gate_name: &str, dry_run: bool) -> Result<S
 
     if !dry_run {
         tokio::fs::create_dir_all(&dir).await.map_err(|e| {
-            ShadowError::Config(format!("cannot create cert dir {}: {e}", dir.display()))
+            ShadowError::config(format!("cannot create cert dir {}: {e}", dir.display()))
         })?;
     }
 
@@ -173,7 +173,7 @@ pub async fn renew_ssh_certificate(dry_run: bool) -> Result<SshCertificate> {
     let key_path = dir.join("id_ecdsa");
 
     if !cert_path.exists() {
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "no certificate to renew at {}",
             cert_path.display()
         )));
@@ -212,9 +212,8 @@ pub async fn install_host_certificate(hostname: &str, dry_run: bool) -> Result<S
 
     let host_key = PathBuf::from("/etc/ssh/ssh_host_ecdsa_key.pub");
     if !host_key.exists() && !dry_run {
-        return Err(ShadowError::Config(
-            "no host key at /etc/ssh/ssh_host_ecdsa_key.pub — generate with ssh-keygen first"
-                .into(),
+        return Err(ShadowError::config(
+            "no host key at /etc/ssh/ssh_host_ecdsa_key.pub — generate with ssh-keygen first",
         ));
     }
 

@@ -305,7 +305,7 @@ pub(crate) fn resolve_federation_peer() -> String {
 /// Returns error if manifest not found or unparseable.
 pub(crate) fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
-        ShadowError::Config(format!(
+        ShadowError::config(format!(
             "ecosystem_manifest.toml not found under {}",
             workspace_root.display()
         ))
@@ -319,7 +319,7 @@ pub(crate) fn load_from_workspace(workspace_root: &Path) -> Result<EcosystemMani
 /// Returns error if manifest not found or unparseable.
 pub(crate) async fn load_from_workspace_async(workspace_root: &Path) -> Result<EcosystemManifest> {
     let path = EcosystemManifest::find_in_workspace(workspace_root).ok_or_else(|| {
-        ShadowError::Config(format!(
+        ShadowError::config(format!(
             "ecosystem_manifest.toml not found under {}",
             workspace_root.display()
         ))

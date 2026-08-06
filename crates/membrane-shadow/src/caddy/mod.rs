@@ -166,7 +166,7 @@ pub async fn reload(config: &ShadowConfig) -> Result<String> {
     );
     let (out, code) = caddy_exec(config, &cmd).await?;
     if code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Caddy reload failed: {}",
             out.trim()
         )));
@@ -184,7 +184,7 @@ pub async fn validate(config: &ShadowConfig) -> Result<String> {
     )
     .await?;
     if code != 0 {
-        return Err(ShadowError::Ssh(format!(
+        return Err(ShadowError::ssh(format!(
             "Caddyfile validation failed: {}",
             out.trim()
         )));
@@ -208,7 +208,7 @@ pub async fn dispatch(
         }
         "caddy.tls.check" => {
             let domain = args.first().ok_or_else(|| {
-                ShadowError::Config("domain required: membrane caddy.tls.check <domain>".into())
+                ShadowError::config("domain required: membrane caddy.tls.check <domain>")
             })?;
             let cert = tls::tls_check(config, domain).await?;
             let json = serde_json::to_string_pretty(&cert)?;
@@ -242,14 +242,14 @@ pub async fn dispatch(
         }
         "caddy.tls.external" => {
             let domain = args.first().ok_or_else(|| {
-                ShadowError::Config("domain required: membrane caddy.tls.external <domain>".into())
+                ShadowError::config("domain required: membrane caddy.tls.external <domain>")
             })?;
             let msg = tls::tls_external(config, domain).await?;
             Ok(crate::ShadowOutcome::ok(msg))
         }
         "caddy.tls.revert" => {
             let domain = args.first().ok_or_else(|| {
-                ShadowError::Config("domain required: membrane caddy.tls.revert <domain>".into())
+                ShadowError::config("domain required: membrane caddy.tls.revert <domain>")
             })?;
             let msg = tls::tls_revert_acme(config, domain).await?;
             Ok(crate::ShadowOutcome::ok(msg))

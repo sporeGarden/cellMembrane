@@ -75,7 +75,7 @@ pub async fn exec(config: &ShadowConfig, command: &str) -> Result<String> {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ShadowError::Ssh(format!(
+        Err(ShadowError::ssh(format!(
             "exit {}: {}",
             exit_code(&output),
             stderr.trim()
@@ -119,7 +119,7 @@ pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) 
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ShadowError::Ssh(format!(
+        Err(ShadowError::ssh(format!(
             "scp failed (exit {}): {}",
             exit_code(&output),
             stderr.trim()
@@ -163,7 +163,7 @@ pub async fn scp_to_host(
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ShadowError::Ssh(format!(
+        Err(ShadowError::ssh(format!(
             "scp to {host} failed (exit {}): {}",
             exit_code(&output),
             stderr.trim()
@@ -179,7 +179,7 @@ pub async fn cat_remote(host: &str, remote_path: &str, timeout: u32) -> Result<V
         Ok(output.stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ShadowError::Ssh(format!(
+        Err(ShadowError::ssh(format!(
             "ssh cat {remote_path} failed (exit {}): {}",
             exit_code(&output),
             stderr.trim()

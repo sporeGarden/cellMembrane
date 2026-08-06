@@ -198,7 +198,7 @@ pub async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
         .await
         .map_err(ShadowError::Io)?;
     if !status.success() {
-        return Err(ShadowError::Git(format!(
+        return Err(ShadowError::git(format!(
             "{} failed in {}",
             args.join(" "),
             repo_dir.display()
@@ -268,7 +268,7 @@ pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
     let output = tokio::time::timeout(GIT_OP_TIMEOUT, child)
         .await
         .map_err(|_| {
-            ShadowError::Git(format!(
+            ShadowError::git(format!(
                 "git {:?} timed out after {}s",
                 args.first().unwrap_or(&"?"),
                 GIT_OP_TIMEOUT.as_secs(),
@@ -398,7 +398,7 @@ pub async fn git_clone(url: &str, dest: &Path) -> Result<()> {
     )
     .await
     .map_err(|_| {
-        ShadowError::Git(format!(
+        ShadowError::git(format!(
             "git clone timed out after {}s",
             GIT_OP_TIMEOUT.as_secs()
         ))
@@ -406,7 +406,7 @@ pub async fn git_clone(url: &str, dest: &Path) -> Result<()> {
     .map_err(ShadowError::Io)?;
 
     if !status.success() {
-        return Err(ShadowError::Git(format!("git clone {url} failed")));
+        return Err(ShadowError::git(format!("git clone {url} failed")));
     }
     Ok(())
 }

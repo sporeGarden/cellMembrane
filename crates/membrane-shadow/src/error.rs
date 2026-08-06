@@ -76,6 +76,41 @@ impl ShadowError {
     pub const fn is_rpc_error(&self) -> bool {
         matches!(self, Self::Rpc(_))
     }
+
+    /// Construct an HTTP transport error from any `Display` source.
+    pub fn http(msg: impl fmt::Display) -> Self {
+        Self::Http(msg.to_string())
+    }
+
+    /// Construct a build pipeline error from any `Display` source.
+    pub fn build(msg: impl fmt::Display) -> Self {
+        Self::Build(msg.to_string())
+    }
+
+    /// Construct a configuration error from any `Display` source.
+    pub fn config(msg: impl fmt::Display) -> Self {
+        Self::Config(msg.to_string())
+    }
+
+    /// Construct a git error from any `Display` source.
+    pub fn git(msg: impl fmt::Display) -> Self {
+        Self::Git(msg.to_string())
+    }
+
+    /// Construct an SSH transport error from any `Display` source.
+    pub fn ssh(msg: impl fmt::Display) -> Self {
+        Self::Ssh(msg.to_string())
+    }
+
+    /// Construct a parse error from any `Display` source.
+    pub fn parse(msg: impl fmt::Display) -> Self {
+        Self::Parse(msg.to_string())
+    }
+
+    /// Construct an RPC error from any `Display` source.
+    pub fn rpc(msg: impl fmt::Display) -> Self {
+        Self::Rpc(msg.to_string())
+    }
 }
 
 /// Result type for shadow operations.

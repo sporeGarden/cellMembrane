@@ -69,8 +69,8 @@ pub fn resolve(workspace_root: &Path) -> Result<GateIdentity> {
         }
     }
 
-    Err(ShadowError::Config(
-        "cannot resolve gate identity — set MEMBRANE_GATE_NAME or create .gate file".into(),
+    Err(ShadowError::config(
+        "cannot resolve gate identity — set MEMBRANE_GATE_NAME or create .gate file",
     ))
 }
 
@@ -97,8 +97,8 @@ pub async fn resolve_async(workspace_root: &Path) -> Result<GateIdentity> {
         }
     }
 
-    Err(ShadowError::Config(
-        "cannot resolve gate identity — set MEMBRANE_GATE_NAME or create .gate file".into(),
+    Err(ShadowError::config(
+        "cannot resolve gate identity — set MEMBRANE_GATE_NAME or create .gate file",
     ))
 }
 

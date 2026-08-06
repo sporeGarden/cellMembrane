@@ -9,6 +9,20 @@
 
 ## Recent Waves
 
+**Wave 156j-c (dispatch extraction + typed error constructors + error API consolidation):**
+Smart refactoring and API evolution pass. (1) `dispatch/mod.rs` extracted from 713L
+to 258L — harvest, webhook, and validate/rootpulse handlers moved to dedicated
+`dispatch_harvest.rs`, `dispatch_webhook.rs`, and `dispatch_validate.rs` modules.
+Router is now a clean prefix-match table. (2) `ShadowError` gained 7 typed
+constructors (`http`, `build`, `config`, `git`, `ssh`, `parse`, `rpc`) taking
+`impl Display`, eliminating verbose `ShadowError::Variant(format!(...))` and
+`ShadowError::Variant("msg".into())` patterns. 80+ call sites migrated across
+35+ files. (3) All remaining raw variant construction in production code converted
+to constructors — only pattern matches and test assertions use raw variants.
+(4) `#[must_use]` audit: `iter_binaries` was the only missing annotation; HTTP
+client factories and `HttpResponse` methods already return `Result` (inherently
+must-use). Zero clippy (pedantic), zero fmt drift, 1285 tests pass.
+
 **Wave 156j-b (deep debt sweep: zero clippy + self-knowledge evolution + smart refactoring):**
 Deep debt pass achieving ZERO clippy warnings for the first time. (1) Clippy:
 `StalenessEntry`/`SchedulerDecision` dead fields annotated; `load_queue` rewritten

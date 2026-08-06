@@ -120,7 +120,7 @@ pub(crate) async fn ensure_staging_dirs(
     for dir in [socket_dir, bin_dir] {
         tokio::fs::create_dir_all(dir)
             .await
-            .map_err(|e| crate::error::ShadowError::Build(format!("create dir: {e}")))?;
+            .map_err(|e| crate::error::ShadowError::build(format!("create dir: {e}")))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -137,13 +137,13 @@ pub(crate) async fn stage_binary(
 ) -> crate::Result<()> {
     tokio::fs::copy(source, dest)
         .await
-        .map_err(|e| crate::error::ShadowError::Build(format!("stage binary: {e}")))?;
+        .map_err(|e| crate::error::ShadowError::build(format!("stage binary: {e}")))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         tokio::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755))
             .await
-            .map_err(|e| crate::error::ShadowError::Build(format!("chmod binary: {e}")))?;
+            .map_err(|e| crate::error::ShadowError::build(format!("chmod binary: {e}")))?;
     }
     Ok(())
 }
@@ -189,7 +189,7 @@ pub(crate) fn spawn_primal_server(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| crate::error::ShadowError::Build(format!("spawn {bin_name}: {e}")))
+        .map_err(|e| crate::error::ShadowError::build(format!("spawn {bin_name}: {e}")))
 }
 
 /// Strip sandbox commit suffix from a binary name.

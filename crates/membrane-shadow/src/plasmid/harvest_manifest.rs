@@ -90,7 +90,7 @@ pub(super) fn resolve_local_source_dir(primal: &str) -> Result<PathBuf> {
                     if dir.exists() {
                         return Ok(dir);
                     }
-                    return Err(ShadowError::Config(format!(
+                    return Err(ShadowError::config(format!(
                         "--local: workspace dir does not exist: {}",
                         dir.display()
                     )));
@@ -106,7 +106,7 @@ pub(super) fn resolve_local_source_dir(primal: &str) -> Result<PathBuf> {
         }
     }
 
-    Err(ShadowError::Config(format!(
+    Err(ShadowError::config(format!(
         "--local: primal '{primal}' not found in ecosystem manifest"
     )))
 }

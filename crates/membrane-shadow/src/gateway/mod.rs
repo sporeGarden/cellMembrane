@@ -138,7 +138,7 @@ fn dispatch_config_generate(args: &[&str]) -> Result<ShadowOutcome> {
     let gate_name = gate_name_owned.as_str();
     let config = generate_from_manifest(gate_name)?;
     let toml_str = toml::to_string_pretty(&config)
-        .map_err(|e| ShadowError::Config(format!("TOML serialize: {e}")))?;
+        .map_err(|e| ShadowError::config(format!("TOML serialize: {e}")))?;
     Ok(ShadowOutcome::ok_with(
         format!("generated gateway config for {gate_name}"),
         serde_json::to_value(&config)?,

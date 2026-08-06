@@ -21,7 +21,7 @@ const DEFAULT_TIMEOUT: Duration =
     Duration::from_secs(cellmembrane_types::service::DEFAULT_JSONRPC_TIMEOUT_SECS);
 
 fn rpc_err(msg: impl std::fmt::Display) -> ShadowError {
-    ShadowError::Rpc(msg.to_string())
+    ShadowError::rpc(msg)
 }
 
 /// Standard JSON-RPC health probe request. Used by canary, sandbox, health, and

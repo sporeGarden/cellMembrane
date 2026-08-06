@@ -41,9 +41,7 @@ impl CloudflareConfig {
     pub fn from_env() -> Result<Self> {
         let api_token = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN)
             .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_API_TOKEN))
-            .map_err(|_| {
-                ShadowError::Config("CLOUDFLARE_API_TOKEN or CF_API_TOKEN required".into())
-            })?;
+            .map_err(|_| ShadowError::config("CLOUDFLARE_API_TOKEN or CF_API_TOKEN required"))?;
 
         let zone_id = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_ZONE)
             .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_ZONE_ID))
@@ -77,7 +75,7 @@ impl<T> CfResponse<T> {
     fn into_result(self) -> Result<T> {
         if self.success {
             self.result
-                .ok_or_else(|| ShadowError::CloudflareApi("empty result".into()))
+                .ok_or_else(|| ShadowError::CloudflareApi("empty result".to_string()))
         } else {
             Err(ShadowError::CloudflareApi(format_cf_errors(&self.errors)))
         }
@@ -171,9 +169,7 @@ pub async fn cache_purge(
     } else if let Some(file_urls) = urls {
         serde_json::json!({ "files": file_urls })
     } else {
-        return Err(ShadowError::Config(
-            "cache.purge requires --urls or --all".into(),
-        ));
+        return Err(ShadowError::config("cache.purge requires --urls or --all"));
     };
 
     let resp = client
@@ -268,7 +264,7 @@ async fn resolve_zone_id(cf: &CloudflareConfig, zone_name: &str) -> Result<Strin
         .find(|z| z.name == zone_name)
         .map(|z| z.id)
         .ok_or_else(|| {
-            ShadowError::Config(format!(
+            ShadowError::config(format!(
                 "zone '{zone_name}' not found in Cloudflare account"
             ))
         })
@@ -359,7 +355,7 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
 
 fn extract_zone_arg<'a>(args: &[&'a str]) -> Result<&'a str> {
     extract_flag(args, "--zone").ok_or_else(|| {
-        ShadowError::Config(format!(
+        ShadowError::config(format!(
             "--zone <domain> required (e.g. --zone {})",
             cellmembrane_types::service::SURFACE_DOMAIN
         ))
@@ -373,7 +369,7 @@ fn extract_flag<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
 }
 
 fn require_flag<'a>(args: &[&'a str], flag: &str) -> Result<&'a str> {
-    extract_flag(args, flag).ok_or_else(|| ShadowError::Config(format!("{flag} is required")))
+    extract_flag(args, flag).ok_or_else(|| ShadowError::config(format!("{flag} is required")))
 }
 
 fn extract_multi_flag<'a>(args: &[&'a str], flag: &str) -> Vec<&'a str> {

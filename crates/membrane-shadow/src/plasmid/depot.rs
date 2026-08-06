@@ -94,7 +94,7 @@ fn update_checksums(
 
     for existing_target in &pre_existing_targets {
         if !all_targets.contains_key(existing_target) {
-            return Err(ShadowError::Config(format!(
+            return Err(ShadowError::config(format!(
                 "checksums validation gate: target section [{existing_target}] would be lost"
             )));
         }
@@ -202,7 +202,7 @@ pub(crate) fn resolve_depot(override_dir: Option<&str>) -> Result<PathBuf> {
         },
     );
     if !path.exists() {
-        return Err(ShadowError::Config(format!(
+        return Err(ShadowError::config(format!(
             "depot not found at {}",
             path.display()
         )));
@@ -239,7 +239,7 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
         .unwrap_or_else(|| PathBuf::from(cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT));
 
     let manifest = crate::manifest::load_from_workspace(&workspace).map_err(|e| {
-        ShadowError::Config(format!(
+        ShadowError::config(format!(
             "sources.toml missing and manifest unavailable for auto-provision: {e}"
         ))
     })?;
@@ -296,8 +296,8 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
     }
 
     if sources.is_empty() {
-        return Err(ShadowError::Config(
-            "auto-provision: no buildable repos found in manifest".into(),
+        return Err(ShadowError::config(
+            "auto-provision: no buildable repos found in manifest",
         ));
     }
 

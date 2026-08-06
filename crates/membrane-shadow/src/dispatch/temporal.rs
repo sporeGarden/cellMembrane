@@ -17,8 +17,8 @@ pub(super) async fn dispatch_temporal(
         "temporal.check" => {
             let root = temporal::resolve_workspace_root()?;
             if args.is_empty() {
-                return Err(crate::ShadowError::Config(
-                    "temporal.check requires at least one repo path".into(),
+                return Err(crate::ShadowError::config(
+                    "temporal.check requires at least one repo path",
                 ));
             }
             let mut matrices = Vec::with_capacity(args.len());
@@ -38,8 +38,8 @@ pub(super) async fn dispatch_temporal(
         "temporal.sync" => {
             let root = temporal::resolve_workspace_root()?;
             if args.is_empty() {
-                return Err(crate::ShadowError::Config(
-                    "temporal.sync requires at least one repo path".into(),
+                return Err(crate::ShadowError::config(
+                    "temporal.sync requires at least one repo path",
                 ));
             }
             let push_target = manifest::load_from_workspace_async(&root)
@@ -90,7 +90,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         identity::resolve_async(&root)
             .await
             .map_err(|e| {
-                crate::ShadowError::Config(format!(
+                crate::ShadowError::config(format!(
                     "cannot resolve gate identity — set MEMBRANE_GATE_NAME or configure identity: {e}"
                 ))
             })?

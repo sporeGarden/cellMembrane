@@ -199,7 +199,7 @@ pub(super) fn generate_from_manifest(gate_name: &str) -> Result<GatewayConfig> {
     let root = crate::temporal::resolve_workspace_root()?;
     let manifest = crate::manifest::load_from_workspace(&root)?;
     let profile = manifest.gates.get(gate_name).ok_or_else(|| {
-        ShadowError::Config(format!("gate '{gate_name}' not in ecosystem manifest"))
+        ShadowError::config(format!("gate '{gate_name}' not in ecosystem manifest"))
     })?;
 
     let routes = default_routes_for_roles(&profile.roles);
@@ -229,7 +229,7 @@ pub(crate) fn load_gateway_config(args: &[&str]) -> Result<GatewayConfig> {
     let content = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
 
     toml::from_str(&content)
-        .map_err(|e| ShadowError::Config(format!("invalid gateway config: {e}")))
+        .map_err(|e| ShadowError::config(format!("invalid gateway config: {e}")))
 }
 
 #[cfg(test)]
