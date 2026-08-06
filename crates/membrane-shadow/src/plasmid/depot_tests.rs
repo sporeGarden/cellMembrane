@@ -77,11 +77,18 @@ fn detect_stale_primals_with_tempdir() {
     // beardog: binary exists + provenance present. May be stale if workspace
     // is available and source HEAD != "aaa" (drift detection).
     // songbird: no binary, no provenance → always stale.
-    let songbird = report.entries.iter().find(|e| e.name == "songbird").unwrap();
+    let songbird = report
+        .entries
+        .iter()
+        .find(|e| e.name == "songbird")
+        .unwrap();
     assert!(songbird.stale, "songbird should be stale (no binary)");
     let beardog = report.entries.iter().find(|e| e.name == "beardog").unwrap();
     assert!(beardog.binary_exists, "beardog binary should exist");
-    assert!(beardog.provenance_commit.is_some(), "beardog should have provenance");
+    assert!(
+        beardog.provenance_commit.is_some(),
+        "beardog should have provenance"
+    );
     assert!(report.stale_count >= 1, "at least songbird should be stale");
 
     let _ = std::fs::remove_dir_all(&tmp);

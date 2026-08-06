@@ -143,7 +143,7 @@ fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<T
     }
 
     let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
-    let mut candidates: Vec<String> = Vec::with_capacity(6);
+    let mut candidates: Vec<String> = Vec::with_capacity(8);
 
     if let Some(api) = svc.api_socket {
         candidates.push(format!("{}/{api}-default.sock", ctx.socket_base));
@@ -153,6 +153,9 @@ fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<T
     candidates.push(format!("{}/{ns}/{}.sock", ctx.xdg_runtime, svc.binary));
     if let Some(api) = svc.api_socket {
         candidates.push(format!("{}/{ns}/{api}-default.sock", ctx.xdg_runtime));
+    }
+    for alias in svc.socket_aliases {
+        candidates.push(format!("{}/{alias}.sock", ctx.socket_base));
     }
 
     for path in &candidates {

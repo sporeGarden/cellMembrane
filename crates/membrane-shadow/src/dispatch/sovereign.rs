@@ -144,15 +144,17 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
 
     // Phase 1b: Sub-builder dispatch (manifest-driven, nanowire/SSH transport)
     let sub_builders = load_sub_builders();
-    let sub_results =
-        run_sub_builder_harvests(&sub_builders, &primal_lower, trigger.commit, trigger.dry_run)
-            .await;
+    let sub_results = run_sub_builder_harvests(
+        &sub_builders,
+        &primal_lower,
+        trigger.commit,
+        trigger.dry_run,
+    )
+    .await;
 
     let sub_summary: Vec<String> = sub_results
         .iter()
-        .map(|(gate, o)| {
-            format!("{}:{}", gate, if o.ok { "OK" } else { "FAIL" })
-        })
+        .map(|(gate, o)| format!("{}:{}", gate, if o.ok { "OK" } else { "FAIL" }))
         .collect();
 
     let sub_all_ok = sub_results.iter().all(|(_, o)| o.ok);
@@ -220,7 +222,7 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
 
 /// Dispatch remote harvests to sub-builder gates for cross-target binaries.
 ///
-/// For each sub-builder, SSHes to the gate and runs `membrane plasmid.harvest`
+/// For each sub-builder, connects via SSH to the gate and runs `membrane plasmid.harvest`
 /// for the primal on that gate's native target triple. Results are collected
 /// and returned as a merged outcome.
 ///
@@ -271,7 +273,7 @@ async fn dispatch_to_sub_builder(
     commit: Option<&str>,
 ) -> ShadowOutcome {
     let mut cmd_parts = vec![
-        sb.membrane_bin.to_string(),
+        sb.membrane_bin.clone(),
         "plasmid.harvest".to_string(),
         "--primal".to_string(),
         primal.to_string(),
@@ -359,10 +361,7 @@ async fn dispatch_to_sub_builder(
             error!(gate = sb.gate, error = %e, "SSH to sub-builder failed");
             ShadowOutcome {
                 ok: false,
-                message: format!(
-                    "sub-builder {}: SSH connection failed — {}",
-                    sb.gate, e
-                ),
+                message: format!("sub-builder {}: SSH connection failed — {}", sb.gate, e),
                 data: None,
             }
         }

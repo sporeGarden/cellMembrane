@@ -116,6 +116,13 @@ pub const ENV_ENROLLMENT_SEED_GEN_LEGACY: &str = "BEARDOG_ENROLLMENT_SEED_GENERA
 /// Default socket filename for the biomeOS Neural API.
 pub const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
 
+/// File extension suffix for tarpc binary-protocol sockets (Cephalization G64).
+///
+/// Dual-socket primals expose JSON-RPC on `{name}.sock` and tarpc on
+/// `{name}.tarpc.sock`. Health sweeps must filter by suffix to avoid
+/// sending JSON-RPC probes to tarpc sockets.
+pub const TARPC_SOCKET_SUFFIX: &str = ".tarpc.sock";
+
 // ── step-ca SSH Certificate Authority ──────────────────────────────────
 
 /// Default URL for the sovereign step-ca instance.

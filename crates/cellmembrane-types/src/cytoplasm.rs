@@ -74,7 +74,9 @@ impl ZoneLabel {
         match gate_name {
             "eastGate" | "sporeGate" | "ironGate" => Self::Backbone,
             "northGate" => Self::House1,
-            "strandGate" | "southGate" | "westGate" | "blueGate" | "swiftGate" | "fieldGate" => Self::House2,
+            "strandGate" | "southGate" | "westGate" | "blueGate" | "swiftGate" | "fieldGate" => {
+                Self::House2
+            }
             "golgi" | "pepti" | "flockGate" => Self::Wan,
             _ => Self::Unassigned,
         }

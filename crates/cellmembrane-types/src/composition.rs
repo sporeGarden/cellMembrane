@@ -347,6 +347,32 @@ impl CompositionSpec {
             .collect()
     }
 
+    /// All UDS socket paths including tarpc sockets (Cephalization G64).
+    ///
+    /// Returns `(binary_name, socket_path, is_tarpc)` triples for all UDS-only
+    /// services. Tarpc sockets are appended after the JSON-RPC socket for each
+    /// primal that has `has_tarpc: true`.
+    #[must_use]
+    pub fn all_socket_paths_resolved(
+        &self,
+        paths: &crate::service::ServicePaths,
+    ) -> Vec<(&'static str, String, bool)> {
+        let services = MembraneService::for_composition(self.composition);
+        let mut result = Vec::new();
+        for s in &services {
+            if !s.is_uds_only() || !s.has_socket {
+                continue;
+            }
+            if let Some(p) = s.resolved_socket_path(paths) {
+                result.push((s.binary, p, false));
+            }
+            if let Some(tp) = s.resolved_tarpc_socket_path(paths) {
+                result.push((s.binary, tp, true));
+            }
+        }
+        result
+    }
+
     /// Systemd `After=` dependencies for a given binary in this composition.
     ///
     /// Returns the systemd unit names of all primals that appear earlier in the

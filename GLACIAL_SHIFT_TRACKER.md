@@ -1,13 +1,30 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-07-31 (Wave 155v)
+**Last updated:** 2026-08-06 (Wave 156j)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 156j (G64 Cephalization: dual-socket registry + tarpc-aware discovery + deep debt sweep):**
+Cephalization era (G64). Added `has_tarpc: bool` field to `MembraneService` struct —
+11 primals marked `has_tarpc: true` (all tarpc-wired/-serving), 2 primals + 4 symbiotic
+marked `false`. Added `TARPC_SOCKET_SUFFIX` constant (`.tarpc.sock`). New
+`ServicePaths::tarpc_socket_path()` and `MembraneService::resolved_tarpc_socket_path()`.
+`ServerContract::Tarpc` now emits `--tarpc-socket {path}` alongside `--socket` in
+`exec_args_with_base()`. Socket discovery: `resolve_primal_tarpc_socket_paths()` and
+`is_tarpc_socket()` added to `gate/sockets.rs`. Health sweep guards: glob-based health
+probe in `provision/bootstrap.rs` now skips `.tarpc.sock` via `case` filter; sandbox
+`list_active()` also excludes tarpc sockets. Pre-existing gap fixed: `resolve_local_uds()`
+in `resolve.rs` now includes `socket_aliases` from registry (was missing). Legacy
+pre-Cephalization aliases `compute-tarpc` and `coralreef-tarpc` removed from toadstool
+and coralreef — replaced by the `has_tarpc` mechanism. `CompositionSpec::all_socket_paths_resolved()`
+returns `(binary, path, is_tarpc)` triples. Deep debt sweep: 13 pre-existing clippy
+warnings fixed (`is_ok_and`, `const fn`, `if let` migration, `map_or`, `if_not_else`,
+`doc_markdown`, `implicit_clone`). 1,285 tests (+4), 0 new clippy, 0 fmt drift.
 
 **Wave 155v (J18: gate coupling — env_or migration + gate-name identity bridge):**
 J18 portability fix: 3 production call sites that used `DEFAULT_INSTALL_BASE`

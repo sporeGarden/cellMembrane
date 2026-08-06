@@ -49,12 +49,15 @@ pub(crate) fn resolve_biomeos_socket_dir() -> String {
     })
 }
 
-/// Build the candidate socket paths for a primal, ordered by priority.
+/// Build the candidate JSON-RPC socket paths for a primal, ordered by priority.
 ///
 /// Uses `resolve_socket_base()` which auto-adapts to init scope (system vs
 /// user-space deploy), then adds XDG/`biomeos` namespace paths for user
 /// session discovery. Checks the service registry for `api_socket` aliases
 /// and `socket_aliases`.
+///
+/// Returns only JSON-RPC sockets — use [`resolve_primal_tarpc_socket_paths`]
+/// for tarpc binary-protocol sockets.
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     let socket_base = cellmembrane_types::service::resolve_socket_base();
     let xdg_runtime = cellmembrane_types::service::resolve_xdg_runtime_dir();
@@ -76,6 +79,34 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
     paths
 }
 
+/// Build candidate tarpc socket paths for a dual-protocol primal (G64).
+///
+/// Returns an empty vec if the primal has `has_tarpc: false` or is unknown
+/// to the registry. Probes `{socket_base}/{binary}.tarpc.sock` and
+/// `{xdg}/{namespace}/{binary}.tarpc.sock`.
+///
+/// Not yet called from production code — primals are shipping dual-socket
+/// incrementally. Will be wired once tarpc health probing is added.
+#[allow(dead_code)]
+pub(crate) fn resolve_primal_tarpc_socket_paths(primal: &str) -> Vec<String> {
+    let svc = match cellmembrane_types::MembraneService::for_binary(primal) {
+        Some(s) if s.has_tarpc => s,
+        _ => return Vec::new(),
+    };
+    let socket_base = cellmembrane_types::service::resolve_socket_base();
+    let xdg_runtime = cellmembrane_types::service::resolve_xdg_runtime_dir();
+    let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
+    vec![
+        format!("{socket_base}/{}.tarpc.sock", svc.binary),
+        format!("{xdg_runtime}/{ns}/{}.tarpc.sock", svc.binary),
+    ]
+}
+
+/// Check whether a socket path is a tarpc socket (by file extension).
+pub(crate) fn is_tarpc_socket(path: &str) -> bool {
+    path.ends_with(cellmembrane_types::service::TARPC_SOCKET_SUFFIX)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,6 +116,36 @@ mod tests {
         let paths = resolve_primal_socket_paths("beardog");
         assert!(paths.iter().any(|p| p.contains("beardog.sock")));
         assert!(paths.len() >= 2);
+        assert!(
+            paths.iter().all(|p| !p.contains(".tarpc.sock")),
+            "JSON-RPC resolver must not return tarpc sockets"
+        );
+    }
+
+    #[test]
+    fn tarpc_socket_paths_for_serving_primal() {
+        let paths = resolve_primal_tarpc_socket_paths("loamspine");
+        assert!(
+            !paths.is_empty(),
+            "loamspine has tarpc — should return candidates"
+        );
+        assert!(paths.iter().all(|p| p.ends_with(".tarpc.sock")));
+    }
+
+    #[test]
+    fn tarpc_socket_paths_empty_for_non_serving() {
+        let paths = resolve_primal_tarpc_socket_paths("beardog");
+        assert!(
+            paths.is_empty(),
+            "beardog has_tarpc=false — should return empty"
+        );
+    }
+
+    #[test]
+    fn is_tarpc_socket_filter() {
+        assert!(is_tarpc_socket("/run/membrane/loamspine.tarpc.sock"));
+        assert!(!is_tarpc_socket("/run/membrane/loamspine.sock"));
+        assert!(!is_tarpc_socket("/run/membrane/security.sock"));
     }
 
     #[test]

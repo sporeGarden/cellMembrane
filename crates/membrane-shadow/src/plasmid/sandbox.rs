@@ -531,7 +531,11 @@ pub(crate) fn list_active() -> Vec<SandboxInstance> {
 
     for entry in entries.flatten() {
         let path = entry.path();
+        let fname = path.to_string_lossy();
         if path.extension().and_then(|e| e.to_str()) != Some("sock") {
+            continue;
+        }
+        if crate::gate::sockets::is_tarpc_socket(&fname) {
             continue;
         }
 

@@ -429,12 +429,14 @@ echo "federation: peers=${{PEERS:-0}} connections=${{CONNS:-0}}"
 /// Phase 7: Health sweep — verify critical services are responding.
 pub(super) async fn health_sweep(ip: &str) -> Result<String> {
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
+    let tarpc_suffix = cellmembrane_types::service::TARPC_SOCKET_SUFFIX;
     let script = format!(
         r#"
         HEALTHY=0
         TOTAL=0
         for sock in {socket_base}/*.sock; do
             [ -S "$sock" ] || continue
+            case "$sock" in *{tarpc_suffix}) continue ;; esac
             TOTAL=$((TOTAL + 1))
             RESP=$(echo '{{"jsonrpc":"2.0","method":"health","id":1}}' | socat - UNIX-CONNECT:"$sock" 2>/dev/null)
             if echo "$RESP" | grep -q '"status":"healthy"'; then

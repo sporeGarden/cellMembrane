@@ -99,7 +99,8 @@ pub enum ServerContract {
     /// External binary with no `server` subcommand — started by systemd with args in the unit.
     /// Used by: hbbs, hbbr, caddy
     External,
-    /// Tarpc server (non-JSON-RPC) — uses port binding, not socket.
+    /// Tarpc-primary server — accepts both `--socket` (JSON-RPC) and
+    /// `--tarpc-socket` (binary protocol) under Cephalization (G64).
     /// Used by: loamspine, rhizocrypt
     Tarpc,
 }
@@ -124,8 +125,14 @@ impl ServerContract {
             Self::SocketAuditDir => format!(
                 "{install_base}/{binary} server --socket {socket_path} --audit-dir {socket_base}/{binary}"
             ),
-            Self::SocketOnly | Self::Tarpc => {
+            Self::SocketOnly => {
                 format!("{install_base}/{binary} server --socket {socket_path}")
+            }
+            Self::Tarpc => {
+                let tarpc_path = format!("{socket_base}/{binary}.tarpc.sock");
+                format!(
+                    "{install_base}/{binary} server --socket {socket_path} --tarpc-socket {tarpc_path}"
+                )
             }
             Self::ServerNoSocket => format!("{install_base}/{binary} server"),
             Self::BiomeosApi => {
@@ -293,6 +300,21 @@ impl ServicePaths {
             .map_or_else(|| service.binary.to_owned(), |api| format!("{api}-default"));
         Some(format!("{}/{name}.sock", self.socket_base))
     }
+
+    /// Resolve tarpc socket path for a dual-protocol service.
+    ///
+    /// Returns `None` if the service doesn't support tarpc (`has_tarpc: false`).
+    /// Path follows the Cephalization convention: `{socket_base}/{binary}.tarpc.sock`.
+    #[must_use]
+    pub fn tarpc_socket_path(&self, service: &MembraneService) -> Option<String> {
+        if !service.has_tarpc {
+            return None;
+        }
+        Some(format!(
+            "{}/{}.tarpc.sock",
+            self.socket_base, service.binary
+        ))
+    }
 }
 
 impl Default for ServicePaths {
@@ -342,6 +364,13 @@ pub struct MembraneService {
     /// Alternative socket name for JSON-RPC probing (e.g. `"neural-api"` for biomeOS).
     /// When `Some`, health probes prefer this over `{binary}.sock`.
     pub api_socket: Option<&'static str>,
+    /// Whether this service also provides a tarpc binary-protocol socket.
+    ///
+    /// Under Cephalization (G64), dual-socket primals expose both JSON-RPC on
+    /// `{binary}.sock` and tarpc on `{binary}.tarpc.sock`. The tarpc socket
+    /// carries high-frequency composition traffic (provenance braiding, CAS ops,
+    /// GPU dispatch) while JSON-RPC handles discovery and diagnostic probes.
+    pub has_tarpc: bool,
     /// Capability socket aliases this primal exposes (in addition to `{binary}.sock`).
     ///
     /// Each primal may create additional sockets named by capability rather than
@@ -397,10 +426,18 @@ impl MembraneService {
         paths.install_path(self)
     }
 
-    /// Resolve socket path using configurable `ServicePaths`.
+    /// Resolve JSON-RPC socket path using configurable `ServicePaths`.
     #[must_use]
     pub fn resolved_socket_path(&self, paths: &ServicePaths) -> Option<String> {
         paths.socket_path(self)
+    }
+
+    /// Resolve tarpc socket path using configurable `ServicePaths`.
+    ///
+    /// Returns `None` if the primal doesn't serve tarpc (`has_tarpc: false`).
+    #[must_use]
+    pub fn resolved_tarpc_socket_path(&self, paths: &ServicePaths) -> Option<String> {
+        paths.tarpc_socket_path(self)
     }
 
     /// Health check method to use in UDS-only mode.

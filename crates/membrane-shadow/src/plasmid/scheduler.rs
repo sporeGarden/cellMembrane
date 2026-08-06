@@ -86,10 +86,10 @@ impl Default for SchedulerConfig {
     }
 }
 
-fn default_debounce() -> u64 {
+const fn default_debounce() -> u64 {
     DEFAULT_DEBOUNCE_SECS
 }
-fn default_staleness() -> u64 {
+const fn default_staleness() -> u64 {
     DEFAULT_STALENESS_THRESHOLD_SECS
 }
 
@@ -100,7 +100,7 @@ pub struct SchedulerDecision {
     pub build_now: Vec<String>,
     /// Primals still waiting (debounce not elapsed).
     pub waiting: Vec<String>,
-    /// Primals auto-promoted from dirty to build_requested (staleness).
+    /// Primals auto-promoted from dirty to `build_requested` (staleness).
     pub auto_promoted: Vec<String>,
     /// Human-readable reason for the decision.
     pub reason: String,
@@ -157,42 +157,39 @@ pub fn ingest(primal: &str, commit: &str, pusher: &str) -> crate::Result<Harvest
     let now = crate::utc_now_iso8601();
     let lower = primal.to_lowercase();
 
-    match queue.primals.get_mut(&lower) {
-        Some(entry) => {
-            if entry.status == QueueStatus::Building {
-                warn!(
-                    primal = %lower,
-                    "push received while building — will rebuild on next tick"
-                );
-            }
-            entry.last_push = now;
-            entry.commit = commit.to_string();
-            entry.pusher = pusher.to_string();
-            entry.push_count += 1;
-            if entry.status != QueueStatus::Building {
-                entry.status = QueueStatus::Dirty;
-            }
-            info!(
+    if let Some(entry) = queue.primals.get_mut(&lower) {
+        if entry.status == QueueStatus::Building {
+            warn!(
                 primal = %lower,
-                push_count = entry.push_count,
-                "harvest queue: push #{} (batching)",
-                entry.push_count
+                "push received while building — will rebuild on next tick"
             );
         }
-        None => {
-            queue.primals.insert(
-                lower.clone(),
-                QueueEntry {
-                    status: QueueStatus::Dirty,
-                    first_dirty: now.clone(),
-                    last_push: now,
-                    commit: commit.to_string(),
-                    pusher: pusher.to_string(),
-                    push_count: 1,
-                },
-            );
-            info!(primal = %lower, "harvest queue: new dirty primal");
+        entry.last_push = now;
+        entry.commit = commit.to_string();
+        entry.pusher = pusher.to_string();
+        entry.push_count += 1;
+        if entry.status != QueueStatus::Building {
+            entry.status = QueueStatus::Dirty;
         }
+        info!(
+            primal = %lower,
+            push_count = entry.push_count,
+            "harvest queue: push #{} (batching)",
+            entry.push_count
+        );
+    } else {
+        queue.primals.insert(
+            lower.clone(),
+            QueueEntry {
+                status: QueueStatus::Dirty,
+                first_dirty: now.clone(),
+                last_push: now,
+                commit: commit.to_string(),
+                pusher: pusher.to_string(),
+                push_count: 1,
+            },
+        );
+        info!(primal = %lower, "harvest queue: new dirty primal");
     }
 
     save_queue(&queue)?;
@@ -210,25 +207,22 @@ pub fn request_build(primal: &str) -> crate::Result<HarvestQueue> {
     let now = crate::utc_now_iso8601();
     let lower = primal.to_lowercase();
 
-    match queue.primals.get_mut(&lower) {
-        Some(entry) => {
-            entry.status = QueueStatus::BuildRequested;
-            info!(primal = %lower, "harvest queue: build requested (promoted)");
-        }
-        None => {
-            queue.primals.insert(
-                lower.clone(),
-                QueueEntry {
-                    status: QueueStatus::BuildRequested,
-                    first_dirty: now.clone(),
-                    last_push: now,
-                    commit: String::new(),
-                    pusher: "operator".to_string(),
-                    push_count: 0,
-                },
-            );
-            info!(primal = %lower, "harvest queue: build requested (new)");
-        }
+    if let Some(entry) = queue.primals.get_mut(&lower) {
+        entry.status = QueueStatus::BuildRequested;
+        info!(primal = %lower, "harvest queue: build requested (promoted)");
+    } else {
+        queue.primals.insert(
+            lower.clone(),
+            QueueEntry {
+                status: QueueStatus::BuildRequested,
+                first_dirty: now.clone(),
+                last_push: now,
+                commit: String::new(),
+                pusher: "operator".to_string(),
+                push_count: 0,
+            },
+        );
+        info!(primal = %lower, "harvest queue: build requested (new)");
     }
 
     save_queue(&queue)?;
@@ -367,8 +361,7 @@ pub fn has_harvest_signal(commits: &[super::super::webhook::CommitPayload]) -> b
 fn now_epoch_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+        .map_or(0, |d| d.as_secs())
 }
 
 fn parse_iso_epoch(iso: &str) -> Option<u64> {
@@ -382,22 +375,30 @@ fn parse_iso_epoch(iso: &str) -> Option<u64> {
     let day: u64 = parts[2].parse().ok()?;
 
     let time_part = iso.split('T').nth(1).unwrap_or("00:00:00");
-    let time_parts: Vec<&str> = time_part
-        .trim_end_matches('Z')
-        .split(':')
-        .collect();
+    let time_parts: Vec<&str> = time_part.trim_end_matches('Z').split(':').collect();
     let hour: u64 = time_parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
     let min: u64 = time_parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
     let sec: u64 = time_parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
 
     // Rough epoch calculation (ignoring leap years for scheduling purposes)
-    let days = (year - 1970) * 365 + (year - 1969) / 4
+    let days = (year - 1970) * 365
+        + (year - 1969) / 4
         + match month {
-            1 => 0, 2 => 31, 3 => 59, 4 => 90, 5 => 120, 6 => 151,
-            7 => 181, 8 => 212, 9 => 243, 10 => 273, 11 => 304, 12 => 334,
+            2 => 31,
+            3 => 59,
+            4 => 90,
+            5 => 120,
+            6 => 151,
+            7 => 181,
+            8 => 212,
+            9 => 243,
+            10 => 273,
+            11 => 304,
+            12 => 334,
             _ => 0,
         }
-        + day - 1;
+        + day
+        - 1;
 
     Some(days * 86400 + hour * 3600 + min * 60 + sec)
 }
@@ -441,10 +442,7 @@ mod tests {
             },
         );
         queue.primals.get_mut("beardog").unwrap().status = QueueStatus::BuildRequested;
-        assert_eq!(
-            queue.primals["beardog"].status,
-            QueueStatus::BuildRequested
-        );
+        assert_eq!(queue.primals["beardog"].status, QueueStatus::BuildRequested);
     }
 
     #[test]

@@ -326,11 +326,7 @@ pub async fn handle_push(
         } else {
             &event.after
         };
-        crate::plasmid::scheduler::ingest(
-            &action.repo_name,
-            commit_short,
-            &event.pusher.username,
-        )?;
+        crate::plasmid::scheduler::ingest(&action.repo_name, commit_short, &event.pusher.username)?;
         Ok(crate::ShadowOutcome::ok(format!(
             "webhook: {} push queued for batch harvest (commit {})",
             action.repo_name, commit_short

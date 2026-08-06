@@ -357,8 +357,7 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> Str
     let stop_ok = std::process::Command::new("sudo")
         .args(["systemctl", "stop", "membrane-nucleus.target"])
         .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+        .is_ok_and(|s| s.success());
 
     if !stop_ok {
         warn!("NUCLEUS stop returned non-zero — continuing with pkill fallback");
@@ -406,20 +405,30 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> Str
     let start_ok = std::process::Command::new("sudo")
         .args(["systemctl", "start", "membrane-nucleus.target"])
         .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+        .is_ok_and(|s| s.success());
 
     if failed.is_empty() && start_ok {
         info!(installed, "NUCLEUS install + restart complete");
-        format!("install: {installed}/{} installed, NUCLEUS restarted", built.len())
+        format!(
+            "install: {installed}/{} installed, NUCLEUS restarted",
+            built.len()
+        )
     } else {
         let fail_msg = if failed.is_empty() {
             String::new()
         } else {
             format!(" failures=[{}]", failed.join("; "))
         };
-        let restart_msg = if start_ok { "" } else { " NUCLEUS restart FAILED" };
-        warn!(installed, failures = failed.len(), "install completed with issues");
+        let restart_msg = if start_ok {
+            ""
+        } else {
+            " NUCLEUS restart FAILED"
+        };
+        warn!(
+            installed,
+            failures = failed.len(),
+            "install completed with issues"
+        );
         format!(
             "install: {installed}/{} installed{fail_msg}{restart_msg}",
             built.len()

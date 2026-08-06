@@ -389,11 +389,10 @@ impl std::fmt::Display for StalenessReport {
                 .iter()
                 .filter(|e| e.stale)
                 .map(|e| {
-                    if let Some(reason) = &e.reason {
-                        format!("{} ({})", e.name, reason)
-                    } else {
-                        e.name.clone()
-                    }
+                    e.reason.as_ref().map_or_else(
+                        || e.name.clone(),
+                        |reason| format!("{} ({})", e.name, reason),
+                    )
                 })
                 .collect();
             write!(f, " [{}]", stale_details.join(", "))?;
@@ -443,10 +442,15 @@ pub(crate) fn detect_stale_primals(depot_dir: &Path) -> Result<StalenessReport> 
             let cmp_len = prov.len().min(src.len()).min(8);
             let prov_prefix = &prov[..cmp_len];
             let src_prefix = &src[..cmp_len];
-            if prov_prefix != src_prefix {
-                (true, Some(format!("commit drift: depot={prov_prefix} src={src_prefix}")))
-            } else {
+            if prov_prefix == src_prefix {
                 (false, None)
+            } else {
+                (
+                    true,
+                    Some(format!(
+                        "commit drift: depot={prov_prefix} src={src_prefix}"
+                    )),
+                )
             }
         } else {
             (false, None)
