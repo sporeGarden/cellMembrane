@@ -12,7 +12,7 @@ use super::types::{
     ImpulseContent, ImpulseFrom, ImpulseMeta, ImpulseOpMeta, ImpulseTo, ImpulseType, Priority,
     SyncDivergeArgs, SyncImpulseFile, SyncPayload, active_dir, current_wave, resolve_head_ref,
 };
-use crate::error::{Result, ShadowError};
+use crate::error::Result;
 use crate::identity;
 use tracing::warn;
 
@@ -112,15 +112,11 @@ pub async fn post_sync_diverge(
     };
 
     let active = active_dir(workspace_root);
-    tokio::fs::create_dir_all(&active)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&active).await?;
 
     let filepath = active.join(&filename);
-    let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
-    crate::atomic_write_async(&filepath, toml_str.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    let toml_str = toml::to_string_pretty(&impulse)?;
+    crate::atomic_write_async(&filepath, toml_str.as_bytes()).await?;
 
     let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     let push = crate::git_ops::add_commit_push(

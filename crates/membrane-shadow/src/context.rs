@@ -277,15 +277,11 @@ pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<Contex
     };
 
     let gate_dir = gate_context_dir(workspace_root, &gate_id.name);
-    tokio::fs::create_dir_all(&gate_dir)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&gate_dir).await?;
 
     let filepath = braid_filepath(workspace_root, &gate_id.name, args.project);
-    let toml_str = toml::to_string_pretty(&braid).map_err(ShadowError::Serialize)?;
-    crate::atomic_write_async(&filepath, toml_str.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    let toml_str = toml::to_string_pretty(&braid)?;
+    crate::atomic_write_async(&filepath, toml_str.as_bytes()).await?;
 
     let slug = project_slug(args.project);
     let rel_path = format!("context/{}/{slug}.toml", gate_id.name);
@@ -329,8 +325,7 @@ pub(crate) fn sense(
         let gd = gate_context_dir(workspace_root, gate);
         if gd.exists() { vec![gd] } else { vec![] }
     } else {
-        std::fs::read_dir(&ctx_dir)
-            .map_err(ShadowError::Io)?
+        std::fs::read_dir(&ctx_dir)?
             .filter_map(std::result::Result::ok)
             .map(|e| e.path())
             .filter(|p: &PathBuf| p.is_dir())
@@ -400,9 +395,7 @@ pub async fn clear(
         let gate_id = identity::resolve_async(workspace_root).await?;
         let filepath = braid_filepath(workspace_root, &gate_id.name, proj);
         if filepath.exists() {
-            tokio::fs::remove_file(&filepath)
-                .await
-                .map_err(ShadowError::Io)?;
+            tokio::fs::remove_file(&filepath).await?;
             let slug = project_slug(proj);
             cleared.push(format!("{}/{slug}", gate_id.name));
         }
@@ -428,8 +421,7 @@ fn clear_expired_braids(ctx_dir: &Path) -> Result<Vec<String>> {
     let now = Utc::now();
     let mut cleared = Vec::new();
 
-    let gate_dirs: Vec<PathBuf> = std::fs::read_dir(ctx_dir)
-        .map_err(ShadowError::Io)?
+    let gate_dirs: Vec<PathBuf> = std::fs::read_dir(ctx_dir)?
         .filter_map(std::result::Result::ok)
         .map(|e| e.path())
         .filter(|p| p.is_dir())
@@ -464,7 +456,7 @@ fn clear_expired_braids(ctx_dir: &Path) -> Result<Vec<String>> {
                         .unwrap_or_default()
                         .to_string_lossy()
                         .to_string();
-                    std::fs::remove_file(&path).map_err(ShadowError::Io)?;
+                    std::fs::remove_file(&path)?;
                     cleared.push(format!("{gate_name}/{slug}"));
                 }
             }

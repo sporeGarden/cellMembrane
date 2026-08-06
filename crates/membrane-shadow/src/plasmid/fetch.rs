@@ -154,9 +154,7 @@ pub async fn fetch(config: &crate::ShadowConfig, args: &FetchArgs) -> Result<Sha
         return Ok(format_dry_run(&primals, arch, &tag, &bin_dir, args.source));
     }
 
-    tokio::fs::create_dir_all(&bin_dir)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&bin_dir).await?;
 
     download::cleanup_partial_downloads(&bin_dir).await;
 

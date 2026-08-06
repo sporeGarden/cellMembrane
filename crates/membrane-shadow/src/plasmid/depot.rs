@@ -100,7 +100,7 @@ fn update_checksums(
         }
     }
 
-    crate::atomic_write(&checksums_path, out.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write(&checksums_path, out.as_bytes())?;
     Ok(())
 }
 
@@ -156,9 +156,7 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
         prov_out.push('\n');
     }
 
-    crate::atomic_write_async(&provenance_path, prov_out.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&provenance_path, prov_out.as_bytes()).await?;
     Ok(())
 }
 
@@ -302,7 +300,7 @@ fn provision_sources_from_manifest(depot_dir: &Path) -> Result<BTreeMap<String, 
     }
 
     let path = depot_dir.join("sources.toml");
-    std::fs::write(&path, toml_out.as_bytes()).map_err(ShadowError::Io)?;
+    std::fs::write(&path, toml_out.as_bytes())?;
     tracing::info!(
         primals = sources.len(),
         path = %path.display(),

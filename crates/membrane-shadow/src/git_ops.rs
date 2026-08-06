@@ -195,8 +195,7 @@ pub async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
         .args(args)
         .current_dir(repo_dir)
         .status()
-        .await
-        .map_err(ShadowError::Io)?;
+        .await?;
     if !status.success() {
         return Err(ShadowError::git(format!(
             "{} failed in {}",
@@ -273,8 +272,7 @@ pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
                 args.first().unwrap_or(&"?"),
                 GIT_OP_TIMEOUT.as_secs(),
             ))
-        })?
-        .map_err(ShadowError::Io)?;
+        })??;
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -402,8 +400,7 @@ pub async fn git_clone(url: &str, dest: &Path) -> Result<()> {
             "git clone timed out after {}s",
             GIT_OP_TIMEOUT.as_secs()
         ))
-    })?
-    .map_err(ShadowError::Io)?;
+    })??;
 
     if !status.success() {
         return Err(ShadowError::git(format!("git clone {url} failed")));

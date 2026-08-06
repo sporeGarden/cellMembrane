@@ -13,7 +13,7 @@ use serde::Deserialize;
 
 use super::checksum::ChecksumEntry;
 use super::depot::compute_blake3_file;
-use crate::error::{Result, ShadowError};
+use crate::error::Result;
 
 /// Result of a depot integrity check (generate or verify).
 #[derive(Debug, Clone, serde::Serialize)]
@@ -56,8 +56,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     let mut total_binaries: u32 = 0;
 
     if primals_dir.is_dir() {
-        let mut entries: Vec<_> = std::fs::read_dir(&primals_dir)
-            .map_err(ShadowError::Io)?
+        let mut entries: Vec<_> = std::fs::read_dir(&primals_dir)?
             .filter_map(std::result::Result::ok)
             .filter(|e| e.path().is_dir())
             .collect();
@@ -68,8 +67,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
             let arch_dir = entry.path();
             let mut arch_checksums: BTreeMap<String, ChecksumEntry> = BTreeMap::new();
 
-            let mut files: Vec<_> = std::fs::read_dir(&arch_dir)
-                .map_err(ShadowError::Io)?
+            let mut files: Vec<_> = std::fs::read_dir(&arch_dir)?
                 .filter_map(std::result::Result::ok)
                 .filter(|e| e.path().is_file())
                 .collect();
@@ -106,7 +104,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     }
 
     let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
-    crate::atomic_write(&checksums_path, out.as_bytes()).map_err(ShadowError::Io)?;
+    crate::atomic_write(&checksums_path, out.as_bytes())?;
 
     Ok(IntegrityReport {
         depot_path: depot_dir.display().to_string(),
@@ -129,7 +127,7 @@ pub(crate) fn verify_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     }
 
     let checksums_path = depot_dir.join(cellmembrane_types::service::CHECKSUMS_FILE);
-    let content = std::fs::read_to_string(&checksums_path).map_err(ShadowError::Io)?;
+    let content = std::fs::read_to_string(&checksums_path)?;
     let parsed: ChecksumFile = toml::from_str(&content)?;
 
     let primals_dir = depot_dir.join("primals");

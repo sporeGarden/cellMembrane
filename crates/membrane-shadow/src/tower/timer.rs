@@ -132,9 +132,7 @@ pub async fn dispatch_tower_status() -> Result<ShadowOutcome> {
 pub async fn dispatch_benchmark(args: &[&str]) -> Result<ShadowOutcome> {
     let songbird_bin = resolve_songbird_bin()?;
     let output_dir = resolve_shadow_output_dir()?;
-    tokio::fs::create_dir_all(&output_dir)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&output_dir).await?;
 
     let peers =
         cli::extract_flag_value(args, "--peer").map_or_else(discover_mesh_peers, |peer_addr| {
@@ -203,9 +201,7 @@ pub async fn dispatch_benchmark(args: &[&str]) -> Result<ShadowOutcome> {
 
 async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
     let output_dir = resolve_shadow_output_dir()?;
-    tokio::fs::create_dir_all(&output_dir)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&output_dir).await?;
 
     let songbird_bin = resolve_songbird_bin()?;
     let peers = discover_mesh_peers();
@@ -218,9 +214,7 @@ async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
 
     let script_content = generate_benchmark_script(&songbird_bin, &peers, &output_dir);
     let script_path = output_dir.join("shadow-benchmark.sh");
-    crate::atomic_write_async(&script_path, script_content.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&script_path, script_content.as_bytes()).await?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -501,9 +495,7 @@ fn generate_benchmark_script(songbird_bin: &Path, peers: &[MeshPeer], output_dir
 // ── systemd interaction ──────────────────────────────────────────────
 
 async fn write_unit_file(path: &str, content: &str) -> Result<()> {
-    tokio::fs::write(path, content)
-        .await
-        .map_err(ShadowError::Io)
+    Ok(tokio::fs::write(path, content).await?)
 }
 
 fn is_user_scope() -> bool {
@@ -521,14 +513,13 @@ async fn systemctl(args: &[&str]) -> Result<()> {
     let output = if is_user_scope() {
         let mut cmd = tokio::process::Command::new("systemctl");
         cmd.arg("--user").args(args);
-        cmd.output().await.map_err(ShadowError::Io)?
+        cmd.output().await?
     } else {
         tokio::process::Command::new("sudo")
             .arg("systemctl")
             .args(args)
             .output()
-            .await
-            .map_err(ShadowError::Io)?
+            .await?
     };
 
     if !output.status.success() {

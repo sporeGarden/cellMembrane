@@ -98,7 +98,6 @@ const fn default_staleness() -> u64 {
 /// `waiting` and `auto_promoted` are retained for diagnostics / JSON
 /// serialization even when not consumed by the dispatch caller.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct SchedulerDecision {
     /// Primals that should be built now.
     pub build_now: Vec<String>,

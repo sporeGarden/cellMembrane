@@ -13,7 +13,7 @@ use cellmembrane_types::topology::{
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::error::{Result, ShadowError};
+use crate::error::Result;
 
 /// Load `TOPOLOGY_MAP.toml` from the workspace's `infra/wateringHole/` directory.
 ///
@@ -25,7 +25,7 @@ pub(crate) fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
     let path = workspace_root
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
         .join(cellmembrane_types::service::TOPOLOGY_MAP_FILENAME);
-    let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
+    let contents = std::fs::read_to_string(&path)?;
     parse_topology_map(&contents)
 }
 
@@ -35,7 +35,7 @@ pub(crate) fn load_topology_map(workspace_root: &Path) -> Result<TopologyMap> {
 /// which don't map to a flat serde struct directly. This function extracts each
 /// section manually for resilience against upstream TOML schema evolution.
 fn parse_topology_map(contents: &str) -> Result<TopologyMap> {
-    let table: toml::Table = contents.parse().map_err(ShadowError::Toml)?;
+    let table: toml::Table = contents.parse()?;
 
     let meta = table
         .get("meta")

@@ -55,18 +55,28 @@ async fn dispatch_schedule(args: &[&str]) -> Result<ShadowOutcome> {
     let decision = scheduler::evaluate(&mut queue);
 
     if decision.build_now.is_empty() {
-        return Ok(ShadowOutcome::ok(format!(
-            "harvest.schedule: nothing to build — {}",
-            decision.reason
-        )));
+        return Ok(ShadowOutcome::ok_with(
+            format!("harvest.schedule: nothing to build — {}", decision.reason),
+            serde_json::json!({
+                "waiting": decision.waiting,
+                "auto_promoted": decision.auto_promoted,
+            }),
+        ));
     }
 
     if dry_run {
-        return Ok(ShadowOutcome::ok(format!(
-            "harvest.schedule (dry-run): would build [{}] — {}",
-            decision.build_now.join(", "),
-            decision.reason
-        )));
+        return Ok(ShadowOutcome::ok_with(
+            format!(
+                "harvest.schedule (dry-run): would build [{}] — {}",
+                decision.build_now.join(", "),
+                decision.reason
+            ),
+            serde_json::json!({
+                "build_now": decision.build_now,
+                "waiting": decision.waiting,
+                "auto_promoted": decision.auto_promoted,
+            }),
+        ));
     }
 
     scheduler::mark_building(&mut queue, &decision.build_now);

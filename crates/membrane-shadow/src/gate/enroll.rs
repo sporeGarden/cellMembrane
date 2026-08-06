@@ -27,17 +27,7 @@ const ENROLL_PHASE_TIMEOUT: std::time::Duration =
 const DEFAULT_SSH_PORT: &str = "22";
 
 /// SSH timeout for hub-side peer addition (generous for WAN latency).
-///
-/// Compile-time assertion below guarantees the `as u32` truncation is safe.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "guarded by const assertion below"
-)]
-const HUB_SSH_TIMEOUT: u32 = cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS as u32 + 5;
-const _: () = assert!(
-    cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS <= u32::MAX as u64,
-    "SSH timeout must fit in u32"
-);
+const HUB_SSH_TIMEOUT: u32 = cellmembrane_types::service::DEFAULT_SSH_TIMEOUT_SECS + 5;
 
 /// Result of a `gate.enroll` run.
 #[derive(Debug, Clone, Serialize, Deserialize)]

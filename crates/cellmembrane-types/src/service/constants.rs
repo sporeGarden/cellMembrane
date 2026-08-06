@@ -498,7 +498,7 @@ pub const ENV_SONGBIRD_PROXY_ROUTES: &str = "SONGBIRD_PROXY_ROUTES";
 // ── Timeout constants ────────────────────────────────────────────────
 
 /// Default SSH connection timeout (seconds).
-pub const DEFAULT_SSH_TIMEOUT_SECS: u64 = 10;
+pub const DEFAULT_SSH_TIMEOUT_SECS: u32 = 10;
 /// HTTP download timeout for binary fetch operations (seconds).
 pub const DEFAULT_FETCH_TIMEOUT_SECS: u64 = 300;
 /// Bootstrap phase timeout (seconds).
@@ -538,7 +538,7 @@ pub const MESH_SOCKET_WAIT_RETRIES: u32 = 5;
 /// Mesh socket wait interval (seconds).
 pub const MESH_SOCKET_WAIT_INTERVAL_SECS: u64 = 2;
 /// Forgejo API pagination page size.
-pub const DEFAULT_API_PAGE_SIZE: u32 = 50;
+pub const DEFAULT_API_PAGE_SIZE: usize = 50;
 
 // ── Well-known ports ─────────────────────────────────────────────────
 

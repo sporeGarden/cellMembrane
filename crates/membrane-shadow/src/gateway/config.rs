@@ -226,7 +226,7 @@ pub(super) fn load_gateway_config(args: &[&str]) -> Result<GatewayConfig> {
         |p| (*p).to_string(),
     );
 
-    let content = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
+    let content = std::fs::read_to_string(&path)?;
 
     toml::from_str(&content)
         .map_err(|e| ShadowError::config(format!("invalid gateway config: {e}")))

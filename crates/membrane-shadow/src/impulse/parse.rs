@@ -42,14 +42,14 @@ pub(super) fn find_impulse_by_id(
     active_dir: &Path,
     impulse_id: &str,
 ) -> Result<(std::path::PathBuf, ImpulseFile)> {
-    let entries = std::fs::read_dir(active_dir).map_err(ShadowError::Io)?;
+    let entries = std::fs::read_dir(active_dir)?;
     for entry in entries {
-        let entry = entry.map_err(ShadowError::Io)?;
+        let entry = entry?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "toml") {
             continue;
         }
-        let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
+        let contents = std::fs::read_to_string(&path)?;
         if let Ok(impulse) = parse_impulse_or_signal(&contents) {
             if impulse.impulse.id == impulse_id
                 || path

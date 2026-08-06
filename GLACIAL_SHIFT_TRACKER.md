@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-06 (Wave 156l)
+**Last updated:** 2026-08-06 (Wave 156m)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 156m (type-safe constants + #[from] error propagation + scheduler diagnostics):**
+Safe constant types and idiomatic error propagation. (1) `DEFAULT_SSH_TIMEOUT_SECS`
+changed from `u64` to `u32` at source — eliminates 2 `as u32` casts and 2 const
+assertion blocks in `config.rs` and `gate/enroll.rs`. `DEFAULT_API_PAGE_SIZE` changed
+from `u32` to `usize` — eliminates `as usize` cast. (2) 56 redundant
+`map_err(ShadowError::Io|Toml|Serialize|Json)` calls replaced with `?` operator
+across 16 files — leverages `#[from]` attributes already on `ShadowError` variants.
+3 now-unused `ShadowError` imports removed. (3) `SchedulerDecision` dead fields
+(`waiting`, `auto_promoted`) wired into harvest dispatch JSON output via
+`ShadowOutcome::ok_with`, removing `#[allow(dead_code)]`. Zero clippy (pedantic),
+zero fmt drift, 1293 tests pass.
 
 **Wave 156l (visibility narrowing + Copy enums + signing extraction + base64 bump):**
 Deep encapsulation and API hygiene pass. (1) Visibility narrowing: 5 `pub(crate)` fns

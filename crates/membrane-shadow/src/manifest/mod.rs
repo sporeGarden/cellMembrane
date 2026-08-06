@@ -23,8 +23,8 @@ impl EcosystemManifest {
     /// Returns `ShadowError::Io` if the file can't be read, or
     /// `ShadowError::Parse` if the TOML is malformed.
     pub fn load(path: &Path) -> Result<Self> {
-        let contents = std::fs::read_to_string(path).map_err(ShadowError::Io)?;
-        toml::from_str(&contents).map_err(ShadowError::Toml)
+        let contents = std::fs::read_to_string(path)?;
+        Ok(toml::from_str(&contents)?)
     }
 
     /// Async variant — reads the file on a blocking thread to avoid stalling
@@ -34,10 +34,8 @@ impl EcosystemManifest {
     /// Returns `ShadowError::Io` if the file can't be read, or
     /// `ShadowError::Parse` if the TOML is malformed.
     pub async fn load_async(path: PathBuf) -> Result<Self> {
-        let contents = tokio::fs::read_to_string(&path)
-            .await
-            .map_err(ShadowError::Io)?;
-        toml::from_str(&contents).map_err(ShadowError::Toml)
+        let contents = tokio::fs::read_to_string(&path).await?;
+        Ok(toml::from_str(&contents)?)
     }
 
     /// Find the manifest file relative to a workspace root.

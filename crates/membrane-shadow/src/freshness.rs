@@ -103,9 +103,7 @@ pub async fn publish_gate_heads(
         .join(cellmembrane_types::service::INFRA_WATERING_HOLE)
         .join("heads");
 
-    tokio::fs::create_dir_all(&heads_dir)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&heads_dir).await?;
 
     let wh_local = cellmembrane_types::service::INFRA_WATERING_HOLE;
 
@@ -138,15 +136,13 @@ pub async fn publish_gate_heads(
         heads,
     };
 
-    let body = toml::to_string_pretty(&file).map_err(ShadowError::Serialize)?;
+    let body = toml::to_string_pretty(&file)?;
     let content = format!(
         "{GATE_HEADS_HEADER}# Gate: {gate} | Updated: {}\n\n{body}",
         file.meta.updated
     );
     let heads_path = heads_dir.join(format!("{gate}.toml"));
-    crate::atomic_write_async(&heads_path, content.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&heads_path, content.as_bytes()).await?;
 
     Ok(())
 }
@@ -248,11 +244,9 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
         heads: merged_heads,
     };
 
-    let body = toml::to_string_pretty(&unified).map_err(ShadowError::Serialize)?;
+    let body = toml::to_string_pretty(&unified)?;
     let content = format!("{FRESHNESS_HEADER}\n{body}");
-    crate::atomic_write_async(&freshness_path, content.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    crate::atomic_write_async(&freshness_path, content.as_bytes()).await?;
 
     Ok(())
 }

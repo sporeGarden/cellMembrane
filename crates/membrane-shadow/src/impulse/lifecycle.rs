@@ -86,15 +86,11 @@ pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseF
     };
 
     let active = active_dir(workspace_root);
-    tokio::fs::create_dir_all(&active)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&active).await?;
 
     let filepath = active.join(&filename);
-    let toml_str = toml::to_string_pretty(&impulse).map_err(ShadowError::Serialize)?;
-    crate::atomic_write_async(&filepath, toml_str.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    let toml_str = toml::to_string_pretty(&impulse)?;
+    crate::atomic_write_async(&filepath, toml_str.as_bytes()).await?;
 
     let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);
     let push = crate::git_ops::add_commit_push(
@@ -135,13 +131,13 @@ pub fn sense(
     };
 
     let mut impulses = Vec::new();
-    let entries = std::fs::read_dir(&active).map_err(ShadowError::Io)?;
+    let entries = std::fs::read_dir(&active)?;
 
     for entry in entries {
-        let entry = entry.map_err(ShadowError::Io)?;
+        let entry = entry?;
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "toml") {
-            let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
+            let contents = std::fs::read_to_string(&path)?;
             if let Ok(mut imp) = parse_impulse_or_signal(&contents) {
                 // Merge external acks from separate ack files
                 let ext_acks = load_external_acks(workspace_root, &imp.impulse.id);
@@ -190,14 +186,14 @@ pub fn check(workspace_root: &Path) -> Result<PotentialHealth> {
     let mut by_wave = std::collections::BTreeMap::new();
 
     if active.exists() {
-        let entries = std::fs::read_dir(&active).map_err(ShadowError::Io)?;
+        let entries = std::fs::read_dir(&active)?;
         for entry in entries {
-            let entry = entry.map_err(ShadowError::Io)?;
+            let entry = entry?;
             let path = entry.path();
             if path.extension().is_none_or(|e| e != "toml") {
                 continue;
             }
-            let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
+            let contents = std::fs::read_to_string(&path)?;
             if let Ok(imp) = parse_impulse_or_signal(&contents) {
                 total += 1;
                 *by_wave.entry(imp.impulse.wave).or_insert(0) += 1;
@@ -242,17 +238,13 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
     };
 
     let acks_dir = impulses_dir(workspace_root).join("acks");
-    tokio::fs::create_dir_all(&acks_dir)
-        .await
-        .map_err(ShadowError::Io)?;
+    tokio::fs::create_dir_all(&acks_dir).await?;
 
     let ack_filename = format!("{}_{}.toml", impulse_id, gate_id.name);
     let ack_path = acks_dir.join(&ack_filename);
 
-    let ack_toml = toml::to_string_pretty(&ack_entry).map_err(ShadowError::Serialize)?;
-    crate::atomic_write_async(&ack_path, ack_toml.as_bytes())
-        .await
-        .map_err(ShadowError::Io)?;
+    let ack_toml = toml::to_string_pretty(&ack_entry)?;
+    crate::atomic_write_async(&ack_path, ack_toml.as_bytes()).await?;
 
     // Also append to in-memory representation for return value
     impulse.acks.push(ack_entry);
@@ -278,18 +270,18 @@ fn archive_expired_impulses(
     workspace_root: &Path,
     now: &chrono::DateTime<Utc>,
 ) -> Result<Vec<String>> {
-    std::fs::create_dir_all(archive_dir).map_err(ShadowError::Io)?;
+    std::fs::create_dir_all(archive_dir)?;
     let mut archived = Vec::new();
-    let entries = std::fs::read_dir(active).map_err(ShadowError::Io)?;
+    let entries = std::fs::read_dir(active)?;
 
     for entry in entries {
-        let entry = entry.map_err(ShadowError::Io)?;
+        let entry = entry?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "toml") {
             continue;
         }
 
-        let contents = std::fs::read_to_string(&path).map_err(ShadowError::Io)?;
+        let contents = std::fs::read_to_string(&path)?;
         let impulse: ImpulseFile = match parse_impulse_or_signal(&contents) {
             Ok(i) => i,
             Err(_) => continue,
@@ -306,7 +298,7 @@ fn archive_expired_impulses(
                 .to_string_lossy()
                 .to_string();
             let dest = archive_dir.join(&fname);
-            std::fs::rename(&path, &dest).map_err(ShadowError::Io)?;
+            std::fs::rename(&path, &dest)?;
             archived.push(fname);
         }
     }
