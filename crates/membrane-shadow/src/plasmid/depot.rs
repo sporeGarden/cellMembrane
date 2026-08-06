@@ -347,7 +347,11 @@ pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
 }
 
 /// Staleness report for a single primal in the depot.
+///
+/// Fields like `source_commit` are retained for mesh publish / JSON
+/// serialization even when not consumed locally.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct StalenessEntry {
     /// Primal binary name.
     pub name: String,

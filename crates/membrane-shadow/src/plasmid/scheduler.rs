@@ -94,7 +94,11 @@ const fn default_staleness() -> u64 {
 }
 
 /// Result of a scheduler tick.
+///
+/// `waiting` and `auto_promoted` are retained for diagnostics / JSON
+/// serialization even when not consumed by the dispatch caller.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SchedulerDecision {
     /// Primals that should be built now.
     pub build_now: Vec<String>,
@@ -125,13 +129,13 @@ fn queue_path() -> PathBuf {
 
 pub fn load_queue() -> HarvestQueue {
     let path = queue_path();
-    match std::fs::read_to_string(&path) {
-        Ok(content) => toml::from_str(&content).unwrap_or_else(|e| {
-            warn!(error = %e, path = %path.display(), "harvest queue parse error, starting fresh");
-            HarvestQueue::default()
-        }),
-        Err(_) => HarvestQueue::default(),
-    }
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return HarvestQueue::default();
+    };
+    toml::from_str(&content).unwrap_or_else(|e| {
+        warn!(error = %e, path = %path.display(), "harvest queue parse error, starting fresh");
+        HarvestQueue::default()
+    })
 }
 
 pub fn save_queue(queue: &HarvestQueue) -> crate::Result<()> {

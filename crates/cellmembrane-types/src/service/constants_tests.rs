@@ -1,3 +1,4 @@
+use super::super::resolve::*;
 use super::*;
 
 #[test]

@@ -58,15 +58,11 @@ impl MembraneChannel {
     pub fn default_primal(&self) -> &'static str {
         match self {
             Self::Signal => {
-                crate::MembraneService::for_binary("knot-dns")
-                    .expect("knot-dns must exist in service registry")
-                    .binary
+                crate::MembraneService::binary_for(crate::ServiceCapability::DnsAuthority)
             }
             Self::Relay => crate::MembraneService::binary_for(crate::ServiceCapability::MeshRelay),
             Self::Surface => {
-                crate::MembraneService::for_binary("caddy")
-                    .expect("caddy must exist in service registry")
-                    .binary
+                crate::MembraneService::binary_for(crate::ServiceCapability::ReverseProxy)
             }
         }
     }

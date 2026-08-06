@@ -9,6 +9,22 @@
 
 ## Recent Waves
 
+**Wave 156j-b (deep debt sweep: zero clippy + self-knowledge evolution + smart refactoring):**
+Deep debt pass achieving ZERO clippy warnings for the first time. (1) Clippy:
+`StalenessEntry`/`SchedulerDecision` dead fields annotated; `load_queue` rewritten
+with `let...else`; `harvest_one` refactored by extracting `SourceResolution`/`resolve_source`
+helper (116L→76L body, no too-many-lines warning). (2) Self-knowledge evolution:
+added 4 new `ServiceCapability` variants (`DnsAuthority`, `ReverseProxy`, `Visualization`,
+`ContentAddressedStorage`); knot-dns and caddy registry entries now declare capabilities;
+`channels.rs::default_primal()` migrated from `for_binary("knot-dns")`/`for_binary("caddy")`
+to `binary_for(DnsAuthority)`/`binary_for(ReverseProxy)`, eliminating 2 `.expect()` calls;
+`sporeprint.rs` migrated from `require_binary("petaltongue")`/`require_binary("nestgate")`
+to `binary_for(Visualization)`/`binary_for(ContentAddressedStorage)`;
+`gateway/mod.rs` migrated from `require_binary("caddy")` to `require_capability(ReverseProxy)`.
+(3) `constants.rs` shrunk from 823L to 692L by extracting runtime resolution functions
+(`env_or`, `resolve_socket_base`, `resolve_systemd_unit_dir`, etc.) into new
+`service/resolve.rs` module (138L). 1,285 tests, ZERO clippy, 0 fmt drift.
+
 **Wave 156j (G64 Cephalization: dual-socket registry + tarpc-aware discovery + deep debt sweep):**
 Cephalization era (G64). Added `has_tarpc: bool` field to `MembraneService` struct —
 11 primals marked `has_tarpc: true` (all tarpc-wired/-serving), 2 primals + 4 symbiotic

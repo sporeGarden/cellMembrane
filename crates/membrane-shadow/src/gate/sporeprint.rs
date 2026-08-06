@@ -20,8 +20,12 @@ use super::systemd_units::{GatewayUnitParams, generate_songbird_unit};
 /// literals while maintaining the architectural coupling.
 fn sporeprint_binaries() -> SporePrintBinaries {
     SporePrintBinaries {
-        content: cellmembrane_types::MembraneService::require_binary("petaltongue").binary,
-        cas: cellmembrane_types::MembraneService::require_binary("nestgate").binary,
+        content: cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::ServiceCapability::Visualization,
+        ),
+        cas: cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::ServiceCapability::ContentAddressedStorage,
+        ),
         crypto: cellmembrane_types::MembraneService::binary_for(
             cellmembrane_types::ServiceCapability::CryptoSigner,
         ),

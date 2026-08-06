@@ -459,6 +459,57 @@ fn determine_primals(
 
 use super::drift;
 
+struct SourceResolution {
+    dir: std::path::PathBuf,
+    cleanup: bool,
+}
+
+async fn resolve_source(
+    primal: &str,
+    source: &SourceEntry,
+    local: bool,
+) -> std::result::Result<SourceResolution, HarvestResult> {
+    if local {
+        return resolve_local_source_dir(primal).map_or_else(
+            |e| {
+                Err(HarvestResult {
+                    binary: primal.into(),
+                    status: HarvestStatus::Failed,
+                    detail: e.to_string(),
+                })
+            },
+            |dir| {
+                info!(primal, path = %dir.display(), "local harvest: using workspace checkout");
+                Ok(SourceResolution {
+                    dir,
+                    cleanup: false,
+                })
+            },
+        );
+    }
+
+    let build_root = std::env::temp_dir().join("membrane-harvest");
+    let clone_dir = build_root.join(primal);
+
+    if let Err(e) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
+        let status = if source.private {
+            HarvestStatus::Skipped
+        } else {
+            HarvestStatus::Failed
+        };
+        return Err(HarvestResult {
+            binary: primal.into(),
+            status,
+            detail: e.to_string(),
+        });
+    }
+
+    Ok(SourceResolution {
+        dir: clone_dir,
+        cleanup: true,
+    })
+}
+
 async fn harvest_one(
     primal: &str,
     source: &SourceEntry,
@@ -467,52 +518,25 @@ async fn harvest_one(
     manifest_linker: Option<&str>,
     local: bool,
 ) -> HarvestResult {
-    let (source_dir, cleanup) = if local {
-        match resolve_local_source_dir(primal) {
-            Ok(dir) => {
-                info!(primal, path = %dir.display(), "local harvest: using workspace checkout");
-                (dir, false)
-            }
-            Err(e) => {
-                return HarvestResult {
-                    binary: primal.into(),
-                    status: HarvestStatus::Failed,
-                    detail: e.to_string(),
-                };
-            }
-        }
-    } else {
-        let build_root = std::env::temp_dir().join("membrane-harvest");
-        let clone_dir = build_root.join(primal);
-
-        if let Err(e) = drift::clone_source(primal, source, &build_root, &clone_dir).await {
-            let status = if source.private {
-                HarvestStatus::Skipped
-            } else {
-                HarvestStatus::Failed
-            };
-            return HarvestResult {
-                binary: primal.into(),
-                status,
-                detail: e.to_string(),
-            };
-        }
-        (clone_dir, true)
+    let resolved = match resolve_source(primal, source, local).await {
+        Ok(r) => r,
+        Err(result) => return result,
     };
+    let source_dir = &resolved.dir;
 
-    let head_commit = crate::git_ops::head_short(&source_dir)
+    let head_commit = crate::git_ops::head_short(source_dir)
         .await
         .unwrap_or_default();
 
     if !local {
         if let Some(warning) =
-            drift::check_clone_freshness(primal, source, &source_dir, &head_commit).await
+            drift::check_clone_freshness(primal, source, source_dir, &head_commit).await
         {
             warn!(primal, warning, "freshness warning");
         }
     }
 
-    if let Err(e) = toolchain::build_binary(source, target, &source_dir, manifest_linker).await {
+    if let Err(e) = toolchain::build_binary(source, target, source_dir, manifest_linker).await {
         return HarvestResult {
             binary: primal.into(),
             status: HarvestStatus::Failed,
@@ -553,8 +577,8 @@ async fn harvest_one(
 
     match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
-            if cleanup {
-                let _ = tokio::fs::remove_dir_all(&source_dir).await;
+            if resolved.cleanup {
+                let _ = tokio::fs::remove_dir_all(source_dir).await;
             }
             let mode = if local { "local" } else { "clone" };
             HarvestResult {

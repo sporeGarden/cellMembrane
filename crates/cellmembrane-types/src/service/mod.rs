@@ -12,11 +12,13 @@
 
 pub mod constants;
 pub mod integrity;
+pub mod resolve;
 
 pub use constants::*;
 pub use integrity::{
     BinaryIntegrity, HashAlgorithm, binary_integrity_for, binary_integrity_for_paths,
 };
+pub use resolve::*;
 
 use crate::composition::MembraneComposition;
 use serde::{Deserialize, Serialize};
@@ -175,6 +177,14 @@ pub enum ServiceCapability {
     ComputeOrchestration,
     /// Identity — gate identity, certificate management.
     Identity,
+    /// DNS authority — authoritative DNS serving.
+    DnsAuthority,
+    /// Reverse proxy — TLS termination, HTTP routing.
+    ReverseProxy,
+    /// Visualization — scene rendering, data visualization.
+    Visualization,
+    /// Content-addressed storage — CAS blob serving.
+    ContentAddressedStorage,
 }
 
 impl ServiceCapability {
@@ -194,6 +204,10 @@ impl ServiceCapability {
             Self::Storage => "storage",
             Self::ComputeOrchestration => "compute_orchestration",
             Self::Identity => "identity",
+            Self::DnsAuthority => "dns_authority",
+            Self::ReverseProxy => "reverse_proxy",
+            Self::Visualization => "visualization",
+            Self::ContentAddressedStorage => "content_addressed_storage",
         }
     }
 }
