@@ -215,11 +215,7 @@ async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
     let script_content = generate_benchmark_script(&songbird_bin, &peers, &output_dir);
     let script_path = output_dir.join("shadow-benchmark.sh");
     crate::atomic_write_async(&script_path, script_content.as_bytes()).await?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755));
-    }
+    let _ = cellmembrane_types::PlatformAccess::Executable.apply(&script_path);
 
     let service_content = generate_service_unit(&output_dir);
     let timer_content = generate_timer_unit(interval_min);

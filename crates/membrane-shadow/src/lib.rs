@@ -78,6 +78,7 @@ pub(crate) mod impulse;
 pub(crate) mod jsonrpc;
 pub(crate) mod manifest;
 pub(crate) mod plasmid;
+pub(crate) mod platform;
 #[cfg(feature = "http")]
 pub(crate) mod provision;
 pub(crate) mod relay;

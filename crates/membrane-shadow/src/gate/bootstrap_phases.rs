@@ -92,19 +92,15 @@ pub(super) fn permissions_phase(dry_run: bool) -> BootstrapPhase {
         socket_base.as_str(),
     ] {
         if std::fs::create_dir_all(dir).is_ok() {
-            #[cfg(unix)]
+            if cellmembrane_types::PlatformAccess::Executable
+                .apply(std::path::Path::new(dir))
+                .is_ok()
             {
-                use std::os::unix::fs::PermissionsExt;
-                let perms = std::fs::Permissions::from_mode(0o755);
-                if std::fs::set_permissions(dir, perms).is_ok() {
-                    details.push(format!("{dir}:OK"));
-                } else {
-                    details.push(format!("{dir}:perms-failed"));
-                    ok = false;
-                }
+                details.push(format!("{dir}:OK"));
+            } else {
+                details.push(format!("{dir}:perms-failed"));
+                ok = false;
             }
-            #[cfg(not(unix))]
-            details.push(format!("{dir}:OK"));
         } else {
             details.push(format!("{dir}:mkdir-failed"));
             ok = false;
@@ -127,12 +123,8 @@ fn link_or_copy_binary(src: &std::path::Path, dest: &std::path::Path) -> bool {
         tracing::debug!(error = %e, "pre-link cleanup (may not exist)");
     }
     if std::fs::hard_link(src, dest).is_ok() || std::fs::copy(src, dest).is_ok() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755)) {
-                tracing::warn!(error = %e, path = %dest.display(), "chmod 755 failed");
-            }
+        if let Err(e) = cellmembrane_types::PlatformAccess::Executable.apply(dest) {
+            tracing::warn!(error = %e, path = %dest.display(), "set executable failed");
         }
         true
     } else {
@@ -386,15 +378,10 @@ pub(super) fn mobility_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
          [ \"$2\" = \"up\" ] && membrane gate.status --quiet 2>/dev/null &\n"
     );
 
-    let hook_ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok() && {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).is_ok()
-        }
-        #[cfg(not(unix))]
-        true
-    };
+    let hook_ok = crate::atomic_write(&hook_path, hook_content.as_bytes()).is_ok()
+        && cellmembrane_types::PlatformAccess::Executable
+            .apply(&hook_path)
+            .is_ok();
 
     if hook_ok {
         details.push(format!("hook: {}", hook_path.display()));

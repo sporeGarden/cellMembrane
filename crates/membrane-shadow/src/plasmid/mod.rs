@@ -122,11 +122,11 @@ pub(crate) async fn ensure_staging_dirs(
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| crate::error::ShadowError::build(format!("create dir: {e}")))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = tokio::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).await;
-        }
+        let _ = crate::platform::apply_access_async(
+            cellmembrane_types::PlatformAccess::Executable,
+            dir,
+        )
+        .await;
     }
     Ok(())
 }
@@ -139,13 +139,9 @@ pub(crate) async fn stage_binary(
     tokio::fs::copy(source, dest)
         .await
         .map_err(|e| crate::error::ShadowError::build(format!("stage binary: {e}")))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755))
-            .await
-            .map_err(|e| crate::error::ShadowError::build(format!("chmod binary: {e}")))?;
-    }
+    crate::platform::apply_access_async(cellmembrane_types::PlatformAccess::Executable, dest)
+        .await
+        .map_err(|e| crate::error::ShadowError::build(format!("set executable: {e}")))?;
     Ok(())
 }
 

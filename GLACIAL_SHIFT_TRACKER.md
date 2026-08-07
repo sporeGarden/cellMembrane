@@ -1,13 +1,26 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-07 (Wave 157a)
+**Last updated:** 2026-08-07 (Wave 157a G68)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (G68 platform substrate abstraction — fully isomorphic):**
+cellMembrane is now **G68 COMPLIANT**. (1) New `PlatformAccess` enum
+(`Executable`, `Restricted`, `GroupReadWrite`) in `cellmembrane-types` with
+semantic `.apply(path)` — mode bits on Unix, read-only attribute on Windows.
+(2) Async helper `apply_access_async()` in `membrane-shadow/platform.rs` for
+tokio-based pipelines. (3) All 11 `PermissionsExt` sites migrated: 8 `0o755`
+→ `PlatformAccess::Executable`, 2 `0o600` → `PlatformAccess::Restricted`,
+1 `0o660` → `PlatformAccess::GroupReadWrite`. Zero `PermissionsExt` in
+business logic — all confined to the abstraction layer (2 files). (4)
+`platform_link()` provided for L1 ecosystem consistency (symlink on Unix,
+hard link on Windows) — zero current L1 sites but ready for future use.
+Zero L3 (device backend) usage. 1319 tests (+7), zero clippy warnings.
 
 **Wave 157a (DIV-7 harvest exit code reliability + G68 audit):**
 Fixed 3 exit-code reliability bugs in `plasmid.harvest` (DIV-7): (1) `--with-restart`

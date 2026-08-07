@@ -257,13 +257,8 @@ fn prepare_socket_base() {
         tracing::warn!(error = %e, path = %socket_base.display(), "failed to create socket base directory");
         return;
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o755);
-        if let Err(e) = std::fs::set_permissions(socket_base, perms) {
-            tracing::warn!(error = %e, "failed to set socket base directory permissions");
-        }
+    if let Err(e) = cellmembrane_types::PlatformAccess::Executable.apply(socket_base) {
+        tracing::warn!(error = %e, "failed to set socket base directory permissions");
     }
 }
 
@@ -464,30 +459,9 @@ fn generate_secrets_env() -> String {
 
 /// Set owner-only permissions on a sensitive file.
 ///
-/// Unix: `chmod 0o600`. Windows: `icacls` to restrict to current user.
-/// Other: trace log only.
 fn set_restricted_permissions(path: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(e) = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
-            tracing::warn!(path = %path.display(), error = %e, "failed to set restricted permissions");
-        }
-    }
-    #[cfg(windows)]
-    {
-        let path_str = path.display().to_string();
-        let result = std::process::Command::new("icacls")
-            .args([&path_str, "/inheritance:r", "/grant:r", "%USERNAME%:F"])
-            .output();
-        if let Err(e) = result {
-            tracing::warn!(path = %path_str, error = %e, "icacls failed");
-        }
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        tracing::trace!(path = %path.display(), "restricted permissions: no platform method");
-        let _ = path;
+    if let Err(e) = cellmembrane_types::PlatformAccess::Restricted.apply(path) {
+        tracing::warn!(path = %path.display(), error = %e, "failed to set restricted permissions");
     }
 }
 

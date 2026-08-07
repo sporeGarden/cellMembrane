@@ -45,6 +45,7 @@ pub mod error;
 pub mod firewall;
 pub mod gateway;
 pub mod identity;
+pub mod platform_substrate;
 pub mod process;
 pub mod provider;
 pub mod service;
@@ -75,6 +76,7 @@ pub use gateway::{
     ShadowComparison, ShadowReport, TlsGatewayConfig,
 };
 pub use identity::{BindMode, GateMobility, GateRole, MembraneIdentity};
+pub use platform_substrate::{PlatformAccess, platform_link};
 pub use process::{
     CrashLoopAction, CrashLoopEntry, CrashLoopReport, InitSystem, RestartPolicy, ServiceOutcome,
     ServiceSpec, ServiceStatus,

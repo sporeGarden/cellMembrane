@@ -461,15 +461,13 @@ async fn fetch_primals(
             }
         }
 
-        #[cfg(unix)]
+        if let Err(e) = crate::platform::apply_access_async(
+            cellmembrane_types::PlatformAccess::Executable,
+            &local_path,
+        )
+        .await
         {
-            use std::os::unix::fs::PermissionsExt;
-            if let Err(e) =
-                tokio::fs::set_permissions(&local_path, std::fs::Permissions::from_mode(0o755))
-                    .await
-            {
-                tracing::warn!(error = %e, path = %local_path.display(), "failed to set executable permissions");
-            }
+            tracing::warn!(error = %e, path = %local_path.display(), "failed to set executable permissions");
         }
 
         let is_verified = checksums.contains_key(*primal);

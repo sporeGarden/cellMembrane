@@ -46,11 +46,7 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
         )))
     })?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660));
-    }
+    let _ = cellmembrane_types::PlatformAccess::GroupReadWrite.apply(std::path::Path::new(path));
 
     info!(socket = %path, "webhook listener started");
 

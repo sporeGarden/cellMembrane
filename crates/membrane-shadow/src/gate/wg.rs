@@ -79,11 +79,7 @@ pub(super) async fn wg_keygen_phase(dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&existing, std::fs::Permissions::from_mode(0o600));
-    }
+    let _ = cellmembrane_types::PlatformAccess::Restricted.apply(&existing);
 
     let pubkey = derive_wg_pubkey(&private_key).await;
     BootstrapPhase {
