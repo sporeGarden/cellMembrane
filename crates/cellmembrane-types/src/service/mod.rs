@@ -541,6 +541,27 @@ impl MembraneService {
         paths.tarpc_socket_path(self)
     }
 
+    /// Platform-appropriate default transport endpoint for this service (G66).
+    ///
+    /// On Unix: returns `Uds` at the resolved socket path.
+    /// On Windows: returns `NamedPipe` or `Tcp` depending on service type.
+    /// Callers should prefer `TRANSPORT_ENDPOINT` env var when available.
+    #[must_use]
+    pub fn default_endpoint(&self) -> crate::TransportEndpoint {
+        if self.has_socket {
+            let socket_base = resolve_socket_base();
+            crate::TransportEndpoint::local_ipc(self.binary, &socket_base)
+        } else if let Some(port) = self.port {
+            crate::TransportEndpoint::Tcp {
+                host: self.bind.to_string(),
+                port,
+            }
+        } else {
+            let socket_base = resolve_socket_base();
+            crate::TransportEndpoint::local_ipc(self.binary, &socket_base)
+        }
+    }
+
     /// Health check method to use in UDS-only mode.
     /// Primals with UDS-only transport use socket existence checks instead of TCP probes.
     #[must_use]
@@ -761,6 +782,30 @@ mod tests {
                 svc.server_contract,
                 ServerContract::Tarpc,
                 "{name} shipped G65 but still has Tarpc contract"
+            );
+        }
+    }
+
+    #[test]
+    fn default_endpoint_uds_for_socket_primal() {
+        let svc = MembraneService::for_binary("beardog").expect("beardog in registry");
+        let ep = svc.default_endpoint();
+        if cfg!(unix) {
+            assert!(
+                matches!(ep, crate::TransportEndpoint::Uds { .. }),
+                "beardog should get UDS on Unix: {ep:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_endpoint_tcp_for_non_socket_service() {
+        let svc = MembraneService::for_binary("songbird").expect("songbird in registry");
+        if !svc.has_socket {
+            let ep = svc.default_endpoint();
+            assert!(
+                matches!(ep, crate::TransportEndpoint::Tcp { .. }),
+                "non-socket service should get TCP: {ep:?}"
             );
         }
     }

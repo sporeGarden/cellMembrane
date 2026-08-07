@@ -1,13 +1,29 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-06 (Wave 156p)
+**Last updated:** 2026-08-06 (Wave 156s)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 156s (G66 transport abstraction — silicon-agnostic byte pipes):**
+Transport layer confining all `#[cfg(unix)]` IPC connection logic. (1) New
+`TransportStream` enum (`Unix`, `Tcp`) implementing `AsyncRead + AsyncWrite +
+Debug` — the platform-aware byte pipe. All `#[cfg(unix)]` for socket
+connections confined to this enum and `connect_transport()`. (2)
+`connect_transport(endpoint)` maps `TransportEndpoint` → `TransportStream`:
+UDS on Unix, TCP cross-platform, with `Unsupported` error for NamedPipe
+(future) and MeshRelay (requires songBird). (3) `endpoint_from_env_or_default()`
+resolves `TRANSPORT_ENDPOINT` env var → platform default. (4)
+`MembraneService::default_endpoint()` returns platform-appropriate transport
+for any registry entry. (5) `negotiate_protocol()` (G65) refactored: now
+delegates to `negotiate_protocol_endpoint()` which connects via
+`connect_transport()` — eliminating the only unconditional `UnixStream` import
+outside the transport layer. (6) Zero unconditional Unix imports remain in
+business logic. Zero clippy (pedantic), zero fmt drift, 1312 tests pass (+9).
 
 **Wave 156p (G65 protocol negotiation — cellMembrane discovery evolution):**
 G65 Phase 3 of Cephalization. (1) New `IpcProtocol` enum (`JsonRpc`, `Tarpc`) with

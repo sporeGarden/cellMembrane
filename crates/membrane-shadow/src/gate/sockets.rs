@@ -21,20 +21,39 @@ pub(crate) struct NegotiationResult {
     pub negotiated: bool,
 }
 
-/// Probe a primal's UDS socket with G65 protocol negotiation.
+/// Probe a primal's socket with G65 protocol negotiation (G66 transport-aware).
 ///
-/// Sends `PROTOCOLS: tarpc,jsonrpc\n` and waits up to the negotiation
-/// timeout for a `PROTOCOL: <name>\n` response. If the server responds,
-/// it supports G65 and the selected protocol is returned. If the timeout
-/// fires or the server sends non-negotiation data, the connection is
-/// assumed to be legacy JSON-RPC.
+/// Connects via `connect_transport()`, sends `PROTOCOLS: tarpc,jsonrpc\n`,
+/// and waits up to the negotiation timeout for a `PROTOCOL: <name>\n`
+/// response. If the server responds, it supports G65 and the selected
+/// protocol is returned. If the timeout fires or the server sends
+/// non-negotiation data, the connection is assumed to be legacy JSON-RPC.
+///
+/// The `socket_path` variant is a convenience for callers that haven't
+/// migrated to `TransportEndpoint` yet — it constructs a UDS endpoint
+/// internally.
 pub(crate) async fn negotiate_protocol(
     socket_path: &str,
     client_prefs: &[IpcProtocol],
 ) -> crate::Result<NegotiationResult> {
+    let endpoint = cellmembrane_types::TransportEndpoint::Uds {
+        path: socket_path.into(),
+    };
+    negotiate_protocol_endpoint(&endpoint, client_prefs).await
+}
+
+/// G65 protocol negotiation on any transport (G66).
+///
+/// Operates on a [`TransportEndpoint`] — UDS, TCP, or future transports.
+/// All platform-specific connection logic is delegated to
+/// [`crate::transport::connect_transport`].
+pub(crate) async fn negotiate_protocol_endpoint(
+    endpoint: &cellmembrane_types::TransportEndpoint,
+    client_prefs: &[IpcProtocol],
+) -> crate::Result<NegotiationResult> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-    let stream = tokio::net::UnixStream::connect(socket_path).await?;
+    let stream = crate::transport::connect_transport(endpoint).await?;
     let (reader, mut writer) = tokio::io::split(stream);
 
     let wire: Vec<&str> = client_prefs.iter().map(|p| p.wire_name()).collect();
