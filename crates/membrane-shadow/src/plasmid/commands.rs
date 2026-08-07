@@ -74,8 +74,8 @@ pub async fn pipeline(
             timeout_secs: None,
         };
 
-        if let Ok(result) = sandbox::validate_with_deps(&sandbox_args).await {
-            if !result.health_ok {
+        match sandbox::validate_with_deps(&sandbox_args).await {
+            Ok(result) if !result.health_ok => {
                 return Ok(crate::ShadowOutcome {
                     ok: false,
                     message: format!(
@@ -85,6 +85,18 @@ pub async fn pipeline(
                     data: Some(serde_json::to_value(&result).unwrap_or_default()),
                 });
             }
+            Err(e) => {
+                tracing::warn!(primal = %entry.binary, error = %e, "sandbox infra error");
+                return Ok(crate::ShadowOutcome {
+                    ok: false,
+                    message: format!(
+                        "{} | sandbox INFRA ERROR for {} — {e}. Refresh aborted.",
+                        harvest_outcome.message, entry.binary
+                    ),
+                    data: None,
+                });
+            }
+            Ok(_) => {}
         }
     }
 

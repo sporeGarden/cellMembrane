@@ -253,8 +253,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     }
 
     if args.with_restart && !args.dry_run && outcome.ok {
-        let install_msg = install_and_restart(&results, &depot_dir).await;
+        let (install_msg, install_ok) = install_and_restart(&results, &depot_dir).await;
         outcome.message = format!("{} | {install_msg}", outcome.message);
+        if !install_ok {
+            outcome.ok = false;
+        }
     }
 
     Ok(outcome)
@@ -328,7 +331,7 @@ async fn append_push_outcome(
 /// (CI-DIV-03). This bridges them: for each built primal, copies the
 /// binary from the harvest depot to the NUCLEUS install path using
 /// atomic rename (write .new, mv over original).
-async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> String {
+async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> (String, bool) {
     let built: Vec<&str> = results
         .iter()
         .filter(|r| matches!(r.status, HarvestStatus::Built))
@@ -336,7 +339,7 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> Str
         .collect();
 
     if built.is_empty() {
-        return "install: nothing to install".to_string();
+        return ("install: nothing to install".to_string(), true);
     }
 
     let target = super::detect_target_triple();
@@ -349,7 +352,10 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> Str
 
     if !install_dir.exists() {
         if let Err(e) = std::fs::create_dir_all(&install_dir) {
-            return format!("install: failed to create install dir — {e}");
+            return (
+                format!("install: failed to create install dir — {e}"),
+                false,
+            );
         }
     }
 
@@ -409,9 +415,12 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> Str
 
     if failed.is_empty() && start_ok {
         info!(installed, "NUCLEUS install + restart complete");
-        format!(
-            "install: {installed}/{} installed, NUCLEUS restarted",
-            built.len()
+        (
+            format!(
+                "install: {installed}/{} installed, NUCLEUS restarted",
+                built.len()
+            ),
+            true,
         )
     } else {
         let fail_msg = if failed.is_empty() {
@@ -429,9 +438,12 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> Str
             failures = failed.len(),
             "install completed with issues"
         );
-        format!(
-            "install: {installed}/{} installed{fail_msg}{restart_msg}",
-            built.len()
+        (
+            format!(
+                "install: {installed}/{} installed{fail_msg}{restart_msg}",
+                built.len()
+            ),
+            false,
         )
     }
 }

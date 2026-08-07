@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-06 (Wave 156s)
+**Last updated:** 2026-08-07 (Wave 157a)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (DIV-7 harvest exit code reliability + G68 audit):**
+Fixed 3 exit-code reliability bugs in `plasmid.harvest` (DIV-7): (1) `--with-restart`
+install/restart failures now flip `outcome.ok = false` — previously build success
+masked NUCLEUS restart failures as exit 0. (2) `temporal.cascade --with-harvest`
+now propagates harvest/refresh failures to process exit code — previously always
+returned `ok: true`. (3) `plasmid.pipeline` sandbox infra `Err` now fails the
+pipeline instead of being silently ignored. G68 Platform Substrate audit: cellMembrane
+is **already clean** — all 11 `PermissionsExt` sites behind `#[cfg(unix)]`, zero
+symlink usage, zero `rustix`/`libc` device backend usage. 1312 tests, zero clippy
+warnings.
 
 **Wave 156s (G66 transport abstraction — silicon-agnostic byte pipes):**
 Transport layer confining all `#[cfg(unix)]` IPC connection logic. (1) New

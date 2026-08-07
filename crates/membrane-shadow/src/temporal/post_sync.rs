@@ -30,20 +30,27 @@ use super::post_sync_content::{
 use super::post_sync_harvest::{run_depot_staleness_and_fetch, run_post_cascade_refresh};
 
 /// Post-sync phases: harvest (if requested), rebuild (harvest+refresh), freshness, depot report.
+///
+/// Returns `(harvest_info_string, all_ok)` — `all_ok` is false if harvest
+/// or refresh reported failures (DIV-7 fix).
 pub(super) async fn run_post_sync_phases(
     opts: &CascadeOpts<'_>,
     root: &std::path::Path,
     m: &crate::manifest::EcosystemManifest,
     repos: &[(&str, &crate::manifest::RepoEntry)],
     lines: &mut Vec<String>,
-) -> String {
+) -> (String, bool) {
     let mut harvest_info = String::new();
+    let mut all_ok = true;
     let do_harvest = opts.post_sync != PostSyncPhase::None && opts.mode == CascadeMode::Sync;
 
     if do_harvest {
         match super::post_sync_harvest::run_post_cascade_harvest(lines).await {
             Ok((built, built_primals, current, failures)) => {
                 harvest_info = format!(" harvest={built}built/{current}current/{failures}failed");
+                if failures > 0 {
+                    all_ok = false;
+                }
 
                 let wants_refresh = matches!(
                     opts.post_sync,
@@ -74,12 +81,18 @@ pub(super) async fn run_post_sync_phases(
                             Ok(pushed) => {
                                 let _ = write!(harvest_info, " refresh={pushed}pushed");
                             }
-                            Err(e) => lines.push(format!("  [refresh] FAIL: {e}")),
+                            Err(e) => {
+                                lines.push(format!("  [refresh] FAIL: {e}"));
+                                all_ok = false;
+                            }
                         }
                     }
                 }
             }
-            Err(e) => lines.push(format!("  [harvest] FAIL: {e}")),
+            Err(e) => {
+                lines.push(format!("  [harvest] FAIL: {e}"));
+                all_ok = false;
+            }
         }
     }
 
@@ -118,7 +131,7 @@ pub(super) async fn run_post_sync_phases(
         check_content_health(root, lines).await;
     }
 
-    harvest_info
+    (harvest_info, all_ok)
 }
 
 #[cfg(test)]

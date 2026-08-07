@@ -118,7 +118,7 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
 
     let (synced, failed, cloned, mut lines) = tally_results(results);
 
-    let harvest_info =
+    let (harvest_info, post_sync_ok) =
         post_sync::run_post_sync_phases(opts, &root, &shared_manifest, &repos, &mut lines).await;
 
     let action = if opts.mode == CascadeMode::CheckOnly {
@@ -146,17 +146,19 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
         opts.source,
     );
 
-    Ok(crate::ShadowOutcome::ok_with(
-        format!("{header}\n{}", lines.join("\n")),
-        serde_json::json!({
+    let cascade_ok = failed == 0 && post_sync_ok;
+    Ok(crate::ShadowOutcome {
+        ok: cascade_ok,
+        message: format!("{header}\n{}", lines.join("\n")),
+        data: Some(serde_json::json!({
             "gate": opts.gate,
             "source": opts.source,
             "total": total,
             "synced": synced,
             "failed": failed,
             "cloned": cloned,
-        }),
-    ))
+        })),
+    })
 }
 
 // Post-sync pipeline delegated to `super::post_sync` module.
