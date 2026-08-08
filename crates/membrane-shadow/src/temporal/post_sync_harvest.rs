@@ -128,6 +128,10 @@ pub(super) async fn run_post_cascade_sandbox(
     let arch = crate::plasmid::detect_target_triple();
     let bin_dir = depot_dir.join("primals").join(arch);
 
+    if let Err(e) = cellmembrane_types::PlatformAccess::Executable.apply(&bin_dir) {
+        tracing::debug!(error = %e, "sandbox bin_dir chmod (non-fatal)");
+    }
+
     let mut passed: Vec<String> = Vec::new();
     let mut failed_names: Vec<String> = Vec::new();
 
@@ -136,6 +140,10 @@ pub(super) async fn run_post_cascade_sandbox(
         if !binary_path.exists() {
             lines.push(format!("  [sandbox] {primal}: SKIP (binary not in depot)"));
             continue;
+        }
+
+        if let Err(e) = cellmembrane_types::PlatformAccess::Executable.apply(&binary_path) {
+            tracing::warn!(error = %e, path = %binary_path.display(), "pre-sandbox chmod failed");
         }
 
         let args = crate::plasmid::sandbox::SandboxArgs {

@@ -50,6 +50,8 @@ pub struct CascadeOpts<'a> {
     pub post_sync: PostSyncPhase,
     /// If true, restart local NUCLEUS processes that received new binaries.
     pub restart_updated: bool,
+    /// If true, push local depot to golgi after successful harvest+refresh.
+    pub depot_push: bool,
 }
 
 /// Execute cascade with typed options.
@@ -311,6 +313,7 @@ mod tests {
             publish_freshness: true,
             post_sync: PostSyncPhase::None,
             restart_updated: false,
+            depot_push: false,
         };
         assert_eq!(opts.gate, "eastGate");
         assert_eq!(opts.post_sync, PostSyncPhase::None);

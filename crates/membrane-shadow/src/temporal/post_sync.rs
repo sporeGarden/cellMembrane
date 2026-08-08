@@ -80,6 +80,10 @@ pub(super) async fn run_post_sync_phases(
                         match run_post_cascade_refresh(Some(&refresh_targets), lines).await {
                             Ok(pushed) => {
                                 let _ = write!(harvest_info, " refresh={pushed}pushed");
+
+                                if opts.depot_push && pushed > 0 {
+                                    run_depot_push(lines).await;
+                                }
                             }
                             Err(e) => {
                                 lines.push(format!("  [refresh] FAIL: {e}"));
@@ -132,6 +136,25 @@ pub(super) async fn run_post_sync_phases(
     }
 
     (harvest_info, all_ok)
+}
+
+/// Push local depot to golgi via SCP after successful harvest+refresh.
+async fn run_depot_push(lines: &mut Vec<String>) {
+    let Ok(depot_dir) = crate::plasmid::depot::resolve_depot(None) else {
+        lines.push("  [depot-push] SKIP — depot not resolved".into());
+        return;
+    };
+    match crate::plasmid::depot_sync_push_standalone(&depot_dir).await {
+        Ok(outcome) if outcome.ok => {
+            lines.push(format!("  [depot-push] OK — {}", outcome.message));
+        }
+        Ok(outcome) => {
+            lines.push(format!("  [depot-push] PARTIAL — {}", outcome.message));
+        }
+        Err(e) => {
+            lines.push(format!("  [depot-push] FAIL — {e}"));
+        }
+    }
 }
 
 #[cfg(test)]

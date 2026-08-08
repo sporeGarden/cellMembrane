@@ -411,9 +411,9 @@ pub(crate) async fn notify_mesh(topic: &str, primals_key: &str, primals: &[Strin
     });
 
     let request_str = request.to_string();
-    match crate::jsonrpc::call(&socket_path, &request_str).await {
-        Ok(response) => {
-            tracing::info!("mesh.publish {topic} sent: {response}");
+    match crate::jsonrpc::send_notify(&socket_path, &request_str).await {
+        Ok(()) => {
+            tracing::info!("mesh.publish {topic} sent (fire-and-forget)");
         }
         Err(e) => {
             tracing::warn!("mesh.publish {topic} failed (non-fatal): {e}");

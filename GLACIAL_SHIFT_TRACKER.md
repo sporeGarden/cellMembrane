@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-07 (Wave 157a G68)
+**Last updated:** 2026-08-08 (Wave 157a cascade fixes)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (cascade pipeline reliability — 3 gaps fixed):**
+Three cascade pipeline gaps resolved: (1) Gap 1: `NeuralBridge::discover()`
+widened to use `resolve_primal_socket_paths("biomeos")` — now finds `biomeos.sock`,
+`neural-api.sock`, and aliases instead of only `neural-api-default.sock`. Pre-sandbox
+binary chmod added so biomeOS service can read candidate binaries. (2) Gap 2:
+`--with-push` CLI flag for `temporal.cascade` — after successful harvest+refresh,
+calls `depot_sync_push_standalone` to SCP binaries to golgi. `CascadeOpts.depot_push`
+field wired through post-sync pipeline. (3) Gap 3: `mesh.publish` switched from
+`jsonrpc::call` (3s read timeout) to new `jsonrpc::send_notify` (fire-and-forget,
+no response wait) — eliminates cascade stalls when songBird fans out over federation.
+1319 tests, zero clippy warnings.
 
 **Wave 157a (G68 platform substrate abstraction — fully isomorphic):**
 cellMembrane is now **G68 COMPLIANT**. (1) New `PlatformAccess` enum

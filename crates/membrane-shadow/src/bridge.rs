@@ -46,6 +46,12 @@ pub enum BridgeResult {
 impl NeuralBridge {
     /// Attempt to discover a biomeOS Neural API socket.
     ///
+    /// Discovery order:
+    ///   1. `$NEURAL_API_SOCKET` env var (explicit override)
+    ///   2. All candidates from the service registry via `resolve_primal_socket_paths`
+    ///      (includes `neural-api-default.sock`, `biomeos.sock`, aliases)
+    ///   3. `/tmp/biomeos/neural-api-default.sock` (fallback for dev)
+    ///
     /// Returns `None` if no socket is found — caller should proceed with
     /// shadow mode.
     #[must_use]
@@ -57,20 +63,9 @@ impl NeuralBridge {
             }
         }
 
-        let socket_base = cellmembrane_types::service::resolve_socket_base();
-        let vps_path = PathBuf::from(&socket_base).join(NEURAL_API_SOCKET_NAME);
-        if vps_path.exists() {
-            return Some(Self {
-                socket_path: vps_path,
-            });
-        }
-
-        let xdg =
-            std::env::var(cellmembrane_types::service::ENV_XDG_RUNTIME_DIR).unwrap_or_default();
-        if !xdg.is_empty() {
-            let p = PathBuf::from(&xdg)
-                .join(NEURAL_API_NAMESPACE)
-                .join(NEURAL_API_SOCKET_NAME);
+        let candidates = crate::gate::sockets::resolve_primal_socket_paths("biomeos");
+        for candidate in &candidates {
+            let p = PathBuf::from(candidate);
             if p.exists() {
                 return Some(Self { socket_path: p });
             }

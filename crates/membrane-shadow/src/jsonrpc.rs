@@ -351,6 +351,49 @@ fn call_named_pipe_err(pipe_name: &str) -> Result<String> {
     }
 }
 
+/// Fire-and-forget: connect, write request, close — no response wait.
+///
+/// Used for `mesh.publish` and similar notifications where the publisher
+/// doesn't need a response. Avoids the 3s read timeout that caused
+/// cascade pipeline stalls when songBird fans out over federation.
+#[cfg(unix)]
+pub async fn send_notify(socket_path: &Path, request: &str) -> Result<()> {
+    let stream = tokio::time::timeout(
+        DEFAULT_TIMEOUT,
+        tokio::net::UnixStream::connect(socket_path),
+    )
+    .await
+    .map_err(|_| rpc_err(format_args!("connect timeout: {}", socket_path.display())))?
+    .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
+
+    let (_reader, mut writer) = stream.into_split();
+
+    writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .map_err(|e| rpc_err(format_args!("signal write: {e}")))?;
+    writer
+        .write_all(request.as_bytes())
+        .await
+        .map_err(|e| rpc_err(format_args!("write: {e}")))?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
+
+    let _ = writer.shutdown().await;
+    Ok(())
+}
+
+/// Fire-and-forget unavailable on non-Unix (no UDS).
+#[cfg(not(unix))]
+pub async fn send_notify(socket_path: &Path, _request: &str) -> Result<()> {
+    Err(rpc_err(format_args!(
+        "UDS transport unavailable on this platform: {}",
+        socket_path.display()
+    )))
+}
+
 /// Convenience: build a JSON-RPC request object for a method with no params.
 #[must_use]
 #[cfg(test)]
