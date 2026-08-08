@@ -95,12 +95,8 @@ pub struct PushEvent {
     pub repository: RepoPayload,
     /// Pusher information.
     pub pusher: PusherPayload,
-    /// Commits included in this push.
+    /// Commits included in this push (checked for harvest signals).
     #[serde(default)]
-    #[allow(
-        dead_code,
-        reason = "serde-populated — needed for commit-level cascade"
-    )]
     pub commits: Vec<CommitPayload>,
 }
 
@@ -129,14 +125,11 @@ pub struct PusherPayload {
 
 /// Individual commit data from the push.
 #[derive(Debug, Clone, Deserialize)]
-#[allow(
-    dead_code,
-    reason = "serde-populated — parsed for commit-level cascade analysis"
-)]
 pub struct CommitPayload {
     /// Full commit SHA.
+    #[allow(dead_code, reason = "serde-populated — needed for delta analysis")]
     pub id: String,
-    /// Commit message.
+    /// Commit message (checked for `[harvest]`/`[build]` signals).
     pub message: String,
 }
 

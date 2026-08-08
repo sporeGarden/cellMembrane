@@ -221,6 +221,13 @@ G65 negotiation) and `capability.rs` (Protocol, TransportMode, ServerContract,
 ServiceCapability, HealthCheckMethod). Modern Rust 2024 let-chains in `git_ops.rs` and
 `freshness.rs`. Silent error swallowing replaced with `tracing::debug` in NeuralBridge
 RPC, health probes, mesh probes, and sync IPC paths.
+Transport unification (Wave 157a): `jsonrpc.rs` platform conditionals reduced 7→3.
+`raw()`, `call_tcp()`, and `send_notify()` now share `rpc_over_stream()` /
+`notify_over_stream()` over G66 `TransportStream`, eliminating duplicated
+write/read/signal logic. Only BTSP handshake retains direct `UnixStream` access.
+Stale `#[allow(dead_code)]` cleaned: struct-level allows narrowed to field-level
+where only specific fields are unread. Hardcoded `security.sock` → registry-derived
+`CryptoSigner` binary. New `WEBHOOK_SOCKET_NAME` constant.
 Zero production `unwrap()` (test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.

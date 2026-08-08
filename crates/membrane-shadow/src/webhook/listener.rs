@@ -20,7 +20,10 @@ use crate::error::Result;
 
 fn default_socket_path() -> String {
     let base = cellmembrane_types::service::resolve_socket_base();
-    format!("{base}/webhook.sock")
+    format!(
+        "{base}/{}",
+        cellmembrane_types::service::WEBHOOK_SOCKET_NAME
+    )
 }
 
 /// Start listening for webhook POSTs on a Unix domain socket.

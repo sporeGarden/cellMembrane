@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-08 (Wave 157a deep debt registry evolution)
+**Last updated:** 2026-08-08 (Wave 157a transport unification)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (transport unification + dead code cleanup):**
+jsonrpc.rs `#[cfg(unix)]` reduced 7→3: `raw()`, `call_tcp()`, `send_notify()` now
+use shared `rpc_over_stream()` / `notify_over_stream()` over `TransportStream` from
+G66 transport layer. BTSP handshake retains direct `UnixStream` access (can't
+genericize without major redesign). Stale `#[allow(dead_code)]` narrowed:
+`CommitPayload` struct allow removed (used in production), field-level allow on
+`CommitPayload.id` only. `PushEvent.commits` allow removed (used via
+`has_harvest_signal`). Hardcoded `security.sock` → registry-derived
+`CryptoSigner` binary. New `WEBHOOK_SOCKET_NAME` constant replaces literal in
+`webhook/listener.rs`. 1329 tests, zero clippy warnings.
 
 **Wave 157a (registry evolution + smart refactor — self-knowledge elimination):**
 Registry-derived trust: `requires_signed_lineage` and `gpu_required` fields added

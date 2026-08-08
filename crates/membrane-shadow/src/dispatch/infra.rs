@@ -297,7 +297,10 @@ fn dispatch_service_template(binary: &str) -> ShadowOutcome {
     );
 
     let socket_path = format!("{socket_base}/{}.sock", svc.binary);
-    let security_socket = format!("{socket_base}/security.sock");
+    let security_binary = cellmembrane_types::MembraneService::binary_for(
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    );
+    let security_socket = format!("{socket_base}/{security_binary}.sock");
     let exec_start = svc.server_contract.exec_args_with_base(
         &install_base,
         svc.binary,

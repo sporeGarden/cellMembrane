@@ -116,6 +116,9 @@ pub const ENV_ENROLLMENT_SEED_GEN_LEGACY: &str = "BEARDOG_ENROLLMENT_SEED_GENERA
 /// Default socket filename for the biomeOS Neural API.
 pub const NEURAL_API_SOCKET_NAME: &str = "neural-api-default.sock";
 
+/// Default socket filename for the webhook listener.
+pub const WEBHOOK_SOCKET_NAME: &str = "webhook.sock";
+
 /// File extension suffix for tarpc binary-protocol sockets (Cephalization G64).
 ///
 /// Dual-socket primals expose JSON-RPC on `{name}.sock` and tarpc on

@@ -28,6 +28,76 @@ fn rpc_err(msg: impl std::fmt::Display) -> ShadowError {
 /// sovereignty probes to check liveness via UDS.
 pub const HEALTH_REQUEST: &str = r#"{"jsonrpc":"2.0","method":"health","params":{},"id":1}"#;
 
+/// Send JSON-RPC request+response over any connected transport stream.
+///
+/// Shared implementation for UDS (`raw`) and TCP (`call_tcp`) — both use
+/// the same riboCipher signal + NDJSON framing protocol.
+async fn rpc_over_stream(
+    stream: crate::transport::TransportStream,
+    request: &str,
+    with_signal: bool,
+    label: &str,
+) -> Result<String> {
+    let (reader, mut writer) = tokio::io::split(stream);
+
+    if with_signal {
+        writer
+            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+            .await
+            .map_err(|e| rpc_err(format_args!("signal write: {e}")))?;
+    }
+    writer
+        .write_all(request.as_bytes())
+        .await
+        .map_err(|e| rpc_err(format_args!("write: {e}")))?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
+
+    let mut buf_reader = tokio::io::BufReader::new(reader);
+    let mut line = String::new();
+
+    let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
+        .await
+        .map_err(|_| rpc_err(format_args!("read timeout: {label}")))?
+        .map_err(|e| rpc_err(format_args!("read: {e}")))?;
+
+    if let Err(e) = writer.shutdown().await {
+        tracing::debug!(error = %e, label, "writer shutdown (non-fatal)");
+    }
+
+    if read_result == 0 && line.is_empty() {
+        return Err(rpc_err(format_args!("empty response: {label}")));
+    }
+
+    Ok(line)
+}
+
+/// Fire-and-forget write over any connected transport stream.
+async fn notify_over_stream(
+    stream: crate::transport::TransportStream,
+    request: &str,
+) -> Result<()> {
+    let (_reader, mut writer) = tokio::io::split(stream);
+
+    writer
+        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
+        .await
+        .map_err(|e| rpc_err(format_args!("signal write: {e}")))?;
+    writer
+        .write_all(request.as_bytes())
+        .await
+        .map_err(|e| rpc_err(format_args!("write: {e}")))?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
+
+    let _ = writer.shutdown().await;
+    Ok(())
+}
+
 /// Send a JSON-RPC request over UDS with riboCipher signal.
 ///
 /// In Reject mode (Wave 113 default): sends signal, no fallback.
@@ -166,62 +236,25 @@ pub async fn call_btsp(socket_path: &Path, request: &str) -> Result<String> {
 /// Send a JSON-RPC request with explicit signal control.
 ///
 /// When `with_signal` is true, prepends `[0xEC, 0x01]` before the JSON payload.
-#[cfg(unix)]
 pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result<String> {
+    let endpoint = cellmembrane_types::TransportEndpoint::Uds {
+        path: socket_path.display().to_string(),
+    };
     let stream = tokio::time::timeout(
         DEFAULT_TIMEOUT,
-        tokio::net::UnixStream::connect(socket_path),
+        crate::transport::connect_transport(&endpoint),
     )
     .await
     .map_err(|_| rpc_err(format_args!("connect timeout: {}", socket_path.display())))?
     .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
 
-    let (reader, mut writer) = stream.into_split();
-
-    if with_signal {
-        writer
-            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-            .await
-            .map_err(|e| rpc_err(format_args!("signal write: {e}")))?;
-    }
-    writer
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|e| rpc_err(format_args!("write: {e}")))?;
-    writer
-        .write_all(b"\n")
-        .await
-        .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
-
-    let mut buf_reader = tokio::io::BufReader::new(reader);
-    let mut line = String::new();
-
-    let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
-        .await
-        .map_err(|_| rpc_err(format_args!("read timeout: {}", socket_path.display())))?
-        .map_err(|e| rpc_err(format_args!("read: {e}")))?;
-
-    if let Err(e) = writer.shutdown().await {
-        tracing::debug!(error = %e, "writer shutdown (non-fatal)");
-    }
-
-    if read_result == 0 && line.is_empty() {
-        return Err(rpc_err(format_args!(
-            "empty response: {}",
-            socket_path.display()
-        )));
-    }
-
-    Ok(line)
-}
-
-/// UDS transport unavailable on this platform — use TCP or Named Pipe.
-#[cfg(not(unix))]
-pub async fn raw(socket_path: &Path, _request: &str, _with_signal: bool) -> Result<String> {
-    Err(rpc_err(format_args!(
-        "UDS transport unavailable on this platform: {}",
-        socket_path.display()
-    )))
+    rpc_over_stream(
+        stream,
+        request,
+        with_signal,
+        &socket_path.display().to_string(),
+    )
+    .await
 }
 
 /// Send a JSON-RPC request through a mesh relay endpoint.
@@ -268,43 +301,19 @@ pub async fn call_via_relay(peer_id: &str, capability: &str, request: &str) -> R
 /// manifest-resolved mesh IPs (e.g. `10.13.37.1:7700`).
 pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String> {
     let addr = format!("{host}:{port}");
-    let stream = tokio::time::timeout(DEFAULT_TIMEOUT, tokio::net::TcpStream::connect(&addr))
-        .await
-        .map_err(|_| rpc_err(format_args!("tcp connect timeout: {addr}")))?
-        .map_err(|e| rpc_err(format_args!("tcp connect {addr}: {e}")))?;
+    let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+        host: host.to_string(),
+        port,
+    };
+    let stream = tokio::time::timeout(
+        DEFAULT_TIMEOUT,
+        crate::transport::connect_transport(&endpoint),
+    )
+    .await
+    .map_err(|_| rpc_err(format_args!("tcp connect timeout: {addr}")))?
+    .map_err(|e| rpc_err(format_args!("tcp connect {addr}: {e}")))?;
 
-    let (reader, mut writer) = stream.into_split();
-
-    writer
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .await
-        .map_err(|e| rpc_err(format_args!("tcp signal write: {e}")))?;
-    writer
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|e| rpc_err(format_args!("tcp write: {e}")))?;
-    writer
-        .write_all(b"\n")
-        .await
-        .map_err(|e| rpc_err(format_args!("tcp newline: {e}")))?;
-
-    let mut buf_reader = tokio::io::BufReader::new(reader);
-    let mut line = String::new();
-
-    let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
-        .await
-        .map_err(|_| rpc_err(format_args!("tcp read timeout: {addr}")))?
-        .map_err(|e| rpc_err(format_args!("tcp read: {e}")))?;
-
-    if let Err(e) = writer.shutdown().await {
-        tracing::debug!(error = %e, addr = %addr, "tcp writer shutdown (non-fatal)");
-    }
-
-    if read_result == 0 && line.is_empty() {
-        return Err(rpc_err(format_args!("tcp empty response: {addr}")));
-    }
-
-    Ok(line)
+    rpc_over_stream(stream, request, true, &addr).await
 }
 
 /// Route a JSON-RPC request through a [`cellmembrane_types::TransportEndpoint`].
@@ -356,42 +365,19 @@ fn call_named_pipe_err(pipe_name: &str) -> Result<String> {
 /// Used for `mesh.publish` and similar notifications where the publisher
 /// doesn't need a response. Avoids the 3s read timeout that caused
 /// cascade pipeline stalls when songBird fans out over federation.
-#[cfg(unix)]
 pub async fn send_notify(socket_path: &Path, request: &str) -> Result<()> {
+    let endpoint = cellmembrane_types::TransportEndpoint::Uds {
+        path: socket_path.display().to_string(),
+    };
     let stream = tokio::time::timeout(
         DEFAULT_TIMEOUT,
-        tokio::net::UnixStream::connect(socket_path),
+        crate::transport::connect_transport(&endpoint),
     )
     .await
     .map_err(|_| rpc_err(format_args!("connect timeout: {}", socket_path.display())))?
     .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
 
-    let (_reader, mut writer) = stream.into_split();
-
-    writer
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .await
-        .map_err(|e| rpc_err(format_args!("signal write: {e}")))?;
-    writer
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|e| rpc_err(format_args!("write: {e}")))?;
-    writer
-        .write_all(b"\n")
-        .await
-        .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
-
-    let _ = writer.shutdown().await;
-    Ok(())
-}
-
-/// Fire-and-forget unavailable on non-Unix (no UDS).
-#[cfg(not(unix))]
-pub async fn send_notify(socket_path: &Path, _request: &str) -> Result<()> {
-    Err(rpc_err(format_args!(
-        "UDS transport unavailable on this platform: {}",
-        socket_path.display()
-    )))
+    notify_over_stream(stream, request).await
 }
 
 /// Convenience: build a JSON-RPC request object for a method with no params.
