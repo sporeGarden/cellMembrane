@@ -33,8 +33,8 @@ fn connect(path: &Path) -> Option<std::os::unix::net::UnixStream> {
     Some(stream)
 }
 
-/// Check if a socket path belongs to bearDog (crypto signer).
-pub(crate) fn is_beardog_socket(path: &Path) -> bool {
+/// Check if a socket path belongs to the crypto signer primal.
+pub(crate) fn is_crypto_signer_socket(path: &Path) -> bool {
     let binary = cellmembrane_types::MembraneService::binary_for(
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
@@ -47,7 +47,7 @@ pub(crate) fn is_beardog_socket(path: &Path) -> bool {
 /// fails, returns `BtspFailed` (caller should retry with plain fallback).
 /// For other sockets: writes the clear JSON-RPC signal.
 fn negotiate_signal(stream: &mut (impl Read + Write), path: &Path) -> NegotiateResult {
-    if is_beardog_socket(path) {
+    if is_crypto_signer_socket(path) {
         if stream
             .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
             .is_err()
@@ -171,18 +171,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_beardog_socket_detects_signer() {
+    fn is_crypto_signer_socket_detects_signer() {
         let signer = cellmembrane_types::MembraneService::binary_for(
             cellmembrane_types::ServiceCapability::CryptoSigner,
         );
         let path = std::path::PathBuf::from(format!("/run/membrane/{signer}.sock"));
-        assert!(is_beardog_socket(&path));
+        assert!(is_crypto_signer_socket(&path));
     }
 
     #[test]
-    fn is_beardog_socket_rejects_non_signer() {
+    fn is_crypto_signer_socket_rejects_non_signer() {
         let path = std::path::Path::new("/run/membrane/songbird.sock");
-        assert!(!is_beardog_socket(path));
+        assert!(!is_crypto_signer_socket(path));
     }
 
     #[test]

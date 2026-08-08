@@ -17,7 +17,8 @@
 use crate::error::{Result, ShadowError};
 use cellmembrane_types::credentials::{SshCertType, SshCertificate};
 use cellmembrane_types::service::{
-    DEFAULT_SSH_CERT_LIFETIME, DEFAULT_STEP_CA_PROVISIONER, DEFAULT_STEP_CA_URL,
+    DEFAULT_SSH_CERT_LIFETIME, DEFAULT_SSH_HOST_CERT, DEFAULT_SSH_HOST_KEY,
+    DEFAULT_SSH_HOST_KEY_PUB, DEFAULT_STEP_CA_PROVISIONER, DEFAULT_STEP_CA_URL,
     ENV_STEP_CA_FINGERPRINT, ENV_STEP_CA_PROVISIONER, ENV_STEP_CA_SSH_LIFETIME, ENV_STEP_CA_URL,
     STEP_CA_CERT_DIR,
 };
@@ -210,14 +211,14 @@ pub async fn install_host_certificate(hostname: &str, dry_run: bool) -> Result<S
     let ca_url = resolve_ca_url();
     let provisioner = resolve_provisioner();
 
-    let host_key = PathBuf::from("/etc/ssh/ssh_host_ecdsa_key.pub");
+    let host_key = PathBuf::from(DEFAULT_SSH_HOST_KEY_PUB);
     if !host_key.exists() && !dry_run {
-        return Err(ShadowError::config(
-            "no host key at /etc/ssh/ssh_host_ecdsa_key.pub — generate with ssh-keygen first",
-        ));
+        return Err(ShadowError::config(format!(
+            "no host key at {DEFAULT_SSH_HOST_KEY_PUB} — generate with ssh-keygen first"
+        )));
     }
 
-    let cert_path = PathBuf::from("/etc/ssh/ssh_host_ecdsa_key-cert.pub");
+    let cert_path = PathBuf::from(DEFAULT_SSH_HOST_CERT);
 
     if dry_run {
         return Ok(SshCertificate {
@@ -263,8 +264,8 @@ pub async fn inspect_certificates() -> Vec<CertStatus> {
     let user_key = dir.join("id_ecdsa");
     results.push(inspect_single_cert("user", &user_cert, &user_key).await);
 
-    let host_cert = PathBuf::from("/etc/ssh/ssh_host_ecdsa_key-cert.pub");
-    let host_key = PathBuf::from("/etc/ssh/ssh_host_ecdsa_key");
+    let host_cert = PathBuf::from(DEFAULT_SSH_HOST_CERT);
+    let host_key = PathBuf::from(DEFAULT_SSH_HOST_KEY);
     results.push(inspect_single_cert("host", &host_cert, &host_key).await);
 
     results

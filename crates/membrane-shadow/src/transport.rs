@@ -192,7 +192,7 @@ fn platform_default(binary: &str, port: Option<u16>) -> TransportEndpoint {
         }
     } else {
         TransportEndpoint::Tcp {
-            host: "127.0.0.1".into(),
+            host: cellmembrane_types::service::BIND_LOOPBACK.into(),
             port: port.unwrap_or(0),
         }
     }

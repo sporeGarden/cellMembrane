@@ -84,7 +84,9 @@ impl TargetOs {
     #[must_use]
     pub const fn default_eco_root(self) -> &'static str {
         match self {
-            Self::Linux | Self::MacOs | Self::Android | Self::Ios => "/opt/ecoPrimals",
+            Self::Linux | Self::MacOs | Self::Android | Self::Ios => {
+                crate::service::DEFAULT_ECOPRIMALS_ROOT
+            }
             Self::Windows => "C:\\ecoPrimals",
             Self::Wasm => "/ecoPrimals",
         }

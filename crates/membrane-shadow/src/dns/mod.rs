@@ -55,7 +55,10 @@ async fn dispatch_configure(args: &[&str]) -> Result<ShadowOutcome> {
         gate_name: gate_name.clone(),
         zones: vec![public_zone, mesh_zone],
         dnssec,
-        listen: vec!["0.0.0.0@53".into(), "::@53".into()],
+        listen: cellmembrane_types::service::DEFAULT_KNOT_LISTEN
+            .iter()
+            .map(|&s| s.into())
+            .collect(),
     };
 
     let mut preview = String::new();
@@ -111,7 +114,10 @@ async fn dispatch_apply(args: &[&str]) -> Result<ShadowOutcome> {
         gate_name: gate_name.clone(),
         zones: vec![public_zone, mesh_zone],
         dnssec,
-        listen: vec!["0.0.0.0@53".into(), "::@53".into()],
+        listen: cellmembrane_types::service::DEFAULT_KNOT_LISTEN
+            .iter()
+            .map(|&s| s.into())
+            .collect(),
     };
 
     if dry_run {

@@ -63,7 +63,10 @@ impl NeuralBridge {
             }
         }
 
-        let candidates = crate::gate::sockets::resolve_primal_socket_paths("biomeos");
+        let binary = cellmembrane_types::MembraneService::binary_for(
+            cellmembrane_types::ServiceCapability::ComputeOrchestration,
+        );
+        let candidates = crate::gate::sockets::resolve_primal_socket_paths(binary);
         for candidate in &candidates {
             let p = PathBuf::from(candidate);
             if p.exists() {

@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-08 (Wave 157a cascade fixes)
+**Last updated:** 2026-08-08 (Wave 157a all gates redeployed)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (deep debt + mesh.register — 6/6 gates redeployed):**
+Forgejo plasmid.fetch API parse fixed (`55fdff3`): HTTP status check before
+JSON deserialization, Forgejo token auth, empty-config guard, /releases?limit=1
+fallback. Unblocks strandGate sovereign deploy. Deep debt sweep: bridge.rs
+hardcoded "biomeos" → `ServiceCapability::ComputeOrchestration` lookup; DNS
+listen strings, arch.rs eco root, transport.rs loopback, SSH host key paths
+all centralized to constants. `is_beardog_socket` renamed to
+`is_crypto_signer_socket`. New `mesh.register` command: publishes
+`capability.register` for all running primals to songBird mesh (upstream from
+westGate pattern — 26 capabilities). Forgejo download auth added.
+1327 tests, zero clippy warnings.
 
 **Wave 157a (platform abstraction — 15 cfg blocks eliminated):**
 Sync IPC centralized: new `sync_ipc.rs` replaces 7 duplicate UDS helper

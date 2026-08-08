@@ -131,6 +131,12 @@ pub const DEFAULT_STEP_CA_URL: &str = "https://ca.primals.eco:9443";
 pub const ENV_STEP_CA_URL: &str = "STEP_CA_URL";
 /// Default SSH certificate lifetime (hours).
 pub const DEFAULT_SSH_CERT_LIFETIME: &str = "8h";
+/// Default SSH host ECDSA public key path.
+pub const DEFAULT_SSH_HOST_KEY_PUB: &str = "/etc/ssh/ssh_host_ecdsa_key.pub";
+/// Default SSH host ECDSA private key path.
+pub const DEFAULT_SSH_HOST_KEY: &str = "/etc/ssh/ssh_host_ecdsa_key";
+/// Default SSH host certificate path.
+pub const DEFAULT_SSH_HOST_CERT: &str = "/etc/ssh/ssh_host_ecdsa_key-cert.pub";
 /// Environment variable override for SSH certificate lifetime.
 pub const ENV_STEP_CA_SSH_LIFETIME: &str = "STEP_CA_SSH_LIFETIME";
 /// Environment variable for the step-ca provisioner name.
@@ -544,6 +550,8 @@ pub const DEFAULT_API_PAGE_SIZE: usize = 50;
 
 /// DNS standard port.
 pub const DEFAULT_DNS_PORT: u16 = 53;
+/// Knot-DNS listen directives (IPv4 + IPv6).
+pub const DEFAULT_KNOT_LISTEN: [&str; 2] = ["0.0.0.0@53", "::@53"];
 /// HTTP standard port (ACME challenge, surface).
 pub const DEFAULT_HTTP_PORT: u16 = 80;
 

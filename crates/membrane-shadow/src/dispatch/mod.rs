@@ -134,6 +134,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("deploy.") => deploy_dispatch::dispatch_deploy(cmd, args).await,
         c if c.starts_with("lifecycle.") => deploy_dispatch::dispatch_lifecycle(cmd, args).await,
         c if c.starts_with("relay.") => relay_dispatch::dispatch_relay(cmd, args).await,
+        "mesh.register" => Ok(crate::plasmid::register_capabilities_with_mesh().await),
         c if c.starts_with("content.") => {
             content_dispatch::dispatch_content(config, cmd, args).await
         }

@@ -395,6 +395,82 @@ pub(crate) async fn notify_mesh_build_pending(drifted: &[String]) {
     notify_mesh("depot.build_pending", "primals_pending", drifted).await;
 }
 
+/// Register all capabilities of running primals with the mesh (songBird).
+///
+/// Iterates the service registry, collects capability wire names for each
+/// primal that has a socket (i.e. is expected to be running), and publishes
+/// a `capability.register` message per primal. This is the cellMembrane-side
+/// implementation of the westGate self-registration pattern.
+pub(crate) async fn register_capabilities_with_mesh() -> crate::ShadowOutcome {
+    let gate = crate::gate::resolve_local_gate_identity();
+    let socket_base = std::path::PathBuf::from(cellmembrane_types::service::resolve_socket_base());
+    let relay_socket = std::path::PathBuf::from(crate::gate::sockets::resolve_mesh_relay_socket());
+
+    if !relay_socket.exists() {
+        return crate::ShadowOutcome::fail("mesh relay socket not found — songBird not running");
+    }
+
+    let mut registered = 0u32;
+    let mut skipped = 0u32;
+
+    for svc in cellmembrane_types::MembraneService::all() {
+        if svc.capabilities.is_empty() || !svc.has_socket {
+            continue;
+        }
+
+        let socket_path = socket_base.join(format!("{}.sock", svc.binary));
+        let api_socket = svc
+            .api_socket
+            .map(|name| socket_base.join(format!("{name}-default.sock")));
+
+        let is_running = socket_path.exists() || api_socket.as_ref().is_some_and(|p| p.exists());
+
+        if !is_running {
+            skipped += 1;
+            continue;
+        }
+
+        let caps: Vec<&str> = svc.capabilities.iter().map(|c| c.wire_name()).collect();
+
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mesh.publish",
+            "params": {
+                "topic": "capability.register",
+                "payload": {
+                    "gate": gate,
+                    "primal": svc.binary,
+                    "capabilities": caps,
+                }
+            },
+            "id": 1
+        });
+
+        let request_str = request.to_string();
+        match crate::jsonrpc::send_notify(&relay_socket, &request_str).await {
+            Ok(()) => {
+                tracing::info!(
+                    primal = svc.binary,
+                    capabilities = ?caps,
+                    "capability.register sent"
+                );
+                registered += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    primal = svc.binary,
+                    error = %e,
+                    "capability.register failed"
+                );
+            }
+        }
+    }
+
+    crate::ShadowOutcome::ok(format!(
+        "capability.register: {registered} primals registered, {skipped} skipped (not running) on gate {gate}"
+    ))
+}
+
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
