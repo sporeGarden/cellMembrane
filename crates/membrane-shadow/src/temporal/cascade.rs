@@ -35,6 +35,7 @@ pub enum PostSyncPhase {
 
 /// Options for a cascade operation.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct CascadeOpts<'a> {
     /// Gate name to cascade (e.g. "golgiBody").
     pub gate: &'a str,

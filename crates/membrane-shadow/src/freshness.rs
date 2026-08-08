@@ -112,7 +112,7 @@ pub async fn publish_gate_heads(
         // Exclude self-reference: wateringHole recording its own SHA creates
         // an infinite fixpoint problem where every write changes the hash,
         // which changes the content, which changes the hash again.
-        if entry.local_path == wh_local || entry.local_path.ends_with("/wateringHole") {
+        if entry.local_path == wh_local || entry.local_path.ends_with(wh_local) {
             continue;
         }
 

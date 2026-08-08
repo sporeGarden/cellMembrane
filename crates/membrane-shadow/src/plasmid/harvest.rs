@@ -378,34 +378,7 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> (St
     }
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    // Atomic copy
-    let mut installed = 0usize;
-    let mut failed = Vec::new();
-    for &primal in &built {
-        let src = harvest_staging.join(primal);
-        let dst = install_dir.join(primal);
-        let tmp = install_dir.join(format!("{primal}.new"));
-
-        if !src.exists() {
-            failed.push(format!("{primal}: not in harvest depot"));
-            continue;
-        }
-
-        match std::fs::copy(&src, &tmp) {
-            Ok(_) => match std::fs::rename(&tmp, &dst) {
-                Ok(()) => {
-                    installed += 1;
-                }
-                Err(e) => {
-                    failed.push(format!("{primal}: rename failed — {e}"));
-                    let _ = std::fs::remove_file(&tmp);
-                }
-            },
-            Err(e) => {
-                failed.push(format!("{primal}: copy failed — {e}"));
-            }
-        }
-    }
+    let (installed, failed) = atomic_copy_binaries(&built, &harvest_staging, &install_dir);
 
     // Restart NUCLEUS
     let start_ok = std::process::Command::new("sudo")
@@ -446,6 +419,41 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> (St
             false,
         )
     }
+}
+
+fn atomic_copy_binaries(
+    built: &[&str],
+    staging: &Path,
+    install_dir: &Path,
+) -> (usize, Vec<String>) {
+    let mut installed = 0usize;
+    let mut failed = Vec::new();
+    for &primal in built {
+        let src = staging.join(primal);
+        let dst = install_dir.join(primal);
+        let tmp = install_dir.join(format!("{primal}.new"));
+
+        if !src.exists() {
+            failed.push(format!("{primal}: not in harvest depot"));
+            continue;
+        }
+
+        match std::fs::copy(&src, &tmp) {
+            Ok(_) => match std::fs::rename(&tmp, &dst) {
+                Ok(()) => {
+                    installed += 1;
+                }
+                Err(e) => {
+                    failed.push(format!("{primal}: rename failed — {e}"));
+                    let _ = std::fs::remove_file(&tmp);
+                }
+            },
+            Err(e) => {
+                failed.push(format!("{primal}: copy failed — {e}"));
+            }
+        }
+    }
+    (installed, failed)
 }
 
 fn determine_primals(

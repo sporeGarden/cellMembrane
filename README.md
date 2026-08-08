@@ -61,7 +61,7 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 155r): ~11k lines types, ~38k lines shadow. Crash-loop breaker
+Current state (Wave 157a G68): ~11k lines types, ~38k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -184,6 +184,28 @@ Systemd unit dir resolves via `MEMBRANE_SYSTEMD_UNIT_DIR` or init scope
 (`multi-user.target` for system, `default.target` for user). Hardcoded
 `/run/membrane` and `/var/lib/membrane` paths replaced with `MEMBRANE_SOCKET_BASE`
 resolution. Bootstrap permissions phase uses env-resolved socket base.
+G65 protocol negotiation (Wave 156l): Single-socket protocol negotiation replaces
+dual-socket. `IpcProtocol` enum (`JsonRpc`, `Tarpc`) in service registry. `negotiate_protocol()`
+reads 4-byte wire header, routes to correct handler. `MembraneService.protocols` replaces
+`has_tarpc: bool`. Health sweep connects once, negotiates, reports capabilities.
+G66 transport abstraction (Wave 156m): Silicon-agnostic byte pipes. `TransportStream`
+enum (`Unix`, `Tcp`) implements `AsyncRead + AsyncWrite + Debug`. `connect_transport()`
+maps `TransportEndpoint` → `TransportStream`. `endpoint_from_env_or_default()` resolves
+`TRANSPORT_ENDPOINT` env or falls back to platform default. All `#[cfg(unix)]` for IPC
+connections confined to transport layer.
+G68 platform substrate (Wave 157a): `PlatformAccess` enum (`Executable`, `Restricted`,
+`GroupReadWrite`) replaces all `#[cfg(unix)] PermissionsExt` sites. 11 call sites
+migrated. `apply_access_async()` in `membrane-shadow` for tokio contexts. `platform_link()`
+for cross-platform symlink/hardlink. All platform-specific permission logic confined to
+abstraction layer. cellMembrane is G68 compliant: 0 production violations, 0 test violations.
+DIV-7 exit code reliability (Wave 157a): `install_and_restart` propagates failure to
+`ShadowOutcome.ok`. `run_post_sync_phases` returns `(String, bool)` for cascade-level
+failure visibility. `sandbox::validate_with_deps` `Err` handled explicitly (was silently
+ignored via `if let Ok`).
+Cascade pipeline fixes (Wave 157a): `NeuralBridge::discover()` widened to scan all
+candidate biomeOS sockets. Pre-sandbox chmod ensures biomeOS read access. `--with-push`
+flag automates golgi depot push after successful harvest+refresh.
+`jsonrpc::send_notify()` fire-and-forget for mesh notifications (eliminates 3s timeout).
 Zero production `unwrap()` (test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
@@ -217,6 +239,7 @@ membrane gate.quorum [--interval 15] [--generate]      # Install autonomous casc
 membrane temporal.cascade                 # Manifest-driven cascade sync (38 repos)
 membrane temporal.cascade --with-restart  # Cascade + fetch + restart updated primals
 membrane temporal.cascade --with-rebuild  # Cascade + harvest stale + push to VPS
+membrane temporal.cascade --with-push    # Cascade + harvest + push depot to golgi
 membrane plasmid.build <primal> [--target T]  # guideStone-grade single-primal build
 membrane plasmid.fetch --source wan       # WAN HTTPS fetch + dual BLAKE3 verification
 membrane plasmid.harvest                  # Build + checksum + auto-publish to git
@@ -288,7 +311,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 155r are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 157a are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -301,8 +324,9 @@ through Wave 155r are **DONE**. Full wave-by-wave audit trail is preserved in
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
 | Code quality | 1319 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
-| Cross-platform | OS Atheism Phase 1+2: `Platform` types, `TransportEndpoint::NamedPipe`, `InitSystem::detect()` | DONE |
+| Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
+| Pipeline | DIV-7 exit code reliability, cascade failure propagation, fire-and-forget mesh notify | DONE |
 
 ---
 
@@ -402,9 +426,12 @@ gardens/cellMembrane/
         service/              # Static service registry + path constants
           mod.rs              # Types, enums, ServicePaths, env vars, path constants
           registry.rs         # 17 const service entries + ALL_SERVICES array
+          resolve.rs          # Runtime helpers (XDG, socket base, UID resolution)
+          constants_tests.rs  # Externalized unit tests for constants
         arch.rs               # Platform, TargetOs, CpuArch, LinkModel (OS Atheism)
         process.rs            # ServiceStatus, InitSystem, ServiceOutcome
         transport.rs          # TransportEndpoint (UDS, TCP, NamedPipe, MeshRelay)
+        platform_substrate.rs # PlatformAccess (G68 cross-platform permissions + links)
         signal.rs             # Ribocipher signal types
         signing.rs            # DepotSignature, DepotTrustPolicy, SignaturesFile
         sync.rs               # Sync config, GateTransport, CascadeSource
@@ -412,23 +439,39 @@ gardens/cellMembrane/
         validation.rs         # Report pattern (pass/fail/warn) + doc-tests
     membrane-shadow/          # Sovereign shadow functions CLI (#![forbid(unsafe_code)])
       src/
-        dispatch/             # CLI command router (8 domain submodules)
+        dispatch/             # CLI command router (17 domain submodules)
           mod.rs              # Top-level run() router + rootpulse + Neural Bridge
           temporal.rs         # cascade, check, sync dispatch
           impulse.rs          # impulse + potential sense dispatch
           infra.rs            # repo, mirror, service, token (remote VPS API)
           gate.rs             # gate status, health, bootstrap, provision
+          gate_keys.rs        # gate.keys SSH cert dispatch
+          gate_configure.rs   # gate.configure + gate.apply dispatch
+          gate_network.rs     # gate.enroll + hub.peer + topology dispatch
           data.rs             # manifest, identity, context, plasmid, relay, topology
           plasmid_dispatch.rs # plasmid.harvest, depot_sync, pipeline, trigger
+          dispatch_harvest.rs # harvest command routing
+          dispatch_webhook.rs # webhook command routing
+          dispatch_validate.rs # gate.validate + rootpulse dispatch
+          deploy_dispatch.rs  # deploy + provision dispatch
+          sign_dispatch.rs    # signing + signing.status dispatch
+          content_dispatch.rs # caddy, sporePrint, DNS dispatch
           relay_dispatch.rs   # relay.run/mediate/ship dispatch
           sovereign.rs        # sovereignty + sovereign deploy dispatch
         gate/                 # Gate operations (modular)
-          bootstrap.rs        # Local deployment (per-phase timeouts, spawn_blocking)
+          bootstrap.rs        # Local deployment orchestrator (per-phase timeouts)
+          bootstrap_phases.rs # Individual bootstrap phase implementations
           enroll.rs           # Mesh enrollment (WG keygen, config, Forgejo-first remotes)
           health.rs           # Native async UDS probes + rootpulse + status
           verify.rs           # Dual checksum verification (git + WAN)
           mesh.rs             # Mesh peer configuration (transport, songbird UDS)
           nucleus.rs          # Cross-platform NUCLEUS (systemd + bare process, PID files)
+          sockets.rs          # Socket discovery + G65 protocol negotiation
+          systemd_units.rs    # Systemd unit generation from composition
+          crash_loop.rs       # Crash-loop detection + disable
+          key_portal.rs       # SSH certificate lifecycle (step-ca)
+          wg.rs               # WireGuard key + config management
+          sporeprint.rs       # sporePrint NUCLEUS unit generation
           local.rs            # Shared helpers (identity via identity::resolve, depot paths)
           interface.rs        # Network interface detection (sysfs + /proc/net)
           preflight.rs        # Pre-bootstrap checks (ports, services, ARP)
@@ -437,21 +480,33 @@ gardens/cellMembrane/
         ssh.rs                # SSH transport (exec, raw, on_host, cat_remote, scp)
         git_ops.rs            # Git operations (add/commit/push, rev-parse, reconcile)
         impulse/              # Inter-gate impulse (native UDS JSON-RPC)
-        temporal/             # Temporal sync + cascade + post_sync rootpulse
+        temporal/             # Temporal sync + cascade + post_sync pipeline
+          cascade.rs          # CascadeOpts + cascade_with_opts orchestrator
+          post_sync.rs        # Post-cascade harvest + refresh + depot push
+          nucleus_restart.rs  # Per-primal convergence (ConvergeOutcome)
         freshness.rs          # Wave freshness, current_wave(), binary drift detection
         context.rs            # Context braid lifecycle
         plasmid/              # Primal binary lifecycle
           mod.rs              # Registry-derived primal list, graceful_kill, shared utils
+          commands.rs         # Pipeline, trigger, status, staleness CLI dispatch
           depot.rs            # Depot resolution, sources.toml auto-provision
           depot_sync.rs       # Depot sync (VPS ↔ local, --push mode)
           fetch.rs            # Fetch + WAN checksum verification + BLAKE3
           harvest.rs          # Build + checksum + sign + atomic publish to git
           harvest_manifest.rs # Manifest build config integration
-          signing.rs          # Depot signing (BLAKE3 + ed25519 via CryptoSigner UDS)
-          sandbox.rs          # Ephemeral isolated validation
+          checksum.rs         # BLAKE3 checksum generation + checksums.toml parsing
+          lineage.rs          # Depot lineage validation (PostPrimordial enforcement)
+          signing.rs          # Depot signing orchestration (BLAKE3 + ed25519)
+          signing_crypto.rs   # Ed25519 primitives + bearDog UDS signing client
+          sandbox.rs          # Ephemeral isolated validation + composition.test_swap
           canary.rs           # Previous-good pool (retire → failover)
           drift.rs            # Source divergence detection
           download.rs         # SSH + WAN binary download
+          refresh.rs          # Push depot binaries to VPS (atomic replace)
+          scheduler.rs        # Harvest scheduling (priority queue, auto-promote)
+          build.rs            # Single-primal guideStone-grade build
+          integrity.rs        # Depot integrity verification
+          auto_fetch.rs       # Autonomous fetch + freshness check
           toolchain.rs        # ELF validation + NDK cross-compile + strip
         caddy/                # Manifest-driven Caddy config generation + TLS + depot
         dns/                  # Sovereign DNS (knot-dns zone + config generation)
@@ -459,7 +514,9 @@ gardens/cellMembrane/
         webhook/              # Webhook receiver + UDS listener (Forgejo + GitHub)
         btsp_client.rs        # BTSP ClientHello handshake (bearDog auth)
         bridge.rs             # Neural API bridge (UDS discovery)
-        jsonrpc.rs            # Centralized JSON-RPC client (UDS, TCP, relay)
+        jsonrpc.rs            # Centralized JSON-RPC client (UDS, TCP, relay, send_notify)
+        transport.rs          # G66 TransportStream (Unix/TCP, platform-agnostic byte pipes)
+        platform.rs           # G68 async platform helpers (apply_access_async)
         resolve.rs            # Transport endpoint resolution
         ribocipher.rs         # Cryptographic functions (HKDF, HMAC, CSPRNG)
         identity.rs           # Gate identity resolution (canonical)
@@ -480,8 +537,9 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,273 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
-enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, and user-space deploy.
+1,319 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, transport
+abstraction (G65/G66), platform substrate (G68), and user-space deploy.
 Tests use both inline `#[cfg(test)]` modules and dedicated test files
 (`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`, `webhook/tests.rs`)
 — no external fixtures.

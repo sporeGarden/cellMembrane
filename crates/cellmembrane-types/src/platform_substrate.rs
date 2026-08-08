@@ -53,6 +53,11 @@ impl PlatformAccess {
     /// On Unix, sets POSIX mode bits.  On Windows, sets the read-only
     /// attribute for `Restricted` (best-effort ACL equivalent) and
     /// clears it otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns `io::Error` if the underlying permission change fails
+    /// (e.g. insufficient privileges, path does not exist).
     pub fn apply(self, path: &Path) -> io::Result<()> {
         self.apply_inner(path)
     }
@@ -99,6 +104,11 @@ impl std::fmt::Display for PlatformAccess {
 ///
 /// cellMembrane currently has zero L1 sites — this is provided for
 /// ecosystem consistency with the sourDough reference pattern.
+///
+/// # Errors
+///
+/// Returns `io::Error` if the link cannot be created (e.g. target
+/// already exists, insufficient privileges, or invalid paths).
 pub fn platform_link(original: &Path, link: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
