@@ -193,9 +193,7 @@ pub fn is_process_alive(pid: u32) -> bool {
         std::process::Command::new("tasklist")
             .args(["/FI", &format!("PID eq {pid}"), "/NH"])
             .output()
-            .is_ok_and(|o| {
-                String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
-            })
+            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
     }
     #[cfg(not(any(unix, windows)))]
     {

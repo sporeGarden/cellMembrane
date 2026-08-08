@@ -35,7 +35,7 @@ pub(super) async fn download_asset(
                 cellmembrane_types::service::DEFAULT_FORGEJO_ORG,
             );
             let url = format!("{base}/{org}/plasmidBin/releases/download/{tag}/{asset}");
-            download_via_http(&url, dest).await
+            download_via_http_auth(&url, config.forgejo_token.as_deref(), dest).await
         }
         FetchSource::Vps => {
             let vps_bin_dir = std::env::var(cellmembrane_types::service::ENV_VPS_BIN_DIR)
@@ -62,6 +62,44 @@ async fn download_via_ssh(host: &str, remote_path: &str, dest: &Path) -> bool {
         Ok(data) if !data.is_empty() => atomic_write(dest, &data).await,
         _ => false,
     }
+}
+
+/// Download with optional bearer token (for Forgejo private repos).
+#[cfg(feature = "http")]
+async fn download_via_http_auth(url: &str, token: Option<&str>, dest: &Path) -> bool {
+    let Ok(client) = crate::http_client(std::time::Duration::from_secs(
+        cellmembrane_types::service::DEFAULT_FETCH_TIMEOUT_SECS,
+    )) else {
+        return false;
+    };
+
+    let mut req = client.get(url);
+    if let Some(t) = token {
+        req = req.header("Authorization", format!("token {t}"));
+    }
+    let response = match req.send().await {
+        Ok(r) if r.status().is_success() => r,
+        Ok(r) => {
+            tracing::debug!(url, status = %r.status(), "forgejo download: non-2xx response");
+            return false;
+        }
+        Err(e) => {
+            tracing::debug!(url, error = %e, "forgejo download: request failed");
+            return false;
+        }
+    };
+
+    let bytes = response.bytes();
+    if bytes.is_empty() {
+        return false;
+    }
+
+    atomic_write(dest, &bytes).await
+}
+
+#[cfg(not(feature = "http"))]
+async fn download_via_http_auth(_url: &str, _token: Option<&str>, _dest: &Path) -> bool {
+    false
 }
 
 #[cfg(feature = "http")]

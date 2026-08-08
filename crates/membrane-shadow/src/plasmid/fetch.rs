@@ -313,33 +313,83 @@ async fn resolve_tag(
                 "{}/repos/{org}/plasmidBin/releases/latest",
                 cellmembrane_types::service::GITHUB_API
             );
-            fetch_release_tag(&url).await
+            fetch_release_tag(&url, None).await
         }
         FetchSource::Forgejo => {
             let api = &config.forgejo_api;
+            if api.is_empty() {
+                return Err(ShadowError::config(
+                    "forgejo_api not configured — set MEMBRANE_FORGEJO_API or \
+                     sync.forgejo_base_url in ecosystem_manifest.toml",
+                ));
+            }
             let base = api.trim_end_matches("/api/v1");
             let org = cellmembrane_types::service::env_or(
                 cellmembrane_types::service::ENV_FORGEJO_ORG,
                 cellmembrane_types::service::DEFAULT_FORGEJO_ORG,
             );
             let url = format!("{base}/api/v1/repos/{org}/plasmidBin/releases/latest");
-            fetch_release_tag(&url).await
+            let token = config.forgejo_token.as_deref();
+            fetch_release_tag(&url, token).await
         }
     }
 }
 
 #[cfg(feature = "http")]
-async fn fetch_release_tag(url: &str) -> Result<String> {
+async fn fetch_release_tag(url: &str, token: Option<&str>) -> Result<String> {
+    let resp = release_api_get(url, token).await?;
+
+    if resp.status().is_success() {
+        let release: ReleaseResponse = resp.json()?;
+        return Ok(release.tag_name);
+    }
+
+    let status = resp.status();
+    let is_404 = status.as_u16() == 404;
+
+    if is_404 {
+        // /releases/latest returns 404 when no non-prerelease, non-draft
+        // releases exist. Fall back to listing all releases.
+        let list_url = url.replace("/releases/latest", "/releases?limit=1");
+        if let Ok(list_resp) = release_api_get(&list_url, token).await {
+            if list_resp.status().is_success() {
+                if let Ok(releases) = list_resp.json::<Vec<ReleaseResponse>>() {
+                    if let Some(first) = releases.into_iter().next() {
+                        tracing::info!(
+                            tag = %first.tag_name,
+                            "no /releases/latest — resolved via release list fallback"
+                        );
+                        return Ok(first.tag_name);
+                    }
+                }
+            }
+        }
+    }
+
+    let body = resp.text().unwrap_or_default();
+    let hint = if body.contains("message") {
+        body.lines().next().unwrap_or(&body).to_string()
+    } else {
+        format!("HTTP {status}")
+    };
+    Err(ShadowError::http(format!(
+        "release tag API returned {status} for {url} — {hint}"
+    )))
+}
+
+#[cfg(feature = "http")]
+async fn release_api_get(
+    url: &str,
+    token: Option<&str>,
+) -> Result<crate::http_client::HttpResponse> {
     let client = crate::http_client(std::time::Duration::from_secs(
         cellmembrane_types::service::DEFAULT_API_READ_TIMEOUT_SECS,
     ))?;
-    let resp: ReleaseResponse = client
-        .get(url)
-        .header("User-Agent", "membrane-shadow/0.1")
-        .send()
-        .await?
-        .json()?;
-    Ok(resp.tag_name)
+    let mut req = client.get(url).header("User-Agent", "membrane-shadow/0.1");
+    if let Some(t) = token {
+        req = req.header("Authorization", format!("token {t}"));
+    }
+    req.send().await
 }
 
 #[cfg(not(feature = "http"))]
