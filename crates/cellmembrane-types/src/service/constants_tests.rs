@@ -52,8 +52,14 @@ fn post_primordial_excludes_non_core() {
 }
 
 #[test]
-fn post_primordial_count() {
-    assert_eq!(POST_PRIMORDIAL_PRIMALS.len(), 6);
+fn post_primordial_registry_derived() {
+    let names = super::super::MembraneService::post_primordial_names();
+    assert!(names.contains(&"beardog"));
+    assert!(names.contains(&"songbird"));
+    assert!(names.contains(&"biomeos"));
+    assert!(!names.contains(&"squirrel"));
+    // +1 for "cellmembrane" which is_post_primordial but not in service registry
+    assert_eq!(names.len() + 1, 6);
 }
 
 #[test]

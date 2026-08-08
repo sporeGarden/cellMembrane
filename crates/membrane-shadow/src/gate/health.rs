@@ -91,9 +91,14 @@ pub async fn status() -> crate::error::Result<GateStatus> {
         probes.push(cert_probe);
     }
 
-    let crash_loop_report = tokio::task::spawn_blocking(|| super::crash_loop::scan_only(None))
-        .await
-        .ok();
+    let crash_loop_report =
+        match tokio::task::spawn_blocking(|| super::crash_loop::scan_only(None)).await {
+            Ok(r) => Some(r),
+            Err(e) => {
+                tracing::debug!(error = %e, "crash-loop scan spawn failed");
+                None
+            }
+        };
     if let Some(ref report) = crash_loop_report {
         let crash_ok = !report.has_loops();
         let detail = if crash_ok {
@@ -471,7 +476,13 @@ async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
         cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
         cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
     );
-    let manifest = crate::manifest::load_from_workspace(std::path::Path::new(&workspace)).ok()?;
+    let manifest = match crate::manifest::load_from_workspace(std::path::Path::new(&workspace)) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::debug!(error = %e, "TLS cert probe: manifest load failed");
+            return None;
+        }
+    };
     let gate = super::resolve_local_gate_identity();
 
     let profile = manifest.gates.get(&gate)?;

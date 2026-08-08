@@ -419,6 +419,7 @@ fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
 }
 
 /// Pre-deployment readiness check for sporePrint NUCLEUS on a target gate.
+#[allow(clippy::too_many_lines)]
 fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
     let resolved_gate = crate::gate::resolve_local_gate_identity();
     let gate_name = args.first().copied().unwrap_or(resolved_gate.as_str());
@@ -429,7 +430,17 @@ fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
 
     let mut checks: Vec<DeployCheck> = Vec::new();
 
-    for &binary in cellmembrane_types::service::SPOREPRINT_NUCLEUS_BINARIES {
+    let sporeprint_caps = [
+        cellmembrane_types::ServiceCapability::Visualization,
+        cellmembrane_types::ServiceCapability::ContentAddressedStorage,
+        cellmembrane_types::ServiceCapability::MeshRelay,
+        cellmembrane_types::ServiceCapability::CryptoSigner,
+    ];
+    let sporeprint_binaries: Vec<&str> = sporeprint_caps
+        .iter()
+        .map(|c| cellmembrane_types::MembraneService::binary_for(*c))
+        .collect();
+    for binary in &sporeprint_binaries {
         let bin_path = bin_dir.join(binary);
         checks.push(DeployCheck {
             name: format!("{binary} binary"),

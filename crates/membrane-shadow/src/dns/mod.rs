@@ -293,7 +293,8 @@ fn build_mesh_zone(m: &crate::manifest::EcosystemManifest) -> DnsZone {
         rdata: hub_ip.into(),
     });
 
-    let mut gate_entries: Vec<(&String, &crate::manifest::GateProfile)> = m.gates.iter().collect();
+    let mut gate_entries: Vec<(&str, &crate::manifest::GateProfile)> =
+        m.gates.iter().map(|(k, v)| (k.as_str(), v)).collect();
     gate_entries.sort_by_key(|(name, _)| name.to_lowercase());
 
     for (gate_name, profile) in gate_entries {

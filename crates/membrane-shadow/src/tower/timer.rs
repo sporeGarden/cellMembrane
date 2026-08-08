@@ -365,8 +365,20 @@ async fn probe_socket_btsp(path: &Path) -> bool {
 
 async fn probe_mesh(songbird_socket: &Path) -> Option<String> {
     let request = r#"{"jsonrpc":"2.0","method":"mesh.status","params":{},"id":1}"#;
-    let response = crate::jsonrpc::call(songbird_socket, request).await.ok()?;
-    let json: serde_json::Value = serde_json::from_str(&response).ok()?;
+    let response = match crate::jsonrpc::call(songbird_socket, request).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::debug!(error = %e, "mesh probe: songbird RPC failed");
+            return None;
+        }
+    };
+    let json: serde_json::Value = match serde_json::from_str(&response) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::debug!(error = %e, "mesh probe: response parse failed");
+            return None;
+        }
+    };
 
     let peers = json
         .pointer("/result/reachable_peers")

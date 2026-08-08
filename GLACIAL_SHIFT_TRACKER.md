@@ -1,13 +1,28 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-08 (Wave 157a all gates redeployed)
+**Last updated:** 2026-08-08 (Wave 157a deep debt registry evolution)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (registry evolution + smart refactor — self-knowledge elimination):**
+Registry-derived trust: `requires_signed_lineage` and `gpu_required` fields added
+to `MembraneService`; `POST_PRIMORDIAL_PRIMALS`, `SPOREPRINT_NUCLEUS_BINARIES`,
+`GPU_PRIMALS` constants eliminated — all now derived from registry at compile time.
+`is_post_primordial()` and `is_gpu_primal()` check registry instead of hardcoded
+lists. `gateway/mod.rs` sporePrint deploy check now derives binary list from
+`ServiceCapability` lookups. Smart refactor of `service/mod.rs` (855→556L):
+extracted `ipc.rs` (131L — IPC protocol types, G65 negotiation) and
+`capability.rs` (234L — Protocol, TransportMode, ServerContract,
+ServiceCapability, HealthCheckMethod). Modern Rust 2024 let-chains applied in
+`git_ops.rs` and `freshness.rs`. `&String` → `&str` fix in `dns/mod.rs`.
+Silent error swallowing replaced with `tracing::debug` in `bridge.rs` NeuralBridge
+RPC, `health.rs` crash-loop scan + TLS cert probe, `tower/timer.rs` mesh probe,
+`sync_ipc.rs` UDS connect. 1329 tests, zero clippy warnings.
 
 **Wave 157a (deep debt + mesh.register — 6/6 gates redeployed):**
 Forgejo plasmid.fetch API parse fixed (`55fdff3`): HTTP status check before

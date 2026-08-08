@@ -469,19 +469,13 @@ impl FromStr for TargetArch {
     }
 }
 
-/// Compile-time fallback for primals that require glibc (gpu/dlopen) builds.
+/// Check whether a primal needs a glibc build for GPU access.
 ///
-/// Prefer `EcosystemManifest::gpu_primals()` at runtime, which reads the
-/// `gpu = true` field from `ecosystem_manifest.toml`. This constant serves
-/// as the last-resort fallback when the manifest is unavailable.
-pub const GPU_PRIMALS: &[&str] = &["barracuda", "coralreef"];
-
-/// Check whether a primal needs a glibc build for GPU access (compile-time fallback).
-///
-/// For manifest-driven GPU detection, use `EcosystemManifest::gpu_primals()`.
+/// Checks the service registry `gpu_required` flag. For manifest-driven GPU
+/// detection, prefer `EcosystemManifest::gpu_primals()` at runtime.
 #[must_use]
 pub fn is_gpu_primal(name: &str) -> bool {
-    GPU_PRIMALS.contains(&name)
+    crate::MembraneService::for_binary(name).is_some_and(|s| s.gpu_required)
 }
 
 #[cfg(test)]

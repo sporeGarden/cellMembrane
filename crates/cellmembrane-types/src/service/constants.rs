@@ -621,28 +621,17 @@ pub const ENV_ACME_DOMAIN: &str = "BEARDOG_ACME_DOMAIN";
 /// Default ACME email for certificate issuance.
 pub const DEFAULT_ACME_EMAIL: &str = "acme@primals.eco";
 
-/// The 4 binaries in a sporePrint NUCLEUS composition.
-pub const SPOREPRINT_NUCLEUS_BINARIES: &[&str] =
-    &["petaltongue", "nestgate", "songbird", "beardog"];
-
-/// Primals in the intercommunication layer requiring signed depot lineage.
-///
-/// No local builds on consumer gates. Hard enforcement at `plasmid.refresh`
-/// and `gate.bootstrap` — binary must chain back to a recognized build
-/// authority with valid BLAKE3 + provenance.
-pub const POST_PRIMORDIAL_PRIMALS: &[&str] = &[
-    "beardog",
-    "songbird",
-    "skunkbat",
-    "nestgate",
-    "cellmembrane",
-    "biomeos",
-];
-
 /// Whether a primal is in the postPrimordial set (requires signed depot lineage).
+///
+/// Checks the service registry `requires_signed_lineage` flag, falling back
+/// to a check for "cellmembrane" (which is not in the registry since it IS
+/// the membrane, but still requires signed lineage).
 #[must_use]
 pub fn is_post_primordial(primal: &str) -> bool {
-    POST_PRIMORDIAL_PRIMALS.contains(&primal)
+    if primal == "cellmembrane" {
+        return true;
+    }
+    super::MembraneService::for_binary(primal).is_some_and(|s| s.requires_signed_lineage)
 }
 
 // ── Composition domains ──────────────────────────────────────────────

@@ -23,7 +23,13 @@ use tracing::debug;
 /// support sync IPC.
 #[cfg(unix)]
 fn connect(path: &Path) -> Option<std::os::unix::net::UnixStream> {
-    let stream = std::os::unix::net::UnixStream::connect(path).ok()?;
+    let stream = match std::os::unix::net::UnixStream::connect(path) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::debug!(path = %path.display(), error = %e, "sync IPC connect failed");
+            return None;
+        }
+    };
     let _ = stream.set_write_timeout(Some(Duration::from_secs(
         cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
     )));

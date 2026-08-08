@@ -227,13 +227,12 @@ pub async fn unify_freshness(root: &Path) -> Result<()> {
     if let Ok(mut entries) = tokio::fs::read_dir(&heads_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().is_some_and(|e| e == "toml") {
-                if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                    if let Ok(gate_file) = toml::from_str::<GateHeadsFile>(&content) {
-                        for (repo, sha) in gate_file.heads {
-                            merged_heads.insert(repo, sha);
-                        }
-                    }
+            if path.extension().is_some_and(|e| e == "toml")
+                && let Ok(content) = tokio::fs::read_to_string(&path).await
+                && let Ok(gate_file) = toml::from_str::<GateHeadsFile>(&content)
+            {
+                for (repo, sha) in gate_file.heads {
+                    merged_heads.insert(repo, sha);
                 }
             }
         }

@@ -187,10 +187,23 @@ async fn try_cross_gate_bridge(
     let dotted = format!("{domain}.{method}");
     let request = crate::jsonrpc::request_with_params(&dotted, params, 1);
 
-    let response = crate::jsonrpc::call_endpoint(&ep, &request).await.ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(&response).ok()?;
+    let response = match crate::jsonrpc::call_endpoint(&ep, &request).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::debug!(method = %dotted, error = %e, "NeuralBridge RPC call failed");
+            return None;
+        }
+    };
+    let parsed: serde_json::Value = match serde_json::from_str(&response) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::debug!(method = %dotted, error = %e, "NeuralBridge response parse failed");
+            return None;
+        }
+    };
 
-    if parsed.get("error").is_some() {
+    if let Some(err) = parsed.get("error") {
+        tracing::debug!(method = %dotted, error = %err, "NeuralBridge RPC returned error");
         return None;
     }
 

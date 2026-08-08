@@ -10,309 +10,29 @@
 //! central knowledge. Binary integrity expectations are derived from the
 //! registry rather than re-hardcoded.
 
+pub mod capability;
 pub mod constants;
 pub mod integrity;
+pub mod ipc;
 pub mod resolve;
 
+pub use capability::{
+    HealthCheckMethod, Protocol, ServerContract, ServiceCapability, TransportMode,
+};
 pub use constants::*;
 pub use integrity::{
     BinaryIntegrity, HashAlgorithm, binary_integrity_for, binary_integrity_for_paths,
 };
+pub use ipc::{
+    IpcProtocol, PROTOCOL_NEGOTIATION_PREFIX, PROTOCOL_NEGOTIATION_RESPONSE,
+    PROTOCOL_NEGOTIATION_TIMEOUT_MS,
+};
 pub use resolve::*;
 
 use crate::composition::MembraneComposition;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// IPC protocol for UDS communication (G65 Protocol Negotiation Standard).
-///
-/// Each primal declares which protocols it supports. Under G65, a single
-/// socket negotiates the best mutual protocol at connection time.
-/// `JsonRpc` is always the fallback — if no negotiation occurs, the
-/// connection proceeds as JSON-RPC (full backward compatibility).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum IpcProtocol {
-    /// JSON-RPC 2.0 — text-based, human-readable, default fallback.
-    JsonRpc,
-    /// tarpc — binary, type-safe, high-performance Rust RPC.
-    Tarpc,
-}
-
-impl IpcProtocol {
-    /// Wire name used in the G65 `PROTOCOLS:` negotiation line.
-    #[must_use]
-    pub const fn wire_name(self) -> &'static str {
-        match self {
-            Self::JsonRpc => "jsonrpc",
-            Self::Tarpc => "tarpc",
-        }
-    }
-
-    /// Parse from a G65 wire name.
-    #[must_use]
-    pub fn from_wire(s: &str) -> Option<Self> {
-        match s.trim() {
-            "jsonrpc" | "json-rpc" | "json_rpc" => Some(Self::JsonRpc),
-            "tarpc" => Some(Self::Tarpc),
-            _ => None,
-        }
-    }
-
-    /// Select the best mutual protocol (client preference order wins).
-    ///
-    /// Returns `JsonRpc` as fallback if no mutual match is found.
-    #[must_use]
-    pub fn negotiate(client: &[Self], server: &[Self]) -> Self {
-        for c in client {
-            if server.contains(c) {
-                return *c;
-            }
-        }
-        Self::JsonRpc
-    }
-}
-
-impl fmt::Display for IpcProtocol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.wire_name())
-    }
-}
-
-/// G65 protocol negotiation wire prefix.
-pub const PROTOCOL_NEGOTIATION_PREFIX: &str = "PROTOCOLS: ";
-
-/// G65 protocol negotiation response prefix.
-pub const PROTOCOL_NEGOTIATION_RESPONSE: &str = "PROTOCOL: ";
-
-/// Timeout for the first line read during negotiation (milliseconds).
-///
-/// If no `PROTOCOLS:` line arrives within this window, the connection
-/// proceeds as JSON-RPC.
-pub const PROTOCOL_NEGOTIATION_TIMEOUT_MS: u64 = 100;
-
-/// Transport protocol for a service port.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Protocol {
-    /// TCP only.
-    Tcp,
-    /// UDP only.
-    Udp,
-    /// Both TCP and UDP on the same port.
-    TcpAndUdp,
-    /// Unix domain socket (no port).
-    Uds,
-}
-
-impl fmt::Display for Protocol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Tcp => write!(f, "tcp"),
-            Self::Udp => write!(f, "udp"),
-            Self::TcpAndUdp => write!(f, "tcp+udp"),
-            Self::Uds => write!(f, "uds"),
-        }
-    }
-}
-
-/// Transport mode for VPS deployment (Wave 56 standard).
-///
-/// Determines whether a primal uses TCP ports or Unix domain sockets
-/// for inter-primal communication. The VPS standard is `UdsOnly` —
-/// zero TCP ports for all NUCLEUS primals.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TransportMode {
-    /// UDS-only: no TCP ports allocated. VPS deployment standard.
-    /// Health checks via socket file existence.
-    UdsOnly,
-    /// TCP default: service binds to a TCP port (legacy / symbiotic).
-    TcpDefault,
-    /// TCP opt-in: UDS primary, TCP available via `TRANSPORT_ENDPOINT` injection.
-    TcpOptIn,
-}
-
-impl fmt::Display for TransportMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UdsOnly => write!(f, "uds_only"),
-            Self::TcpDefault => write!(f, "tcp_default"),
-            Self::TcpOptIn => write!(f, "tcp_opt_in"),
-        }
-    }
-}
-
-/// Server CLI contract — describes what args a primal's `server` subcommand accepts.
-///
-/// Each primal has evolved independently, resulting in CLI divergence. This enum
-/// captures the actual capabilities so template systemd units can generate correct
-/// `ExecStart` lines without trial and error.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ServerContract {
-    /// Full guideStone P4 contract: `server --socket <path> --security-socket <path> --pid-dir <path>`
-    /// Used by: songbird, skunkbat
-    Full,
-    /// Socket + audit-dir: `server --socket <path> --audit-dir <path>`
-    /// Used by: beardog (crypto spine)
-    SocketAuditDir,
-    /// Socket-only: `server --socket <path>`
-    /// Used by: sweetgrass, coralreef, squirrel, petaltongue, barracuda, toadstool
-    SocketOnly,
-    /// Server subcommand only: `server` (socket path via env/convention, no `--socket` flag).
-    /// Used by: nestgate (CLI evolved in Wave 150x)
-    ServerNoSocket,
-    /// biomeOS-style: `api --socket <path>` or `neural-api --socket <path>`
-    /// Used by: biomeos
-    BiomeosApi,
-    /// External binary with no `server` subcommand — started by systemd with args in the unit.
-    /// Used by: hbbs, hbbr, caddy
-    External,
-    /// Tarpc-primary server — accepts both `--socket` (JSON-RPC) and
-    /// `--tarpc-socket` (binary protocol) under C2 dual-socket pattern.
-    /// Under G65, these primals transition to `SocketOnly` as negotiation
-    /// replaces the separate tarpc socket.
-    /// Used by: loamspine, rhizocrypt (transitional — will be `SocketOnly` post-G65)
-    Tarpc,
-}
-
-impl ServerContract {
-    /// Generate the `ExecStart` args for a primal given socket/security paths.
-    ///
-    /// Uses `install_base` to allow deployment to non-standard locations.
-    #[must_use]
-    pub fn exec_args_with_base(
-        &self,
-        install_base: &str,
-        binary: &str,
-        socket_path: &str,
-        security_socket: &str,
-    ) -> String {
-        let socket_base = crate::service::resolve_socket_base();
-        match self {
-            Self::Full => format!(
-                "{install_base}/{binary} server --socket {socket_path} --security-socket {security_socket} --pid-dir {socket_base}"
-            ),
-            Self::SocketAuditDir => format!(
-                "{install_base}/{binary} server --socket {socket_path} --audit-dir {socket_base}/{binary}"
-            ),
-            Self::SocketOnly => {
-                format!("{install_base}/{binary} server --socket {socket_path}")
-            }
-            Self::Tarpc => {
-                let tarpc_path = format!("{socket_base}/{binary}.tarpc.sock");
-                format!(
-                    "{install_base}/{binary} server --socket {socket_path} --tarpc-socket {tarpc_path}"
-                )
-            }
-            Self::ServerNoSocket => format!("{install_base}/{binary} server"),
-            Self::BiomeosApi => {
-                format!("{install_base}/{binary} neural-api --socket {socket_path}")
-            }
-            Self::External => format!("{install_base}/{binary}"),
-        }
-    }
-
-    /// Generate the `ExecStart` args using the default install base.
-    #[must_use]
-    pub fn exec_args(&self, binary: &str, socket_path: &str, security_socket: &str) -> String {
-        self.exec_args_with_base(DEFAULT_INSTALL_BASE, binary, socket_path, security_socket)
-    }
-}
-
-/// Capability tag for runtime discovery.
-///
-/// Instead of hardcoding binary names ("songbird", "beardog") in production
-/// code, services declare capabilities and consumers discover providers
-/// through the registry at compile time or runtime.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ServiceCapability {
-    /// Mesh relay — provides peer-to-peer connectivity and message routing.
-    MeshRelay,
-    /// TURN server — NAT traversal for real-time connections.
-    TurnServer,
-    /// Cryptographic signing — ed25519 signatures, key management.
-    CryptoSigner,
-    /// Security enforcement — authentication, authorization, secrets.
-    Security,
-    /// Observability — metrics collection, health aggregation.
-    Observability,
-    /// Content serving — static file / API serving.
-    ContentServing,
-    /// Storage — persistent data management.
-    Storage,
-    /// Compute orchestration — job scheduling, pipeline execution.
-    ComputeOrchestration,
-    /// Identity — gate identity, certificate management.
-    Identity,
-    /// DNS authority — authoritative DNS serving.
-    DnsAuthority,
-    /// Reverse proxy — TLS termination, HTTP routing.
-    ReverseProxy,
-    /// Visualization — scene rendering, data visualization.
-    Visualization,
-    /// Content-addressed storage — CAS blob serving.
-    ContentAddressedStorage,
-}
-
-impl ServiceCapability {
-    /// Stable wire-format name matching serde `snake_case` rename.
-    ///
-    /// Used in mesh relay routing (`TransportEndpoint::MeshRelay.capability`)
-    /// and JSON-RPC `relay.forward` envelopes.
-    #[must_use]
-    pub const fn wire_name(self) -> &'static str {
-        match self {
-            Self::MeshRelay => "mesh_relay",
-            Self::TurnServer => "turn_server",
-            Self::CryptoSigner => "crypto_signer",
-            Self::Security => "security",
-            Self::Observability => "observability",
-            Self::ContentServing => "content_serving",
-            Self::Storage => "storage",
-            Self::ComputeOrchestration => "compute_orchestration",
-            Self::Identity => "identity",
-            Self::DnsAuthority => "dns_authority",
-            Self::ReverseProxy => "reverse_proxy",
-            Self::Visualization => "visualization",
-            Self::ContentAddressedStorage => "content_addressed_storage",
-        }
-    }
-}
-
-impl std::fmt::Display for ServiceCapability {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.wire_name())
-    }
-}
-
-/// Health check strategy for a service.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HealthCheckMethod {
-    /// JSON-RPC `health.liveness` probe.
-    Liveness,
-    /// Raw TCP connection probe.
-    TcpConnect,
-    /// HTTPS GET probe (200 OK).
-    HttpsProbe,
-    /// DNS query probe.
-    DnsProbe,
-    /// UDS socket file existence check (VPS standard).
-    SocketExists,
-}
-
-impl fmt::Display for HealthCheckMethod {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Liveness => write!(f, "health.liveness"),
-            Self::TcpConnect => write!(f, "tcp_connect"),
-            Self::HttpsProbe => write!(f, "https_probe"),
-            Self::DnsProbe => write!(f, "dns_probe"),
-            Self::SocketExists => write!(f, "socket_exists"),
-        }
-    }
-}
+// ── ServicePaths — runtime path resolution ──────────────────────────────
 
 /// Runtime path resolver for membrane services.
 ///
@@ -406,22 +126,28 @@ impl Default for ServicePaths {
     }
 }
 
+// ── MembraneService — static service registry entry ─────────────────────
+
 /// A single membrane service (one running process).
+///
+/// This struct is compile-time data. The service registry (in `registry.rs`)
+/// is an array of const `MembraneService` values — zero allocations, zero
+/// runtime cost.
 ///
 /// All fields are `&'static str` — service definitions are compile-time
 /// constants, not runtime-allocated data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct MembraneService {
-    /// Binary name (e.g. "songbird", "hbbs").
+    /// Binary name on disk (e.g. `"beardog"`, `"songbird"`).
     pub binary: &'static str,
-    /// Systemd unit name.
+    /// Systemd unit name (e.g. `"beardog-membrane.service"`).
     pub systemd_unit: &'static str,
-    /// Network port, if any (UDS-only services have `None`).
+    /// Primary network port (`None` for UDS-only services).
     pub port: Option<u16>,
-    /// Protocol for the port.
+    /// Primary transport protocol.
     pub protocol: Protocol,
-    /// Whether this service provides a UDS socket.
-    /// The actual path is resolved via [`ServicePaths::socket_path`].
+    /// Whether this service creates a UDS socket for IPC.
     pub has_socket: bool,
     /// Bind address.
     pub bind: &'static str,
@@ -460,6 +186,18 @@ pub struct MembraneService {
     /// binary. This registry allows bootstrap to predict the full socket set and
     /// health probes to verify capability presence.
     pub socket_aliases: &'static [&'static str],
+    /// Whether this primal requires signed depot lineage (post-primordial trust).
+    ///
+    /// Post-primordial primals cannot be locally built on consumer gates —
+    /// binaries must chain back to a recognized build authority with valid
+    /// BLAKE3 + provenance signatures.
+    pub requires_signed_lineage: bool,
+    /// Whether this primal needs a glibc build for GPU/dlopen access.
+    ///
+    /// GPU primals use `x86_64-unknown-linux-gnu` (glibc) instead of musl
+    /// because GPU drivers require runtime `dlopen`. The manifest's `gpu = true`
+    /// field is the runtime source of truth; this flag is the compile-time fallback.
+    pub gpu_required: bool,
 }
 
 mod registry;
@@ -644,6 +382,36 @@ impl MembraneService {
             .collect()
     }
 
+    /// All primals requiring signed depot lineage (post-primordial trust).
+    #[must_use]
+    pub fn post_primordial_primals() -> Vec<&'static Self> {
+        ALL_SERVICES
+            .iter()
+            .filter(|s| s.requires_signed_lineage)
+            .collect()
+    }
+
+    /// All primal binary names requiring signed depot lineage.
+    #[must_use]
+    pub fn post_primordial_names() -> Vec<&'static str> {
+        Self::post_primordial_primals()
+            .into_iter()
+            .map(|s| s.binary)
+            .collect()
+    }
+
+    /// All primals that need glibc builds for GPU/dlopen access.
+    #[must_use]
+    pub fn gpu_primals() -> Vec<&'static Self> {
+        ALL_SERVICES.iter().filter(|s| s.gpu_required).collect()
+    }
+
+    /// All GPU primal binary names (compile-time fallback).
+    #[must_use]
+    pub fn gpu_names() -> Vec<&'static str> {
+        Self::gpu_primals().into_iter().map(|s| s.binary).collect()
+    }
+
     /// Whether this service should be started after the mesh relay.
     ///
     /// Services providing `MeshRelay` are infrastructure — they must start
@@ -685,58 +453,15 @@ impl MembraneService {
     }
 }
 
+impl fmt::Display for MembraneService {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.binary)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn ipc_protocol_wire_roundtrip() {
-        assert_eq!(
-            IpcProtocol::from_wire("jsonrpc"),
-            Some(IpcProtocol::JsonRpc)
-        );
-        assert_eq!(IpcProtocol::from_wire("tarpc"), Some(IpcProtocol::Tarpc));
-        assert_eq!(
-            IpcProtocol::from_wire("json-rpc"),
-            Some(IpcProtocol::JsonRpc)
-        );
-        assert_eq!(
-            IpcProtocol::from_wire("json_rpc"),
-            Some(IpcProtocol::JsonRpc)
-        );
-        assert_eq!(IpcProtocol::from_wire("unknown"), None);
-    }
-
-    #[test]
-    fn ipc_protocol_display() {
-        assert_eq!(IpcProtocol::JsonRpc.to_string(), "jsonrpc");
-        assert_eq!(IpcProtocol::Tarpc.to_string(), "tarpc");
-    }
-
-    #[test]
-    fn negotiate_client_preference_wins() {
-        let client = [IpcProtocol::Tarpc, IpcProtocol::JsonRpc];
-        let server = [IpcProtocol::JsonRpc, IpcProtocol::Tarpc];
-        assert_eq!(IpcProtocol::negotiate(&client, &server), IpcProtocol::Tarpc);
-    }
-
-    #[test]
-    fn negotiate_fallback_to_jsonrpc() {
-        let client = [IpcProtocol::Tarpc];
-        let server = [IpcProtocol::JsonRpc];
-        assert_eq!(
-            IpcProtocol::negotiate(&client, &server),
-            IpcProtocol::JsonRpc
-        );
-    }
-
-    #[test]
-    fn negotiate_empty_client_falls_back() {
-        assert_eq!(
-            IpcProtocol::negotiate(&[], &[IpcProtocol::Tarpc]),
-            IpcProtocol::JsonRpc
-        );
-    }
 
     #[test]
     fn has_tarpc_derived_from_protocols() {
@@ -808,5 +533,24 @@ mod tests {
                 "non-socket service should get TCP: {ep:?}"
             );
         }
+    }
+
+    #[test]
+    fn post_primordial_registry_coverage() {
+        let names = MembraneService::post_primordial_names();
+        assert!(names.contains(&"beardog"));
+        assert!(names.contains(&"songbird"));
+        assert!(names.contains(&"skunkbat"));
+        assert!(names.contains(&"nestgate"));
+        assert!(names.contains(&"biomeos"));
+        assert!(!names.contains(&"squirrel"));
+    }
+
+    #[test]
+    fn gpu_registry_coverage() {
+        let names = MembraneService::gpu_names();
+        assert!(names.contains(&"barracuda"));
+        assert!(names.contains(&"coralreef"));
+        assert!(!names.contains(&"beardog"));
     }
 }

@@ -12,12 +12,11 @@ use cellmembrane_types::service::DEFAULT_PUSH_REMOTES;
 
 /// Resolve push remotes from manifest `[sync]` config, falling back to defaults.
 fn resolve_push_remotes() -> Vec<String> {
-    if let Ok(root) = crate::temporal::resolve_workspace_root() {
-        if let Ok(m) = crate::manifest::load_from_workspace(&root) {
-            if !m.sync.push_remotes.is_empty() {
-                return m.sync.push_remotes;
-            }
-        }
+    if let Ok(root) = crate::temporal::resolve_workspace_root()
+        && let Ok(m) = crate::manifest::load_from_workspace(&root)
+        && !m.sync.push_remotes.is_empty()
+    {
+        return m.sync.push_remotes;
     }
     DEFAULT_PUSH_REMOTES
         .iter()
