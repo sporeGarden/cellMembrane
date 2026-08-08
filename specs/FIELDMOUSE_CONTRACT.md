@@ -113,11 +113,11 @@ Every fieldMouse must satisfy all items before being considered operational.
 
 ### The fieldMouse MUST:
 
-1. **Respond to `deploy_membrane.sh status`** with accurate channel health.
+1. **Respond to `membrane gate.health`** with accurate channel health.
 2. **Maintain TURN relay availability** — 99.9% uptime target for Channel 2.
 3. **Preserve `tower.env` across redeploys** — the family seed is persistent identity.
 4. **Keep binaries current** — track plasmidBin releases, redeploy on security updates.
-5. **Pass Dark Forest audit** — all 17 MEM checks from `darkforest_membrane.sh`.
+5. **Pass Dark Forest audit** — all 17 MEM checks via `membrane gate.validate`.
 
 ### The fieldMouse MUST NOT:
 
@@ -169,14 +169,14 @@ Validate `membrane.toml` against `cellmembrane-types`:
 
 ### Level 2: Runtime (post-deploy)
 
-Run `deploy_membrane.sh status root@<host>`:
+Run `membrane gate.health`:
 - All systemd units active
 - UFW rules match composition
 - Health probes pass (TURN allocate, TCP connect, TLS handshake)
 
 ### Level 3: Security (audit)
 
-Run `darkforest_membrane.sh`:
+Run `membrane gate.validate`:
 - 17 MEM checks (MEM-01 through MEM-17)
 - SSH hardening, credential perms, port inventory, binary provenance
 - Must be 21/21 PASS for Nest Atomic production status (MEM-01 through MEM-17)
@@ -212,8 +212,8 @@ To deploy your own membrane:
 
 1. **Write a `membrane.toml`** — see `MULTI_MEMBRANE_DEPLOYMENT.md` for the schema.
 2. **Provision a VPS** — any provider with public IPv4 and Debian 12+.
-3. **Run the deployer** — `deploy_membrane.sh deploy root@<ip> --composition <tier>`.
-4. **Validate** — `deploy_membrane.sh status root@<ip> --validate`.
+3. **Bootstrap the gate** — `membrane gate.bootstrap <name>` (profile-driven 7-phase deployment).
+4. **Validate** — `membrane gate.validate` (Dark Forest audit).
 5. **Register your domain** — point DNS to the VPS IP, configure in `membrane.toml`.
 6. **Back up `tower.env`** — this is your membrane's persistent identity.
 
@@ -287,7 +287,7 @@ No primary data. No user data. No caches. No logs beyond journald.
 
 1. **Disposable**: Tear down and reprovision from `membrane.toml` + `tower.env`
    backup yields an identical functional relay. Zero data loss.
-2. **Replicable**: `deploy_membrane.sh --composition peptidoglycan --provider <any>`
+2. **Replicable**: `membrane gate.bootstrap <name>` with a `membrane.toml` composition
    produces a working trust barrier on any VPS provider.
 3. **Provider-as-adversary**: VPS provider sees encrypted relay traffic volume
    and timing. Cannot read content, forge identity, or impersonate a gate.

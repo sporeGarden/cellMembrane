@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1319 tests — pedantic clippy clean
+cargo test                  # 1327 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -206,6 +206,12 @@ Cascade pipeline fixes (Wave 157a): `NeuralBridge::discover()` widened to scan a
 candidate biomeOS sockets. Pre-sandbox chmod ensures biomeOS read access. `--with-push`
 flag automates golgi depot push after successful harvest+refresh.
 `jsonrpc::send_notify()` fire-and-forget for mesh notifications (eliminates 3s timeout).
+Platform abstraction (Wave 157a): `sync_ipc.rs` centralizes all synchronous IPC behind
+a single platform gate (replaces 7 duplicate UDS helpers across impulse + signing).
+BTSP `handshake_sync` genericized to `impl Read + Write`. Process lifecycle
+(`kill_process`, `force_kill_process`, `is_process_alive`, `detach_process_group`)
+moved to platform substrate. Webhook `handle_connection` genericized to
+`AsyncRead + AsyncWrite + Unpin`. 15 cfg blocks eliminated, net -150 lines.
 Zero production `unwrap()` (test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
@@ -322,7 +328,7 @@ through Wave 157a are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh (10 named, 3 pending), UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1319 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1327 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -512,7 +518,8 @@ gardens/cellMembrane/
         dns/                  # Sovereign DNS (knot-dns zone + config generation)
         gateway/              # Tower HTTP gateway (Caddy replacement)
         webhook/              # Webhook receiver + UDS listener (Forgejo + GitHub)
-        btsp_client.rs        # BTSP ClientHello handshake (bearDog auth)
+        sync_ipc.rs           # Platform-agnostic sync IPC (ipc_send, ipc_request + BTSP)
+        btsp_client.rs        # BTSP ClientHello handshake (generic Read+Write)
         bridge.rs             # Neural API bridge (UDS discovery)
         jsonrpc.rs            # Centralized JSON-RPC client (UDS, TCP, relay, send_notify)
         transport.rs          # G66 TransportStream (Unix/TCP, platform-agnostic byte pipes)
@@ -537,15 +544,16 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,319 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,327 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, transport
-abstraction (G65/G66), platform substrate (G68), and user-space deploy.
+abstraction (G65/G66), platform substrate (G68), sync IPC, process lifecycle, and
+user-space deploy.
 Tests use both inline `#[cfg(test)]` modules and dedicated test files
 (`gateway_tests.rs`, `harvest_tests.rs`, `manifest/tests.rs`, `webhook/tests.rs`)
 — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1319 tests)
+cargo test                  # Full suite (1327 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

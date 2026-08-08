@@ -187,7 +187,7 @@ To add a new composition tier:
 3. **Define the `CompositionSpec`** — list required primals, ports, services.
 4. **Update `FirewallRuleset`** derivation in `cellmembrane-types/firewall.rs`.
 5. **Add systemd unit templates** to `infra/plasmidBin/membrane/`.
-6. **Update `deploy_membrane.sh`** case statement (or future Rust CLI).
+6. **Register in `MembraneService` registry** (`cellmembrane-types/src/service/registry.rs`).
 7. **Validate** with `cellmembrane-types` against the reference `membrane.toml`.
 
 To add a new primal to an existing tier:

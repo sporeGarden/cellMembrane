@@ -9,6 +9,17 @@
 
 ## Recent Waves
 
+**Wave 157a (platform abstraction — 15 cfg blocks eliminated):**
+Sync IPC centralized: new `sync_ipc.rs` replaces 7 duplicate UDS helper
+functions across `impulse/primal.rs` (4) and `signing_crypto.rs` (3) with
+shared `ipc_send()` and `ipc_request()`. BTSP `handshake_sync` genericized
+from `UnixStream` to `impl Read + Write`. Process lifecycle abstracted:
+`kill_process()`, `force_kill_process()`, `is_process_alive()`,
+`detach_process_group()` moved to `platform_substrate` — replaces inline
+cfg blocks in `nucleus.rs` (3) and `graceful_kill` (2). Webhook
+`handle_connection` genericized to `AsyncRead + AsyncWrite + Unpin`.
+Net -150 lines. 1327 tests (+8), zero clippy warnings.
+
 **Wave 157a (cascade pipeline reliability — 3 gaps fixed):**
 Three cascade pipeline gaps resolved: (1) Gap 1: `NeuralBridge::discover()`
 widened to use `resolve_primal_socket_paths("biomeos")` — now finds `biomeos.sock`,

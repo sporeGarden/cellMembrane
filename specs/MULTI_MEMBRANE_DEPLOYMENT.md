@@ -256,7 +256,7 @@ Anyone can deploy their own membrane without ecoPrimals coordination:
 
 ### Quick Start
 
-1. Install `deploy_membrane.sh` (from `infra/plasmidBin/`).
+1. Build the `membrane` CLI (`cargo build --release -p membrane-shadow`).
 2. Write a `membrane.toml`:
    ```toml
    [membrane]
@@ -270,8 +270,8 @@ Anyone can deploy their own membrane without ecoPrimals coordination:
    ```
 3. Provision and deploy:
    ```bash
-   ./deploy_membrane.sh deploy root@my-server.example.com \
-       --composition tower --validate
+   membrane gate.bootstrap my-server \
+       --composition tower
    ```
 4. Back up `tower.env` from the server.
 

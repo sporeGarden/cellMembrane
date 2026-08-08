@@ -92,7 +92,7 @@ gate's plasma membrane and the VPS's outer membrane channels. It
 contains:
 
 - **Routing**: `routing_config.toml`, content-aware request dispatch
-- **Telemetry**: `membrane_telemetry.sh`, shadow validation, SkunkBat
+- **Telemetry**: `membrane gate.health`, shadow validation, SkunkBat
   correlation
 - **Attribution**: sweetGrass braid verification at the boundary
 - **Bonding classification**: which bond type applies to inbound traffic
