@@ -59,18 +59,26 @@ pub struct HandshakeComplete {
     pub session_id: String,
 }
 
-// ── Sync handshake (for signing.rs, impulse/primal.rs) ────────────────
+// ── Sync handshake (for sync_ipc, signing_crypto, impulse/primal) ─────
 
-/// Perform BTSP handshake over a connected sync `UnixStream`.
+/// Perform BTSP handshake over any connected sync stream.
+///
+/// Generic over `Read + Write` — works with `UnixStream`, `TcpStream`,
+/// or any future sync transport. The `#[cfg(unix)]` gate has moved to
+/// the connect point (`sync_ipc::connect`), not the handshake logic.
 ///
 /// On success, the stream is authenticated and ready for JSON-RPC.
 /// On failure, the stream should be dropped (bearDog will reject further traffic).
-#[cfg(unix)]
-pub fn handshake_sync(stream: &mut std::os::unix::net::UnixStream) -> Option<HandshakeComplete> {
+pub fn handshake_sync<S: std::io::Read + std::io::Write>(
+    stream: &mut S,
+) -> Option<HandshakeComplete> {
     use std::io::{BufRead, BufReader, Write};
 
     let ephemeral_pub = generate_ephemeral_pub()?;
     let btsp_key = derive_btsp_key()?;
+
+    // Wrap in BufReader for line-oriented reading; use get_mut() for writes.
+    let mut reader = BufReader::new(stream);
 
     // Step 1: Send ClientHello
     let hello = ClientHello {
@@ -79,10 +87,9 @@ pub fn handshake_sync(stream: &mut std::os::unix::net::UnixStream) -> Option<Han
         client_ephemeral_pub: ephemeral_pub,
     };
     let hello_json = serde_json::to_string(&hello).ok()?;
-    writeln!(stream, "{hello_json}").ok()?;
+    writeln!(reader.get_mut(), "{hello_json}").ok()?;
 
     // Step 2: Read ServerHello
-    let mut reader = BufReader::new(stream.try_clone().ok()?);
     let mut line = String::new();
     reader.read_line(&mut line).ok()?;
     if line.trim().is_empty() {
@@ -98,7 +105,7 @@ pub fn handshake_sync(stream: &mut std::os::unix::net::UnixStream) -> Option<Han
         hmac: hmac_hex,
     };
     let response_json = serde_json::to_string(&response).ok()?;
-    writeln!(stream, "{response_json}").ok()?;
+    writeln!(reader.get_mut(), "{response_json}").ok()?;
 
     // Step 4: Read HandshakeComplete
     let mut complete_line = String::new();

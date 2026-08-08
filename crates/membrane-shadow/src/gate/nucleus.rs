@@ -212,11 +212,7 @@ fn start_nucleus_bare(arch: &str, init: cellmembrane_types::InitSystem) -> super
             cmd.env(k, v);
         }
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
-        }
+        cellmembrane_types::detach_process_group(&mut cmd);
 
         match cmd.spawn() {
             Ok(child) => {
@@ -300,27 +296,9 @@ pub(crate) fn stop_bare_process(binary: &str) -> bool {
     killed
 }
 
-/// Kill a process by PID — platform-aware.
+/// Kill a process by PID — delegates to platform substrate.
 fn kill_process(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        std::process::Command::new("kill")
-            .args(["-TERM", &pid.to_string()])
-            .output()
-            .is_ok_and(|o| o.status.success())
-    }
-    #[cfg(windows)]
-    {
-        std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/F"])
-            .output()
-            .is_ok_and(|o| o.status.success())
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _ = pid;
-        false
-    }
+    cellmembrane_types::kill_process(pid)
 }
 
 /// Restart a bare-process primal: stop then re-spawn from the current binary.
@@ -369,11 +347,7 @@ pub(crate) async fn restart_bare_process(binary: &str, arch: &str) -> bool {
     let mut cmd = std::process::Command::new(program);
     cmd.args(args);
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
+    cellmembrane_types::detach_process_group(&mut cmd);
 
     match cmd.spawn() {
         Ok(child) => {

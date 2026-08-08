@@ -79,14 +79,13 @@ pub async fn listen(_config: &crate::ShadowConfig, _socket_path: Option<&str>) -
 
 /// Handle a single HTTP connection on the webhook socket.
 ///
-/// Parses the minimal HTTP request (method, headers, body), verifies the
-/// webhook signature, and dispatches to `handle_push()`.
-#[cfg(unix)]
-async fn handle_connection(
-    stream: tokio::net::UnixStream,
-    config: &crate::ShadowConfig,
-) -> Result<()> {
-    let (reader, mut writer) = stream.into_split();
+/// Generic over any async stream — the `#[cfg(unix)]` gate lives only at
+/// the `listen()` bind point, not in the HTTP handling logic.
+async fn handle_connection<S>(stream: S, config: &crate::ShadowConfig) -> Result<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let (reader, mut writer) = tokio::io::split(stream);
     let mut buf_reader = tokio::io::BufReader::new(reader);
 
     let mut request_line = String::new();

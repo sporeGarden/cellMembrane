@@ -120,6 +120,106 @@ pub fn platform_link(original: &Path, link: &Path) -> io::Result<()> {
     }
 }
 
+/// Send a termination signal to a process by PID.
+///
+/// On Unix: sends `SIGTERM` via the `kill` command.
+/// On Windows: sends `taskkill /PID <pid> /F`.
+/// On other platforms: no-op (returns `false`).
+///
+/// Returns `true` if the signal was sent successfully.
+#[must_use]
+pub fn kill_process(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+/// Force-kill a process by PID (non-catchable signal).
+///
+/// On Unix: sends `SIGKILL` via the `kill` command.
+/// On Windows: same as [`kill_process`] (taskkill /F is always forceful).
+/// On other platforms: no-op (returns `false`).
+///
+/// Returns `true` if the signal was sent successfully.
+#[must_use]
+pub fn force_kill_process(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        std::process::Command::new("kill")
+            .args(["-KILL", &pid.to_string()])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+    #[cfg(windows)]
+    {
+        kill_process(pid)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+/// Check if a process with the given PID is still running.
+///
+/// On Unix: checks `/proc/{pid}/` existence.
+/// On Windows: queries `tasklist /FI "PID eq {pid}"`.
+/// On other platforms: returns `false` (assume not running).
+#[must_use]
+pub fn is_process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        Path::new(&format!("/proc/{pid}")).exists()
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+            .output()
+            .is_ok_and(|o| {
+                String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
+            })
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+/// Set process group on a `Command` (Unix: new session leader).
+///
+/// On Unix: calls `process_group(0)` to detach from the parent's process group.
+/// On other platforms: no-op.
+pub fn detach_process_group(cmd: &mut std::process::Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = cmd;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +319,26 @@ mod tests {
         assert_eq!(PlatformAccess::Executable.unix_mode(), 0o755);
         assert_eq!(PlatformAccess::Restricted.unix_mode(), 0o600);
         assert_eq!(PlatformAccess::GroupReadWrite.unix_mode(), 0o660);
+    }
+
+    #[test]
+    fn kill_nonexistent_process() {
+        assert!(!kill_process(u32::MAX - 1));
+    }
+
+    #[test]
+    fn force_kill_nonexistent_process() {
+        assert!(!force_kill_process(u32::MAX - 1));
+    }
+
+    #[test]
+    fn is_process_alive_nonexistent() {
+        assert!(!is_process_alive(u32::MAX - 1));
+    }
+
+    #[test]
+    fn detach_process_group_does_not_panic() {
+        let mut cmd = std::process::Command::new("echo");
+        detach_process_group(&mut cmd);
     }
 }

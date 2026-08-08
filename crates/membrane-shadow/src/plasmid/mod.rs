@@ -46,49 +46,18 @@ pub use depot_sync::depot_sync;
 pub(crate) use depot_sync::depot_sync_push_standalone;
 pub(crate) use lineage::{LineageResult, validate_lineage};
 
-/// Gracefully stop a process: SIGTERM → grace period → SIGKILL (Unix),
-/// or `TerminateProcess` (Windows).
+/// Gracefully stop a process: SIGTERM → grace period → SIGKILL.
 ///
-/// Platform-aware — OS Atheism Phase 2.
+/// Uses platform substrate for cross-platform process control.
 pub(crate) async fn graceful_kill(pid: u32, grace_ms: u64) {
-    #[cfg(unix)]
-    {
-        graceful_kill_unix(pid, grace_ms).await;
-    }
-    #[cfg(not(unix))]
-    {
-        graceful_kill_bare(pid, grace_ms).await;
-    }
-}
-
-/// Unix: SIGTERM → grace → SIGKILL via the `kill` command.
-///
-/// Uses `/proc/{pid}/` existence check to avoid signaling stale PIDs.
-/// Replaced nix crate with `kill(1)` to eliminate the heavy dependency.
-#[cfg(unix)]
-async fn graceful_kill_unix(pid: u32, grace_ms: u64) {
-    let proc_path = std::path::PathBuf::from(format!("/proc/{pid}"));
-    if !proc_path.exists() {
+    if !cellmembrane_types::is_process_alive(pid) {
         return;
     }
-    let pid_str = pid.to_string();
-    let _ = std::process::Command::new("kill")
-        .args(["-s", "TERM", &pid_str])
-        .output();
+    let _ = cellmembrane_types::kill_process(pid);
     tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
-    if proc_path.exists() {
-        let _ = std::process::Command::new("kill")
-            .args(["-s", "KILL", &pid_str])
-            .output();
+    if cellmembrane_types::is_process_alive(pid) {
+        let _ = cellmembrane_types::force_kill_process(pid);
     }
-}
-
-/// Non-Unix: best-effort process kill via `std::process::Command("taskkill")`.
-#[cfg(not(unix))]
-async fn graceful_kill_bare(pid: u32, _grace_ms: u64) {
-    let _ = std::process::Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/F"])
-        .output();
 }
 
 /// Compute BLAKE3 hash of a file, returning hex string.

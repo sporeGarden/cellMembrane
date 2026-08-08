@@ -4,9 +4,7 @@
 //!
 //! Low-level crypto operations used by the depot signing pipeline.
 //! Verify uses `ed25519-dalek` directly (no bearDog required).
-//! Sign delegates to bearDog's `crypto.sign_ed25519` via UDS.
-
-use std::path::Path;
+//! Sign delegates to bearDog's `crypto.sign_ed25519` via centralized `sync_ipc`.
 
 /// Pure ed25519 verification using `ed25519-dalek`.
 pub(super) fn verify_ed25519(message: &str, signature_hex: &str, public_key_hex: &str) -> bool {
@@ -48,49 +46,40 @@ pub(super) struct SignResult {
 ///
 /// Discovers the signer socket at runtime via `MembraneService::binary_for`.
 pub(super) fn request_signer_sign(data: &str) -> Option<SignResult> {
-    #[cfg(not(unix))]
-    {
-        let _ = data;
-        return None;
-    }
+    use base64::Engine;
 
-    #[cfg(unix)]
-    {
-        use base64::Engine;
+    let socket_name = signer_socket_name();
+    let socket_path = crate::impulse::discover_socket(&socket_name)?;
 
-        let socket_name = signer_socket_name();
-        let socket_path = crate::impulse::discover_socket(&socket_name)?;
+    let message_b64 = base64::engine::general_purpose::STANDARD.encode(data.as_bytes());
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "crypto.sign_ed25519",
+        "params": {
+            "message": message_b64,
+            "key_id": "depot-signer",
+            "purpose": "depot"
+        }
+    });
+    let request_str = serde_json::to_string(&request).ok()?;
+    let response_bytes = crate::sync_ipc::ipc_request(&socket_path, &request_str)?;
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
+    let result = response.get("result")?;
 
-        let message_b64 = base64::engine::general_purpose::STANDARD.encode(data.as_bytes());
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "crypto.sign_ed25519",
-            "params": {
-                "message": message_b64,
-                "key_id": "depot-signer",
-                "purpose": "depot"
-            }
-        });
-        let request_str = serde_json::to_string(&request).ok()?;
-        let response_bytes = uds_sign_request(&socket_path, &request_str)?;
-        let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
-        let result = response.get("result")?;
+    let pk_b64 = result.get("public_key")?.as_str()?;
+    let sig_b64 = result.get("signature")?.as_str()?;
+    let pk_bytes = base64::engine::general_purpose::STANDARD
+        .decode(pk_b64)
+        .ok()?;
+    let sig_bytes = base64::engine::general_purpose::STANDARD
+        .decode(sig_b64)
+        .ok()?;
 
-        let pk_b64 = result.get("public_key")?.as_str()?;
-        let sig_b64 = result.get("signature")?.as_str()?;
-        let pk_bytes = base64::engine::general_purpose::STANDARD
-            .decode(pk_b64)
-            .ok()?;
-        let sig_bytes = base64::engine::general_purpose::STANDARD
-            .decode(sig_b64)
-            .ok()?;
-
-        Some(SignResult {
-            public_key: hex::encode(pk_bytes),
-            signature: hex::encode(sig_bytes),
-        })
-    }
+    Some(SignResult {
+        public_key: hex::encode(pk_bytes),
+        signature: hex::encode(sig_bytes),
+    })
 }
 
 fn signer_socket_name() -> String {
@@ -98,67 +87,4 @@ fn signer_socket_name() -> String {
         cellmembrane_types::ServiceCapability::CryptoSigner,
     );
     format!("{binary}.sock")
-}
-
-#[cfg(unix)]
-fn uds_sign_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
-    use std::io::{Read, Write};
-    use std::os::unix::net::UnixStream;
-
-    let mut stream = UnixStream::connect(socket_path).ok()?;
-    stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-        )))
-        .ok()?;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
-        )))
-        .ok()?;
-
-    stream
-        .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
-        .ok()?;
-    if crate::btsp_client::handshake_sync(&mut stream).is_none() {
-        tracing::warn!(
-            socket = %socket_path.display(),
-            "BTSP handshake failed — falling back to plain JSON-RPC"
-        );
-        drop(stream);
-        return uds_sign_request_plain(socket_path, request);
-    }
-
-    writeln!(stream, "{request}").ok()?;
-    stream.shutdown(std::net::Shutdown::Write).ok()?;
-
-    let mut buf = Vec::with_capacity(4096);
-    stream.read_to_end(&mut buf).ok()?;
-    Some(buf)
-}
-
-/// Fallback for when BTSP is unavailable (`FAMILY_SEED` not set or bearDog
-/// running in legacy mode during transition).
-#[cfg(unix)]
-fn uds_sign_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
-    use std::io::{Read, Write};
-    use std::os::unix::net::UnixStream;
-
-    let mut stream = UnixStream::connect(socket_path).ok()?;
-    stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-        )))
-        .ok()?;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
-        )))
-        .ok()?;
-    writeln!(stream, "{request}").ok()?;
-    stream.shutdown(std::net::Shutdown::Write).ok()?;
-
-    let mut buf = Vec::with_capacity(4096);
-    stream.read_to_end(&mut buf).ok()?;
-    Some(buf)
 }

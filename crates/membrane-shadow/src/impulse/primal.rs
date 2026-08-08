@@ -25,46 +25,37 @@ fn signer_socket_name() -> String {
 }
 
 pub(super) fn try_relay_impulse(impulse: &ImpulseFile) {
-    #[cfg(not(unix))]
-    {
-        let _ = impulse;
+    let payload = serde_json::json!({
+        "id": impulse.impulse.id,
+        "type": impulse.impulse.impulse_type,
+        "from": impulse.from.gate,
+        "to": impulse.to.gates,
+        "subject": impulse.content.subject,
+        "priority": impulse.impulse.priority,
+    });
+
+    let Ok(payload_str) = serde_json::to_string(&payload) else {
         return;
-    }
+    };
 
-    #[cfg(unix)]
-    {
-        let payload = serde_json::json!({
-            "id": impulse.impulse.id,
-            "type": impulse.impulse.impulse_type,
-            "from": impulse.from.gate,
-            "to": impulse.to.gates,
-            "subject": impulse.content.subject,
-            "priority": impulse.impulse.priority,
-        });
+    try_forward_to_gates(impulse, &payload_str);
 
-        let Ok(payload_str) = serde_json::to_string(&payload) else {
-            return;
-        };
-
-        try_forward_to_gates(impulse, &payload_str);
-
-        let Some(socket_path) = discover_socket(&relay_socket_name()) else {
-            return;
-        };
-        let notification = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "mesh.publish",
-            "params": {
-                "topic": format!("impulse/{}", impulse.from.gate),
-                "payload": payload,
-            }
-        });
-        let Ok(request_str) = serde_json::to_string(&notification) else {
-            return;
-        };
-        uds_send(&socket_path, &request_str);
-    }
+    let Some(socket_path) = discover_socket(&relay_socket_name()) else {
+        return;
+    };
+    let notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "mesh.publish",
+        "params": {
+            "topic": format!("impulse/{}", impulse.from.gate),
+            "payload": payload,
+        }
+    });
+    let Ok(request_str) = serde_json::to_string(&notification) else {
+        return;
+    };
+    crate::sync_ipc::ipc_send(&socket_path, &request_str);
 }
 
 /// Targeted cross-gate delivery via `relay.forward` for explicitly named gates.
@@ -127,37 +118,28 @@ pub(super) fn try_sign_impulse(
     _workspace_root: &Path,
     impulse_id: &str,
 ) -> Option<ImpulseSignature> {
-    #[cfg(not(unix))]
-    {
-        let _ = impulse_id;
-        return None;
-    }
+    let socket_path = discover_socket(&signer_socket_name())?;
 
-    #[cfg(unix)]
-    {
-        let socket_path = discover_socket(&signer_socket_name())?;
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "crypto.sign_ed25519",
+        "params": { "data": impulse_id }
+    });
+    let request_str = serde_json::to_string(&request).ok()?;
 
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "crypto.sign_ed25519",
-            "params": { "data": impulse_id }
-        });
-        let request_str = serde_json::to_string(&request).ok()?;
+    let response_bytes = crate::sync_ipc::ipc_request(&socket_path, &request_str)?;
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
+    let result = response.get("result")?;
 
-        let response_bytes = uds_request(&socket_path, &request_str)?;
-        let response: serde_json::Value = serde_json::from_slice(&response_bytes).ok()?;
-        let result = response.get("result")?;
-
-        Some(ImpulseSignature {
-            algorithm: "ed25519".to_string(),
-            public_key: result.get("public_key")?.as_str()?.to_string(),
-            value: result.get("signature")?.as_str()?.to_string(),
-            signed_at: Local::now()
-                .format(cellmembrane_types::service::ISO8601_TZ)
-                .to_string(),
-        })
-    }
+    Some(ImpulseSignature {
+        algorithm: "ed25519".to_string(),
+        public_key: result.get("public_key")?.as_str()?.to_string(),
+        value: result.get("signature")?.as_str()?.to_string(),
+        signed_at: Local::now()
+            .format(cellmembrane_types::service::ISO8601_TZ)
+            .to_string(),
+    })
 }
 
 /// Discover a primal UDS socket by name.
@@ -204,138 +186,6 @@ pub fn discover_socket(socket_name: &str) -> Option<PathBuf> {
     }
 
     None
-}
-
-#[cfg(unix)]
-fn uds_send(socket_path: &Path, request: &str) {
-    use std::io::Write;
-    use std::os::unix::net::UnixStream;
-
-    let Ok(mut stream) = UnixStream::connect(socket_path) else {
-        tracing::debug!(socket = %socket_path.display(), "impulse relay: UDS not reachable");
-        return;
-    };
-    if stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-        )))
-        .is_err()
-    {
-        tracing::debug!(socket = %socket_path.display(), "impulse relay: cannot set write timeout");
-    }
-
-    // Attempt BTSP handshake for bearDog crypto sockets.
-    if is_beardog_socket(socket_path) {
-        if stream
-            .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
-            .is_err()
-        {
-            tracing::debug!(socket = %socket_path.display(), "impulse relay: BTSP signal write failed");
-            return;
-        }
-        if crate::btsp_client::handshake_sync(&mut stream).is_none() {
-            tracing::debug!(socket = %socket_path.display(), "impulse relay: BTSP handshake failed, falling back");
-            drop(stream);
-            uds_send_plain(socket_path, request);
-            return;
-        }
-    } else if stream
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .is_err()
-    {
-        tracing::debug!(socket = %socket_path.display(), "impulse relay: signal write failed");
-        return;
-    }
-
-    if writeln!(stream, "{request}").is_err() {
-        tracing::debug!(socket = %socket_path.display(), "impulse relay: request write failed");
-    }
-}
-
-#[cfg(unix)]
-fn uds_send_plain(socket_path: &Path, request: &str) {
-    use std::io::Write;
-    use std::os::unix::net::UnixStream;
-
-    let Ok(mut stream) = UnixStream::connect(socket_path) else {
-        return;
-    };
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(
-        cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-    )));
-    let _ = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL);
-    let _ = writeln!(stream, "{request}");
-}
-
-#[cfg(unix)]
-fn uds_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
-    use std::io::{Read, Write};
-    use std::os::unix::net::UnixStream;
-
-    let mut stream = UnixStream::connect(socket_path).ok()?;
-    stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-        )))
-        .ok()?;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(
-            cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
-        )))
-        .ok()?;
-
-    if is_beardog_socket(socket_path) {
-        stream
-            .write_all(&crate::btsp_client::BTSP_JSONLINE_SIGNAL)
-            .ok()?;
-        if crate::btsp_client::handshake_sync(&mut stream).is_none() {
-            tracing::debug!(socket = %socket_path.display(), "BTSP handshake failed, falling back");
-            drop(stream);
-            return uds_request_plain(socket_path, request);
-        }
-    } else {
-        stream
-            .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-            .ok()?;
-    }
-
-    writeln!(stream, "{request}").ok()?;
-    stream.shutdown(std::net::Shutdown::Write).ok()?;
-
-    let mut buf = Vec::with_capacity(4096);
-    stream.read_to_end(&mut buf).ok()?;
-    Some(buf)
-}
-
-#[cfg(unix)]
-fn uds_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
-    use std::io::{Read, Write};
-    use std::os::unix::net::UnixStream;
-
-    let mut stream = UnixStream::connect(socket_path).ok()?;
-    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(
-        cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-    )));
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(
-        cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
-    )));
-    stream
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .ok()?;
-    writeln!(stream, "{request}").ok()?;
-    stream.shutdown(std::net::Shutdown::Write).ok()?;
-
-    let mut buf = Vec::with_capacity(4096);
-    stream.read_to_end(&mut buf).ok()?;
-    Some(buf)
-}
-
-/// Check if a socket path belongs to bearDog (crypto signer).
-fn is_beardog_socket(path: &std::path::Path) -> bool {
-    let binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-    path.to_str().is_some_and(|s| s.contains(binary))
 }
 
 #[cfg(test)]

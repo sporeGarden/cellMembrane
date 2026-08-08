@@ -87,6 +87,7 @@ pub(crate) mod ribocipher;
 pub mod service;
 pub(crate) mod sovereignty_ledger;
 pub(crate) mod ssh;
+pub(crate) mod sync_ipc;
 pub(crate) mod temporal;
 pub(crate) mod topology;
 pub(crate) mod tower;

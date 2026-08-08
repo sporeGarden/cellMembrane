@@ -76,7 +76,10 @@ pub use gateway::{
     ShadowComparison, ShadowReport, TlsGatewayConfig,
 };
 pub use identity::{BindMode, GateMobility, GateRole, MembraneIdentity};
-pub use platform_substrate::{PlatformAccess, platform_link};
+pub use platform_substrate::{
+    PlatformAccess, detach_process_group, force_kill_process, is_process_alive, kill_process,
+    platform_link,
+};
 pub use process::{
     CrashLoopAction, CrashLoopEntry, CrashLoopReport, InitSystem, RestartPolicy, ServiceOutcome,
     ServiceSpec, ServiceStatus,
