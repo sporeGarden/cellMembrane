@@ -35,6 +35,8 @@ gate_status = { protocol = "cli", description = "Local gate health probe (depot,
 gate_validate = { protocol = "ssh", description = "Composition trust barrier validation — verify gate conforms to declared tier" }
 plasmid_build = { protocol = "cli", description = "guideStone-grade single-primal build with ELF validation + provenance" }
 gate_profile = { protocol = "cli", description = "Read gate profile from ecosystem_manifest.toml" }
+gate_configure = { protocol = "cli", description = "Generate service configs from gate composition profile" }
+gate_apply = { protocol = "cli", description = "Install generated service configs to init system" }
 gate_quorum = { protocol = "cli", description = "Install autonomous cascade timer (Quorum Phase 1 — systemd timer)" }
 ndk_check = { protocol = "cli", description = "Verify NDK toolchain for aarch64-linux-android cross-compilation" }
 harvest_android = { protocol = "cli", description = "plasmid.harvest --target aarch64-linux-android (NDK cross-compile pipeline)" }
@@ -79,11 +81,20 @@ caddy_depot_provision = { protocol = "ssh", description = "Provision /depot/ HTT
 caddy_tls_check = { protocol = "ssh", description = "Check TLS certificate status for domain" }
 caddy_generate = { protocol = "cli", description = "Generate Caddyfile from manifest roles + topology" }
 
+# DNS management
+dns_configure = { protocol = "cli", description = "Generate Knot-DNS zone file from manifest topology" }
+dns_apply = { protocol = "cli", description = "Install generated DNS config to knot-dns" }
+
 # Provision (DigitalOcean)
 provision_create = { protocol = "api", description = "Create new droplet for gate deployment" }
 provision_destroy = { protocol = "api", description = "Destroy provisioned droplet" }
 provision_list = { protocol = "api", description = "List membrane-tagged droplets" }
 provision_bootstrap = { protocol = "ssh", description = "Remote OS hardening + NUCLEUS install" }
+
+# SSH certificate lifecycle
+gate_keys = { protocol = "cli", description = "SSH certificate status inspection" }
+gate_keys_renew = { protocol = "cli", description = "Renew SSH host/user certificates via step-ca" }
+gate_enroll = { protocol = "cli", description = "One-command gate enrollment (WireGuard + SSH cert + mesh + primal start)" }
 
 # K-Derm relay chain
 relay_mediate = { protocol = "ssh", description = "Inner→outer membrane relay (Forgejo→GitHub sync)" }
@@ -112,6 +123,9 @@ cloudflare_ssl = { protocol = "api", description = "SSL/TLS settings inspection"
 
 # Content verification
 content_verify = { protocol = "ssh", description = "Verify nestGate content integrity on VPS" }
+
+# Mesh capability registration
+mesh_register = { protocol = "uds", description = "Publish running primal capabilities to songBird mesh" }
 
 # Forgejo API
 forgejo_repo = { protocol = "api", description = "Repository CRUD and mirroring via Forgejo API" }

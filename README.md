@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1327 tests — pedantic clippy clean
+cargo test                  # 1329 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -212,6 +212,15 @@ BTSP `handshake_sync` genericized to `impl Read + Write`. Process lifecycle
 (`kill_process`, `force_kill_process`, `is_process_alive`, `detach_process_group`)
 moved to platform substrate. Webhook `handle_connection` genericized to
 `AsyncRead + AsyncWrite + Unpin`. 15 cfg blocks eliminated, net -150 lines.
+Registry evolution (Wave 157a): Self-knowledge elimination — `POST_PRIMORDIAL_PRIMALS`,
+`SPOREPRINT_NUCLEUS_BINARIES`, `GPU_PRIMALS` hardcoded constants replaced with
+`MembraneService` registry fields (`requires_signed_lineage`, `gpu_required`).
+`is_post_primordial()` and `is_gpu_primal()` now derive from registry at compile time.
+Smart refactor of `service/mod.rs` (855→556L): extracted `ipc.rs` (IPC protocol types,
+G65 negotiation) and `capability.rs` (Protocol, TransportMode, ServerContract,
+ServiceCapability, HealthCheckMethod). Modern Rust 2024 let-chains in `git_ops.rs` and
+`freshness.rs`. Silent error swallowing replaced with `tracing::debug` in NeuralBridge
+RPC, health probes, mesh probes, and sync IPC paths.
 Zero production `unwrap()` (test-only, confirmed via full audit).
 Zero `unsafe` code (`#![forbid(unsafe_code)]` on all crates).
 Full evolution history in `GLACIAL_SHIFT_TRACKER.md` and git log.
