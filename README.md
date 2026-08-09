@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1347 tests — ZERO clippy warnings
+cargo test                  # 1344 tests — ZERO clippy warnings
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -358,10 +358,10 @@ through Wave 157d are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh (10 named, 3 pending), UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1347 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1344 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
-| Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
+| Dependencies | `nix`+`chrono` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, `time` crate, CSPRNG via `getrandom` | DONE |
 | Pipeline | DIV-7 exit code reliability, cascade failure propagation, fire-and-forget mesh notify | DONE |
 
 ---
@@ -574,7 +574,7 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,347 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,344 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, transport
 abstraction (G65/G66), platform substrate (G68), sync IPC, process lifecycle, and
 user-space deploy.
@@ -583,7 +583,7 @@ Tests use both inline `#[cfg(test)]` modules and dedicated test files
 — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1347 tests)
+cargo test                  # Full suite (1344 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

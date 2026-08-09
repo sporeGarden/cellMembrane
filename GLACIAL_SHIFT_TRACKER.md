@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-09 (Wave 157d deep debt — error hardening + dead code audit)
+**Last updated:** 2026-08-09 (Wave 157d dep evolution — chrono→time + magic numbers + byte literal)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157d (dep evolution — chrono→time + magic numbers + byte literal):**
+External dependency evolution: replaced `chrono 0.4` with `time 0.3` across 9
+files (~30 call sites). Smaller dep tree (`chrono`+`iana-time-zone` eliminated),
+`#![no_std]`-friendly path for types crate. Centralized timestamp helpers:
+`local_now_iso8601_tz()`, `utc_now_iso8601_z()`, `format_offset_datetime()`,
+`parse_iso8601_tz()`, `parse_rfc3339()`, `parse_openssl_date()`. Magic numbers
+promoted to named constants: `IPC_READ_BUF_CAPACITY`, `NUCLEUS_STOP_GRACE_SECS`,
+`PKILL_SETTLE_MS`, `SOCKET_POLL_INTERVAL_MS`, `SOCKET_POLL_MAX_ATTEMPTS`,
+`DEFAULT_CERT_LIFETIME_*`, `SECS_PER_{HOUR,MINUTE}`. Byte literal hardening:
+`b"127.0.0.1"` replaced with `const_str_eq()` + `BIND_LOOPBACK` reference.
+1344 tests, 0 clippy.
 
 **Wave 157d (deep debt — error hardening + dead code audit):**
 Error swallowing eliminated: webhook listener `let _ = write_all` → `send_response()`
@@ -16,7 +28,7 @@ helper with `tracing::debug` on failure. BTSP handshake 7 `.ok()?` → explicit
 Dead code audit: `StalenessEntry` struct-level allow removed (was incorrect) →
 field-level `source_commit` only. All `#[allow(dead_code)]` annotated with
 `reason = "..."` explaining forward-declaration purpose. `native_braid.py`
-assessed: westGate/wateringHole scope, not cellMembrane code. 1347 tests, 0 clippy.
+assessed: westGate/wateringHole scope, not cellMembrane code. 1344 tests, 0 clippy.
 
 **Wave 157d (deep debt — hardcode elimination + zero clippy):**
 Systematic hardcode sweep: 14 port literals in registry.rs wired to named
@@ -28,7 +40,7 @@ sporeprint unit filenames → registry-derived via `sporeprint_binaries()`. Sile
 non-Unix sync IPC no-ops in `sync_ipc.rs` → `tracing::warn` diagnostics.
 `DEFAULT_SERVICE_FILTER` formally `#[deprecated]` in favor of registry-driven
 `build_service_filter()`. Fixed 3 pre-existing clippy warnings (map_or, let-else,
-if-let) — **first zero-warning clippy run**. 1347 tests, 0 clippy warnings.
+if-let) — **first zero-warning clippy run**. 1344 tests, 0 clippy warnings.
 
 **Wave 157d (G69 Depot Lineage Phase 1 — `depot.prune`):**
 New `depot.prune` command: scans all arch directories, compares binaries against
@@ -37,7 +49,7 @@ checksums + BLAKE3SUMS, and prunes stale provenance entries. Supports `--dry-run
 and `--allow=<name>` for binaries not yet in registry (e.g. swarmvine). Dispatch
 table refactored: `depot.*` commands now route through unified `dispatch_depot()`.
 `BLAKE3SUMS_FILE` constant promoted from local to `cellmembrane-types`.
-`format_bytes()` elevated to `pub(crate)`. 4 new prune tests. 1347 tests total.
+`format_bytes()` elevated to `pub(crate)`. 4 new prune tests. 1344 tests total.
 
 **Wave 157a (vertebrate self-audit — P1 FD limits + dispatch/registry convergence):**
 `LimitNOFILE=65536` added to `ServiceSpec::to_systemd_unit()` — all generated
