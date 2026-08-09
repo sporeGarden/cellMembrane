@@ -151,8 +151,8 @@ fn health_check_display() {
 }
 
 #[test]
-fn service_all_returns_seventeen() {
-    assert_eq!(MembraneService::all().len(), 17);
+fn service_all_returns_eighteen() {
+    assert_eq!(MembraneService::all().len(), 18);
 }
 
 #[test]

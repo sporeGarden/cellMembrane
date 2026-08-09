@@ -173,6 +173,8 @@ pub enum ServiceCapability {
     Visualization,
     /// Content-addressed storage — CAS blob serving.
     ContentAddressedStorage,
+    /// Build — binary harvest, cross-compilation, depot staging.
+    Build,
 }
 
 impl ServiceCapability {
@@ -196,6 +198,7 @@ impl ServiceCapability {
             Self::ReverseProxy => "reverse_proxy",
             Self::Visualization => "visualization",
             Self::ContentAddressedStorage => "content_addressed_storage",
+            Self::Build => "build",
         }
     }
 
@@ -216,6 +219,7 @@ impl ServiceCapability {
             "reverse_proxy" => Some(Self::ReverseProxy),
             "visualization" => Some(Self::Visualization),
             "content_addressed_storage" => Some(Self::ContentAddressedStorage),
+            "build" => Some(Self::Build),
             _ => None,
         }
     }

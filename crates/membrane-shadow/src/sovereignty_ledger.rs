@@ -63,6 +63,71 @@ pub async fn rootpulse_commit(
     Ok(session_id)
 }
 
+/// Register a harvest batch with the rootPulse provenance trio via NUCLEUS neural-api.
+///
+/// Unlike `rootpulse_commit` which records cascade repo HEADs, this records
+/// build events: which primals were rebuilt, their source commits, target
+/// triples, and BLAKE3 checksums. This creates a provenance chain from
+/// source commit → built binary → depot.
+pub async fn rootpulse_harvest_commit(
+    gate: &str,
+    harvest_entries: &[HarvestProvenanceEntry],
+) -> Result<String> {
+    let endpoint = resolve_neural_api_endpoint().ok_or_else(|| {
+        ShadowError::config("NUCLEUS neural-api endpoint not found — rootpulse harvest commit skipped")
+    })?;
+
+    let session_id = format!("harvest-{gate}-{}", crate::utc_now_compact());
+    let agent_did = format!("did:primal:cellMembrane:{gate}");
+
+    let metadata = serde_json::json!({
+        "session_id": session_id,
+        "agent_did": agent_did,
+        "gate": gate,
+        "event_type": "depot.harvest",
+        "entries": harvest_entries,
+    });
+
+    let request = crate::jsonrpc::request_with_params(
+        "graph.execute",
+        &serde_json::json!({
+            "graph_id": "rootpulse_commit",
+            "params": {
+                "SESSION_ID": session_id,
+                "AGENT_DID": agent_did,
+                "FAMILY_ID": "default",
+            },
+            "metadata": metadata,
+        }),
+        44,
+    );
+
+    let response = crate::jsonrpc::call_endpoint(&endpoint, &request).await?;
+
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
+        if parsed.get("error").is_some() && parsed.get("result").is_none() {
+            return Err(ShadowError::config(format!(
+                "rootpulse harvest commit graph error: {response}"
+            )));
+        }
+    }
+
+    Ok(session_id)
+}
+
+/// A single primal build event for rootPulse harvest provenance.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct HarvestProvenanceEntry {
+    /// Primal binary name.
+    pub primal: String,
+    /// Source commit hash.
+    pub commit: String,
+    /// Target triple (e.g. `x86_64-unknown-linux-musl`).
+    pub target: String,
+    /// BLAKE3 hash of the built binary.
+    pub blake3: String,
+}
+
 /// Sovereignty verification result for a single repo.
 #[derive(Debug)]
 pub struct SovereigntyCheck {
@@ -396,5 +461,28 @@ mod tests {
             request_body["params"]["SESSION_ID"].as_str().unwrap(),
             session_id
         );
+    }
+
+    #[test]
+    fn harvest_provenance_entry_serializes() {
+        let entry = HarvestProvenanceEntry {
+            primal: "songbird".into(),
+            commit: "42aba605".into(),
+            target: "x86_64-unknown-linux-musl".into(),
+            blake3: "121546db28b35be6".into(),
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["primal"], "songbird");
+        assert_eq!(json["commit"], "42aba605");
+        assert_eq!(json["target"], "x86_64-unknown-linux-musl");
+        assert_eq!(json["blake3"], "121546db28b35be6");
+    }
+
+    #[test]
+    fn harvest_session_id_format() {
+        let gate = "sporeGate";
+        let session = format!("harvest-{gate}-{}", crate::utc_now_compact());
+        assert!(session.starts_with("harvest-sporeGate-"));
+        assert!(session.len() > 25);
     }
 }

@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 pub use types::{
     BuildEntry, CompositionProfile, EcosystemManifest, GateProfile, ManifestBuildConfig, RepoEntry,
+    SubBuilderEntry,
 };
 
 impl EcosystemManifest {
@@ -183,6 +184,20 @@ impl EcosystemManifest {
     )]
     pub fn is_build_authority(&self, gate: &str) -> bool {
         self.build_authorities().iter().any(|g| g == gate)
+    }
+
+    /// Check whether a specific gate is the *primary* build authority (first in list).
+    ///
+    /// The primary builder compiles locally; non-primary gates delegate via mesh.
+    #[must_use]
+    #[allow(
+        dead_code,
+        reason = "manifest API — wired by tests, ready for consumers"
+    )]
+    pub fn is_primary_build_authority(&self, gate: &str) -> bool {
+        self.build_authorities()
+            .first()
+            .map_or(false, |g| g == gate)
     }
 
     /// Find gates that have a specific role in their roles list.

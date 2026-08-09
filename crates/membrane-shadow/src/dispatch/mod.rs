@@ -14,6 +14,7 @@
 //! handles the request. This enables smooth graduation: as primals come
 //! online, membrane-shadow automatically delegates without code changes.
 
+mod builder;
 mod content_dispatch;
 mod data;
 mod deploy_dispatch;
@@ -143,6 +144,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             let v = forgejo::version(config).await?;
             Ok(ShadowOutcome::ok(v))
         }
+        "builder.serve" => builder::serve(args).await,
         c if c.starts_with("sovereign.") => sovereign::dispatch_sovereign(config, cmd, args).await,
         c if c.starts_with("rootpulse.") => dispatch_validate::dispatch_rootpulse(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,

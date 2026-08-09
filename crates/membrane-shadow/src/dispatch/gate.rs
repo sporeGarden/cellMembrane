@@ -144,20 +144,32 @@ async fn dispatch_enroll(args: &[&str]) -> crate::Result<ShadowOutcome> {
     reason = "dispatch adapter — must match arm signature"
 )]
 fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    use crate::gate::systemd_units::CascadeTimerOpts;
+
     let dry_run = args.contains(&"--dry-run");
     let interval: u32 = cli::extract_flag_value(args, "--interval")
         .and_then(|v| v.parse().ok())
         .unwrap_or(15);
     let gate_name = crate::gate::resolve_local_gate_identity();
+    let with_rebuild = args.contains(&"--with-rebuild");
+    let with_push = args.contains(&"--with-push");
+
+    let opts = CascadeTimerOpts {
+        interval_minutes: interval,
+        gate_name: &gate_name,
+        with_rebuild,
+        with_push,
+    };
 
     if args.contains(&"--generate") {
-        let (service, timer) =
-            crate::gate::systemd_units::generate_cascade_timer(interval, &gate_name);
+        let (service, timer) = crate::gate::systemd_units::generate_cascade_timer(&opts);
         let data = serde_json::json!({
             "service": service,
             "timer": timer,
             "interval_minutes": interval,
             "gate": gate_name,
+            "with_rebuild": with_rebuild,
+            "with_push": with_push,
         });
         return Ok(ShadowOutcome::ok_with(
             format!(
@@ -167,7 +179,7 @@ fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
         ));
     }
 
-    let phase = crate::gate::systemd_units::install_cascade_timer(interval, &gate_name, dry_run);
+    let phase = crate::gate::systemd_units::install_cascade_timer(&opts, dry_run);
     let data = serde_json::json!({
         "phase": phase.name,
         "ok": phase.ok,

@@ -415,9 +415,33 @@ const KNOTDNS: MembraneService = MembraneService {
     gpu_required: false,
 };
 
+// ── Infrastructure (build + deploy) ──────────────────────────────────────────
+
+const MEMBRANE_BUILDER: MembraneService = MembraneService {
+    binary: "membrane",
+    systemd_unit: "membrane-builder.service",
+    port: None,
+    protocol: Protocol::Uds,
+    has_socket: true,
+    protocols: JSONRPC_ONLY,
+    bind: "",
+    health_method: HealthCheckMethod::Liveness,
+    is_primal: false,
+    system_install_path: None,
+    extra_ports: &[],
+    min_composition: MembraneComposition::Nucleus,
+    vps_transport: TransportMode::TcpOptIn,
+    capabilities: &[ServiceCapability::Build],
+    server_contract: ServerContract::External,
+    api_socket: None,
+    socket_aliases: &["builder", "harvest"],
+    requires_signed_lineage: false,
+    gpu_required: false,
+};
+
 /// All known membrane services. Runtime discovery starts here.
 ///
-/// Order: Tower (3) → Nest provenance (4) → Nucleus compute (3) → Nucleus meta (3) → Symbiotic (4).
+/// Order: Tower (3) → Nest provenance (4) → Nucleus compute (3) → Nucleus meta (3) → Infra (1) → Symbiotic (4).
 pub(super) const ALL_SERVICES: &[MembraneService] = &[
     BEARDOG,
     SONGBIRD,
@@ -432,6 +456,7 @@ pub(super) const ALL_SERVICES: &[MembraneService] = &[
     BIOMEOS,
     SQUIRREL,
     PETALTONGUE,
+    MEMBRANE_BUILDER,
     HBBS,
     HBBR,
     CADDY,

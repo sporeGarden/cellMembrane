@@ -44,7 +44,9 @@ pub(super) async fn run_post_sync_phases(
     let mut all_ok = true;
     let do_harvest = opts.post_sync != PostSyncPhase::None && opts.mode == CascadeMode::Sync;
 
-    if do_harvest {
+    if do_harvest && should_delegate_build(opts.gate, m) {
+        delegate_harvest_to_primary(m, lines).await;
+    } else if do_harvest {
         match super::post_sync_harvest::run_post_cascade_harvest(lines).await {
             Ok((built, built_primals, current, failures)) => {
                 harvest_info = format!(" harvest={built}built/{current}current/{failures}failed");
@@ -136,6 +138,91 @@ pub(super) async fn run_post_sync_phases(
     }
 
     (harvest_info, all_ok)
+}
+
+/// Check whether this gate should delegate builds to the primary build authority.
+///
+/// Returns `true` if the manifest names a primary builder AND this gate is not it.
+fn should_delegate_build(gate: &str, m: &crate::manifest::EcosystemManifest) -> bool {
+    let authorities = m.build_authorities();
+    match authorities.first() {
+        Some(primary) if primary != gate => {
+            tracing::info!(
+                gate,
+                primary = primary.as_str(),
+                "this gate is not the primary builder — will delegate"
+            );
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Delegate a harvest request to the primary build authority via songBird mesh relay.
+async fn delegate_harvest_to_primary(
+    m: &crate::manifest::EcosystemManifest,
+    lines: &mut Vec<String>,
+) {
+    let primary = match m.build_authorities().into_iter().next() {
+        Some(p) => p,
+        None => {
+            lines.push("  [delegate] no primary builder configured — skipping".into());
+            return;
+        }
+    };
+
+    let endpoint = cellmembrane_types::TransportEndpoint::MeshRelay {
+        peer_id: primary.clone(),
+        capability: "build".into(),
+    };
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "plasmid.harvest",
+        "params": {
+            "local": true,
+            "push": true,
+        },
+        "id": 1,
+    })
+    .to_string();
+
+    lines.push(format!(
+        "  [delegate] dispatching harvest to primary builder {primary} via mesh"
+    ));
+
+    match crate::jsonrpc::call_endpoint(&endpoint, &request).await {
+        Ok(response) => {
+            let parsed: serde_json::Value =
+                serde_json::from_str(&response).unwrap_or_default();
+            let ok = parsed
+                .get("result")
+                .and_then(|r| r.get("ok"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            let msg = parsed
+                .get("result")
+                .and_then(|r| r.get("message"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("done");
+
+            if ok {
+                lines.push(format!("  [delegate] {primary} harvest OK — {msg}"));
+            } else {
+                lines.push(format!("  [delegate] {primary} harvest FAILED — {msg}"));
+            }
+        }
+        Err(e) => {
+            lines.push(format!(
+                "  [delegate] mesh dispatch to {primary} failed — {e} — falling back to local"
+            ));
+            if let Ok((_built, _primals, _current, _failures)) =
+                super::post_sync_harvest::run_post_cascade_harvest(lines).await
+            {
+                lines.push("  [delegate] local fallback harvest completed".into());
+            }
+        }
+    }
 }
 
 /// Push local depot to golgi via SCP after successful harvest+refresh.

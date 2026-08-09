@@ -7,6 +7,16 @@
 
 // ── Quorum cascade timer ────────────────────────────────────────────
 
+/// Options for cascade timer generation.
+pub(crate) struct CascadeTimerOpts<'a> {
+    pub interval_minutes: u32,
+    pub gate_name: &'a str,
+    /// Include `--with-rebuild` so stale primals auto-build after cascade.
+    pub with_rebuild: bool,
+    /// Include `--with-push` so rebuilt binaries are pushed to the depot server.
+    pub with_push: bool,
+}
+
 /// Generate systemd timer + service units for autonomous cascade.
 ///
 /// Runs `membrane temporal.cascade` periodically so the gate converges
@@ -14,9 +24,13 @@
 /// the `--source` flag (falls back to `temporal`). This is Quorum Phase 1:
 /// the gate autonomously pulls all ecosystem repos on a schedule.
 ///
+/// When `with_rebuild` is set, appends `--with-rebuild` so stale primals
+/// are rebuilt after each cascade. When `with_push` is also set, rebuilt
+/// binaries are pushed to the remote depot server.
+///
 /// The timer uses `OnCalendar` with `RandomizedDelaySec` to avoid
 /// thundering-herd across gates.
-pub(crate) fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> (String, String) {
+pub(crate) fn generate_cascade_timer(opts: &CascadeTimerOpts<'_>) -> (String, String) {
     let install_base = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_INSTALL_BASE,
         cellmembrane_types::service::DEFAULT_INSTALL_BASE,
@@ -32,6 +46,17 @@ pub(crate) fn generate_cascade_timer(interval_minutes: u32, gate_name: &str) -> 
     let cascade_timeout = cellmembrane_types::service::DEFAULT_CASCADE_TIMEOUT_SECS;
     let cascade_jitter = cellmembrane_types::service::DEFAULT_CASCADE_JITTER_SECS;
 
+    let mut extra_flags = String::new();
+    if opts.with_rebuild {
+        extra_flags.push_str(" --with-rebuild");
+    }
+    if opts.with_push {
+        extra_flags.push_str(" --with-push");
+    }
+
+    let gate_name = opts.gate_name;
+    let interval_minutes = opts.interval_minutes;
+
     let service = format!(
         r"[Unit]
 Description=Membrane Autonomous Cascade ({gate_name})
@@ -40,7 +65,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart={install_base}/membrane temporal.cascade --source {source}
+ExecStart={install_base}/membrane temporal.cascade --source {source}{extra_flags}
 Environment=MEMBRANE_GATE_NAME={gate_name}
 TimeoutStartSec={cascade_timeout}
 StandardOutput=journal
@@ -66,22 +91,27 @@ WantedBy=timers.target
 }
 
 /// Install the cascade timer units and enable the timer.
-pub fn install_cascade_timer(
-    interval_minutes: u32,
-    gate_name: &str,
-    dry_run: bool,
-) -> super::BootstrapPhase {
+pub fn install_cascade_timer(opts: &CascadeTimerOpts<'_>, dry_run: bool) -> super::BootstrapPhase {
+    let interval_minutes = opts.interval_minutes;
+    let gate_name = opts.gate_name;
+
     if dry_run {
+        let mut detail =
+            format!("dry-run: would install membrane-cascade.timer (every {interval_minutes}m)");
+        if opts.with_rebuild {
+            detail.push_str(" +rebuild");
+        }
+        if opts.with_push {
+            detail.push_str(" +push");
+        }
         return super::BootstrapPhase {
             name: "quorum.cascade-timer".into(),
             ok: true,
-            detail: format!(
-                "dry-run: would install membrane-cascade.timer (every {interval_minutes}m)"
-            ),
+            detail,
         };
     }
 
-    let (service_content, timer_content) = generate_cascade_timer(interval_minutes, gate_name);
+    let (service_content, timer_content) = generate_cascade_timer(opts);
     let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
     let systemd_dir = std::path::Path::new(&unit_dir);
 
@@ -104,12 +134,19 @@ pub fn install_cascade_timer(
     }
     let enable_ok = super::nucleus::systemctl(&["enable", "--now", "membrane-cascade.timer"]);
 
+    let mut detail =
+        format!("membrane-cascade.timer installed (every {interval_minutes}m, gate={gate_name})");
+    if opts.with_rebuild {
+        detail.push_str(" +rebuild");
+    }
+    if opts.with_push {
+        detail.push_str(" +push");
+    }
+
     super::BootstrapPhase {
         name: "quorum.cascade-timer".into(),
         ok: enable_ok,
-        detail: format!(
-            "membrane-cascade.timer installed (every {interval_minutes}m, gate={gate_name})"
-        ),
+        detail,
     }
 }
 
@@ -251,15 +288,26 @@ pub(crate) fn generate_gateway_units(params: &GatewayUnitParams<'_>) -> (String,
 mod tests {
     use super::*;
 
+    fn test_opts(gate: &str) -> CascadeTimerOpts<'_> {
+        CascadeTimerOpts {
+            interval_minutes: cellmembrane_types::service::DEFAULT_CASCADE_INTERVAL_MINUTES,
+            gate_name: gate,
+            with_rebuild: false,
+            with_push: false,
+        }
+    }
+
     #[test]
     fn cascade_timer_generates_valid_units() {
-        let interval = cellmembrane_types::service::DEFAULT_CASCADE_INTERVAL_MINUTES;
-        let (service, timer) = generate_cascade_timer(interval, "golgi");
+        let opts = test_opts("golgi");
+        let (service, timer) = generate_cascade_timer(&opts);
         assert!(service.contains("[Unit]"));
         assert!(service.contains("[Service]"));
         assert!(service.contains("temporal.cascade"));
         assert!(service.contains("golgi"));
         assert!(service.contains("Type=oneshot"));
+        assert!(!service.contains("--with-rebuild"));
+        assert!(!service.contains("--with-push"));
 
         assert!(timer.contains("[Timer]"));
         assert!(timer.contains("OnCalendar=*:0/15"));
@@ -273,18 +321,54 @@ mod tests {
 
     #[test]
     fn cascade_timer_custom_interval() {
-        let (_, timer) = generate_cascade_timer(30, "sporeGate");
+        let mut opts = test_opts("sporeGate");
+        opts.interval_minutes = 30;
+        let (_, timer) = generate_cascade_timer(&opts);
         assert!(timer.contains("OnCalendar=*:0/30"));
         assert!(timer.contains("sporeGate"));
     }
 
     #[test]
+    fn cascade_timer_with_rebuild_and_push() {
+        let opts = CascadeTimerOpts {
+            interval_minutes: 15,
+            gate_name: "sporeGate",
+            with_rebuild: true,
+            with_push: true,
+        };
+        let (service, _) = generate_cascade_timer(&opts);
+        assert!(
+            service.contains("--with-rebuild"),
+            "should include --with-rebuild flag"
+        );
+        assert!(
+            service.contains("--with-push"),
+            "should include --with-push flag"
+        );
+    }
+
+    #[test]
     fn cascade_timer_dry_run() {
-        let phase = install_cascade_timer(15, "test-gate", true);
+        let opts = test_opts("test-gate");
+        let phase = install_cascade_timer(&opts, true);
         assert!(phase.ok);
         assert_eq!(phase.name, "quorum.cascade-timer");
         assert!(phase.detail.contains("dry-run"));
         assert!(phase.detail.contains("15m"));
+    }
+
+    #[test]
+    fn cascade_timer_dry_run_with_flags() {
+        let opts = CascadeTimerOpts {
+            interval_minutes: 15,
+            gate_name: "test-gate",
+            with_rebuild: true,
+            with_push: true,
+        };
+        let phase = install_cascade_timer(&opts, true);
+        assert!(phase.ok);
+        assert!(phase.detail.contains("+rebuild"));
+        assert!(phase.detail.contains("+push"));
     }
 
     #[test]

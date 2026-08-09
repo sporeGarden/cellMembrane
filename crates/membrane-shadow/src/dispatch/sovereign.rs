@@ -19,17 +19,19 @@ use crate::{ShadowConfig, ShadowOutcome};
 use tracing::{error, info, warn};
 
 /// Resolved sub-builder for dispatch.
+///
+/// Uses `TransportEndpoint` — mesh relay (Tower Atomic) by default,
+/// with SSH legacy fallback for backward compatibility.
 struct ResolvedSubBuilder {
     gate: String,
     target: String,
-    ssh_host: String,
-    membrane_bin: String,
+    endpoint: cellmembrane_types::TransportEndpoint,
 }
 
 /// Load sub-builders from the ecosystem manifest.
 ///
-/// Falls back to a hardcoded blueGate entry if the manifest is unavailable
-/// or has no `[sub_builders]` section — preserving nanowire compatibility.
+/// Resolves each entry to a `TransportEndpoint` — mesh relay for
+/// `transport = "mesh"` (default), SSH command fallback for `transport = "ssh"`.
 fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
     let workspace = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
@@ -41,11 +43,13 @@ fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
             return manifest
                 .sub_builders
                 .into_iter()
-                .map(|(target, entry)| ResolvedSubBuilder {
-                    gate: entry.gate,
-                    target,
-                    ssh_host: entry.ssh_host,
-                    membrane_bin: entry.membrane_bin,
+                .map(|(target, entry)| {
+                    let endpoint = resolve_builder_endpoint(&entry);
+                    ResolvedSubBuilder {
+                        gate: entry.gate,
+                        target,
+                        endpoint,
+                    }
                 })
                 .collect();
         }
@@ -54,9 +58,33 @@ fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
     vec![ResolvedSubBuilder {
         gate: "blueGate".into(),
         target: "x86_64-pc-windows-gnu".into(),
-        ssh_host: "blueGate".into(),
-        membrane_bin: "membrane.exe".into(),
+        endpoint: cellmembrane_types::TransportEndpoint::MeshRelay {
+            peer_id: "blueGate".into(),
+            capability: "build".into(),
+        },
     }]
+}
+
+/// Resolve a manifest entry to a transport endpoint.
+fn resolve_builder_endpoint(
+    entry: &crate::manifest::SubBuilderEntry,
+) -> cellmembrane_types::TransportEndpoint {
+    if entry.transport == "ssh" && !entry.ssh_host.is_empty() {
+        warn!(
+            gate = entry.gate,
+            ssh_host = entry.ssh_host,
+            "sub-builder using legacy SSH transport — migrate to transport = \"mesh\""
+        );
+        cellmembrane_types::TransportEndpoint::Tcp {
+            host: entry.ssh_host.clone(),
+            port: 9800,
+        }
+    } else {
+        cellmembrane_types::TransportEndpoint::MeshRelay {
+            peer_id: entry.gate.clone(),
+            capability: "build".into(),
+        }
+    }
 }
 
 /// Route `sovereign.*` commands.
@@ -222,12 +250,12 @@ async fn dispatch_ci_trigger(config: &ShadowConfig, args: &[&str]) -> Result<Sha
 
 /// Dispatch remote harvests to sub-builder gates for cross-target binaries.
 ///
-/// For each sub-builder, connects via SSH to the gate and runs `membrane plasmid.harvest`
-/// for the primal on that gate's native target triple. Results are collected
-/// and returned as a merged outcome.
+/// For each sub-builder, sends a JSON-RPC `plasmid.harvest` request via
+/// songBird mesh relay (Tower Atomic). Results are collected and returned
+/// as a merged outcome.
 ///
 /// Sub-builders are loaded from the ecosystem manifest `[sub_builders]` section,
-/// falling back to the hardcoded blueGate entry for nanowire compatibility.
+/// falling back to a mesh relay entry for blueGate.
 async fn run_sub_builder_harvests(
     sub_builders: &[ResolvedSubBuilder],
     primal: &str,
@@ -241,6 +269,7 @@ async fn run_sub_builder_harvests(
             primal,
             gate = %sb.gate,
             target = %sb.target,
+            endpoint = %sb.endpoint,
             "sub-builder dispatch"
         );
 
@@ -250,8 +279,8 @@ async fn run_sub_builder_harvests(
                 ShadowOutcome {
                     ok: true,
                     message: format!(
-                        "sub-builder {}: {} (dry-run) — would SSH to {} and harvest {} for {}",
-                        sb.gate, primal, sb.ssh_host, primal, sb.target
+                        "sub-builder {}: {} (dry-run) — would dispatch via {} to harvest {} for {}",
+                        sb.gate, primal, sb.endpoint, primal, sb.target
                     ),
                     data: None,
                 },
@@ -266,102 +295,95 @@ async fn run_sub_builder_harvests(
     results
 }
 
-/// SSH to a sub-builder gate and run `membrane plasmid.harvest` (nanowire transport).
+/// Dispatch a harvest request to a sub-builder via Tower Atomic mesh relay.
 async fn dispatch_to_sub_builder(
     sb: &ResolvedSubBuilder,
     primal: &str,
     commit: Option<&str>,
 ) -> ShadowOutcome {
-    let mut cmd_parts = vec![
-        sb.membrane_bin.clone(),
-        "plasmid.harvest".to_string(),
-        "--primal".to_string(),
-        primal.to_string(),
-        "--force".to_string(),
-        "--push".to_string(),
-    ];
+    let mut params = serde_json::json!({
+        "primal": primal,
+        "force": true,
+        "push": true,
+        "local": true,
+    });
 
     if let Some(c) = commit {
-        cmd_parts.push("--commit".to_string());
-        cmd_parts.push(c.to_string());
+        params["commit"] = serde_json::Value::String(c.to_string());
     }
 
-    let remote_cmd = cmd_parts.join(" ");
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "plasmid.harvest",
+        "params": params,
+        "id": 1,
+    })
+    .to_string();
 
     info!(
         gate = sb.gate,
         target = sb.target,
-        cmd = %remote_cmd,
-        "dispatching to sub-builder via SSH"
+        endpoint = %sb.endpoint,
+        "dispatching to sub-builder via mesh"
     );
 
-    let output = tokio::process::Command::new("ssh")
-        .args([
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "BatchMode=yes",
-            &sb.ssh_host,
-            &remote_cmd,
-        ])
-        .output()
-        .await;
+    match crate::jsonrpc::call_endpoint(&sb.endpoint, &request).await {
+        Ok(response) => {
+            let parsed: serde_json::Value =
+                serde_json::from_str(&response).unwrap_or_default();
 
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let stderr = String::from_utf8_lossy(&out.stderr);
+            let result_ok = parsed
+                .get("result")
+                .and_then(|r| r.get("ok"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
 
-            if out.status.success() {
+            let result_msg = parsed
+                .get("result")
+                .and_then(|r| r.get("message"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("done");
+
+            if result_ok {
                 info!(
                     gate = sb.gate,
-                    stdout = %stdout.trim(),
-                    "sub-builder harvest completed"
+                    message = result_msg,
+                    "sub-builder harvest completed via mesh"
                 );
-                ShadowOutcome {
-                    ok: true,
-                    message: format!(
-                        "sub-builder {}: {} harvest OK for {} — {}",
-                        sb.gate,
-                        primal,
-                        sb.target,
-                        stdout.lines().last().unwrap_or("done")
-                    ),
-                    data: Some(serde_json::json!({
-                        "gate": sb.gate,
-                        "target": sb.target,
-                        "stdout": stdout.trim(),
-                    })),
-                }
             } else {
                 error!(
                     gate = sb.gate,
-                    exit_code = out.status.code(),
-                    stderr = %stderr.trim(),
-                    "sub-builder harvest failed"
+                    message = result_msg,
+                    "sub-builder harvest failed via mesh"
                 );
-                ShadowOutcome {
-                    ok: false,
-                    message: format!(
-                        "sub-builder {}: {} harvest FAILED for {} — {}",
-                        sb.gate,
-                        primal,
-                        sb.target,
-                        stderr.lines().last().unwrap_or("unknown error")
-                    ),
-                    data: Some(serde_json::json!({
-                        "gate": sb.gate,
-                        "target": sb.target,
-                        "stderr": stderr.trim(),
-                    })),
-                }
+            }
+
+            ShadowOutcome {
+                ok: result_ok,
+                message: format!(
+                    "sub-builder {}: {} harvest {} for {} — {}",
+                    sb.gate,
+                    primal,
+                    if result_ok { "OK" } else { "FAILED" },
+                    sb.target,
+                    result_msg,
+                ),
+                data: Some(serde_json::json!({
+                    "gate": sb.gate,
+                    "target": sb.target,
+                    "transport": sb.endpoint.to_string(),
+                    "response": parsed.get("result"),
+                })),
             }
         }
         Err(e) => {
-            error!(gate = sb.gate, error = %e, "SSH to sub-builder failed");
+            error!(gate = sb.gate, error = %e, "mesh dispatch to sub-builder failed");
             ShadowOutcome {
                 ok: false,
-                message: format!("sub-builder {}: SSH connection failed — {}", sb.gate, e),
+                message: format!(
+                    "sub-builder {}: mesh dispatch failed — {}",
+                    sb.gate, e
+                ),
                 data: None,
             }
         }
@@ -594,6 +616,13 @@ mod tests {
         );
         let has_windows = builders.iter().any(|b| b.target == "x86_64-pc-windows-gnu");
         assert!(has_windows, "should include windows-gnu sub-builder");
+        for b in &builders {
+            assert!(
+                !matches!(&b.endpoint, cellmembrane_types::TransportEndpoint::Tcp { .. }
+                    if b.endpoint.to_string().contains("ssh")),
+                "no SSH transport should remain for {}", b.gate
+            );
+        }
     }
 
     #[test]
@@ -609,5 +638,29 @@ mod tests {
             assert!(outcome.ok, "dry-run should always succeed for {gate}");
             assert!(outcome.message.contains("dry-run"));
         }
+    }
+
+    #[test]
+    fn resolve_builder_endpoint_mesh_default() {
+        let entry = crate::manifest::SubBuilderEntry {
+            gate: "testGate".into(),
+            transport: "mesh".into(),
+            ssh_host: String::new(),
+            membrane_bin: "membrane".into(),
+        };
+        let ep = resolve_builder_endpoint(&entry);
+        assert!(matches!(ep, cellmembrane_types::TransportEndpoint::MeshRelay { .. }));
+    }
+
+    #[test]
+    fn resolve_builder_endpoint_ssh_legacy() {
+        let entry = crate::manifest::SubBuilderEntry {
+            gate: "legacyGate".into(),
+            transport: "ssh".into(),
+            ssh_host: "legacyGate".into(),
+            membrane_bin: "membrane.exe".into(),
+        };
+        let ep = resolve_builder_endpoint(&entry);
+        assert!(matches!(ep, cellmembrane_types::TransportEndpoint::Tcp { .. }));
     }
 }

@@ -263,12 +263,13 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
     Ok(outcome)
 }
 
-/// Post-build: regenerate checksums from disk, update provenance, sign, publish.
+/// Post-build: regenerate checksums from disk, update provenance, sign, publish,
+/// and record the build event in the rootPulse provenance trio.
 ///
 /// Checksums are fully regenerated from all on-disk binaries rather than
 /// partially merged, so stale entries are dropped and new binaries that
 /// weren't in the build list are captured.
-async fn finalize_depot(results: &[HarvestResult], _targets_built: &[String], depot_dir: &Path) {
+async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], depot_dir: &Path) {
     let built: Vec<&HarvestResult> = results
         .iter()
         .filter(|r| matches!(r.status, HarvestStatus::Built))
@@ -282,7 +283,7 @@ async fn finalize_depot(results: &[HarvestResult], _targets_built: &[String], de
         Ok(report) => info!(
             binaries = report.total_binaries,
             architectures = ?report.architectures,
-            "checksums.toml regenerated from depot"
+            "checksums.toml + BLAKE3SUMS regenerated from depot"
         ),
         Err(e) => warn!(error = %e, "failed to regenerate checksums.toml"),
     }
@@ -297,6 +298,61 @@ async fn finalize_depot(results: &[HarvestResult], _targets_built: &[String], de
 
     drift::publish_depot_checksums(depot_dir).await;
     notify_mesh_depot_updated(&built_names).await;
+
+    rootpulse_harvest_record(&built, targets_built).await;
+}
+
+/// Record the harvest batch in the rootPulse provenance trio.
+///
+/// Parses `blake3=` and `commit=` from each built result's detail string and
+/// fires `graph.execute { graph_id: "rootpulse_commit" }` via the neural-api.
+/// Degrades gracefully if NUCLEUS is unavailable.
+async fn rootpulse_harvest_record(built: &[&HarvestResult], targets_built: &[String]) {
+    use crate::sovereignty_ledger::HarvestProvenanceEntry;
+
+    let target = targets_built
+        .first()
+        .map_or_else(|| super::detect_target_triple().to_string(), Clone::clone);
+
+    let entries: Vec<HarvestProvenanceEntry> = built
+        .iter()
+        .filter_map(|r| {
+            let commit = r
+                .detail
+                .split("commit=")
+                .nth(1)?
+                .split_whitespace()
+                .next()?
+                .to_string();
+            let blake3 = r
+                .detail
+                .split("blake3=")
+                .nth(1)?
+                .split_whitespace()
+                .next()?
+                .to_string();
+            Some(HarvestProvenanceEntry {
+                primal: r.binary.clone(),
+                commit,
+                target: target.clone(),
+                blake3,
+            })
+        })
+        .collect();
+
+    if entries.is_empty() {
+        return;
+    }
+
+    let gate = crate::gate::resolve_local_gate_identity();
+    match crate::sovereignty_ledger::rootpulse_harvest_commit(&gate, &entries).await {
+        Ok(session) => info!(
+            session,
+            primals = entries.len(),
+            "rootPulse harvest committed to provenance trio"
+        ),
+        Err(e) => warn!(error = %e, "rootPulse harvest commit skipped (NUCLEUS unavailable)"),
+    }
 }
 
 /// If any primals were built, push depot to VPS and append the result.

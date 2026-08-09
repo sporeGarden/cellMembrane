@@ -270,18 +270,29 @@ pub struct CompositionProfile {
 /// ```toml
 /// [sub_builders."x86_64-pc-windows-gnu"]
 /// gate = "blueGate"
-/// ssh_host = "blueGate"
-/// membrane_bin = "membrane.exe"
+/// transport = "mesh"
+///
+/// # Legacy (deprecated — kept for backward compat):
+/// # ssh_host = "blueGate"
+/// # membrane_bin = "membrane.exe"
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubBuilderEntry {
     /// Gate name that handles this target (e.g., `"blueGate"`).
     pub gate: String,
-    /// SSH host or alias for nanowire dispatch.
+    /// Transport method: `"mesh"` (Tower Atomic, default) or `"ssh"` (legacy).
+    #[serde(default = "default_transport")]
+    pub transport: String,
+    /// SSH host or alias for nanowire dispatch (deprecated — use `transport = "mesh"`).
+    #[serde(default)]
     pub ssh_host: String,
-    /// Membrane binary name on the remote gate (e.g., `"membrane.exe"`).
+    /// Membrane binary name on the remote gate (deprecated — mesh dispatch is binary-agnostic).
     #[serde(default = "default_membrane_bin")]
     pub membrane_bin: String,
+}
+
+fn default_transport() -> String {
+    "mesh".into()
 }
 
 fn default_membrane_bin() -> String {

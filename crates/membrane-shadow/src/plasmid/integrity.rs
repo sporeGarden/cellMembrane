@@ -47,8 +47,11 @@ pub struct IntegrityMismatch {
     pub actual: String,
 }
 
-/// Scan all arch directories under `primals/`, compute BLAKE3 hashes, and write
-/// a fresh `checksums.toml`. Used after harvest to regenerate integrity metadata.
+/// Name of the per-arch GNU-style BLAKE3 checksum file.
+const BLAKE3SUMS_FILE: &str = "BLAKE3SUMS";
+
+/// Scan all arch directories under `primals/`, compute BLAKE3 hashes, write
+/// a fresh `checksums.toml`, and generate per-arch `BLAKE3SUMS` files.
 pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
     let primals_dir = depot_dir.join("primals");
     let mut all_targets: BTreeMap<String, BTreeMap<String, ChecksumEntry>> = BTreeMap::new();
@@ -69,7 +72,11 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
 
             let mut files: Vec<_> = std::fs::read_dir(&arch_dir)?
                 .filter_map(std::result::Result::ok)
-                .filter(|e| e.path().is_file())
+                .filter(|e| {
+                    let p = e.path();
+                    p.is_file()
+                        && e.file_name().to_string_lossy() != BLAKE3SUMS_FILE
+                })
                 .collect();
             files.sort_by_key(std::fs::DirEntry::file_name);
 
@@ -84,6 +91,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
 
             if !arch_checksums.is_empty() {
                 architectures.push(arch.clone());
+                write_blake3sums(&arch_dir, &arch_checksums);
                 all_targets.insert(arch, arch_checksums);
             }
         }
@@ -115,6 +123,20 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
         missing: Vec::new(),
         generated: true,
     })
+}
+
+/// Write a GNU-style `BLAKE3SUMS` file into the given arch directory.
+///
+/// Format: `<64-char-blake3>  <filename>\n` — compatible with `b3sum --check`.
+fn write_blake3sums(arch_dir: &Path, checksums: &BTreeMap<String, ChecksumEntry>) {
+    let mut content = String::new();
+    for (name, entry) in checksums {
+        let _ = writeln!(content, "{}  {name}", entry.blake3);
+    }
+    let path = arch_dir.join(BLAKE3SUMS_FILE);
+    if let Err(e) = crate::atomic_write(&path, content.as_bytes()) {
+        tracing::warn!(error = %e, path = %path.display(), "failed to write BLAKE3SUMS");
+    }
 }
 
 /// Read existing `checksums.toml` and verify every listed binary matches its
@@ -223,6 +245,36 @@ mod tests {
         assert!(checksums.contains("[x86_64-unknown-linux-musl]"));
         assert!(checksums.contains("beardog"));
         assert!(checksums.contains("songbird"));
+
+        let b3sums = std::fs::read_to_string(arch_dir.join(BLAKE3SUMS_FILE)).unwrap();
+        assert!(b3sums.contains("  beardog\n"), "GNU-style: hash  filename");
+        assert!(b3sums.contains("  songbird\n"));
+        let lines: Vec<&str> = b3sums.lines().collect();
+        assert_eq!(lines.len(), 2, "one line per binary, BLAKE3SUMS itself excluded");
+        for line in &lines {
+            let parts: Vec<&str> = line.splitn(2, "  ").collect();
+            assert_eq!(parts.len(), 2, "format: hash  name");
+            assert_eq!(parts[0].len(), 64, "full BLAKE3 hex hash");
+        }
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_blake3sums_excludes_itself() {
+        let tmp = std::env::temp_dir().join("integrity_blake3_self");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let arch_dir = tmp.join("primals").join("x86_64-unknown-linux-musl");
+        std::fs::create_dir_all(&arch_dir).unwrap();
+        std::fs::write(arch_dir.join("beardog"), b"binary content").unwrap();
+        std::fs::write(arch_dir.join(BLAKE3SUMS_FILE), b"stale content").unwrap();
+
+        let report = generate_checksums(&tmp).unwrap();
+        assert_eq!(report.total_binaries, 1, "BLAKE3SUMS excluded from count");
+
+        let b3sums = std::fs::read_to_string(arch_dir.join(BLAKE3SUMS_FILE)).unwrap();
+        assert!(!b3sums.contains(BLAKE3SUMS_FILE), "must not hash itself");
+        assert!(b3sums.contains("beardog"));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
