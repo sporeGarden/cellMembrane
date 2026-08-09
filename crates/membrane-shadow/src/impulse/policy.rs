@@ -89,12 +89,11 @@ pub(super) fn suggest_action(
 }
 
 #[must_use]
-pub(super) fn is_expired(expires: &str, now: &chrono::DateTime<chrono::Utc>) -> bool {
+pub(super) fn is_expired(expires: &str, now: &time::OffsetDateTime) -> bool {
     if expires.is_empty() {
         return false;
     }
-    chrono::DateTime::parse_from_str(expires, cellmembrane_types::service::ISO8601_TZ)
-        .is_ok_and(|exp| now > &exp)
+    crate::parse_iso8601_tz(expires).is_some_and(|exp| *now > exp)
 }
 
 #[cfg(test)]
@@ -232,24 +231,20 @@ mod tests {
 
     #[test]
     fn is_expired_empty_is_false() {
-        assert!(!is_expired("", &chrono::Utc::now()));
+        assert!(!is_expired("", &time::OffsetDateTime::now_utc()));
     }
 
     #[test]
     fn is_expired_future_is_false() {
-        let now = chrono::Utc::now();
-        let future = (now + chrono::Duration::hours(1))
-            .format(cellmembrane_types::service::ISO8601_TZ)
-            .to_string();
+        let now = time::OffsetDateTime::now_utc();
+        let future = crate::format_offset_datetime(&(now + time::Duration::hours(1)));
         assert!(!is_expired(&future, &now));
     }
 
     #[test]
     fn is_expired_past_is_true() {
-        let now = chrono::Utc::now();
-        let past = (now - chrono::Duration::hours(1))
-            .format(cellmembrane_types::service::ISO8601_TZ)
-            .to_string();
+        let now = time::OffsetDateTime::now_utc();
+        let past = crate::format_offset_datetime(&(now - time::Duration::hours(1)));
         assert!(is_expired(&past, &now));
     }
 

@@ -183,27 +183,99 @@ pub fn atomic_write(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
 /// Current UTC time formatted as ISO 8601 (e.g. `2026-07-17T13:45:00Z`).
 #[must_use]
 pub fn utc_now_iso8601() -> String {
-    chrono::Utc::now()
-        .format(cellmembrane_types::service::ISO8601_UTC)
-        .to_string()
+    utc_now_iso8601_z()
 }
 
 /// Current UTC date as `YYYY-MM-DD`.
 #[must_use]
 pub fn utc_today() -> String {
-    chrono::Utc::now().format("%Y-%m-%d").to_string()
+    let now = time::OffsetDateTime::now_utc();
+    format!(
+        "{:04}-{:02}-{:02}",
+        now.year(),
+        now.month() as u8,
+        now.day()
+    )
 }
 
 /// Current UTC time as RFC 3339 (e.g. `2026-07-17T13:45:00.123+00:00`).
 #[must_use]
 pub fn utc_now_rfc3339() -> String {
-    chrono::Utc::now().to_rfc3339()
+    time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default()
 }
 
 /// Compact UTC timestamp for session IDs (e.g. `20260717T134500`).
 #[must_use]
 pub fn utc_now_compact() -> String {
-    chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string()
+    let now = time::OffsetDateTime::now_utc();
+    format!(
+        "{:04}{:02}{:02}T{:02}{:02}{:02}",
+        now.year(),
+        now.month() as u8,
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    )
+}
+
+/// Local-time ISO 8601 with timezone offset (e.g. `2026-07-17T09:45:00-04:00`).
+#[must_use]
+pub fn local_now_iso8601_tz() -> String {
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    format_offset_datetime(&now)
+}
+
+/// UTC ISO 8601 with Z suffix for serialization contexts.
+#[must_use]
+pub fn utc_now_iso8601_z() -> String {
+    let now = time::OffsetDateTime::now_utc();
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        now.year(),
+        now.month() as u8,
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    )
+}
+
+/// Format an `OffsetDateTime` as ISO 8601 with timezone offset.
+#[must_use]
+pub fn format_offset_datetime(dt: &time::OffsetDateTime) -> String {
+    let off = dt.offset();
+    let sign = if off.whole_hours() >= 0 { '+' } else { '-' };
+    let h = off.whole_hours().unsigned_abs();
+    let m = off.minutes_past_hour().unsigned_abs();
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{sign}{h:02}:{m:02}",
+        dt.year(),
+        dt.month() as u8,
+        dt.day(),
+        dt.hour(),
+        dt.minute(),
+        dt.second()
+    )
+}
+
+/// Parse an ISO 8601 timestamp with timezone offset.
+#[must_use]
+pub fn parse_iso8601_tz(s: &str) -> Option<time::OffsetDateTime> {
+    time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339)
+        .ok()
+        .or_else(|| {
+            time::OffsetDateTime::parse(s, &time::format_description::well_known::Iso8601::DEFAULT)
+                .ok()
+        })
+}
+
+/// Parse an RFC 3339 timestamp string.
+#[must_use]
+pub fn parse_rfc3339(s: &str) -> Option<time::OffsetDateTime> {
+    time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339).ok()
 }
 
 // ── HTTP client ──────────────────────────────────────────────────────

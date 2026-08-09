@@ -2,7 +2,6 @@
 
 //! Impulse lifecycle operations: post, sense, check, ack, archive.
 
-use chrono::{Local, Utc};
 use std::path::Path;
 
 use super::parse::{find_impulse_by_id, parse_impulse_or_signal};
@@ -20,11 +19,16 @@ use tracing::warn;
 /// Fire a new impulse — rootPulse ACTION.
 pub async fn post(workspace_root: &Path, args: &PostArgs<'_>) -> Result<ImpulseFile> {
     let gate_id = identity::resolve_async(workspace_root).await?;
-    let now = Local::now();
-    let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
-    let ts_iso = now
-        .format(cellmembrane_types::service::ISO8601_TZ)
-        .to_string();
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let ts_file = format!(
+        "{:04}-{:02}-{:02}T{:02}-{:02}",
+        now.year(),
+        now.month() as u8,
+        now.day(),
+        now.hour(),
+        now.minute()
+    );
+    let ts_iso = crate::format_offset_datetime(&now);
 
     let slug = args
         .subject
@@ -177,7 +181,7 @@ pub fn sense(
 /// Check membrane potential health — quorumSignal SENSE.
 pub fn check(workspace_root: &Path) -> Result<PotentialHealth> {
     let active = active_dir(workspace_root);
-    let now = Utc::now();
+    let now = time::OffsetDateTime::now_utc();
     let wave = current_wave(workspace_root);
 
     let mut total = 0usize;
@@ -231,9 +235,7 @@ pub async fn ack(workspace_root: &Path, impulse_id: &str, note: &str) -> Result<
 
     let ack_entry = ImpulseAck {
         gate: gate_id.name.clone(),
-        timestamp: Utc::now()
-            .format(cellmembrane_types::service::ISO8601_TZ)
-            .to_string(),
+        timestamp: crate::utc_now_iso8601_z(),
         note: note.to_string(),
     };
 
@@ -268,7 +270,7 @@ fn archive_expired_impulses(
     active: &Path,
     archive_dir: &Path,
     workspace_root: &Path,
-    now: &chrono::DateTime<Utc>,
+    now: &time::OffsetDateTime,
 ) -> Result<Vec<String>> {
     std::fs::create_dir_all(archive_dir)?;
     let mut archived = Vec::new();
@@ -312,7 +314,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
         return Ok(vec![]);
     }
 
-    let now = Utc::now();
+    let now = time::OffsetDateTime::now_utc();
     let wave = current_wave(workspace_root);
     let archive_dir = impulses_dir(workspace_root)
         .join("archive")

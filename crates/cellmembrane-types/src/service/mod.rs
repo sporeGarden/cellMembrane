@@ -126,6 +126,23 @@ impl Default for ServicePaths {
     }
 }
 
+/// Const-compatible string equality (byte-by-byte).
+const fn const_str_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
 // ── MembraneService — static service registry entry ─────────────────────
 
 /// A single membrane service (one running process).
@@ -229,7 +246,8 @@ impl MembraneService {
     /// Whether this service is externally reachable (bind != loopback, not UDS).
     #[must_use]
     pub const fn is_externally_reachable(&self) -> bool {
-        !matches!(self.bind.as_bytes(), b"127.0.0.1") && !matches!(self.protocol, Protocol::Uds)
+        !const_str_eq(self.bind, constants::BIND_LOOPBACK)
+            && !matches!(self.protocol, Protocol::Uds)
     }
 
     /// Whether this service uses UDS-only transport on VPS (Wave 56 standard).

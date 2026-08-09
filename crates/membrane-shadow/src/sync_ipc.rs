@@ -16,6 +16,8 @@ use std::time::Duration;
 
 use tracing::debug;
 
+const IPC_READ_BUF_CAPACITY: usize = 4096;
+
 /// Connect to a local IPC socket at `path`, returning a stream that
 /// implements `Read + Write` with timeouts already set.
 ///
@@ -144,7 +146,7 @@ pub(crate) fn ipc_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> 
         writeln!(stream, "{request}").ok()?;
         stream.shutdown(std::net::Shutdown::Write).ok()?;
 
-        let mut buf = Vec::with_capacity(4096);
+        let mut buf = Vec::with_capacity(IPC_READ_BUF_CAPACITY);
         stream.read_to_end(&mut buf).ok()?;
         Some(buf)
     }
@@ -184,7 +186,7 @@ fn ipc_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     writeln!(stream, "{request}").ok()?;
     stream.shutdown(std::net::Shutdown::Write).ok()?;
 
-    let mut buf = Vec::with_capacity(4096);
+    let mut buf = Vec::with_capacity(IPC_READ_BUF_CAPACITY);
     stream.read_to_end(&mut buf).ok()?;
     Some(buf)
 }

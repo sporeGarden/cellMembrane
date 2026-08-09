@@ -10,7 +10,6 @@
 use std::path::{Path, PathBuf};
 
 use cellmembrane_types::ServiceCapability;
-use chrono::Local;
 
 use super::types::{ImpulseFile, ImpulseSignature};
 
@@ -136,9 +135,7 @@ pub(super) fn try_sign_impulse(
         algorithm: "ed25519".to_string(),
         public_key: result.get("public_key")?.as_str()?.to_string(),
         value: result.get("signature")?.as_str()?.to_string(),
-        signed_at: Local::now()
-            .format(cellmembrane_types::service::ISO8601_TZ)
-            .to_string(),
+        signed_at: crate::local_now_iso8601_tz(),
     })
 }
 

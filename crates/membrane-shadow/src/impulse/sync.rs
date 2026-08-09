@@ -3,7 +3,6 @@
 //! SYNC divergence impulse — auto-fired by `temporal.cascade` when
 //! non-fast-forward divergence is detected.
 
-use chrono::Local;
 use std::path::Path;
 
 use super::policy::{classify_diverge_type, suggest_action};
@@ -36,11 +35,16 @@ pub async fn post_sync_diverge(
     }
 
     let gate_id = identity::resolve_async(workspace_root).await?;
-    let now = Local::now();
-    let ts_file = now.format("%Y-%m-%dT%H-%M").to_string();
-    let ts_iso = now
-        .format(cellmembrane_types::service::ISO8601_TZ)
-        .to_string();
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let ts_file = format!(
+        "{:04}-{:02}-{:02}T{:02}-{:02}",
+        now.year(),
+        now.month() as u8,
+        now.day(),
+        now.hour(),
+        now.minute()
+    );
+    let ts_iso = crate::format_offset_datetime(&now);
 
     let mut remotes_map = std::collections::BTreeMap::new();
     let mut ahead_map = std::collections::BTreeMap::new();

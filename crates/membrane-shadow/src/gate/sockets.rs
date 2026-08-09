@@ -171,7 +171,10 @@ pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
 ///
 /// Not yet called from production code — primals are shipping dual-socket
 /// incrementally. Will be wired once tarpc health probing is added.
-#[allow(dead_code, reason = "G65 tarpc health probing — wired when primals ship dual-socket")]
+#[allow(
+    dead_code,
+    reason = "G65 tarpc health probing — wired when primals ship dual-socket"
+)]
 fn resolve_primal_tarpc_socket_paths(primal: &str) -> Vec<String> {
     let svc = match cellmembrane_types::MembraneService::for_binary(primal) {
         Some(s) if s.has_tarpc() => s,

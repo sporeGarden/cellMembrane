@@ -709,16 +709,16 @@ pub const GITHUB_API: &str = "https://api.github.com";
 
 // ── Timestamp Formats ────────────────────────────────────────────────
 
-/// ISO 8601 UTC timestamp format — `2026-07-15T14:30:00Z`.
+/// ISO 8601 UTC timestamp format (strftime) — `2026-07-15T14:30:00Z`.
 ///
-/// Used across depot checksums, provenance, signing, wave metadata, and
-/// bootstrap identity. UTC (no timezone offset).
+/// Canonical format spec for interop. `membrane-shadow` uses the `time` crate's
+/// built-in formatters; this constant is retained for primals still using `chrono`.
 pub const ISO8601_UTC: &str = "%Y-%m-%dT%H:%M:%SZ";
 
-/// ISO 8601 timestamp with timezone offset — `2026-07-15T14:30:00-04:00`.
+/// ISO 8601 timestamp with timezone offset (strftime) — `2026-07-15T14:30:00-04:00`.
 ///
-/// Used for local-time-aware timestamps in impulses, focus context, and
-/// lifecycle tracking where the originating timezone matters.
+/// Canonical format spec for interop. `membrane-shadow` uses the `time` crate's
+/// built-in formatters; this constant is retained for primals still using `chrono`.
 pub const ISO8601_TZ: &str = "%Y-%m-%dT%H:%M:%S%:z";
 
 #[cfg(test)]

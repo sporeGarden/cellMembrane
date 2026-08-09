@@ -24,6 +24,9 @@ use super::harvest_manifest::{
 use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
+const NUCLEUS_STOP_GRACE_SECS: u64 = 1;
+const PKILL_SETTLE_MS: u64 = 500;
+
 /// Parsed CLI arguments for `plasmid.harvest`.
 #[allow(clippy::struct_excessive_bools)]
 pub struct HarvestArgs {
@@ -426,13 +429,13 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> (St
     }
 
     // Kill lingering processes
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(NUCLEUS_STOP_GRACE_SECS)).await;
     for &primal in &built {
         let _ = std::process::Command::new("pkill")
             .args(["-f", primal])
             .status();
     }
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(PKILL_SETTLE_MS)).await;
 
     let (installed, failed) = atomic_copy_binaries(&built, &harvest_staging, &install_dir);
 

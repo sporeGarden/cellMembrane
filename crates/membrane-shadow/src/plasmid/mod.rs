@@ -57,9 +57,7 @@ pub(crate) async fn graceful_kill(pid: u32, grace_ms: u64) {
         tracing::debug!(pid, "SIGTERM failed");
     }
     tokio::time::sleep(std::time::Duration::from_millis(grace_ms)).await;
-    if cellmembrane_types::is_process_alive(pid)
-        && !cellmembrane_types::force_kill_process(pid)
-    {
+    if cellmembrane_types::is_process_alive(pid) && !cellmembrane_types::force_kill_process(pid) {
         tracing::debug!(pid, "SIGKILL failed");
     }
 }

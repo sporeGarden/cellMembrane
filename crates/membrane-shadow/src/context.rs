@@ -16,7 +16,6 @@
 
 use crate::error::{Result, ShadowError};
 use crate::identity;
-use chrono::{Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::warn;
@@ -206,10 +205,8 @@ fn current_wave(workspace_root: &Path) -> u32 {
 /// Weave a context braid — create or overwrite for this gate+project.
 pub async fn weave(workspace_root: &Path, args: &WeaveArgs<'_>) -> Result<ContextBraid> {
     let gate_id = identity::resolve_async(workspace_root).await?;
-    let now = Local::now();
-    let ts_iso = now
-        .format(cellmembrane_types::service::ISO8601_TZ)
-        .to_string();
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let ts_iso = crate::format_offset_datetime(&now);
     let wave = current_wave(workspace_root);
 
     let breadcrumbs = if args.breadcrumbs.is_empty() {
@@ -418,7 +415,7 @@ pub async fn clear(
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 fn clear_expired_braids(ctx_dir: &Path) -> Result<Vec<String>> {
-    let now = Utc::now();
+    let now = time::OffsetDateTime::now_utc();
     let mut cleared = Vec::new();
 
     let gate_dirs: Vec<PathBuf> = std::fs::read_dir(ctx_dir)?
@@ -465,13 +462,11 @@ fn clear_expired_braids(ctx_dir: &Path) -> Result<Vec<String>> {
     Ok(cleared)
 }
 
-fn is_expired(updated: &str, ttl_hours: u32, now: &chrono::DateTime<Utc>) -> bool {
-    chrono::DateTime::parse_from_str(updated, cellmembrane_types::service::ISO8601_TZ).is_ok_and(
-        |updated_dt| {
-            let expires_at = updated_dt + chrono::Duration::hours(i64::from(ttl_hours));
-            now > &expires_at
-        },
-    )
+fn is_expired(updated: &str, ttl_hours: u32, now: &time::OffsetDateTime) -> bool {
+    crate::parse_iso8601_tz(updated).is_some_and(|updated_dt| {
+        let expires_at = updated_dt + time::Duration::hours(i64::from(ttl_hours));
+        *now > expires_at
+    })
 }
 
 async fn git_add_commit_push(repo_dir: &Path, file_path: &str, message: &str) -> Result<()> {
@@ -558,25 +553,21 @@ mod tests {
 
     #[test]
     fn is_expired_within_ttl() {
-        let now = Utc::now();
-        let updated = (now - chrono::Duration::hours(1))
-            .format(cellmembrane_types::service::ISO8601_TZ)
-            .to_string();
+        let now = time::OffsetDateTime::now_utc();
+        let updated = crate::format_offset_datetime(&(now - time::Duration::hours(1)));
         assert!(!is_expired(&updated, 24, &now));
     }
 
     #[test]
     fn is_expired_past_ttl() {
-        let now = Utc::now();
-        let updated = (now - chrono::Duration::hours(25))
-            .format(cellmembrane_types::service::ISO8601_TZ)
-            .to_string();
+        let now = time::OffsetDateTime::now_utc();
+        let updated = crate::format_offset_datetime(&(now - time::Duration::hours(25)));
         assert!(is_expired(&updated, 24, &now));
     }
 
     #[test]
     fn is_expired_invalid_timestamp() {
-        let now = Utc::now();
+        let now = time::OffsetDateTime::now_utc();
         assert!(!is_expired("not-a-date", 24, &now));
     }
 

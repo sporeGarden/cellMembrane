@@ -502,7 +502,9 @@ async fn read_chunked<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Res
         body.extend_from_slice(&chunk);
 
         let mut crlf = [0u8; 2];
-        reader.read_exact(&mut crlf).await
+        reader
+            .read_exact(&mut crlf)
+            .await
             .map_err(|e| ShadowError::http(format!("chunk CRLF: {e}")))?;
     }
 

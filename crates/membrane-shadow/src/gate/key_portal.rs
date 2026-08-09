@@ -367,8 +367,8 @@ fn parse_inspect_output(text: &str, cert_path: &Path) -> SshCertificate {
             // "Valid: from 2026-07-28T18:00:00Z to 2026-07-29T02:00:00Z"
             l.rsplit("to ").next()
         })
-        .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts.trim()).ok())
-        .map_or(0, |dt| u64::try_from(dt.timestamp()).unwrap_or(0));
+        .and_then(|ts| crate::parse_rfc3339(ts.trim()))
+        .map_or(0, |dt| u64::try_from(dt.unix_timestamp()).unwrap_or(0));
 
     let ca_fingerprint = text
         .lines()
@@ -390,6 +390,12 @@ fn parse_inspect_output(text: &str, cert_path: &Path) -> SshCertificate {
     }
 }
 
+const DEFAULT_CERT_LIFETIME_HOURS: u64 = 8;
+const DEFAULT_CERT_LIFETIME_MINUTES: u64 = 480;
+const DEFAULT_CERT_LIFETIME_SECS: u64 = 28800;
+const SECS_PER_HOUR: u64 = 3600;
+const SECS_PER_MINUTE: u64 = 60;
+
 /// Parse an SSH cert lifetime string (e.g. "8h", "24h", "1h") into seconds.
 #[must_use]
 pub fn parse_lifetime_secs(lifetime: &str) -> u64 {
@@ -398,10 +404,10 @@ pub fn parse_lifetime_secs(lifetime: &str) -> u64 {
         (char::from(b), &trimmed[..trimmed.len() - 1])
     });
     match suffix {
-        'h' => body.parse::<u64>().unwrap_or(8) * 3600,
-        'm' => body.parse::<u64>().unwrap_or(480) * 60,
-        's' => body.parse::<u64>().unwrap_or(28800),
-        _ => trimmed.parse::<u64>().unwrap_or(28800),
+        'h' => body.parse::<u64>().unwrap_or(DEFAULT_CERT_LIFETIME_HOURS) * SECS_PER_HOUR,
+        'm' => body.parse::<u64>().unwrap_or(DEFAULT_CERT_LIFETIME_MINUTES) * SECS_PER_MINUTE,
+        's' => body.parse::<u64>().unwrap_or(DEFAULT_CERT_LIFETIME_SECS),
+        _ => trimmed.parse::<u64>().unwrap_or(DEFAULT_CERT_LIFETIME_SECS),
     }
 }
 

@@ -127,12 +127,12 @@ fn is_stale(slot: &CanarySlot) -> bool {
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(DEFAULT_MAX_AGE_HOURS);
 
-    let Ok(promoted) = chrono::DateTime::parse_from_rfc3339(&slot.promoted_at) else {
+    let Some(promoted) = crate::parse_rfc3339(&slot.promoted_at) else {
         return true; // unparseable timestamp = stale
     };
 
-    let age = chrono::Utc::now().signed_duration_since(promoted);
-    age.num_hours() > max_hours
+    let age = time::OffsetDateTime::now_utc() - promoted;
+    age.whole_hours() > max_hours
 }
 
 /// Audit the canary pool for staleness.
@@ -146,9 +146,8 @@ pub(crate) async fn staleness_audit(auto_refresh: bool) -> Vec<CanaryStalenessRe
 
     for slot in &pool.slots {
         let stale = is_stale(slot);
-        let age_hours = chrono::DateTime::parse_from_rfc3339(&slot.promoted_at).map_or(-1, |t| {
-            chrono::Utc::now().signed_duration_since(t).num_hours()
-        });
+        let age_hours = crate::parse_rfc3339(&slot.promoted_at)
+            .map_or(-1, |t| (time::OffsetDateTime::now_utc() - t).whole_hours());
 
         reports.push(CanaryStalenessReport {
             primal: slot.primal.clone(),

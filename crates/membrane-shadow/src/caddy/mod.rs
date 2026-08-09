@@ -436,17 +436,46 @@ pub(crate) fn parse_days_remaining(not_after: &str) -> i64 {
     if not_after.is_empty() {
         return 0;
     }
-    chrono::NaiveDateTime::parse_from_str(not_after.trim_end_matches(" GMT"), "%b %d %H:%M:%S %Y")
-        .or_else(|_| {
-            chrono::NaiveDateTime::parse_from_str(
-                not_after.trim_end_matches(" GMT").trim(),
-                "%b  %d %H:%M:%S %Y",
-            )
-        })
-        .map_or(0, |expiry| {
-            let now = chrono::Utc::now().naive_utc();
-            (expiry - now).num_days()
-        })
+    parse_openssl_date(not_after).map_or(0, |expiry| {
+        let now = time::OffsetDateTime::now_utc();
+        (expiry - now).whole_days()
+    })
+}
+
+/// Parse OpenSSL-style date: `"Jul 28 18:00:00 2026"` or `"Jul  1 18:00:00 2026"`.
+fn parse_openssl_date(s: &str) -> Option<time::OffsetDateTime> {
+    let s = s.trim().trim_end_matches(" GMT");
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let month = match parts[0] {
+        "Jan" => time::Month::January,
+        "Feb" => time::Month::February,
+        "Mar" => time::Month::March,
+        "Apr" => time::Month::April,
+        "May" => time::Month::May,
+        "Jun" => time::Month::June,
+        "Jul" => time::Month::July,
+        "Aug" => time::Month::August,
+        "Sep" => time::Month::September,
+        "Oct" => time::Month::October,
+        "Nov" => time::Month::November,
+        "Dec" => time::Month::December,
+        _ => return None,
+    };
+    let day: u8 = parts[1].parse().ok()?;
+    let year: i32 = parts[3].parse().ok()?;
+    let time_parts: Vec<&str> = parts[2].split(':').collect();
+    if time_parts.len() != 3 {
+        return None;
+    }
+    let hour: u8 = time_parts[0].parse().ok()?;
+    let minute: u8 = time_parts[1].parse().ok()?;
+    let second: u8 = time_parts[2].parse().ok()?;
+    let date = time::Date::from_calendar_date(year, month, day).ok()?;
+    let t = time::Time::from_hms(hour, minute, second).ok()?;
+    Some(time::PrimitiveDateTime::new(date, t).assume_utc())
 }
 
 fn parse_caddyfile_vhosts(content: &str) -> Vec<VhostEntry> {

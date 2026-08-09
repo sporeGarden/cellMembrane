@@ -59,7 +59,9 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
         )))
     })?;
 
-    if let Err(e) = cellmembrane_types::PlatformAccess::GroupReadWrite.apply(std::path::Path::new(path)) {
+    if let Err(e) =
+        cellmembrane_types::PlatformAccess::GroupReadWrite.apply(std::path::Path::new(path))
+    {
         debug!(socket = %path, "set socket permissions: {e}");
     }
 

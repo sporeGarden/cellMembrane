@@ -460,13 +460,16 @@ fn resolve_dependency_binary_path(binary: &str) -> crate::Result<PathBuf> {
     )))
 }
 
-/// Wait for a socket file to appear on disk (polled at 200ms intervals).
+const SOCKET_POLL_INTERVAL_MS: u64 = 200;
+const SOCKET_POLL_MAX_ATTEMPTS: usize = 40;
+
+/// Wait for a socket file to appear on disk.
 async fn wait_for_socket(path: &Path) {
-    for _ in 0..40 {
+    for _ in 0..SOCKET_POLL_MAX_ATTEMPTS {
         if path.exists() {
             return;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(SOCKET_POLL_INTERVAL_MS)).await;
     }
 }
 
