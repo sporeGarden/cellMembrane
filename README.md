@@ -8,8 +8,8 @@
 | **Class** | fieldMouse — Nest Atomic on external substrate |
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
-| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 10-gate mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 157a) |
+| **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 11-peer mesh |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 157d) |
 
 ---
 
@@ -61,7 +61,7 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 157a G68): ~11k lines types, ~38k lines shadow. Crash-loop breaker
+Current state (Wave 157d G69): ~11k lines types, ~38k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -293,6 +293,8 @@ membrane plasmid.canary.promote --primal X  # Rollback: canary → production
 membrane plasmid.canary.failover          # List healthy failover targets
 membrane depot.integrity                  # Generate checksums.toml (BLAKE3) for all depot binaries
 membrane depot.integrity --verify         # Verify existing checksums against depot
+membrane depot.prune [--dry-run]          # Remove non-registry binaries from depot (G69)
+membrane depot.prune --allow=swarmvine    # Prune but keep named unregistered binaries
 membrane caddy.depot.provision            # Provision /depot/ HTTPS file server
 membrane caddy.status                     # VPS Caddy health + vhosts + TLS
 membrane relay.run infra/wateringHole     # Full K-Derm relay: pull → impulse → ship
@@ -345,7 +347,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 157a are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 157d are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -356,7 +358,7 @@ through Wave 157a are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh (10 named, 3 pending), UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1327 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1347 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
 | Dependencies | `nix` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, CSPRNG via `getrandom` | DONE |
@@ -572,7 +574,7 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,327 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,347 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, transport
 abstraction (G65/G66), platform substrate (G68), sync IPC, process lifecycle, and
 user-space deploy.
@@ -581,7 +583,7 @@ Tests use both inline `#[cfg(test)]` modules and dedicated test files
 — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1327 tests)
+cargo test                  # Full suite (1347 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

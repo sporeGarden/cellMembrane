@@ -37,7 +37,7 @@ checksums + BLAKE3SUMS, and prunes stale provenance entries. Supports `--dry-run
 and `--allow=<name>` for binaries not yet in registry (e.g. swarmvine). Dispatch
 table refactored: `depot.*` commands now route through unified `dispatch_depot()`.
 `BLAKE3SUMS_FILE` constant promoted from local to `cellmembrane-types`.
-`format_bytes()` elevated to `pub(crate)`. 4 new prune tests. 1343 tests total.
+`format_bytes()` elevated to `pub(crate)`. 4 new prune tests. 1347 tests total.
 
 **Wave 157a (vertebrate self-audit — P1 FD limits + dispatch/registry convergence):**
 `LimitNOFILE=65536` added to `ServiceSpec::to_systemd_unit()` — all generated
