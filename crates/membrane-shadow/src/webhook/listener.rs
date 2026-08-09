@@ -42,11 +42,15 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
     let path = socket_path.unwrap_or(&default);
 
     if Path::new(path).exists() {
-        let _ = std::fs::remove_file(path);
+        if let Err(e) = std::fs::remove_file(path) {
+            debug!(socket = %path, "remove stale socket: {e}");
+        }
     }
 
     if let Some(parent) = Path::new(path).parent() {
-        let _ = std::fs::create_dir_all(parent);
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            debug!(dir = %parent.display(), "create socket dir: {e}");
+        }
     }
 
     let listener = tokio::net::UnixListener::bind(path).map_err(|e| {
@@ -55,7 +59,9 @@ pub async fn listen(config: &crate::ShadowConfig, socket_path: Option<&str>) -> 
         )))
     })?;
 
-    let _ = cellmembrane_types::PlatformAccess::GroupReadWrite.apply(std::path::Path::new(path));
+    if let Err(e) = cellmembrane_types::PlatformAccess::GroupReadWrite.apply(std::path::Path::new(path)) {
+        debug!(socket = %path, "set socket permissions: {e}");
+    }
 
     info!(socket = %path, "webhook listener started");
 

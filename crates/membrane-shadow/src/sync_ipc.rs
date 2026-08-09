@@ -30,12 +30,16 @@ fn connect(path: &Path) -> Option<std::os::unix::net::UnixStream> {
             return None;
         }
     };
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(
+    if let Err(e) = stream.set_write_timeout(Some(Duration::from_secs(
         cellmembrane_types::service::DEFAULT_IPC_WRITE_TIMEOUT_SECS,
-    )));
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(
+    ))) {
+        tracing::debug!(path = %path.display(), "set write timeout: {e}");
+    }
+    if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(
         cellmembrane_types::service::DEFAULT_IPC_READ_TIMEOUT_SECS,
-    )));
+    ))) {
+        tracing::debug!(path = %path.display(), "set read timeout: {e}");
+    }
     Some(stream)
 }
 
@@ -161,8 +165,13 @@ fn ipc_send_plain(socket_path: &Path, request: &str) {
     let Some(mut stream) = connect(socket_path) else {
         return;
     };
-    let _ = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL);
-    let _ = writeln!(stream, "{request}");
+    if let Err(e) = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL) {
+        tracing::debug!(path = %socket_path.display(), "plain send signal: {e}");
+        return;
+    }
+    if let Err(e) = writeln!(stream, "{request}") {
+        tracing::debug!(path = %socket_path.display(), "plain send request: {e}");
+    }
 }
 
 /// Plain (no BTSP) request-response — fallback when BTSP handshake fails.

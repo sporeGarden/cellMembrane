@@ -464,7 +464,7 @@ echo "+$ahead"
             ShipResult::Failed
         }
         Err(e) => {
-            error!(error = %e, "SSH to golgiBody-ext failed");
+            error!(error = %e, "SSH to outer membrane relay failed");
             ShipResult::Failed
         }
     }

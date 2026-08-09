@@ -488,7 +488,9 @@ async fn read_chunked<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Res
 
         if chunk_size == 0 {
             let mut trailer = String::new();
-            let _ = reader.read_line(&mut trailer).await;
+            if let Err(e) = reader.read_line(&mut trailer).await {
+                tracing::debug!("chunked trailer read: {e}");
+            }
             break;
         }
 
@@ -500,7 +502,8 @@ async fn read_chunked<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Res
         body.extend_from_slice(&chunk);
 
         let mut crlf = [0u8; 2];
-        let _ = reader.read_exact(&mut crlf).await;
+        reader.read_exact(&mut crlf).await
+            .map_err(|e| ShadowError::http(format!("chunk CRLF: {e}")))?;
     }
 
     Ok(body)

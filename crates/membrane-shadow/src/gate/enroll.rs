@@ -329,7 +329,7 @@ fn resolve_hub_ssh_target() -> Option<String> {
 /// Configure Forgejo-first git remotes on local repos.
 ///
 /// The enrollment standard (Wave 147a): `origin` = Forgejo (sovereign), `github` = GitHub (mirror).
-async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
+async fn git_remotes_phase(_gate_name: &str, dry_run: bool) -> BootstrapPhase {
     let Ok(root) = crate::temporal::resolve_workspace_root() else {
         return BootstrapPhase {
             name: "git.remotes".into(),
@@ -344,8 +344,6 @@ async fn git_remotes_phase(gate_name: &str, dry_run: bool) -> BootstrapPhase {
             detail: "cannot load ecosystem manifest".into(),
         };
     };
-
-    let _ = gate_name;
 
     let mut configured = 0u32;
     let mut skipped = 0u32;

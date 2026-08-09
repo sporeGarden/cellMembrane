@@ -158,10 +158,6 @@ impl EcosystemManifest {
     /// Return the ordered list of build-authority gates from `[topology.roles]`.
     /// Falls back to scanning `[gates.*]` for `build_authority = true`.
     #[must_use]
-    #[allow(
-        dead_code,
-        reason = "manifest API — wired by tests, ready for consumers"
-    )]
     pub fn build_authorities(&self) -> Vec<String> {
         if let Some(topo) = &self.topology
             && let Some(roles) = &topo.roles

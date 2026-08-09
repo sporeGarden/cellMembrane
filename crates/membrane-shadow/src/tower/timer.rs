@@ -255,15 +255,25 @@ async fn enable_shadow(interval_min: u32) -> Result<ShadowOutcome> {
 }
 
 async fn disable_shadow() -> Result<ShadowOutcome> {
-    let _ = systemctl(&["disable", "--now", SHADOW_TIMER_UNIT]).await;
-    let _ = systemctl(&["stop", SHADOW_SERVICE_UNIT]).await;
+    if let Err(e) = systemctl(&["disable", "--now", SHADOW_TIMER_UNIT]).await {
+        tracing::debug!("disable timer: {e}");
+    }
+    if let Err(e) = systemctl(&["stop", SHADOW_SERVICE_UNIT]).await {
+        tracing::debug!("stop service: {e}");
+    }
 
     let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
     let service_path = format!("{unit_dir}/{SHADOW_SERVICE_UNIT}");
     let timer_path = format!("{unit_dir}/{SHADOW_TIMER_UNIT}");
-    let _ = tokio::fs::remove_file(&service_path).await;
-    let _ = tokio::fs::remove_file(&timer_path).await;
-    let _ = systemctl(&["daemon-reload"]).await;
+    if let Err(e) = tokio::fs::remove_file(&service_path).await {
+        tracing::debug!(path = %service_path, "remove unit: {e}");
+    }
+    if let Err(e) = tokio::fs::remove_file(&timer_path).await {
+        tracing::debug!(path = %timer_path, "remove unit: {e}");
+    }
+    if let Err(e) = systemctl(&["daemon-reload"]).await {
+        tracing::debug!("daemon-reload: {e}");
+    }
 
     Ok(ShadowOutcome::ok("tower shadow disabled"))
 }
