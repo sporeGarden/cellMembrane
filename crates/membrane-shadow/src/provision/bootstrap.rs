@@ -286,7 +286,10 @@ async fn install_systemd_units(ip: &str, gate_name: &str) -> Result<String> {
     let (bearer_unit, relay_unit, _nucleus_template) = generate_systemd_units(gate_name);
 
     let socket_base = cellmembrane_types::service::DEFAULT_SOCKET_BASE;
-    let spine_socket = format!("{socket_base}/{spine}.sock");
+    let spine_socket = format!(
+        "{socket_base}/{}",
+        cellmembrane_types::service::constants::socket_filename(spine)
+    );
 
     let mut primal_units = String::new();
     for svc in cellmembrane_types::MembraneService::all() {

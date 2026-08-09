@@ -19,6 +19,9 @@ pub(crate) enum LineageResult {
 /// Validate depot lineage for a primal: BLAKE3 checksum, provenance commit,
 /// and builder authority. `PostPrimordial` primals are hard-blocked on failure;
 /// other primals get a warning.
+///
+/// G69 Phase 2: validates per-entry builder and blake3 when available, falling
+/// back to file-level builder for legacy provenance files.
 pub(crate) fn validate_lineage(primal: &str, depot_dir: &std::path::Path) -> LineageResult {
     let is_critical = cellmembrane_types::service::is_post_primordial(primal);
     let arch = super::detect_target_triple();
@@ -31,17 +34,26 @@ pub(crate) fn validate_lineage(primal: &str, depot_dir: &std::path::Path) -> Lin
     };
 
     let provenance = super::depot::load_provenance(depot_dir);
-    let provenance_ok = provenance
-        .as_ref()
-        .and_then(|p| p.entries.get(primal))
-        .and_then(|e| e.commit.as_ref())
-        .is_some();
+    let entry = provenance.as_ref().and_then(|p| p.entries.get(primal));
 
-    let builder_ok = provenance
-        .as_ref()
-        .is_some_and(|p| !p.builder.as_ref().is_some_and(String::is_empty));
+    let provenance_ok = entry.and_then(|e| e.commit.as_ref()).is_some();
 
-    if checksum_ok && provenance_ok && builder_ok {
+    let builder_ok = entry.and_then(|e| e.builder.as_ref()).map_or_else(
+        || {
+            provenance
+                .as_ref()
+                .is_some_and(|p| !p.builder.as_ref().is_some_and(String::is_empty))
+        },
+        |b| !b.is_empty(),
+    );
+
+    let blake3_cross_ok = entry
+        .and_then(|e| e.blake3.as_ref())
+        .is_none_or(|prov_hash| {
+            super::compute_blake3_file(&bin_path).is_ok_and(|actual| actual == *prov_hash)
+        });
+
+    if checksum_ok && provenance_ok && builder_ok && blake3_cross_ok {
         return LineageResult::Verified;
     }
 
@@ -54,6 +66,9 @@ pub(crate) fn validate_lineage(primal: &str, depot_dir: &std::path::Path) -> Lin
     }
     if !builder_ok {
         reasons.push("no builder identity");
+    }
+    if !blake3_cross_ok {
+        reasons.push("provenance blake3 does not match binary");
     }
     let detail = format!("{primal}: lineage incomplete — {}", reasons.join(", "));
 

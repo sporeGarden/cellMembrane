@@ -59,6 +59,32 @@ pub struct HarvestResult {
     pub status: HarvestStatus,
     /// Human-readable detail.
     pub detail: String,
+    /// G69 Phase 2 — source commit SHA (populated on successful build).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    /// G69 Phase 2 — BLAKE3 hash of the built binary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blake3: Option<String>,
+    /// G69 Phase 2 — target triple this binary was built for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+}
+
+impl HarvestResult {
+    pub(super) fn new(
+        binary: impl Into<String>,
+        status: HarvestStatus,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            binary: binary.into(),
+            status,
+            detail: detail.into(),
+            commit: None,
+            blake3: None,
+            target: None,
+        }
+    }
 }
 
 /// Status of a single primal harvest.
@@ -103,6 +129,18 @@ pub struct ProvenanceEntry {
     pub commit: Option<String>,
     #[serde(default)]
     pub source: Option<String>,
+    /// G69 Phase 2 — per-entry BLAKE3 hash of the binary.
+    #[serde(default)]
+    pub blake3: Option<String>,
+    /// G69 Phase 2 — when this entry was built.
+    #[serde(default)]
+    pub built_at: Option<String>,
+    /// G69 Phase 2 — target triple this binary was built for.
+    #[serde(default)]
+    pub target: Option<String>,
+    /// G69 Phase 2 — which gate built this binary.
+    #[serde(default)]
+    pub builder: Option<String>,
 }
 
 /// Full provenance file structure.
@@ -168,11 +206,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
 
     for primal in &primals_to_harvest {
         let Some(source) = sources.get(primal.as_str()) else {
-            results.push(HarvestResult {
-                binary: primal.clone(),
-                status: HarvestStatus::Skipped,
-                detail: "not in sources.toml".into(),
-            });
+            results.push(HarvestResult::new(
+                primal,
+                HarvestStatus::Skipped,
+                "not in sources.toml",
+            ));
             continue;
         };
 
@@ -185,11 +223,11 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
             || drift::has_upstream_changes(primal, &source, provenance.as_ref(), &depot_dir).await;
 
         if !needs_rebuild {
-            results.push(HarvestResult {
-                binary: primal.clone(),
-                status: HarvestStatus::Current,
-                detail: "commit unchanged".into(),
-            });
+            results.push(HarvestResult::new(
+                primal,
+                HarvestStatus::Current,
+                "commit unchanged",
+            ));
             continue;
         }
 
@@ -207,25 +245,25 @@ pub async fn harvest(args: &HarvestArgs) -> Result<ShadowOutcome> {
                     match resolve_local_source_dir(primal) {
                         Ok(dir) => format!("build from local ({})", dir.display()),
                         Err(e) => {
-                            results.push(HarvestResult {
-                                binary: primal.clone(),
-                                status: HarvestStatus::Failed,
-                                detail: format!("dry-run: --local validation failed — {e}"),
-                            });
+                            results.push(HarvestResult::new(
+                                primal.as_str(),
+                                HarvestStatus::Failed,
+                                format!("dry-run: --local validation failed — {e}"),
+                            ));
                             continue;
                         }
                     }
                 } else {
                     "clone".to_string()
                 };
-                results.push(HarvestResult {
-                    binary: primal.clone(),
-                    status: HarvestStatus::Built,
-                    detail: format!(
+                results.push(HarvestResult::new(
+                    primal.as_str(),
+                    HarvestStatus::Built,
+                    format!(
                         "dry-run: would {mode} {} and build for {target}",
                         source.repo
                     ),
-                });
+                ));
                 continue;
             }
 
@@ -547,15 +585,15 @@ async fn resolve_source(
     primal: &str,
     source: &SourceEntry,
     local: bool,
-) -> std::result::Result<SourceResolution, HarvestResult> {
+) -> std::result::Result<SourceResolution, Box<HarvestResult>> {
     if local {
         return resolve_local_source_dir(primal).map_or_else(
             |e| {
-                Err(HarvestResult {
-                    binary: primal.into(),
-                    status: HarvestStatus::Failed,
-                    detail: e.to_string(),
-                })
+                Err(Box::new(HarvestResult::new(
+                    primal,
+                    HarvestStatus::Failed,
+                    e.to_string(),
+                )))
             },
             |dir| {
                 info!(primal, path = %dir.display(), "local harvest: using workspace checkout");
@@ -576,11 +614,7 @@ async fn resolve_source(
         } else {
             HarvestStatus::Failed
         };
-        return Err(HarvestResult {
-            binary: primal.into(),
-            status,
-            detail: e.to_string(),
-        });
+        return Err(Box::new(HarvestResult::new(primal, status, e.to_string())));
     }
 
     Ok(SourceResolution {
@@ -599,7 +633,7 @@ async fn harvest_one(
 ) -> HarvestResult {
     let resolved = match resolve_source(primal, source, local).await {
         Ok(r) => r,
-        Err(result) => return result,
+        Err(result) => return *result,
     };
     let source_dir = &resolved.dir;
 
@@ -616,11 +650,7 @@ async fn harvest_one(
     }
 
     if let Err(e) = toolchain::build_binary(source, target, source_dir, manifest_linker).await {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: e.to_string(),
-        };
+        return HarvestResult::new(primal, HarvestStatus::Failed, e.to_string());
     }
 
     let binary_name = source.binary_name.as_deref().unwrap_or(primal);
@@ -636,20 +666,16 @@ async fn harvest_one(
         .join(&file_name);
 
     if !bin_path.exists() {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: format!("binary not found at {}", bin_path.display()),
-        };
+        return HarvestResult::new(
+            primal,
+            HarvestStatus::Failed,
+            format!("binary not found at {}", bin_path.display()),
+        );
     }
 
     if !target.contains("windows") {
         if let Err(e) = validate_elf_arch(&bin_path, target).await {
-            return HarvestResult {
-                binary: primal.into(),
-                status: HarvestStatus::Failed,
-                detail: e.to_string(),
-            };
+            return HarvestResult::new(primal, HarvestStatus::Failed, e.to_string());
         }
         toolchain::strip_binary(&bin_path, primal, target).await;
     }
@@ -669,13 +695,12 @@ async fn harvest_one(
                     &blake3[..16],
                     &head_commit[..std::cmp::min(8, head_commit.len())]
                 ),
+                commit: Some(head_commit),
+                blake3: Some(blake3),
+                target: Some(target.to_string()),
             }
         }
-        Err(e) => HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: e.to_string(),
-        },
+        Err(e) => HarvestResult::new(primal, HarvestStatus::Failed, e.to_string()),
     }
 }
 

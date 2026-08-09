@@ -105,6 +105,61 @@ fn lineage_result_variants_exhaustive() {
 }
 
 #[test]
+fn validate_lineage_per_entry_builder_fallback() {
+    use super::harvest::{ProvenanceEntry, ProvenanceFile};
+    use std::collections::BTreeMap;
+
+    let tmp = std::env::temp_dir().join("lineage_per_entry_builder");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+
+    let mut entries = BTreeMap::new();
+    entries.insert(
+        "squirrel".to_string(),
+        ProvenanceEntry {
+            version: None,
+            commit: Some("abc123".into()),
+            source: None,
+            blake3: None,
+            built_at: Some("2026-08-09T18:00:00Z".into()),
+            target: Some("x86_64-unknown-linux-musl".into()),
+            builder: Some("blueGate".into()),
+        },
+    );
+    let prov = ProvenanceFile {
+        generated: Some("2026-08-09".into()),
+        builder: None,
+        target: None,
+        rustc: None,
+        entries,
+    };
+    let prov_toml = toml::to_string_pretty(&prov).unwrap();
+    std::fs::write(
+        tmp.join(cellmembrane_types::service::PROVENANCE_FILE),
+        &prov_toml,
+    )
+    .unwrap();
+
+    let result = validate_lineage("squirrel", &tmp);
+    match &result {
+        LineageResult::Warned(detail) => {
+            assert!(
+                !detail.contains("no builder identity"),
+                "per-entry builder should satisfy the builder check, got: {detail}"
+            );
+        }
+        other => {
+            assert!(
+                !matches!(other, LineageResult::Blocked(_)),
+                "squirrel is not postPrimordial: {other:?}"
+            );
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
 fn strip_sandbox_suffix_removes_commit_hash() {
     assert_eq!(strip_sandbox_suffix("biomeos-abc12345"), "biomeos");
     assert_eq!(strip_sandbox_suffix("beardog-deadbeef"), "beardog");

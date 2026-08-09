@@ -126,17 +126,25 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
             .map_or_else(BTreeMap::new, |parsed| parsed.entries);
 
     for result in built {
-        if let Some(after_commit) = result.detail.split("commit=").nth(1) {
-            let commit = after_commit
-                .split_whitespace()
-                .next()
-                .unwrap_or_else(|| after_commit.trim());
+        let commit = result.commit.clone().or_else(|| {
+            result
+                .detail
+                .split("commit=")
+                .nth(1)
+                .and_then(|s| s.split_whitespace().next())
+                .map(str::to_string)
+        });
+        if commit.is_some() || result.blake3.is_some() {
             existing_prov.insert(
                 result.binary.clone(),
                 ProvenanceEntry {
                     version: None,
-                    commit: Some(commit.to_string()),
+                    commit,
                     source: None,
+                    blake3: result.blake3.clone(),
+                    built_at: Some(now.clone()),
+                    target: result.target.clone(),
+                    builder: Some(builder.clone()),
                 },
             );
         }
@@ -152,6 +160,18 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
         }
         if let Some(s) = &entry.source {
             let _ = writeln!(prov_out, "source = \"{s}\"");
+        }
+        if let Some(b) = &entry.blake3 {
+            let _ = writeln!(prov_out, "blake3 = \"{b}\"");
+        }
+        if let Some(t) = &entry.built_at {
+            let _ = writeln!(prov_out, "built_at = \"{t}\"");
+        }
+        if let Some(tgt) = &entry.target {
+            let _ = writeln!(prov_out, "target = \"{tgt}\"");
+        }
+        if let Some(bldr) = &entry.builder {
+            let _ = writeln!(prov_out, "builder = \"{bldr}\"");
         }
         prov_out.push('\n');
     }

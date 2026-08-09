@@ -15,12 +15,18 @@ use super::types::{ImpulseFile, ImpulseSignature};
 
 fn relay_socket_name() -> String {
     let binary = cellmembrane_types::MembraneService::binary_for(ServiceCapability::MeshRelay);
-    format!("{binary}-default.sock")
+    format!(
+        "{binary}-default{}",
+        cellmembrane_types::service::constants::SOCKET_SUFFIX
+    )
 }
 
 fn signer_socket_name() -> String {
     let binary = cellmembrane_types::MembraneService::binary_for(ServiceCapability::CryptoSigner);
-    format!("{binary}-default.sock")
+    format!(
+        "{binary}-default{}",
+        cellmembrane_types::service::constants::SOCKET_SUFFIX
+    )
 }
 
 pub(super) fn try_relay_impulse(impulse: &ImpulseFile) {

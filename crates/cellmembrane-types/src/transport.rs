@@ -143,7 +143,10 @@ impl TransportEndpoint {
             }
         } else {
             Self::Uds {
-                path: format!("{socket_base}/{binary}.sock"),
+                path: format!(
+                    "{socket_base}/{}",
+                    crate::service::constants::socket_filename(binary)
+                ),
             }
         }
     }

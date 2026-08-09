@@ -191,7 +191,10 @@ fn platform_default(binary: &str, port: Option<u16>) -> TransportEndpoint {
     let socket_base = cellmembrane_types::service::resolve_socket_base();
     if cfg!(unix) {
         TransportEndpoint::Uds {
-            path: format!("{socket_base}/{binary}.sock"),
+            path: format!(
+                "{socket_base}/{}",
+                cellmembrane_types::service::constants::socket_filename(binary)
+            ),
         }
     } else {
         TransportEndpoint::Tcp {

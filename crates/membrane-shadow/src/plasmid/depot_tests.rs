@@ -220,16 +220,16 @@ fn update_checksums_preserves_other_targets() {
     std::fs::write(staging_a.join("beardog"), b"x86 binary").unwrap();
     std::fs::write(staging_b.join("beardog"), b"arm binary").unwrap();
 
-    let result_a = HarvestResult {
-        binary: "beardog".into(),
-        status: HarvestStatus::Built,
-        detail: "100KB blake3=aaa commit=abc".into(),
-    };
-    let result_b = HarvestResult {
-        binary: "beardog".into(),
-        status: HarvestStatus::Built,
-        detail: "90KB blake3=bbb commit=def".into(),
-    };
+    let result_a = HarvestResult::new(
+        "beardog",
+        HarvestStatus::Built,
+        "100KB blake3=aaa commit=abc",
+    );
+    let result_b = HarvestResult::new(
+        "beardog",
+        HarvestStatus::Built,
+        "90KB blake3=bbb commit=def",
+    );
 
     update_checksums(&tmp, target_a, &[&result_a], &staging_a).unwrap();
     let after_a = std::fs::read_to_string(tmp.join("checksums.toml")).unwrap();

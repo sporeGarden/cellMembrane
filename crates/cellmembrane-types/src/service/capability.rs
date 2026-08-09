@@ -119,7 +119,10 @@ impl ServerContract {
                 format!("{install_base}/{binary} server --socket {socket_path}")
             }
             Self::Tarpc => {
-                let tarpc_path = format!("{socket_base}/{binary}.tarpc.sock");
+                let tarpc_path = format!(
+                    "{socket_base}/{binary}{}",
+                    super::constants::TARPC_SOCKET_SUFFIX
+                );
                 format!(
                     "{install_base}/{binary} server --socket {socket_path} --tarpc-socket {tarpc_path}"
                 )

@@ -420,10 +420,15 @@ pub(crate) async fn register_capabilities_with_mesh() -> crate::ShadowOutcome {
             continue;
         }
 
-        let socket_path = socket_base.join(format!("{}.sock", svc.binary));
-        let api_socket = svc
-            .api_socket
-            .map(|name| socket_base.join(format!("{name}-default.sock")));
+        let socket_path = socket_base.join(
+            cellmembrane_types::service::constants::socket_filename(svc.binary),
+        );
+        let api_socket = svc.api_socket.map(|name| {
+            socket_base.join(format!(
+                "{name}-default{}",
+                cellmembrane_types::service::constants::SOCKET_SUFFIX
+            ))
+        });
 
         let is_running = socket_path.exists() || api_socket.as_ref().is_some_and(|p| p.exists());
 

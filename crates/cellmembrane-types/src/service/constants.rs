@@ -124,10 +124,19 @@ pub const WEBHOOK_SOCKET_NAME: &str = "webhook.sock";
 
 /// File extension suffix for tarpc binary-protocol sockets (Cephalization G64).
 ///
+/// Standard UDS socket file extension.
+pub const SOCKET_SUFFIX: &str = ".sock";
+
 /// Dual-socket primals expose JSON-RPC on `{name}.sock` and tarpc on
 /// `{name}.tarpc.sock`. Health sweeps must filter by suffix to avoid
 /// sending JSON-RPC probes to tarpc sockets.
 pub const TARPC_SOCKET_SUFFIX: &str = ".tarpc.sock";
+
+/// Construct the canonical socket filename for a binary: `{binary}.sock`.
+#[must_use]
+pub fn socket_filename(binary: &str) -> String {
+    format!("{binary}{SOCKET_SUFFIX}")
+}
 
 // ── step-ca SSH Certificate Authority ──────────────────────────────────
 
@@ -474,13 +483,6 @@ pub const DEFAULT_FORGEJO_ADMIN_USER: &str = "admin";
 pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
 /// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
 ///
-/// **Deprecated:** Use `MembraneService::build_service_filter()` instead — it
-/// derives the filter from the service registry and tracks new services
-/// automatically.
-#[deprecated(note = "use MembraneService::build_service_filter() instead")]
-pub const DEFAULT_SERVICE_FILTER: &str =
-    "membrane|forgejo|caddy|songbird|beardog|knot|hbb|fail2ban";
-
 /// Infrastructure services included in the service filter that are NOT in the
 /// membrane service registry (external daemons managed alongside the membrane).
 pub const INFRA_SERVICE_FILTER_EXTRAS: &[&str] = &["forgejo", "fail2ban"];

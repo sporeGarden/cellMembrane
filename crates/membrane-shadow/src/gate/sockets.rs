@@ -120,7 +120,10 @@ pub(crate) fn resolve_mesh_relay_socket() -> String {
         .find(|p| Path::new(p).exists())
         .unwrap_or_else(|| {
             let socket_dir = resolve_biomeos_socket_dir();
-            format!("{socket_dir}/{binary_name}.sock")
+            format!(
+                "{socket_dir}/{}",
+                cellmembrane_types::service::constants::socket_filename(binary_name)
+            )
         })
 }
 
@@ -143,21 +146,22 @@ pub(super) fn resolve_biomeos_socket_dir() -> String {
 /// Under G65, these are the only sockets needed — protocol negotiation
 /// selects `tarpc` or `jsonrpc` at connection time on a single socket.
 pub(crate) fn resolve_primal_socket_paths(primal: &str) -> Vec<String> {
+    use cellmembrane_types::service::constants::{SOCKET_SUFFIX, socket_filename};
     let socket_base = cellmembrane_types::service::resolve_socket_base();
     let xdg_runtime = cellmembrane_types::service::resolve_xdg_runtime_dir();
     let ns = cellmembrane_types::service::NEURAL_API_NAMESPACE;
     let mut paths = vec![
-        format!("{socket_base}/{primal}.sock"),
-        format!("{xdg_runtime}/{ns}/{primal}.sock"),
+        format!("{socket_base}/{}", socket_filename(primal)),
+        format!("{xdg_runtime}/{ns}/{}", socket_filename(primal)),
     ];
     if let Some(svc) = cellmembrane_types::MembraneService::for_binary(primal) {
         if let Some(api) = svc.api_socket {
-            paths.insert(0, format!("{socket_base}/{api}.sock"));
-            paths.insert(0, format!("{socket_base}/{api}-default.sock"));
-            paths.push(format!("{xdg_runtime}/{ns}/{api}-default.sock"));
+            paths.insert(0, format!("{socket_base}/{}", socket_filename(api)));
+            paths.insert(0, format!("{socket_base}/{api}-default{SOCKET_SUFFIX}"));
+            paths.push(format!("{xdg_runtime}/{ns}/{api}-default{SOCKET_SUFFIX}"));
         }
         for alias in svc.socket_aliases {
-            paths.push(format!("{socket_base}/{alias}.sock"));
+            paths.push(format!("{socket_base}/{}", socket_filename(alias)));
         }
     }
     paths

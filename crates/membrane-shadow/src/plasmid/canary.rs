@@ -82,7 +82,9 @@ pub(crate) async fn retire_to_canary(
     pool.slots.retain(|s| s.primal != primal);
 
     let canary_binary = bin_dir.join(primal);
-    let socket_path = socket_dir.join(format!("{primal}.sock"));
+    let socket_path = socket_dir.join(cellmembrane_types::service::constants::socket_filename(
+        primal,
+    ));
 
     let _ = tokio::fs::remove_file(&socket_path).await;
     super::stage_binary(old_binary, &canary_binary).await?;

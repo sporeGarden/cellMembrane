@@ -1,13 +1,26 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-09 (Wave 157d dep evolution — chrono→time + magic numbers + byte literal)
+**Last updated:** 2026-08-09 (Wave 157d G69 Phase 2 lineage metadata + deprecated cleanup + socket consolidation)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157d (G69 Phase 2 lineage metadata + deprecated cleanup + socket consolidation):**
+G69 Phase 2: `ProvenanceEntry` enriched with per-entry `blake3`, `built_at`,
+`target`, `builder` fields (backward-compatible via `#[serde(default)]`).
+`HarvestResult` gains structured `commit`/`blake3`/`target` fields — eliminates
+fragile string parsing in `update_provenance()`. `validate_lineage()` now verifies
+per-entry builder identity (with file-level fallback) and cross-checks provenance
+blake3 against binary on disk. Deprecated code removed: `TargetArch` re-export
+purged from `lib.rs` (0 production callers), `DEFAULT_SERVICE_FILTER` dead constant
+deleted. Socket suffix consolidation: `SOCKET_SUFFIX`, `socket_filename()` helper
+promoted to constants, 15 production call sites migrated. `TARPC_SOCKET_SUFFIX`
+usage in `capability.rs` standardized. guideStone P2 doc updated. 5 new tests.
+1349 tests, 0 clippy.
 
 **Wave 157d (dep evolution — chrono→time + magic numbers + byte literal):**
 External dependency evolution: replaced `chrono 0.4` with `time 0.3` across 9

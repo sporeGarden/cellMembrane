@@ -13,7 +13,7 @@
 //!
 //! guideStone properties:
 //! - P1 (Deterministic): same source + target = same binary
-//! - P2 (Reference-Traceable): provenance.toml with commit, rustc, timestamp, blake3
+//! - P2 (Reference-Traceable): provenance.toml per-entry commit, blake3, builder, `built_at`, target (G69 Phase 2)
 //! - P3 (Self-Verifying): BLAKE3 fail-closed; ELF arch validation at build time
 //! - P4 (Environment-Agnostic): musl-static, no runtime deps
 //! - P5 (Tolerance-Documented): build timeout, expected arch
@@ -102,11 +102,7 @@ async fn build_one(
         } else {
             HarvestStatus::Failed
         };
-        return HarvestResult {
-            binary: primal.into(),
-            status,
-            detail: e.to_string(),
-        };
+        return HarvestResult::new(primal, status, e.to_string());
     }
 
     let head_commit = crate::git_ops::head_short(&clone_dir)
@@ -114,11 +110,7 @@ async fn build_one(
         .unwrap_or_default();
 
     if let Err(e) = super::toolchain::build_binary(source, target, &clone_dir, None).await {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: e.to_string(),
-        };
+        return HarvestResult::new(primal, HarvestStatus::Failed, e.to_string());
     }
 
     let binary_name = source.binary_name.as_deref().unwrap_or(primal);
@@ -129,23 +121,19 @@ async fn build_one(
         .join(binary_name);
 
     if !bin_path.exists() {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: format!(
+        return HarvestResult::new(
+            primal,
+            HarvestStatus::Failed,
+            format!(
                 "binary '{}' not found at {} (HARVEST-NAME-01: check binary_name in sources.toml)",
                 binary_name,
                 bin_path.display()
             ),
-        };
+        );
     }
 
     if let Err(e) = validate_elf_arch(&bin_path, target).await {
-        return HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: e.to_string(),
-        };
+        return HarvestResult::new(primal, HarvestStatus::Failed, e.to_string());
     }
 
     super::toolchain::strip_binary(&bin_path, primal, target).await;
@@ -153,21 +141,21 @@ async fn build_one(
     match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
             let _ = tokio::fs::remove_dir_all(&clone_dir).await;
-            HarvestResult {
-                binary: primal.into(),
-                status: HarvestStatus::Built,
-                detail: format!(
+            let mut result = HarvestResult::new(
+                primal,
+                HarvestStatus::Built,
+                format!(
                     "{}KB blake3={} commit={} target={target} elf=VERIFIED",
                     size / 1024,
                     &blake3[..16],
                     &head_commit[..std::cmp::min(8, head_commit.len())]
                 ),
-            }
+            );
+            result.commit = Some(head_commit);
+            result.blake3 = Some(blake3);
+            result.target = Some(target.to_string());
+            result
         }
-        Err(e) => HarvestResult {
-            binary: primal.into(),
-            status: HarvestStatus::Failed,
-            detail: e.to_string(),
-        },
+        Err(e) => HarvestResult::new(primal, HarvestStatus::Failed, e.to_string()),
     }
 }

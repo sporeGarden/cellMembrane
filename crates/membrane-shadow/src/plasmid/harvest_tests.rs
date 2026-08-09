@@ -46,6 +46,10 @@ fn provenance_file_roundtrip() {
             version: Some("0.9.1".into()),
             commit: Some("abc123".into()),
             source: Some("forgejo".into()),
+            blake3: None,
+            built_at: None,
+            target: None,
+            builder: None,
         },
     );
     let prov = ProvenanceFile {
@@ -65,6 +69,85 @@ fn provenance_file_roundtrip() {
 }
 
 #[test]
+fn provenance_entry_g69_phase2_roundtrip() {
+    let mut entries = BTreeMap::new();
+    entries.insert(
+        "beardog".into(),
+        ProvenanceEntry {
+            version: Some("1.0.0".into()),
+            commit: Some("abc123".into()),
+            source: None,
+            blake3: Some("deadbeefdeadbeefdeadbeefdeadbeef".into()),
+            built_at: Some("2026-08-09T18:00:00Z".into()),
+            target: Some("x86_64-unknown-linux-musl".into()),
+            builder: Some("blueGate".into()),
+        },
+    );
+    let prov = ProvenanceFile {
+        generated: Some("2026-08-09T18:00:00Z".into()),
+        builder: Some("blueGate".into()),
+        target: Some("x86_64-unknown-linux-musl".into()),
+        rustc: Some("1.96.0".into()),
+        entries,
+    };
+    let serialized = toml::to_string_pretty(&prov).unwrap();
+    let deserialized: ProvenanceFile = toml::from_str(&serialized).unwrap();
+    let entry = &deserialized.entries["beardog"];
+    assert_eq!(
+        entry.blake3.as_deref(),
+        Some("deadbeefdeadbeefdeadbeefdeadbeef")
+    );
+    assert_eq!(entry.built_at.as_deref(), Some("2026-08-09T18:00:00Z"));
+    assert_eq!(entry.target.as_deref(), Some("x86_64-unknown-linux-musl"));
+    assert_eq!(entry.builder.as_deref(), Some("blueGate"));
+}
+
+#[test]
+fn provenance_entry_legacy_compat() {
+    let legacy_toml = r#"
+generated = "2026-07-01"
+builder = "sporeGate"
+target = "x86_64-unknown-linux-musl"
+
+[beardog]
+commit = "abc123"
+"#;
+    let parsed: ProvenanceFile = toml::from_str(legacy_toml).unwrap();
+    let entry = &parsed.entries["beardog"];
+    assert_eq!(entry.commit.as_deref(), Some("abc123"));
+    assert!(entry.blake3.is_none());
+    assert!(entry.built_at.is_none());
+    assert!(entry.target.is_none());
+    assert!(entry.builder.is_none());
+}
+
+#[test]
+fn harvest_result_structured_fields() {
+    let mut result = HarvestResult::new("beardog", HarvestStatus::Built, "ok");
+    assert!(result.commit.is_none());
+    assert!(result.blake3.is_none());
+    assert!(result.target.is_none());
+
+    result.commit = Some("abc123".into());
+    result.blake3 = Some("deadbeef".into());
+    result.target = Some("x86_64-unknown-linux-musl".into());
+
+    let json = serde_json::to_value(&result).unwrap();
+    assert_eq!(json["commit"], "abc123");
+    assert_eq!(json["blake3"], "deadbeef");
+    assert_eq!(json["target"], "x86_64-unknown-linux-musl");
+}
+
+#[test]
+fn harvest_result_none_fields_skipped_in_json() {
+    let result = HarvestResult::new("beardog", HarvestStatus::Current, "no change");
+    let json = serde_json::to_value(&result).unwrap();
+    assert!(json.get("commit").is_none());
+    assert!(json.get("blake3").is_none());
+    assert!(json.get("target").is_none());
+}
+
+#[test]
 fn checksum_entry_serde() {
     let entry = ChecksumEntry {
         blake3: "deadbeef".into(),
@@ -78,11 +161,7 @@ fn checksum_entry_serde() {
 
 #[test]
 fn harvest_result_status_display() {
-    let result = HarvestResult {
-        binary: "beardog".into(),
-        status: HarvestStatus::Built,
-        detail: "compiled OK".into(),
-    };
+    let result = HarvestResult::new("beardog", HarvestStatus::Built, "compiled OK");
     let json = serde_json::to_value(&result).unwrap();
     assert_eq!(json["status"], "Built");
     assert_eq!(json["binary"], "beardog");
@@ -91,16 +170,8 @@ fn harvest_result_status_display() {
 #[test]
 fn format_harvest_outcome_all_current() {
     let results = vec![
-        HarvestResult {
-            binary: "a".into(),
-            status: HarvestStatus::Current,
-            detail: "no change".into(),
-        },
-        HarvestResult {
-            binary: "b".into(),
-            status: HarvestStatus::Current,
-            detail: "no change".into(),
-        },
+        HarvestResult::new("a", HarvestStatus::Current, "no change"),
+        HarvestResult::new("b", HarvestStatus::Current, "no change"),
     ];
     let outcome = format_harvest_outcome(&results);
     assert!(outcome.ok);
@@ -111,16 +182,8 @@ fn format_harvest_outcome_all_current() {
 #[test]
 fn format_harvest_outcome_with_failure() {
     let results = vec![
-        HarvestResult {
-            binary: "a".into(),
-            status: HarvestStatus::Built,
-            detail: "ok".into(),
-        },
-        HarvestResult {
-            binary: "b".into(),
-            status: HarvestStatus::Failed,
-            detail: "build error".into(),
-        },
+        HarvestResult::new("a", HarvestStatus::Built, "ok"),
+        HarvestResult::new("b", HarvestStatus::Failed, "build error"),
     ];
     let outcome = format_harvest_outcome(&results);
     assert!(!outcome.ok);

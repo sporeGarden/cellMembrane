@@ -109,7 +109,9 @@ async fn configure_mesh(
 
     let socket_dir = super::sockets::resolve_biomeos_socket_dir();
     let socket_path = std::path::PathBuf::from(&socket_dir)
-        .join(format!("{relay_binary}.sock"))
+        .join(cellmembrane_types::service::constants::socket_filename(
+            relay_binary,
+        ))
         .display()
         .to_string();
 
