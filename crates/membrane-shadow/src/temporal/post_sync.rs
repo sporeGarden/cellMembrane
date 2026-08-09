@@ -163,12 +163,9 @@ async fn delegate_harvest_to_primary(
     m: &crate::manifest::EcosystemManifest,
     lines: &mut Vec<String>,
 ) {
-    let primary = match m.build_authorities().into_iter().next() {
-        Some(p) => p,
-        None => {
-            lines.push("  [delegate] no primary builder configured — skipping".into());
-            return;
-        }
+    let Some(primary) = m.build_authorities().into_iter().next() else {
+        lines.push("  [delegate] no primary builder configured — skipping".into());
+        return;
     };
 
     let endpoint = cellmembrane_types::TransportEndpoint::MeshRelay {

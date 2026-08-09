@@ -195,9 +195,7 @@ impl EcosystemManifest {
         reason = "manifest API — wired by tests, ready for consumers"
     )]
     pub fn is_primary_build_authority(&self, gate: &str) -> bool {
-        self.build_authorities()
-            .first()
-            .map_or(false, |g| g == gate)
+        self.build_authorities().first().is_some_and(|g| g == gate)
     }
 
     /// Find gates that have a specific role in their roles list.

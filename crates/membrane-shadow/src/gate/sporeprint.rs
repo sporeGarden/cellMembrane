@@ -203,25 +203,31 @@ pub(crate) struct SporePrintUnits {
 }
 
 impl SporePrintUnits {
-    /// Unit filenames for systemd installation.
+    /// Unit filenames for systemd installation, derived from the service registry.
     #[must_use]
-    pub const fn filenames() -> [&'static str; 4] {
+    pub fn filenames() -> [String; 4] {
+        let roles = sporeprint_binaries();
         [
-            "petaltongue-sporeprint.service",
-            "nestgate-sporeprint.service",
-            "songbird-gateway.service",
-            "beardog-sporeprint.service",
+            format!("{}-sporeprint.service", roles.content),
+            format!("{}-sporeprint.service", roles.cas),
+            format!(
+                "{}-gateway.service",
+                cellmembrane_types::MembraneService::binary_for(
+                    cellmembrane_types::ServiceCapability::MeshRelay
+                )
+            ),
+            format!("{}-sporeprint.service", roles.crypto),
         ]
     }
 
     /// Iterate over `(filename, content)` pairs in boot order.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub fn iter(&self) -> impl Iterator<Item = (String, &str)> {
         let names = Self::filenames();
         [
-            (names[0], self.petaltongue.as_str()),
-            (names[1], self.nestgate.as_str()),
-            (names[2], self.songbird.as_str()),
-            (names[3], self.beardog.as_str()),
+            (names[0].clone(), self.petaltongue.as_str()),
+            (names[1].clone(), self.nestgate.as_str()),
+            (names[2].clone(), self.songbird.as_str()),
+            (names[3].clone(), self.beardog.as_str()),
         ]
         .into_iter()
     }

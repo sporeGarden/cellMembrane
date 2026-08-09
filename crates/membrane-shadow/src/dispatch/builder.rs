@@ -17,8 +17,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
 
-const DEFAULT_BUILDER_PORT: u16 = 9800;
-const DEFAULT_BUILDER_BIND: &str = "0.0.0.0";
+const DEFAULT_BUILDER_PORT: u16 = cellmembrane_types::service::DEFAULT_BUILDER_PORT;
+const DEFAULT_BUILDER_BIND: &str = cellmembrane_types::service::BIND_ALL;
 
 /// Start the builder service: bind TCP, register with mesh, accept JSON-RPC.
 pub(super) async fn serve(args: &[&str]) -> Result<ShadowOutcome> {
@@ -218,7 +218,7 @@ async fn register_build_capability(gate: &str) {
         "method": "ipc.register",
         "params": {
             "primal_id": "membrane",
-            "socket_path": format!("tcp://0.0.0.0:{DEFAULT_BUILDER_PORT}"),
+            "socket_path": format!("tcp://{}:{DEFAULT_BUILDER_PORT}", cellmembrane_types::service::BIND_ALL),
             "capabilities": ["build", "plasmid_harvest", "plasmid_build"],
             "gate": gate,
         },

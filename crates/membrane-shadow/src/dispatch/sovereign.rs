@@ -55,14 +55,8 @@ fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
         }
     }
 
-    vec![ResolvedSubBuilder {
-        gate: "blueGate".into(),
-        target: "x86_64-pc-windows-gnu".into(),
-        endpoint: cellmembrane_types::TransportEndpoint::MeshRelay {
-            peer_id: "blueGate".into(),
-            capability: "build".into(),
-        },
-    }]
+    tracing::debug!("no sub_builders in manifest — sub-builder dispatch will be skipped");
+    Vec::new()
 }
 
 /// Resolve a manifest entry to a transport endpoint.
@@ -77,7 +71,7 @@ fn resolve_builder_endpoint(
         );
         cellmembrane_types::TransportEndpoint::Tcp {
             host: entry.ssh_host.clone(),
-            port: 9800,
+            port: cellmembrane_types::service::DEFAULT_BUILDER_PORT,
         }
     } else {
         cellmembrane_types::TransportEndpoint::MeshRelay {

@@ -110,7 +110,11 @@ pub(crate) fn ipc_send(socket_path: &Path, request: &str) {
     }
     #[cfg(not(unix))]
     {
-        let _ = (socket_path, request);
+        tracing::warn!(
+            socket = %socket_path.display(),
+            "ipc_send: UDS not available on this platform — message dropped"
+        );
+        let _ = request;
     }
 }
 
@@ -142,7 +146,11 @@ pub(crate) fn ipc_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> 
     }
     #[cfg(not(unix))]
     {
-        let _ = (socket_path, request);
+        tracing::warn!(
+            socket = %socket_path.display(),
+            "ipc_request: UDS not available on this platform"
+        );
+        let _ = request;
         None
     }
 }

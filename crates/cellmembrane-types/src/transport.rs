@@ -66,7 +66,9 @@ impl TransportEndpoint {
     pub fn is_local(&self) -> bool {
         match self {
             Self::Uds { .. } | Self::NamedPipe { .. } => true,
-            Self::Tcp { host, .. } => host == "127.0.0.1" || host == "::1" || host == "localhost",
+            Self::Tcp { host, .. } => {
+                host == crate::service::BIND_LOOPBACK || host == "::1" || host == "localhost"
+            }
             Self::MeshRelay { .. } => false,
         }
     }

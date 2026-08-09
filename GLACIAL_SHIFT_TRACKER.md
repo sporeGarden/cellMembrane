@@ -1,13 +1,25 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-09 (Wave 157d G69 depot.prune)
+**Last updated:** 2026-08-09 (Wave 157d deep debt — hardcode elimination + zero clippy)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157d (deep debt — hardcode elimination + zero clippy):**
+Systematic hardcode sweep: 14 port literals in registry.rs wired to named
+constants (added 7 new: builder, skunkbat, rhizocrypt×2, loamspine, sweetgrass,
+hbbs-NAT). IP literals `0.0.0.0`/`127.0.0.1` in builder.rs and transport.rs
+replaced with `BIND_ALL`/`BIND_LOOPBACK`. Self-knowledge violations eliminated:
+hardcoded `"blueGate"` fallback in sovereign.rs → empty vec (manifest-driven only);
+sporeprint unit filenames → registry-derived via `sporeprint_binaries()`. Silent
+non-Unix sync IPC no-ops in `sync_ipc.rs` → `tracing::warn` diagnostics.
+`DEFAULT_SERVICE_FILTER` formally `#[deprecated]` in favor of registry-driven
+`build_service_filter()`. Fixed 3 pre-existing clippy warnings (map_or, let-else,
+if-let) — **first zero-warning clippy run**. 1347 tests, 0 clippy warnings.
 
 **Wave 157d (G69 Depot Lineage Phase 1 — `depot.prune`):**
 New `depot.prune` command: scans all arch directories, compares binaries against

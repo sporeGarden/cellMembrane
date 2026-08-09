@@ -8,8 +8,12 @@
 //! capabilities, and composition tiers.
 
 use super::{
-    BIND_ALL, BIND_LOOPBACK, DEFAULT_FEDERATION_PORT, HealthCheckMethod, IpcProtocol,
-    MembraneService, Protocol, ServerContract, ServiceCapability, TransportMode,
+    BIND_ALL, BIND_LOOPBACK, DEFAULT_DNS_PORT, DEFAULT_FEDERATION_PORT, DEFAULT_HTTPS_PORT,
+    DEFAULT_LOAMSPINE_PORT, DEFAULT_NESTGATE_PORT, DEFAULT_PETALTONGUE_PORT,
+    DEFAULT_RHIZOCRYPT_PORT, DEFAULT_RHIZOCRYPT_SECONDARY_PORT, DEFAULT_SHADOW_PORT,
+    DEFAULT_SKUNKBAT_PORT, DEFAULT_SWEETGRASS_PORT, DEFAULT_TURN_PORT, HealthCheckMethod,
+    IpcProtocol, MembraneService, Protocol, RUSTDESK_HBBR_PORT, RUSTDESK_HBBS_NAT_PORT,
+    RUSTDESK_HBBS_PORT, ServerContract, ServiceCapability, TransportMode,
 };
 use crate::composition::MembraneComposition;
 
@@ -31,7 +35,7 @@ const BEARDOG: MembraneService = MembraneService {
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     system_install_path: None,
-    extra_ports: &[(8443, Protocol::Tcp, "beardog-tls-shadow")],
+    extra_ports: &[(DEFAULT_SHADOW_PORT, Protocol::Tcp, "beardog-tls-shadow")],
     min_composition: MembraneComposition::Tower,
     vps_transport: TransportMode::UdsOnly,
     capabilities: &[ServiceCapability::CryptoSigner, ServiceCapability::Security],
@@ -45,7 +49,7 @@ const BEARDOG: MembraneService = MembraneService {
 const SONGBIRD: MembraneService = MembraneService {
     binary: "songbird",
     systemd_unit: "songbird-relay.service",
-    port: Some(3478),
+    port: Some(DEFAULT_TURN_PORT),
     protocol: Protocol::TcpAndUdp,
     has_socket: false,
     protocols: DUAL_PROTOCOL,
@@ -71,7 +75,7 @@ const SONGBIRD: MembraneService = MembraneService {
 const SKUNKBAT: MembraneService = MembraneService {
     binary: "skunkbat",
     systemd_unit: "skunkbat-membrane.service",
-    port: Some(9140),
+    port: Some(DEFAULT_SKUNKBAT_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -95,7 +99,7 @@ const SKUNKBAT: MembraneService = MembraneService {
 const NESTGATE: MembraneService = MembraneService {
     binary: "nestgate",
     systemd_unit: "nestgate-membrane.service",
-    port: Some(9500),
+    port: Some(DEFAULT_NESTGATE_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -120,7 +124,7 @@ const NESTGATE: MembraneService = MembraneService {
 const RHIZOCRYPT: MembraneService = MembraneService {
     binary: "rhizocrypt",
     systemd_unit: "rhizocrypt-membrane.service",
-    port: Some(9601),
+    port: Some(DEFAULT_RHIZOCRYPT_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -128,7 +132,11 @@ const RHIZOCRYPT: MembraneService = MembraneService {
     health_method: HealthCheckMethod::Liveness,
     is_primal: true,
     system_install_path: None,
-    extra_ports: &[(9602, Protocol::Tcp, "rhizocrypt-jsonrpc")],
+    extra_ports: &[(
+        DEFAULT_RHIZOCRYPT_SECONDARY_PORT,
+        Protocol::Tcp,
+        "rhizocrypt-jsonrpc",
+    )],
     min_composition: MembraneComposition::Nest,
     vps_transport: TransportMode::UdsOnly,
     capabilities: &[ServiceCapability::Storage],
@@ -142,7 +150,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
 const LOAMSPINE: MembraneService = MembraneService {
     binary: "loamspine",
     systemd_unit: "loamspine-membrane.service",
-    port: Some(9700),
+    port: Some(DEFAULT_LOAMSPINE_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -164,7 +172,7 @@ const LOAMSPINE: MembraneService = MembraneService {
 const SWEETGRASS: MembraneService = MembraneService {
     binary: "sweetgrass",
     systemd_unit: "sweetgrass-membrane.service",
-    port: Some(9850),
+    port: Some(DEFAULT_SWEETGRASS_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -303,7 +311,7 @@ const SQUIRREL: MembraneService = MembraneService {
 const PETALTONGUE: MembraneService = MembraneService {
     binary: "petaltongue",
     systemd_unit: "petaltongue-membrane.service",
-    port: Some(8080),
+    port: Some(DEFAULT_PETALTONGUE_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -330,7 +338,7 @@ const PETALTONGUE: MembraneService = MembraneService {
 const HBBS: MembraneService = MembraneService {
     binary: "hbbs",
     systemd_unit: "hbbs-membrane.service",
-    port: Some(21116),
+    port: Some(RUSTDESK_HBBS_NAT_PORT),
     protocol: Protocol::TcpAndUdp,
     has_socket: false,
     protocols: JSONRPC_ONLY,
@@ -338,7 +346,7 @@ const HBBS: MembraneService = MembraneService {
     health_method: HealthCheckMethod::TcpConnect,
     is_primal: false,
     system_install_path: None,
-    extra_ports: &[(21115, Protocol::Tcp, "hbbs-id")],
+    extra_ports: &[(RUSTDESK_HBBS_PORT, Protocol::Tcp, "hbbs-id")],
     min_composition: MembraneComposition::RustDesk,
     vps_transport: TransportMode::TcpDefault,
     capabilities: &[],
@@ -352,7 +360,7 @@ const HBBS: MembraneService = MembraneService {
 const HBBR: MembraneService = MembraneService {
     binary: "hbbr",
     systemd_unit: "hbbr-membrane.service",
-    port: Some(21117),
+    port: Some(RUSTDESK_HBBR_PORT),
     protocol: Protocol::Tcp,
     has_socket: false,
     protocols: JSONRPC_ONLY,
@@ -374,7 +382,7 @@ const HBBR: MembraneService = MembraneService {
 const CADDY: MembraneService = MembraneService {
     binary: "caddy",
     systemd_unit: "caddy-tls.service",
-    port: Some(443),
+    port: Some(DEFAULT_HTTPS_PORT),
     protocol: Protocol::Tcp,
     has_socket: false,
     protocols: JSONRPC_ONLY,
@@ -396,7 +404,7 @@ const CADDY: MembraneService = MembraneService {
 const KNOTDNS: MembraneService = MembraneService {
     binary: "knot-dns",
     systemd_unit: "knot.service",
-    port: Some(53),
+    port: Some(DEFAULT_DNS_PORT),
     protocol: Protocol::TcpAndUdp,
     has_socket: false,
     protocols: JSONRPC_ONLY,

@@ -348,8 +348,30 @@ pub const ENV_TOWER_PORT: &str = "MEMBRANE_TOWER_PORT";
 /// Default TURN relay port.
 pub const DEFAULT_TURN_PORT: u16 = 3478;
 
+/// Default builder service port (Tower Atomic dispatch).
+pub const DEFAULT_BUILDER_PORT: u16 = 9800;
+
+/// Default skunkBat metadata port.
+pub const DEFAULT_SKUNKBAT_PORT: u16 = 9140;
+
+/// Default rhizoCrypt primary port.
+pub const DEFAULT_RHIZOCRYPT_PORT: u16 = 9601;
+
+/// Default rhizoCrypt secondary port.
+pub const DEFAULT_RHIZOCRYPT_SECONDARY_PORT: u16 = 9602;
+
+/// Default loamSpine port.
+pub const DEFAULT_LOAMSPINE_PORT: u16 = 9700;
+
+/// Default sweetGrass port.
+pub const DEFAULT_SWEETGRASS_PORT: u16 = 9850;
+
 /// `RustDesk` hbbs (ID/rendezvous server) port.
 pub const RUSTDESK_HBBS_PORT: u16 = 21115;
+
+/// `RustDesk` hbbs NAT-type-test (UDP) port.
+pub const RUSTDESK_HBBS_NAT_PORT: u16 = 21116;
+
 /// `RustDesk` hbbr (relay server) port.
 pub const RUSTDESK_HBBR_PORT: u16 = 21117;
 
@@ -452,8 +474,10 @@ pub const DEFAULT_FORGEJO_ADMIN_USER: &str = "admin";
 pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
 /// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
 ///
-/// Prefer `MembraneService::build_service_filter()` for a registry-derived
-/// filter that tracks new services automatically.
+/// **Deprecated:** Use `MembraneService::build_service_filter()` instead — it
+/// derives the filter from the service registry and tracks new services
+/// automatically.
+#[deprecated(note = "use MembraneService::build_service_filter() instead")]
 pub const DEFAULT_SERVICE_FILTER: &str =
     "membrane|forgejo|caddy|songbird|beardog|knot|hbb|fail2ban";
 
