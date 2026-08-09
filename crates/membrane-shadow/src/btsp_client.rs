@@ -86,17 +86,35 @@ pub fn handshake_sync<S: std::io::Read + std::io::Write>(
         version: BTSP_VERSION,
         client_ephemeral_pub: ephemeral_pub,
     };
-    let hello_json = serde_json::to_string(&hello).ok()?;
-    writeln!(reader.get_mut(), "{hello_json}").ok()?;
+    let hello_json = match serde_json::to_string(&hello) {
+        Ok(j) => j,
+        Err(e) => {
+            debug!(error = %e, "BTSP: ClientHello serialize failed");
+            return None;
+        }
+    };
+    if writeln!(reader.get_mut(), "{hello_json}").is_err() {
+        debug!("BTSP: ClientHello write failed");
+        return None;
+    }
 
     // Step 2: Read ServerHello
     let mut line = String::new();
-    reader.read_line(&mut line).ok()?;
+    if reader.read_line(&mut line).is_err() {
+        debug!("BTSP: ServerHello read failed");
+        return None;
+    }
     if line.trim().is_empty() {
         warn!("BTSP: empty ServerHello response");
         return None;
     }
-    let server_hello: ServerHello = serde_json::from_str(line.trim()).ok()?;
+    let server_hello: ServerHello = match serde_json::from_str(line.trim()) {
+        Ok(h) => h,
+        Err(e) => {
+            debug!(error = %e, "BTSP: ServerHello parse failed");
+            return None;
+        }
+    };
 
     // Step 3: Compute HMAC and send ChallengeResponse
     let hmac_hex = compute_challenge_hmac(&btsp_key, &server_hello.challenge);
@@ -104,17 +122,35 @@ pub fn handshake_sync<S: std::io::Read + std::io::Write>(
         session_id: server_hello.session_id,
         hmac: hmac_hex,
     };
-    let response_json = serde_json::to_string(&response).ok()?;
-    writeln!(reader.get_mut(), "{response_json}").ok()?;
+    let response_json = match serde_json::to_string(&response) {
+        Ok(j) => j,
+        Err(e) => {
+            debug!(error = %e, "BTSP: ChallengeResponse serialize failed");
+            return None;
+        }
+    };
+    if writeln!(reader.get_mut(), "{response_json}").is_err() {
+        debug!("BTSP: ChallengeResponse write failed");
+        return None;
+    }
 
     // Step 4: Read HandshakeComplete
     let mut complete_line = String::new();
-    reader.read_line(&mut complete_line).ok()?;
+    if reader.read_line(&mut complete_line).is_err() {
+        debug!("BTSP: HandshakeComplete read failed");
+        return None;
+    }
     if complete_line.trim().is_empty() {
         warn!("BTSP: empty HandshakeComplete response");
         return None;
     }
-    let complete: HandshakeComplete = serde_json::from_str(complete_line.trim()).ok()?;
+    let complete: HandshakeComplete = match serde_json::from_str(complete_line.trim()) {
+        Ok(c) => c,
+        Err(e) => {
+            debug!(error = %e, "BTSP: HandshakeComplete parse failed");
+            return None;
+        }
+    };
 
     debug!(
         session_id = %complete.session_id,

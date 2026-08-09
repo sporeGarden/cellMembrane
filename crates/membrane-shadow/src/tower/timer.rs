@@ -168,7 +168,9 @@ pub async fn dispatch_benchmark(args: &[&str]) -> Result<ShadowOutcome> {
             let filepath = output_dir.join(&filename);
 
             if let Some(ref json_str) = output {
-                let _ = crate::atomic_write_async(&filepath, json_str.as_bytes()).await;
+                if let Err(e) = crate::atomic_write_async(&filepath, json_str.as_bytes()).await {
+                    tracing::debug!(error = %e, path = %filepath.display(), "benchmark result write failed");
+                }
             }
 
             results.push(serde_json::json!({

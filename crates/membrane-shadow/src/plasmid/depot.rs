@@ -349,7 +349,6 @@ pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
 /// Fields like `source_commit` are retained for mesh publish / JSON
 /// serialization even when not consumed locally.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct StalenessEntry {
     /// Primal binary name.
     pub name: String,
@@ -358,6 +357,8 @@ pub struct StalenessEntry {
     /// Recorded commit from provenance (if any).
     pub provenance_commit: Option<String>,
     /// Local source HEAD commit (if workspace available).
+    /// Retained for mesh publish / JSON serialization.
+    #[allow(dead_code, reason = "serialized for mesh staleness publish")]
     pub source_commit: Option<String>,
     /// Whether this primal is considered stale (provenance missing, binary absent, or commit drift).
     pub stale: bool,

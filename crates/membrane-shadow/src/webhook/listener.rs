@@ -13,10 +13,16 @@
 use std::path::Path;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use super::{PushEvent, WebhookProvider, verify_provider_signature};
 use crate::error::Result;
+
+async fn send_response(writer: &mut (impl AsyncWriteExt + Unpin), response: &str) {
+    if let Err(e) = writer.write_all(response.as_bytes()).await {
+        debug!(error = %e, "webhook: response write failed (client may have disconnected)");
+    }
+}
 
 fn default_socket_path() -> String {
     let base = cellmembrane_types::service::resolve_socket_base();
@@ -98,8 +104,7 @@ where
         .map_err(io_err)?;
 
     if !request_line.starts_with("POST ") {
-        let response = http_response(405, "Method Not Allowed");
-        let _ = writer.write_all(response.as_bytes()).await;
+        send_response(&mut writer, &http_response(405, "Method Not Allowed")).await;
         return Ok(());
     }
 
@@ -132,29 +137,41 @@ where
 
     let secret = cellmembrane_types::service::resolve_webhook_secret_env().unwrap_or_default();
     if secret.is_empty() {
-        let response = http_response(500, "webhook secret not configured");
-        let _ = writer.write_all(response.as_bytes()).await;
+        send_response(
+            &mut writer,
+            &http_response(500, "webhook secret not configured"),
+        )
+        .await;
         return Ok(());
     }
 
     let Some((provider, raw_sig)) = WebhookProvider::detect(&headers) else {
-        let response = http_response(400, "no webhook signature header");
-        let _ = writer.write_all(response.as_bytes()).await;
+        send_response(
+            &mut writer,
+            &http_response(400, "no webhook signature header"),
+        )
+        .await;
         return Ok(());
     };
 
     if let Err(e) = verify_provider_signature(provider, secret.as_bytes(), &body, &raw_sig) {
         warn!(error = %e, "webhook signature verification failed");
-        let response = http_response(401, "signature verification failed");
-        let _ = writer.write_all(response.as_bytes()).await;
+        send_response(
+            &mut writer,
+            &http_response(401, "signature verification failed"),
+        )
+        .await;
         return Ok(());
     }
 
     let event: PushEvent = match serde_json::from_slice(&body) {
         Ok(e) => e,
         Err(e) => {
-            let response = http_response(400, &format!("invalid push event: {e}"));
-            let _ = writer.write_all(response.as_bytes()).await;
+            send_response(
+                &mut writer,
+                &http_response(400, &format!("invalid push event: {e}")),
+            )
+            .await;
             return Ok(());
         }
     };
@@ -172,7 +189,7 @@ where
         Ok(o) => http_response(200, &o.message),
         Err(e) => http_response(500, &format!("pipeline error: {e}")),
     };
-    let _ = writer.write_all(response.as_bytes()).await;
+    send_response(&mut writer, &response).await;
 
     Ok(())
 }

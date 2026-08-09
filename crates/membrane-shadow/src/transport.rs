@@ -51,7 +51,7 @@ impl TransportStream {
     ///
     /// Available for callers evolving toward G66 transport-aware health
     /// checks and BTSP local-trust (G63).
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "G66 transport-aware health checks")]
     #[must_use]
     pub const fn is_local(&self) -> bool {
         match self {
@@ -62,7 +62,7 @@ impl TransportStream {
     }
 
     /// Transport name for diagnostics.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "G66 transport diagnostics")]
     #[must_use]
     pub const fn transport_name(&self) -> &'static str {
         match self {
@@ -166,7 +166,10 @@ pub async fn connect_transport(endpoint: &TransportEndpoint) -> io::Result<Trans
 /// This is the primary entry point for transport injection. Systemd units,
 /// biomeOS, and songBird inject the endpoint via the env var; local dev
 /// falls back to the platform default.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "G66 transport injection entry point — wired per-primal incrementally"
+)]
 pub fn endpoint_from_env_or_default(binary: &str, port: Option<u16>) -> TransportEndpoint {
     if let Ok(val) = std::env::var(cellmembrane_types::transport::ENV_TRANSPORT_ENDPOINT) {
         if let Ok(ep) = TransportEndpoint::from_env_value(&val) {
