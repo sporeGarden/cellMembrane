@@ -47,8 +47,9 @@ webhook_receive = { protocol = "http", description = "Receive push events from F
 webhook_test = { protocol = "cli", description = "Test webhook event processing with sample JSON" }
 webhook_verify = { protocol = "cli", description = "Verify webhook HMAC signature" }
 
-# Depot integrity
+# Depot lifecycle (G69)
 depot_integrity = { protocol = "cli", description = "Generate/verify BLAKE3 checksums for depot binaries" }
+depot_prune = { protocol = "cli", description = "Remove non-registry binaries from depot (test/demo/bench cleanup)" }
 
 # Sandbox + canary lifecycle
 plasmid_sandbox = { protocol = "cli", description = "Ephemeral isolated binary validation (UDS probe)" }

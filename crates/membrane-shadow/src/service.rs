@@ -125,7 +125,7 @@ pub async fn logs(config: &ShadowConfig, unit: &str, lines: u32) -> Result<Strin
     .await
 }
 
-fn format_bytes(bytes: u64) -> String {
+pub(crate) fn format_bytes(bytes: u64) -> String {
     const KIB: u64 = 1024;
     const MIB: u64 = KIB * 1024;
     const GIB: u64 = MIB * 1024;

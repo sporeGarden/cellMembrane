@@ -329,8 +329,7 @@ async fn dispatch_to_sub_builder(
 
     match crate::jsonrpc::call_endpoint(&sb.endpoint, &request).await {
         Ok(response) => {
-            let parsed: serde_json::Value =
-                serde_json::from_str(&response).unwrap_or_default();
+            let parsed: serde_json::Value = serde_json::from_str(&response).unwrap_or_default();
 
             let result_ok = parsed
                 .get("result")
@@ -380,10 +379,7 @@ async fn dispatch_to_sub_builder(
             error!(gate = sb.gate, error = %e, "mesh dispatch to sub-builder failed");
             ShadowOutcome {
                 ok: false,
-                message: format!(
-                    "sub-builder {}: mesh dispatch failed — {}",
-                    sb.gate, e
-                ),
+                message: format!("sub-builder {}: mesh dispatch failed — {}", sb.gate, e),
                 data: None,
             }
         }
@@ -620,7 +616,8 @@ mod tests {
             assert!(
                 !matches!(&b.endpoint, cellmembrane_types::TransportEndpoint::Tcp { .. }
                     if b.endpoint.to_string().contains("ssh")),
-                "no SSH transport should remain for {}", b.gate
+                "no SSH transport should remain for {}",
+                b.gate
             );
         }
     }
@@ -649,7 +646,10 @@ mod tests {
             membrane_bin: "membrane".into(),
         };
         let ep = resolve_builder_endpoint(&entry);
-        assert!(matches!(ep, cellmembrane_types::TransportEndpoint::MeshRelay { .. }));
+        assert!(matches!(
+            ep,
+            cellmembrane_types::TransportEndpoint::MeshRelay { .. }
+        ));
     }
 
     #[test]
@@ -661,6 +661,9 @@ mod tests {
             membrane_bin: "membrane.exe".into(),
         };
         let ep = resolve_builder_endpoint(&entry);
-        assert!(matches!(ep, cellmembrane_types::TransportEndpoint::Tcp { .. }));
+        assert!(matches!(
+            ep,
+            cellmembrane_types::TransportEndpoint::Tcp { .. }
+        ));
     }
 }

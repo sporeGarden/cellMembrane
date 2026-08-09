@@ -1,13 +1,22 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-09 (Wave 157a vertebrate self-audit)
+**Last updated:** 2026-08-09 (Wave 157d G69 depot.prune)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157d (G69 Depot Lineage Phase 1 — `depot.prune`):**
+New `depot.prune` command: scans all arch directories, compares binaries against
+the service registry, removes unknown files (test/demo/bench), regenerates
+checksums + BLAKE3SUMS, and prunes stale provenance entries. Supports `--dry-run`
+and `--allow=<name>` for binaries not yet in registry (e.g. swarmvine). Dispatch
+table refactored: `depot.*` commands now route through unified `dispatch_depot()`.
+`BLAKE3SUMS_FILE` constant promoted from local to `cellmembrane-types`.
+`format_bytes()` elevated to `pub(crate)`. 4 new prune tests. 1343 tests total.
 
 **Wave 157a (vertebrate self-audit — P1 FD limits + dispatch/registry convergence):**
 `LimitNOFILE=65536` added to `ServiceSpec::to_systemd_unit()` — all generated

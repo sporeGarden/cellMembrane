@@ -246,3 +246,92 @@ fn update_checksums_preserves_other_targets() {
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn prune_removes_unknown_binaries() {
+    let tmp = std::env::temp_dir().join(format!("prune_test_{}", std::process::id()));
+    let arch_dir = tmp.join("primals").join("x86_64-unknown-linux-musl");
+    std::fs::create_dir_all(&arch_dir).unwrap();
+
+    std::fs::write(arch_dir.join("beardog"), b"known").unwrap();
+    std::fs::write(arch_dir.join("songbird"), b"known").unwrap();
+    std::fs::write(arch_dir.join("test-demo-binary"), b"junk").unwrap();
+    std::fs::write(arch_dir.join("bench-tool"), b"junk").unwrap();
+
+    let report = prune_depot(&tmp, &[], false).unwrap();
+
+    assert_eq!(report.scanned, 4);
+    assert_eq!(report.retained, 2);
+    assert_eq!(report.pruned.len(), 2);
+    assert!(!arch_dir.join("test-demo-binary").exists());
+    assert!(!arch_dir.join("bench-tool").exists());
+    assert!(arch_dir.join("beardog").exists());
+    assert!(arch_dir.join("songbird").exists());
+
+    let display = report.to_string();
+    assert!(display.contains("pruned=2"));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn prune_dry_run_does_not_delete() {
+    let tmp = std::env::temp_dir().join(format!("prune_dry_{}", std::process::id()));
+    let arch_dir = tmp.join("primals").join("x86_64-unknown-linux-musl");
+    std::fs::create_dir_all(&arch_dir).unwrap();
+
+    std::fs::write(arch_dir.join("beardog"), b"known").unwrap();
+    std::fs::write(arch_dir.join("unknown-bin"), b"junk").unwrap();
+
+    let report = prune_depot(&tmp, &[], true).unwrap();
+
+    assert_eq!(report.pruned.len(), 1);
+    assert!(
+        arch_dir.join("unknown-bin").exists(),
+        "dry-run must not delete"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn prune_respects_allow_list() {
+    let tmp = std::env::temp_dir().join(format!("prune_allow_{}", std::process::id()));
+    let arch_dir = tmp.join("primals").join("x86_64-unknown-linux-musl");
+    std::fs::create_dir_all(&arch_dir).unwrap();
+
+    std::fs::write(arch_dir.join("swarmvine"), b"extra").unwrap();
+    std::fs::write(arch_dir.join("beardog"), b"known").unwrap();
+
+    let report = prune_depot(&tmp, &["swarmvine"], false).unwrap();
+
+    assert_eq!(report.pruned.len(), 0);
+    assert_eq!(report.retained, 2);
+    assert!(arch_dir.join("swarmvine").exists());
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn prune_skips_blake3sums_file() {
+    let tmp = std::env::temp_dir().join(format!("prune_b3_{}", std::process::id()));
+    let arch_dir = tmp.join("primals").join("x86_64-unknown-linux-musl");
+    std::fs::create_dir_all(&arch_dir).unwrap();
+
+    std::fs::write(
+        arch_dir.join(cellmembrane_types::service::BLAKE3SUMS_FILE),
+        b"hash file",
+    )
+    .unwrap();
+    std::fs::write(arch_dir.join("unknown-bin"), b"junk").unwrap();
+
+    let report = prune_depot(&tmp, &[], true).unwrap();
+
+    assert_eq!(
+        report.scanned, 1,
+        "BLAKE3SUMS must not be counted or pruned"
+    );
+    assert_eq!(report.pruned.len(), 1);
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

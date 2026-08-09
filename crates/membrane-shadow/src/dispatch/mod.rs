@@ -110,11 +110,12 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
             .unwrap_or_else(|ref e| Err(spawn_blocking_err(e)))
         }
         c if c.starts_with("context.") => data::dispatch_context(cmd, args).await,
-        "depot.integrity" => {
+        c if c.starts_with("depot.") => {
+            let cmd = cmd.to_owned();
             let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
             tokio::task::spawn_blocking(move || {
                 let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-                plasmid_dispatch::dispatch_depot_integrity(&refs)
+                plasmid_dispatch::dispatch_depot(&cmd, &refs)
             })
             .await
             .unwrap_or_else(|ref e| Err(spawn_blocking_err(e)))

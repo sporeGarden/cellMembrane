@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1329 tests — pedantic clippy clean
+cargo test                  # 1343 tests — pedantic clippy clean
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -221,6 +221,10 @@ G65 negotiation) and `capability.rs` (Protocol, TransportMode, ServerContract,
 ServiceCapability, HealthCheckMethod). Modern Rust 2024 let-chains in `git_ops.rs` and
 `freshness.rs`. Silent error swallowing replaced with `tracing::debug` in NeuralBridge
 RPC, health probes, mesh probes, and sync IPC paths.
+G69 Depot Lineage Phase 1 (Wave 157d): `depot.prune` command removes non-registry
+binaries (test/demo/bench) from depot, regenerates checksums + BLAKE3SUMS, prunes
+stale provenance. Supports `--dry-run` and `--allow=<name>` for unregistered binaries.
+`BLAKE3SUMS_FILE` constant promoted to `cellmembrane-types`. 104 capabilities registered.
 Vertebrate self-audit (Wave 157a): `LimitNOFILE=65536` in all systemd unit generation
 (P1 FD exhaustion fix). Five registry capabilities wired as dispatch commands:
 `freshness.check`, `freshness.publish`, `topology.service`, `topology.roles`,

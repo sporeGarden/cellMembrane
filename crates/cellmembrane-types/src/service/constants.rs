@@ -51,6 +51,9 @@ pub const SIGNATURES_FILE: &str = "signatures.toml";
 /// Depot provenance manifest filename.
 pub const PROVENANCE_FILE: &str = "provenance.toml";
 
+/// Per-arch GNU-style hash file (`b3sum --check` compatible).
+pub const BLAKE3SUMS_FILE: &str = "BLAKE3SUMS";
+
 /// Depot freshness manifest filename.
 pub const FRESHNESS_FILE: &str = "freshness.toml";
 

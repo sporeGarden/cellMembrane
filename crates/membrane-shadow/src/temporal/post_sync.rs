@@ -193,8 +193,7 @@ async fn delegate_harvest_to_primary(
 
     match crate::jsonrpc::call_endpoint(&endpoint, &request).await {
         Ok(response) => {
-            let parsed: serde_json::Value =
-                serde_json::from_str(&response).unwrap_or_default();
+            let parsed: serde_json::Value = serde_json::from_str(&response).unwrap_or_default();
             let ok = parsed
                 .get("result")
                 .and_then(|r| r.get("ok"))

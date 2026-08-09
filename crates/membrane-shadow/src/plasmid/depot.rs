@@ -501,6 +501,173 @@ fn resolve_source_head(primal: &str) -> Option<String> {
     }
 }
 
+// ── Depot pruning (G69 Phase 1) ─────────────────────────────────────
+
+/// Result of a depot prune operation.
+#[derive(Debug)]
+pub(crate) struct PruneReport {
+    /// Files that were (or would be) removed.
+    pub pruned: Vec<PrunedFile>,
+    /// Files retained (in the known set).
+    pub retained: u32,
+    /// Total files scanned.
+    pub scanned: u32,
+}
+
+#[derive(Debug)]
+pub(crate) struct PrunedFile {
+    pub arch: String,
+    pub name: String,
+    pub size: u64,
+}
+
+impl std::fmt::Display for PruneReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "scanned={} retained={} pruned={}",
+            self.scanned,
+            self.retained,
+            self.pruned.len()
+        )?;
+        if !self.pruned.is_empty() {
+            let total_bytes: u64 = self.pruned.iter().map(|p| p.size).sum();
+            write!(
+                f,
+                " ({} reclaimed)",
+                crate::service::format_bytes(total_bytes)
+            )?;
+            for p in &self.pruned {
+                write!(
+                    f,
+                    "\n  - {}/{} ({})",
+                    p.arch,
+                    p.name,
+                    crate::service::format_bytes(p.size)
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Prune depot binaries not in the service registry or the allow-list.
+///
+/// Scans all arch directories under `primals/`, compares each binary against
+/// known names, and removes (or reports in dry-run) unknown binaries.
+/// After pruning, regenerates checksums + BLAKE3SUMS.
+pub(crate) fn prune_depot(
+    depot_dir: &Path,
+    extra_allow: &[&str],
+    dry_run: bool,
+) -> Result<PruneReport> {
+    let known: std::collections::HashSet<&str> = cellmembrane_types::MembraneService::all()
+        .iter()
+        .map(|s| s.binary)
+        .chain(extra_allow.iter().copied())
+        .collect();
+
+    let primals_dir = depot_dir.join("primals");
+    if !primals_dir.exists() {
+        return Err(ShadowError::config(format!(
+            "depot primals directory not found: {}",
+            primals_dir.display()
+        )));
+    }
+
+    let mut pruned = Vec::new();
+    let mut retained = 0u32;
+    let mut scanned = 0u32;
+
+    let mut arches: Vec<_> = std::fs::read_dir(&primals_dir)?
+        .filter_map(std::result::Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .collect();
+    arches.sort_by_key(std::fs::DirEntry::file_name);
+
+    for arch_entry in arches {
+        let arch_dir = arch_entry.path();
+        let arch_name = arch_entry.file_name().to_string_lossy().to_string();
+
+        let mut binaries: Vec<_> = std::fs::read_dir(&arch_dir)?
+            .filter_map(std::result::Result::ok)
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+            .collect();
+        binaries.sort_by_key(std::fs::DirEntry::file_name);
+
+        for bin_entry in binaries {
+            let name = bin_entry.file_name().to_string_lossy().to_string();
+            if name == cellmembrane_types::service::BLAKE3SUMS_FILE {
+                continue;
+            }
+
+            scanned += 1;
+
+            if known.contains(name.as_str()) {
+                retained += 1;
+                continue;
+            }
+
+            let size = bin_entry.metadata().map_or(0, |m| m.len());
+
+            if !dry_run {
+                if let Err(e) = std::fs::remove_file(bin_entry.path()) {
+                    tracing::warn!(
+                        arch = %arch_name,
+                        binary = %name,
+                        error = %e,
+                        "depot prune: failed to remove file"
+                    );
+                    continue;
+                }
+                tracing::info!(arch = %arch_name, binary = %name, "depot prune: removed");
+            }
+
+            pruned.push(PrunedFile {
+                arch: arch_name.clone(),
+                name,
+                size,
+            });
+        }
+    }
+
+    if !dry_run && !pruned.is_empty() {
+        tracing::info!(pruned = pruned.len(), "regenerating checksums after prune");
+        super::integrity::generate_checksums(depot_dir)?;
+        prune_provenance(depot_dir, &known)?;
+    }
+
+    Ok(PruneReport {
+        pruned,
+        retained,
+        scanned,
+    })
+}
+
+/// Remove provenance entries for pruned binaries.
+fn prune_provenance(depot_dir: &Path, known: &std::collections::HashSet<&str>) -> Result<()> {
+    let prov_path = depot_dir.join(cellmembrane_types::service::PROVENANCE_FILE);
+    let Ok(content) = std::fs::read_to_string(&prov_path) else {
+        return Ok(());
+    };
+
+    let mut table: toml::Table = toml::from_str(&content)?;
+    let before = table.len();
+    table.retain(|k, v| {
+        let name: &str = k;
+        !v.is_table() || known.contains(name)
+    });
+    let removed = before - table.len();
+
+    if removed > 0 {
+        let serialized = toml::to_string_pretty(&table)?;
+        std::fs::write(&prov_path, serialized)?;
+        tracing::info!(removed, "provenance entries pruned");
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 #[path = "depot_tests.rs"]
 mod tests;

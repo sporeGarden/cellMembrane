@@ -10,9 +10,9 @@
 //! so remote gates can discover this builder via `capability.resolve` or
 //! `relay.forward`.
 
+use crate::ShadowOutcome;
 use crate::cli;
 use crate::error::Result;
-use crate::ShadowOutcome;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
@@ -153,9 +153,7 @@ async fn dispatch_jsonrpc(raw: &str, gate: &str) -> String {
 }
 
 /// Extract harvest args from JSON-RPC params and dispatch.
-async fn dispatch_harvest(
-    params: Option<&serde_json::Value>,
-) -> Result<ShadowOutcome> {
+async fn dispatch_harvest(params: Option<&serde_json::Value>) -> Result<ShadowOutcome> {
     let mut args: Vec<&str> = Vec::new();
     let primal_str;
     let target_str;
@@ -167,13 +165,22 @@ async fn dispatch_harvest(
         } else {
             args.push("--all");
         }
-        if p.get("force").and_then(serde_json::Value::as_bool).unwrap_or(false) {
+        if p.get("force")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
             args.push("--force");
         }
-        if p.get("push").and_then(serde_json::Value::as_bool).unwrap_or(false) {
+        if p.get("push")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
             args.push("--push");
         }
-        if p.get("local").and_then(serde_json::Value::as_bool).unwrap_or(true) {
+        if p.get("local")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true)
+        {
             args.push("--local");
         }
         if let Some(target) = p.get("target").and_then(serde_json::Value::as_str) {
@@ -197,7 +204,9 @@ async fn register_build_capability(gate: &str) {
         ),
     );
 
-    let relay_socket = sockets.into_iter().find(|p| std::path::Path::new(p).exists());
+    let relay_socket = sockets
+        .into_iter()
+        .find(|p| std::path::Path::new(p).exists());
 
     let Some(socket_path) = relay_socket else {
         warn!("no songBird socket found — builder will not be discoverable via mesh");
@@ -229,11 +238,8 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_jsonrpc_health() {
-        let response = dispatch_jsonrpc(
-            r#"{"jsonrpc":"2.0","method":"health","id":1}"#,
-            "testGate",
-        )
-        .await;
+        let response =
+            dispatch_jsonrpc(r#"{"jsonrpc":"2.0","method":"health","id":1}"#, "testGate").await;
         let parsed: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert!(parsed["result"]["ok"].as_bool().unwrap());
         assert_eq!(parsed["id"], 1);
@@ -241,17 +247,16 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_jsonrpc_unknown_method() {
-        let response = dispatch_jsonrpc(
-            r#"{"jsonrpc":"2.0","method":"foo.bar","id":2}"#,
-            "testGate",
-        )
-        .await;
+        let response =
+            dispatch_jsonrpc(r#"{"jsonrpc":"2.0","method":"foo.bar","id":2}"#, "testGate").await;
         let parsed: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert!(!parsed["result"]["ok"].as_bool().unwrap());
-        assert!(parsed["result"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("unknown"));
+        assert!(
+            parsed["result"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("unknown")
+        );
     }
 
     #[tokio::test]

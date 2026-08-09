@@ -312,22 +312,40 @@ async fn dispatch_sandbox_validate(args: &[&str]) -> crate::Result<ShadowOutcome
     }
 }
 
-pub(super) fn dispatch_depot_integrity(args: &[&str]) -> crate::Result<ShadowOutcome> {
-    let verify_only = args.contains(&"--verify");
-    let depot_dir = crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
-    let report = if verify_only {
-        crate::plasmid::integrity::verify_checksums(&depot_dir)?
-    } else {
-        crate::plasmid::integrity::generate_checksums(&depot_dir)?
-    };
-    Ok(ShadowOutcome::ok_with(
-        format!(
-            "{} binaries across {} arch(es)",
-            report.total_binaries,
-            report.architectures.len()
-        ),
-        serde_json::to_value(&report)?,
-    ))
+pub(super) fn dispatch_depot(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
+    match cmd {
+        "depot.integrity" => {
+            let verify_only = args.contains(&"--verify");
+            let depot_dir =
+                crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
+            let report = if verify_only {
+                crate::plasmid::integrity::verify_checksums(&depot_dir)?
+            } else {
+                crate::plasmid::integrity::generate_checksums(&depot_dir)?
+            };
+            Ok(ShadowOutcome::ok_with(
+                format!(
+                    "{} binaries across {} arch(es)",
+                    report.total_binaries,
+                    report.architectures.len()
+                ),
+                serde_json::to_value(&report)?,
+            ))
+        }
+        "depot.prune" => {
+            let depot_dir =
+                crate::plasmid::depot::resolve_depot(cli::extract_flag_value(args, "--depot"))?;
+            let dry_run = args.contains(&"--dry-run");
+            let extra_allow: Vec<&str> = args
+                .iter()
+                .filter_map(|a| a.strip_prefix("--allow="))
+                .collect();
+            let report = crate::plasmid::depot::prune_depot(&depot_dir, &extra_allow, dry_run)?;
+            let prefix = if dry_run { "[dry-run] " } else { "" };
+            Ok(ShadowOutcome::ok(format!("{prefix}{report}")))
+        }
+        _ => Ok(ShadowOutcome::fail(format!("unknown depot command: {cmd}"))),
+    }
 }
 
 /// `plasmid.composition` — Query manifest composition profiles.

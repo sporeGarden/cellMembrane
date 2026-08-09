@@ -74,7 +74,9 @@ pub async fn rootpulse_harvest_commit(
     harvest_entries: &[HarvestProvenanceEntry],
 ) -> Result<String> {
     let endpoint = resolve_neural_api_endpoint().ok_or_else(|| {
-        ShadowError::config("NUCLEUS neural-api endpoint not found — rootpulse harvest commit skipped")
+        ShadowError::config(
+            "NUCLEUS neural-api endpoint not found — rootpulse harvest commit skipped",
+        )
     })?;
 
     let session_id = format!("harvest-{gate}-{}", crate::utc_now_compact());

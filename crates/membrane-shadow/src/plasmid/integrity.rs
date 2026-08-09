@@ -47,8 +47,7 @@ pub struct IntegrityMismatch {
     pub actual: String,
 }
 
-/// Name of the per-arch GNU-style BLAKE3 checksum file.
-const BLAKE3SUMS_FILE: &str = "BLAKE3SUMS";
+use cellmembrane_types::service::BLAKE3SUMS_FILE;
 
 /// Scan all arch directories under `primals/`, compute BLAKE3 hashes, write
 /// a fresh `checksums.toml`, and generate per-arch `BLAKE3SUMS` files.
@@ -74,8 +73,7 @@ pub(crate) fn generate_checksums(depot_dir: &Path) -> Result<IntegrityReport> {
                 .filter_map(std::result::Result::ok)
                 .filter(|e| {
                     let p = e.path();
-                    p.is_file()
-                        && e.file_name().to_string_lossy() != BLAKE3SUMS_FILE
+                    p.is_file() && e.file_name().to_string_lossy() != BLAKE3SUMS_FILE
                 })
                 .collect();
             files.sort_by_key(std::fs::DirEntry::file_name);
@@ -250,7 +248,11 @@ mod tests {
         assert!(b3sums.contains("  beardog\n"), "GNU-style: hash  filename");
         assert!(b3sums.contains("  songbird\n"));
         let lines: Vec<&str> = b3sums.lines().collect();
-        assert_eq!(lines.len(), 2, "one line per binary, BLAKE3SUMS itself excluded");
+        assert_eq!(
+            lines.len(),
+            2,
+            "one line per binary, BLAKE3SUMS itself excluded"
+        );
         for line in &lines {
             let parts: Vec<&str> = line.splitn(2, "  ").collect();
             assert_eq!(parts.len(), 2, "format: hash  name");
