@@ -135,6 +135,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("lifecycle.") => deploy_dispatch::dispatch_lifecycle(cmd, args).await,
         c if c.starts_with("relay.") => relay_dispatch::dispatch_relay(cmd, args).await,
         "mesh.register" => Ok(crate::plasmid::register_capabilities_with_mesh().await),
+        c if c.starts_with("freshness.") => dispatch_freshness(cmd, args).await,
         c if c.starts_with("content.") => {
             content_dispatch::dispatch_content(config, cmd, args).await
         }
@@ -164,6 +165,37 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         #[cfg(feature = "cloudflare")]
         c if c.starts_with("cloudflare.") => crate::cloudflare::dispatch(cmd, args).await,
         _ => Ok(ShadowOutcome::fail(format!("unknown command: {cmd}"))),
+    }
+}
+
+async fn dispatch_freshness(cmd: &str, _args: &[&str]) -> crate::Result<ShadowOutcome> {
+    match cmd {
+        "freshness.check" => {
+            let report = tokio::task::spawn_blocking(crate::freshness::check_installed_freshness)
+                .await
+                .map_err(|e| {
+                    ShadowError::Io(std::io::Error::other(format!(
+                        "spawn_blocking panicked: {e}"
+                    )))
+                })??;
+            Ok(ShadowOutcome::ok(report))
+        }
+        "freshness.publish" => {
+            let root = crate::temporal::resolve_workspace_root()?;
+            let manifest = crate::manifest::load_from_workspace_async(&root).await?;
+            let repos: Vec<(&str, &crate::manifest::RepoEntry)> = manifest
+                .repos
+                .iter()
+                .map(|(k, v)| (k.as_str(), v))
+                .collect();
+            crate::freshness::publish_gate_heads(&root, &repos).await?;
+            Ok(ShadowOutcome::ok(
+                "gate heads published to heads/<gate>.toml".to_string(),
+            ))
+        }
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown freshness command: {cmd}"
+        ))),
     }
 }
 

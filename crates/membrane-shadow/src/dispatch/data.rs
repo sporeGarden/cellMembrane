@@ -143,6 +143,52 @@ pub(super) async fn dispatch_topology(cmd: &str, args: &[&str]) -> crate::Result
             let data = serde_json::to_value(&map)?;
             Ok(ShadowOutcome::ok_with(summary, data))
         }
+        "topology.roles" => {
+            use std::fmt::Write;
+            let root = temporal::resolve_workspace_root()?;
+            let m = manifest::load_from_workspace_async(&root).await?;
+            let mut output = String::new();
+            for (gate, profile) in &m.gates {
+                let roles: Vec<String> = profile.roles.iter().map(ToString::to_string).collect();
+                let _ = writeln!(output, "{gate}: {}", roles.join(", "));
+            }
+            Ok(ShadowOutcome::ok(output))
+        }
+        "topology.service" => {
+            let cap_name = cli::require_arg(args, 0, "capability")?;
+            let Some(cap) = cellmembrane_types::ServiceCapability::from_wire(cap_name) else {
+                return Ok(ShadowOutcome::fail(format!(
+                    "unknown capability: {cap_name}"
+                )));
+            };
+            let Some(svc) = cellmembrane_types::MembraneService::with_capability(cap) else {
+                return Ok(ShadowOutcome::fail(format!(
+                    "no primal provides capability: {cap_name}"
+                )));
+            };
+            Ok(ShadowOutcome::ok(format!(
+                "capability={cap_name} binary={} has_socket={} server_contract={:?}",
+                svc.binary, svc.has_socket, svc.server_contract
+            )))
+        }
+        "topology.endpoint" => {
+            let gate_name = cli::require_arg(args, 0, "gate_name")?;
+            let cap_name = cli::require_arg(args, 1, "capability")?;
+            let Some(cap) = cellmembrane_types::ServiceCapability::from_wire(cap_name) else {
+                return Ok(ShadowOutcome::fail(format!(
+                    "unknown capability: {cap_name}"
+                )));
+            };
+            let ctx = crate::resolve::ResolutionContext::from_env();
+            crate::resolve::resolve_endpoint(&ctx, gate_name, cap).map_or_else(
+                || {
+                    Ok(ShadowOutcome::fail(format!(
+                        "no endpoint resolved for {gate_name}/{cap_name}"
+                    )))
+                },
+                |ep| Ok(ShadowOutcome::ok(format!("{ep:?}"))),
+            )
+        }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown topology command: {cmd}"
         ))),

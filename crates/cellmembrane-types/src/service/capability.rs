@@ -198,6 +198,27 @@ impl ServiceCapability {
             Self::ContentAddressedStorage => "content_addressed_storage",
         }
     }
+
+    /// Parse a wire-format name back into a `ServiceCapability`.
+    #[must_use]
+    pub fn from_wire(s: &str) -> Option<Self> {
+        match s {
+            "mesh_relay" => Some(Self::MeshRelay),
+            "turn_server" => Some(Self::TurnServer),
+            "crypto_signer" => Some(Self::CryptoSigner),
+            "security" => Some(Self::Security),
+            "observability" => Some(Self::Observability),
+            "content_serving" => Some(Self::ContentServing),
+            "storage" => Some(Self::Storage),
+            "compute_orchestration" => Some(Self::ComputeOrchestration),
+            "identity" => Some(Self::Identity),
+            "dns_authority" => Some(Self::DnsAuthority),
+            "reverse_proxy" => Some(Self::ReverseProxy),
+            "visualization" => Some(Self::Visualization),
+            "content_addressed_storage" => Some(Self::ContentAddressedStorage),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for ServiceCapability {

@@ -167,6 +167,9 @@ pub struct ServiceSpec {
     pub runtime_directory: Option<String>,
     /// Runtime directory mode (e.g. "0755").
     pub runtime_directory_mode: String,
+    /// File descriptor limit (`LimitNOFILE`). Prevents FD exhaustion from
+    /// auto-discovery loops and connection pooling. `None` = systemd default.
+    pub limit_nofile: Option<u64>,
 }
 
 /// Restart policy for managed services.
@@ -242,6 +245,7 @@ impl ServiceSpec {
             umask: crate::service::DEFAULT_SERVICE_UMASK.into(),
             runtime_directory: Some(crate::service::DEFAULT_RUNTIME_DIRECTORY.into()),
             runtime_directory_mode: crate::service::DEFAULT_RUNTIME_DIRECTORY_MODE.into(),
+            limit_nofile: Some(crate::service::DEFAULT_LIMIT_NOFILE),
         }
     }
 
@@ -267,6 +271,10 @@ impl ServiceSpec {
             )
         });
 
+        let nofile = self
+            .limit_nofile
+            .map_or(String::new(), |n| format!("LimitNOFILE={n}\n"));
+
         let wd = self
             .working_directory
             .as_ref()
@@ -287,6 +295,7 @@ impl ServiceSpec {
              RestartSec={restart_sec}\n\
              StartLimitIntervalSec={sli}\n\
              StartLimitBurst={slb}\n\
+             {nofile}\
              {rtd}\n\
              [Install]\n\
              WantedBy={wanted_by}\n",

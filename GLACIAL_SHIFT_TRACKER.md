@@ -1,13 +1,23 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-08 (Wave 157a transport unification)
+**Last updated:** 2026-08-09 (Wave 157a vertebrate self-audit)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157a (vertebrate self-audit — P1 FD limits + dispatch/registry convergence):**
+`LimitNOFILE=65536` added to `ServiceSpec::to_systemd_unit()` — all generated
+systemd units now include file descriptor limit (P1 FD exhaustion fix). Five
+missing dispatch commands wired: `freshness.check`, `freshness.publish`,
+`topology.service`, `topology.roles`, `topology.endpoint`. New
+`ServiceCapability::from_wire()` enables CLI capability lookups.
+`capability_registry.toml` expanded from 75 to 103 entries — covers mirror,
+gateway, tower, sovereign, sign, deploy, manifest, harvest, crash-loop,
+potential, and extended plasmid namespaces. 1329 tests, zero clippy.
 
 **Wave 157a (transport unification + dead code cleanup):**
 jsonrpc.rs `#[cfg(unix)]` reduced 7→3: `raw()`, `call_tcp()`, `send_notify()` now

@@ -134,6 +134,7 @@ fn service_spec_to_systemd_unit_has_sections() {
         umask: "0002".into(),
         runtime_directory: Some("membrane".into()),
         runtime_directory_mode: "0755".into(),
+        limit_nofile: Some(65536),
     };
     let unit = spec.to_systemd_unit();
     assert!(unit.contains("[Unit]"));
@@ -143,6 +144,7 @@ fn service_spec_to_systemd_unit_has_sections() {
     assert!(unit.contains("ExecStart=/opt/membrane/beardog server"));
     assert!(unit.contains("Restart=on-failure"));
     assert!(unit.contains("RuntimeDirectory=membrane"));
+    assert!(unit.contains("LimitNOFILE=65536"));
     assert!(unit.contains("WantedBy=multi-user.target"));
 }
 
@@ -162,6 +164,7 @@ fn service_spec_env_file_included() {
         umask: "0002".into(),
         runtime_directory: Some("membrane".into()),
         runtime_directory_mode: "0755".into(),
+        limit_nofile: Some(65536),
     };
     let unit = spec.to_systemd_unit();
     assert!(unit.contains("EnvironmentFile=-/etc/membrane/secrets.env"));
@@ -186,6 +189,7 @@ fn service_spec_environment_vars() {
         umask: "0002".into(),
         runtime_directory: None,
         runtime_directory_mode: "0755".into(),
+        limit_nofile: Some(65536),
     };
     let unit = spec.to_systemd_unit();
     assert!(unit.contains("Environment=MEMBRANE_GATE_NAME=sporeGate"));
@@ -208,6 +212,7 @@ fn service_spec_to_systemd_override() {
         umask: "0002".into(),
         runtime_directory: None,
         runtime_directory_mode: "0755".into(),
+        limit_nofile: None,
     };
     let ovr = spec.to_systemd_override();
     assert!(ovr.contains("[Service]"));
@@ -231,6 +236,7 @@ fn service_spec_to_launchd_plist() {
         umask: "0002".into(),
         runtime_directory: None,
         runtime_directory_mode: "0755".into(),
+        limit_nofile: Some(65536),
     };
     let plist = spec.to_launchd_plist();
     assert!(plist.contains("<key>Label</key>"));

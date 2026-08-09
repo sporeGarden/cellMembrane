@@ -533,6 +533,7 @@ pub(crate) fn generate_unit_content(
         umask: cellmembrane_types::service::DEFAULT_SERVICE_UMASK.into(),
         runtime_directory: Some(cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY.into()),
         runtime_directory_mode: cellmembrane_types::service::DEFAULT_RUNTIME_DIRECTORY_MODE.into(),
+        limit_nofile: Some(cellmembrane_types::service::DEFAULT_LIMIT_NOFILE),
     };
     spec.to_systemd_unit()
 }

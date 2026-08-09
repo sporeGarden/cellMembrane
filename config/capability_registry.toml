@@ -68,8 +68,8 @@ wireguard_generate = { protocol = "cli", description = "Generate wg-quick config
 
 # Topology + service discovery
 topology_resolve = { protocol = "cli", description = "Resolve gate topology (zone, transport, envelope, mesh IP)" }
-topology_service = { protocol = "cli", description = "Identity-based service discovery — find gates by role" }
-topology_roles = { protocol = "cli", description = "List all role→gate mappings from manifest" }
+topology_service = { protocol = "cli", description = "Resolve primal binary for a capability wire name" }
+topology_roles = { protocol = "cli", description = "List all gate→roles mappings from manifest" }
 topology_zones = { protocol = "cli", description = "Cytoplasm zone map with physical hub enrichment" }
 topology_mesh = { protocol = "cli", description = "WireGuard mesh peer listing with manifest-authoritative IPs" }
 topology_endpoint = { protocol = "cli", description = "Resolve transport endpoint (UDS/TCP/mesh_relay) for gate+capability" }
@@ -110,8 +110,8 @@ context_weave = { protocol = "cli", description = "Create/update context braid f
 context_sense = { protocol = "cli", description = "Sense current context state" }
 
 # Freshness tracking
-freshness_check = { protocol = "cli", description = "Compare installed binary ages against depot" }
-freshness_publish = { protocol = "cli", description = "Publish freshness.toml to ecosystem" }
+freshness_check = { protocol = "cli", description = "Compare installed binary provenance against source HEAD" }
+freshness_publish = { protocol = "cli", description = "Publish gate HEAD SHAs to heads/<gate>.toml" }
 
 # Identity resolution
 identity_resolve = { protocol = "cli", description = "Resolve gate identity from workspace markers" }
@@ -130,6 +130,58 @@ mesh_register = { protocol = "uds", description = "Publish running primal capabi
 # Forgejo API
 forgejo_repo = { protocol = "api", description = "Repository CRUD and mirroring via Forgejo API" }
 forgejo_token = { protocol = "api", description = "API token lifecycle management" }
+forgejo_version = { protocol = "api", description = "Query Forgejo instance version" }
+
+# Mirror management
+mirror_sync = { protocol = "ssh", description = "Sync single push mirror to remote" }
+mirror_sync_all = { protocol = "ssh", description = "Sync all configured push mirrors" }
+mirror_status = { protocol = "ssh", description = "Report push mirror sync state" }
+
+# Gateway (sporePrint/NestGate deploy)
+gateway_health = { protocol = "cli", description = "Gateway composition health check" }
+gateway_config_generate = { protocol = "cli", description = "Generate gateway config from manifest" }
+gateway_deploy_check = { protocol = "cli", description = "Pre-deploy validation for gateway composition" }
+gateway_sporeprint_check = { protocol = "cli", description = "sporePrint NUCLEUS binary availability check" }
+
+# Tower Atomic transport
+tower_status = { protocol = "cli", description = "Tower mesh transport status" }
+tower_shadow = { protocol = "cli", description = "Shadow benchmark (asymmetric tower atomic vs TCP)" }
+tower_benchmark = { protocol = "cli", description = "Run tower transport benchmark suite" }
+
+# Sovereign CI
+sovereign_ci_trigger = { protocol = "cli", description = "Trigger sovereign CI pipeline (build, sandbox, verify, deploy)" }
+sovereign_ci_status = { protocol = "cli", description = "Report sovereign CI pipeline state" }
+
+# Signing + depot provenance
+sign_activate = { protocol = "cli", description = "Activate Ed25519 signing for depot provenance" }
+sign_verify = { protocol = "cli", description = "Verify Ed25519 signatures on depot artifacts" }
+sign_status = { protocol = "cli", description = "Report signing key and provenance state" }
+
+# Deploy lifecycle
+deploy_composition = { protocol = "cli", description = "Deploy composition to gate via manifest" }
+deploy_graph = { protocol = "cli", description = "Visualize deployment dependency graph" }
+lifecycle_status = { protocol = "cli", description = "Report deployment lifecycle state" }
+
+# Manifest introspection
+manifest_info = { protocol = "cli", description = "Display ecosystem manifest metadata" }
+manifest_repos = { protocol = "cli", description = "List manifest-declared repositories" }
+manifest_validate = { protocol = "cli", description = "Cross-field manifest integrity validation" }
+
+# Harvest queue (async build pipeline)
+harvest_ingest = { protocol = "cli", description = "Queue async harvest job for primal" }
+harvest_request = { protocol = "cli", description = "Request harvest from remote gate" }
+
+# Crash-loop detection
+gate_crash_loop = { protocol = "cli", description = "Scan for crash-looping systemd services" }
+
+# Potential field (ambient context)
+potential_sense = { protocol = "cli", description = "Sense ambient ecosystem potential state" }
+potential_check = { protocol = "cli", description = "Check potential field for specific primal" }
+
+# Plasmid extended
+plasmid_staleness = { protocol = "cli", description = "Depot staleness report with provenance drift detection" }
+plasmid_composition = { protocol = "cli", description = "Report composition coverage and binary state" }
+plasmid_depot_sync = { protocol = "cli", description = "Bidirectional depot synchronization" }
 
 [consumed_capabilities]
 # cellMembrane discovers these at runtime via UDS probes and SSH

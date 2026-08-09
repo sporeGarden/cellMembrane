@@ -222,6 +222,13 @@ pub const DEFAULT_RUNTIME_DIRECTORY: &str = "membrane";
 /// connect to primal UDS sockets. Combined with `DEFAULT_SERVICE_UMASK`.
 pub const DEFAULT_RUNTIME_DIRECTORY_MODE: &str = "0755";
 
+/// Default file descriptor limit for primal services (`LimitNOFILE`).
+///
+/// Prevents FD exhaustion from auto-discovery loops, connection pooling, and
+/// high-connection-count primals (biomeOS, songBird). The default 1024 is too
+/// low for primals that maintain persistent socket pools.
+pub const DEFAULT_LIMIT_NOFILE: u64 = 65536;
+
 /// Systemd `UMask` for primal services.
 ///
 /// `0002` causes socket files to be created as `srw-rw-r--` (0664) instead
