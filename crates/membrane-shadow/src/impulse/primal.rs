@@ -208,7 +208,10 @@ mod tests {
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("sock")),
             "should have .sock extension: {name}"
         );
-        assert!(!name.contains("-default"), "should use canonical socket name, not -default: {name}");
+        assert!(
+            !name.contains("-default"),
+            "should use canonical socket name, not -default: {name}"
+        );
     }
 
     #[test]
@@ -224,7 +227,10 @@ mod tests {
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("sock")),
             "should have .sock extension: {name}"
         );
-        assert!(!name.contains("-default"), "should use canonical socket name, not -default: {name}");
+        assert!(
+            !name.contains("-default"),
+            "should use canonical socket name, not -default: {name}"
+        );
     }
 
     #[test]

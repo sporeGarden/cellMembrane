@@ -93,11 +93,12 @@ pub(crate) async fn ensure_staging_dirs(
         tokio::fs::create_dir_all(dir)
             .await
             .map_err(|e| crate::error::ShadowError::build(format!("create dir: {e}")))?;
-        let _ = crate::platform::apply_access_async(
-            cellmembrane_types::PlatformAccess::Executable,
-            dir,
-        )
-        .await;
+        if let Err(e) =
+            crate::platform::apply_access_async(cellmembrane_types::PlatformAccess::Executable, dir)
+                .await
+        {
+            tracing::warn!(dir = %dir.display(), %e, "failed to set executable access on socket dir");
+        }
     }
     Ok(())
 }

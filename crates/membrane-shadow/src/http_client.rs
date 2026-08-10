@@ -70,7 +70,7 @@ fn parse_url(url: &str) -> Result<ParsedUrl> {
     let (host, port) = if let Some((h, p)) = authority.rsplit_once(':') {
         let port = p
             .parse::<u16>()
-            .map_err(|_| ShadowError::http(format!("invalid port: {p}")))?;
+            .map_err(|e| ShadowError::http(format!("invalid port '{p}': {e}")))?;
         (h.to_string(), port)
     } else {
         let default = if tls {
@@ -233,7 +233,7 @@ impl RequestBuilder {
         let timeout = self.timeout_override.unwrap_or(self.client.timeout);
         tokio::time::timeout(timeout, self.send_inner())
             .await
-            .map_err(|_| ShadowError::http("request timed out"))?
+            .map_err(|_| ShadowError::http(format!("request timed out after {timeout:?}")))?
     }
 
     async fn send_inner(self) -> Result<HttpResponse> {
@@ -432,7 +432,7 @@ fn parse_status_line(line: &str) -> Result<u16> {
     }
     parts[1]
         .parse::<u16>()
-        .map_err(|_| ShadowError::http(format!("invalid status code: {}", parts[1])))
+        .map_err(|e| ShadowError::http(format!("invalid status code '{}': {e}", parts[1])))
 }
 
 async fn read_body<R: tokio::io::AsyncBufRead + Unpin>(
@@ -484,7 +484,7 @@ async fn read_chunked<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Res
 
         let size_str = size_line.trim();
         let chunk_size = usize::from_str_radix(size_str, 16)
-            .map_err(|_| ShadowError::http(format!("invalid chunk size: {size_str}")))?;
+            .map_err(|e| ShadowError::http(format!("invalid chunk size '{size_str}': {e}")))?;
 
         if chunk_size == 0 {
             let mut trailer = String::new();

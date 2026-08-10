@@ -325,7 +325,7 @@ pub async fn archive(workspace_root: &Path) -> Result<Vec<String>> {
         archive_expired_impulses(&active, &archive_dir, &ws_root, &now)
     })
     .await
-    .map_err(|_| ShadowError::Io(std::io::Error::other("archive task panicked")))??;
+    .map_err(|e| ShadowError::Io(std::io::Error::other(format!("archive task panicked: {e}"))))??;
 
     if !archived.is_empty() {
         let wh_dir = workspace_root.join(cellmembrane_types::service::INFRA_WATERING_HOLE);

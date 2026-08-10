@@ -53,7 +53,10 @@ pub async fn collect_cascade_heads(
     for (name, entry) in repos {
         let repo_dir = root.join(&entry.local_path);
         if repo_dir.join(".git").exists() {
-            #[allow(clippy::literal_string_with_formatting_args, reason = "shell command string, not Rust format")]
+            #[allow(
+                clippy::literal_string_with_formatting_args,
+                reason = "shell command string, not Rust format"
+            )]
             if let Ok(tree) =
                 crate::git_ops::git_output(&repo_dir, &["rev-parse", "HEAD^{tree}"]).await
             {
@@ -116,7 +119,6 @@ pub(super) fn summarize_depot_freshness() -> String {
     };
     format!("  [depot] {present}/{total} binaries present{suffix}")
 }
-
 
 /// Persist rootpulse session to gate-local state.
 pub(crate) fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {

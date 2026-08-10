@@ -449,10 +449,10 @@ pub(super) fn emit_deployment_toml(
     }
 
     let timestamp = crate::utc_now_iso8601();
-    let hostname = std::fs::read_to_string("/proc/sys/kernel/hostname")
+    let hostname = std::fs::read_to_string(super::PROC_HOSTNAME)
         .map(|s| s.trim().to_string())
-        .or_else(|_| std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()))
-        .unwrap_or_else(|_| "unknown".into());
+        .or_else(|_| std::fs::read_to_string(super::ETC_HOSTNAME).map(|s| s.trim().to_string()))
+        .unwrap_or_else(|_| cellmembrane_types::service::UNKNOWN_LABEL.into());
 
     let content = format!(
         "# deployment.toml — gate.bootstrap provenance record\n\

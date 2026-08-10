@@ -62,7 +62,10 @@ struct GateHeadsMeta {
 
 /// wave.toml representation.
 #[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code, reason = "forward declaration for wave.toml deserialization")]
+#[allow(
+    dead_code,
+    reason = "forward declaration for wave.toml deserialization"
+)]
 struct WaveFile {
     wave: WaveSection,
     #[serde(default)]
@@ -70,7 +73,10 @@ struct WaveFile {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code, reason = "forward declaration for wave.toml deserialization")]
+#[allow(
+    dead_code,
+    reason = "forward declaration for wave.toml deserialization"
+)]
 struct GatesSection {
     #[serde(default)]
     online: Vec<String>,

@@ -152,7 +152,7 @@ pub async fn connect_transport(endpoint: &TransportEndpoint) -> io::Result<Trans
             capability,
         } => Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            format!("mesh relay requires songBird routing: {peer_id}/{capability}"),
+            format!("mesh relay requires relay primal routing: {peer_id}/{capability}"),
         )),
     }
 }

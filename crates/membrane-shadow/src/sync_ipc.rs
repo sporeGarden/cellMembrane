@@ -143,11 +143,20 @@ pub(crate) fn ipc_request(socket_path: &Path, request: &str) -> Option<Vec<u8>> 
             NegotiateResult::Failed => return None,
         }
 
-        writeln!(stream, "{request}").ok()?;
-        stream.shutdown(std::net::Shutdown::Write).ok()?;
+        if let Err(e) = writeln!(stream, "{request}") {
+            tracing::debug!(socket = %socket_path.display(), %e, "ipc_request: write failed");
+            return None;
+        }
+        if let Err(e) = stream.shutdown(std::net::Shutdown::Write) {
+            tracing::debug!(socket = %socket_path.display(), %e, "ipc_request: shutdown failed");
+            return None;
+        }
 
         let mut buf = Vec::with_capacity(IPC_READ_BUF_CAPACITY);
-        stream.read_to_end(&mut buf).ok()?;
+        if let Err(e) = stream.read_to_end(&mut buf) {
+            tracing::debug!(socket = %socket_path.display(), %e, "ipc_request: read failed");
+            return None;
+        }
         Some(buf)
     }
     #[cfg(not(unix))]
@@ -180,14 +189,24 @@ fn ipc_send_plain(socket_path: &Path, request: &str) {
 #[cfg(unix)]
 fn ipc_request_plain(socket_path: &Path, request: &str) -> Option<Vec<u8>> {
     let mut stream = connect(socket_path)?;
-    stream
-        .write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL)
-        .ok()?;
-    writeln!(stream, "{request}").ok()?;
-    stream.shutdown(std::net::Shutdown::Write).ok()?;
+    if let Err(e) = stream.write_all(&crate::ribocipher::CLEAR_JSONRPC_SIGNAL) {
+        tracing::debug!(path = %socket_path.display(), %e, "plain request signal failed");
+        return None;
+    }
+    if let Err(e) = writeln!(stream, "{request}") {
+        tracing::debug!(path = %socket_path.display(), %e, "plain request write failed");
+        return None;
+    }
+    if let Err(e) = stream.shutdown(std::net::Shutdown::Write) {
+        tracing::debug!(path = %socket_path.display(), %e, "plain request shutdown failed");
+        return None;
+    }
 
     let mut buf = Vec::with_capacity(IPC_READ_BUF_CAPACITY);
-    stream.read_to_end(&mut buf).ok()?;
+    if let Err(e) = stream.read_to_end(&mut buf) {
+        tracing::debug!(path = %socket_path.display(), %e, "plain request read failed");
+        return None;
+    }
     Some(buf)
 }
 

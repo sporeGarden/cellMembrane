@@ -29,6 +29,9 @@ pub(crate) mod systemd_units;
 pub mod verify;
 mod wg;
 
+const PROC_HOSTNAME: &str = "/proc/sys/kernel/hostname";
+const ETC_HOSTNAME: &str = "/etc/hostname";
+
 pub use bootstrap::{BootstrapPhase, BootstrapResult, bootstrap};
 pub use enroll::{EnrollResult, enroll};
 pub use health::{GateStatus, StatusProbe, status};

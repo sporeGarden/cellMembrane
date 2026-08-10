@@ -28,7 +28,10 @@ const NUCLEUS_STOP_GRACE_SECS: u64 = 1;
 const PKILL_SETTLE_MS: u64 = 500;
 
 /// Parsed CLI arguments for `plasmid.harvest`.
-#[allow(clippy::struct_excessive_bools, reason = "CLI flags map 1:1 to boolean args")]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "CLI flags map 1:1 to boolean args"
+)]
 pub struct HarvestArgs {
     /// Single primal to harvest (None = all with changes).
     pub primal: Option<String>,
@@ -476,12 +479,14 @@ async fn install_and_restart(results: &[HarvestResult], depot_dir: &Path) -> (St
         warn!("NUCLEUS stop returned non-zero — continuing with pkill fallback");
     }
 
-    // Kill lingering processes
     tokio::time::sleep(std::time::Duration::from_secs(NUCLEUS_STOP_GRACE_SECS)).await;
     for &primal in &built {
-        let _ = std::process::Command::new("pkill")
+        if let Err(e) = std::process::Command::new("pkill")
             .args(["-f", primal])
-            .status();
+            .status()
+        {
+            tracing::warn!(primal, error = %e, "pkill fallback failed — process may linger");
+        }
     }
     tokio::time::sleep(std::time::Duration::from_millis(PKILL_SETTLE_MS)).await;
 
@@ -750,10 +755,20 @@ pub(super) async fn stage_to_depot_async(
                     cellmembrane_types::service::ENV_GATE_NAME,
                     "unknown",
                 );
-                let _ = crate::sovereignty_ledger::archive_superseded_binary(
-                    primal, target, &old_blake3, &new_blake3, "", "", &gate, old_size,
+                if let Err(e) = crate::sovereignty_ledger::archive_superseded_binary(
+                    primal,
+                    target,
+                    &old_blake3,
+                    &new_blake3,
+                    "",
+                    "",
+                    &gate,
+                    old_size,
                 )
-                .await;
+                .await
+                {
+                    tracing::debug!(primal, %e, "depot lineage archival failed — non-blocking");
+                }
             }
         }
     }

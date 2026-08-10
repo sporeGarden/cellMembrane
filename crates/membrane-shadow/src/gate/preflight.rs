@@ -212,6 +212,8 @@ async fn is_systemd_unit_active(unit: &str) -> bool {
 }
 
 async fn check_networkmanager() -> PreflightCheck {
+    const NM_UNMANAGE_CONF: &str = "/etc/NetworkManager/conf.d/99-unmanage-wired.conf";
+
     let active = is_systemd_unit_active("NetworkManager.service").await;
 
     if !active {
@@ -222,7 +224,7 @@ async fn check_networkmanager() -> PreflightCheck {
         };
     }
 
-    let unmanage_path = "/etc/NetworkManager/conf.d/99-unmanage-wired.conf";
+    let unmanage_path = NM_UNMANAGE_CONF;
     let has_unmanage = tokio::fs::metadata(unmanage_path).await.is_ok();
 
     PreflightCheck {

@@ -419,7 +419,10 @@ fn dispatch_sporeprint_units(args: &[&str]) -> ShadowOutcome {
 }
 
 /// Pre-deployment readiness check for sporePrint NUCLEUS on a target gate.
-#[allow(clippy::too_many_lines, reason = "multi-step readiness check probes many subsystems sequentially")]
+#[allow(
+    clippy::too_many_lines,
+    reason = "multi-step readiness check probes many subsystems sequentially"
+)]
 fn dispatch_sporeprint_check(args: &[&str]) -> ShadowOutcome {
     let resolved_gate = crate::gate::resolve_local_gate_identity();
     let gate_name = args.first().copied().unwrap_or(resolved_gate.as_str());

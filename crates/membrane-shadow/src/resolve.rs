@@ -125,7 +125,7 @@ fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
 ///
 /// For services without a socket (TCP-only), returns `Tcp` on loopback.
 fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<TransportEndpoint> {
-    use cellmembrane_types::service::constants::{socket_filename, SOCKET_SUFFIX};
+    use cellmembrane_types::service::constants::{SOCKET_SUFFIX, socket_filename};
 
     if !svc.has_socket {
         return svc.port.map(|port| TransportEndpoint::Tcp {
@@ -151,10 +151,21 @@ fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<T
         candidates.push(format!("{}/{api}-default{SOCKET_SUFFIX}", ctx.socket_base));
         candidates.push(format!("{}/{}", ctx.socket_base, socket_filename(api)));
     }
-    candidates.push(format!("{}/{}", ctx.socket_base, socket_filename(svc.binary)));
-    candidates.push(format!("{}/{ns}/{}", ctx.xdg_runtime, socket_filename(svc.binary)));
+    candidates.push(format!(
+        "{}/{}",
+        ctx.socket_base,
+        socket_filename(svc.binary)
+    ));
+    candidates.push(format!(
+        "{}/{ns}/{}",
+        ctx.xdg_runtime,
+        socket_filename(svc.binary)
+    ));
     if let Some(api) = svc.api_socket {
-        candidates.push(format!("{}/{ns}/{api}-default{SOCKET_SUFFIX}", ctx.xdg_runtime));
+        candidates.push(format!(
+            "{}/{ns}/{api}-default{SOCKET_SUFFIX}",
+            ctx.xdg_runtime
+        ));
     }
     for alias in svc.socket_aliases {
         candidates.push(format!("{}/{}", ctx.socket_base, socket_filename(alias)));

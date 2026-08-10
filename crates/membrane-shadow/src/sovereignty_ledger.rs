@@ -136,7 +136,10 @@ pub struct HarvestProvenanceEntry {
 /// evolution event via the `depot_lineage` biomeOS graph — signing the hash,
 /// appending to the primal's spine, and creating an attribution braid.
 /// Graceful degradation: returns Ok(None) if NUCLEUS is unreachable.
-#[allow(clippy::too_many_arguments, reason = "neural-api graph params naturally require distinct fields")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "neural-api graph params naturally require distinct fields"
+)]
 pub async fn archive_superseded_binary(
     primal: &str,
     arch: &str,

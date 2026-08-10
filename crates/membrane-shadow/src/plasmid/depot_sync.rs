@@ -272,9 +272,7 @@ async fn push_depot_to_remote(
         });
     }
 
-    if let Ok((disk_out, 0)) =
-        crate::ssh::exec_raw(config, "df --output=pcent / | tail -1").await
-    {
+    if let Ok((disk_out, 0)) = crate::ssh::exec_raw(config, "df --output=pcent / | tail -1").await {
         if let Ok(pct) = disk_out.trim().trim_end_matches('%').trim().parse::<u8>() {
             if pct >= 90 {
                 return Ok(crate::ShadowOutcome {

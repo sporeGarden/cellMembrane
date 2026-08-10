@@ -1,13 +1,29 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-10 (Wave 157g G72 dep pandemic + socket dedup + deep debt)
+**Last updated:** 2026-08-10 (Wave 157g deep debt sweep: error handling + module extraction + constant consolidation)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157g (deep debt sweep: error handling + module extraction + constant consolidation):**
+P1 silent error suppression: 5 `let _ =` on real I/O replaced with `if let Err(e)`
++ tracing (harvest pkill, archive_superseded_binary, bare-process PID file,
+socket dir permissions, benchmark script chmod). IPC error visibility: `sync_ipc.rs`
+`ipc_request` and `ipc_request_plain` — 6 `.ok()?` swallowed errors replaced with
+per-operation `tracing::debug!`. `nucleus.rs` CSPRNG failure now logs before returning
+`None`. HTTP client: 4 `map_err(|_|` patterns restored to `map_err(|e|` preserving
+parse/timeout context. `context.rs` + `impulse/lifecycle.rs` panic messages enriched.
+Module extraction: `gate/health.rs` (738L) → `gate/health/mod.rs` + `gate/health/auxiliary.rs`
+(auxiliary probes: depot freshness, VCS parity, rootpulse ledger, TLS cert expiry).
+Constant consolidation: hardcoded Forgejo data path → `DEFAULT_FORGEJO_DATA_DIR`,
+hostname paths → `PROC_HOSTNAME`/`ETC_HOSTNAME`, NM conf → local const. Self-knowledge
+purge: `MEMBRANE_BINARY` constant replaces hardcoded `"cellmembrane"` in
+`is_post_primordial()`, `transport.rs` error string no longer names specific primals.
+0 clippy, all tests pass.
 
 **Wave 157g (G72 dep pandemic + socket dedup + deep debt):**
 G72 Dependency Pandemic: `time/macros` feature removed (eliminates `time-macros`

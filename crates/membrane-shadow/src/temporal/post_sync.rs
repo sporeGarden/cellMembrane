@@ -113,7 +113,6 @@ pub(super) async fn run_post_sync_phases(
             }
             Err(e) => lines.push(format!("  [freshness] gate heads FAIL: {e}")),
         }
-
     }
 
     if opts.mode == CascadeMode::Sync {

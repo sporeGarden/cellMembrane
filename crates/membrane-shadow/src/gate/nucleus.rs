@@ -353,7 +353,9 @@ pub(crate) async fn restart_bare_process(binary: &str, arch: &str) -> bool {
         Ok(child) => {
             let pid_dir = std::path::Path::new(&install_base).join("pids");
             let pid_file = pid_dir.join(format!("{}.pid", svc.binary));
-            let _ = std::fs::write(&pid_file, child.id().to_string());
+            if let Err(e) = std::fs::write(&pid_file, child.id().to_string()) {
+                tracing::warn!(service = %binary, pid = child.id(), %e, "PID file write failed — bare-process lifecycle may be impaired");
+            }
             tracing::info!(service = %binary, pid = child.id(), "respawned (bare)");
             true
         }
@@ -446,7 +448,10 @@ fn set_restricted_permissions(path: &std::path::Path) {
 /// `SecRandomCopyBytes` on macOS/iOS, etc.).
 fn csprng_hex(n: usize) -> Option<String> {
     let mut buf = vec![0u8; n];
-    getrandom::fill(&mut buf).ok()?;
+    if let Err(e) = getrandom::fill(&mut buf) {
+        tracing::warn!(%e, "CSPRNG fill failed — cannot generate secure random bytes");
+        return None;
+    }
     let mut hex = String::with_capacity(n * 2);
     for b in &buf {
         use std::fmt::Write;

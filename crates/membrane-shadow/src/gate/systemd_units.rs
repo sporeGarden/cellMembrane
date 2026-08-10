@@ -157,7 +157,10 @@ pub fn install_cascade_timer(opts: &CascadeTimerOpts<'_>, dry_run: bool) -> supe
 /// Runs `git gc --aggressive` on all Forgejo-managed repos to compact objects
 /// and reduce disk footprint on the golgi pepti relay.
 pub(crate) fn generate_forgejo_gc_timer() -> (String, String) {
-    let forgejo_data = "/opt/forgejo/data/gitea-repositories";
+    let forgejo_data = format!(
+        "{}/gitea-repositories",
+        cellmembrane_types::service::DEFAULT_FORGEJO_DATA_DIR
+    );
 
     let service = format!(
         "[Unit]\n\
@@ -196,8 +199,7 @@ pub fn install_forgejo_gc_timer(dry_run: bool) -> super::BootstrapPhase {
         return super::BootstrapPhase {
             name: "forgejo.gc-timer".into(),
             ok: true,
-            detail: "dry-run: would install membrane-forgejo-gc.timer (weekly Sunday 04:00)"
-                .into(),
+            detail: "dry-run: would install membrane-forgejo-gc.timer (weekly Sunday 04:00)".into(),
         };
     }
 

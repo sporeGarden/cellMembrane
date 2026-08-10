@@ -660,14 +660,17 @@ pub const ENV_ACME_DOMAIN: &str = "BEARDOG_ACME_DOMAIN";
 /// Default ACME email for certificate issuance.
 pub const DEFAULT_ACME_EMAIL: &str = "acme@primals.eco";
 
+/// Binary identity of the membrane itself (not in primal registry).
+pub const MEMBRANE_BINARY: &str = "cellmembrane";
+
 /// Whether a primal is in the postPrimordial set (requires signed depot lineage).
 ///
 /// Checks the service registry `requires_signed_lineage` flag, falling back
-/// to a check for "cellmembrane" (which is not in the registry since it IS
-/// the membrane, but still requires signed lineage).
+/// to a check for the membrane binary itself (which is not in the registry
+/// since it IS the membrane, but still requires signed lineage).
 #[must_use]
 pub fn is_post_primordial(primal: &str) -> bool {
-    if primal == "cellmembrane" {
+    if primal == MEMBRANE_BINARY {
         return true;
     }
     super::MembraneService::for_binary(primal).is_some_and(|s| s.requires_signed_lineage)

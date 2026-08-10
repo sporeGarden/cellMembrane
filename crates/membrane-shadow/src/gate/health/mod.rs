@@ -4,14 +4,10 @@
 //!
 //! Replaces shell-based socat/bash/pgrep probes with native async Rust.
 
+mod auxiliary;
+
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-
-const STALE_THRESHOLD_DAYS: u64 = 7;
-const SECS_PER_DAY: u64 = 86_400;
-const SECS_PER_HOUR: u64 = 3_600;
-const CERT_WARNING_THRESHOLD_DAYS: i64 = 14;
-const MAX_CERT_PROBE_DOMAINS: usize = 5;
 
 /// A single status probe (e.g. depot integrity, mesh connectivity).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,9 +66,10 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     });
 
     let arch_for_freshness = arch;
-    let fresh = tokio::task::spawn_blocking(move || probe_depot_freshness(arch_for_freshness))
-        .await
-        .unwrap_or_else(|_| super::ProbeResult::fail("freshness probe panicked"));
+    let fresh =
+        tokio::task::spawn_blocking(move || auxiliary::probe_depot_freshness(arch_for_freshness))
+            .await
+            .unwrap_or_else(|_| super::ProbeResult::fail("freshness probe panicked"));
     probes.push(StatusProbe {
         name: "depot.freshness".into(),
         ok: fresh.ok,
@@ -82,12 +79,12 @@ pub async fn status() -> crate::error::Result<GateStatus> {
     let sovereignty_probes = super::sovereignty::probe_sovereignty().await;
     probes.extend(sovereignty_probes);
 
-    probes.push(probe_rootpulse_ledger());
+    probes.push(auxiliary::probe_rootpulse_ledger());
 
-    let vcs_probe = probe_vcs_parity().await;
+    let vcs_probe = auxiliary::probe_vcs_parity().await;
     probes.push(vcs_probe);
 
-    if let Some(cert_probe) = probe_tls_cert_expiry().await {
+    if let Some(cert_probe) = auxiliary::probe_tls_cert_expiry().await {
         probes.push(cert_probe);
     }
 
@@ -123,6 +120,8 @@ pub async fn status() -> crate::error::Result<GateStatus> {
         healthy,
     })
 }
+
+// ── Mesh probes ──────────────────────────────────────────────────
 
 /// Probe mesh status via neuralAPI-routed `capability.call` with fallback to direct UDS.
 async fn probe_mesh_status() -> super::ProbeResult {
@@ -202,6 +201,8 @@ fn parse_mesh_response(response: &str) -> super::ProbeResult {
     )
 }
 
+// ── Primal health sweep ──────────────────────────────────────────
+
 /// Health sweep: probe each primal using its registry-declared `HealthCheckMethod`.
 ///
 /// Dispatches per-service: JSON-RPC liveness for primals, TCP connect for
@@ -237,13 +238,15 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
         }
 
         let svc = cellmembrane_types::MembraneService::for_binary(primal);
-        let method = svc.map_or(HealthCheckMethod::Liveness, cellmembrane_types::MembraneService::uds_health_check);
+        let method = svc.map_or(
+            HealthCheckMethod::Liveness,
+            cellmembrane_types::MembraneService::uds_health_check,
+        );
 
         let probed = match method {
             HealthCheckMethod::Liveness => probe_primal_jsonrpc(primal).await,
             HealthCheckMethod::TcpConnect => {
-                svc.and_then(|s| s.port)
-                    .is_some_and(probe_tcp_connect)
+                svc.and_then(|s| s.port).is_some_and(probe_tcp_connect)
             }
             HealthCheckMethod::HttpsProbe => probe_https(primal),
             HealthCheckMethod::DnsProbe => probe_dns(),
@@ -257,10 +260,9 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
             alive += 1;
         } else {
             let primal_name = (*primal).to_string();
-            let pgrep_found =
-                tokio::task::spawn_blocking(move || probe_primal_pgrep(&primal_name))
-                    .await
-                    .unwrap_or(false);
+            let pgrep_found = tokio::task::spawn_blocking(move || probe_primal_pgrep(&primal_name))
+                .await
+                .unwrap_or(false);
             if pgrep_found {
                 alive += 1;
             } else {
@@ -384,231 +386,10 @@ fn probe_dns() -> bool {
     probe_tcp_connect(53)
 }
 
-fn probe_depot_freshness(arch: &str) -> super::ProbeResult {
-    let dest_root = super::resolve_plasmidbin_dir();
-    let bin_dir = dest_root.join("primals").join(arch);
-
-    if !bin_dir.is_dir() {
-        return super::ProbeResult::fail(format!("depot dir missing: {}", bin_dir.display()));
-    }
-
-    let gate = super::resolve_local_gate_identity();
-    let composition_primals = crate::plasmid::resolve_gate_primals(&gate);
-    let primals: Vec<&str> = composition_primals.iter().map(String::as_str).collect();
-    let mut present = 0u32;
-    let mut missing = 0u32;
-    let mut oldest_age_secs: u64 = 0;
-
-    let now = std::time::SystemTime::now();
-    for primal in &primals {
-        let path = bin_dir.join(primal);
-        if path.is_file() {
-            present += 1;
-            if let Ok(meta) = std::fs::metadata(&path)
-                && let Ok(modified) = meta.modified()
-                && let Ok(age) = now.duration_since(modified)
-            {
-                oldest_age_secs = oldest_age_secs.max(age.as_secs());
-            }
-        } else {
-            missing += 1;
-        }
-    }
-
-    let total = present + missing;
-    let age_days = oldest_age_secs / SECS_PER_DAY;
-    let ok = missing == 0 && age_days < STALE_THRESHOLD_DAYS;
-
-    let age_str = if oldest_age_secs > 0 {
-        if age_days > 0 {
-            format!(", oldest {age_days}d")
-        } else {
-            let hours = oldest_age_secs / SECS_PER_HOUR;
-            format!(", oldest {hours}h")
-        }
-    } else {
-        String::new()
-    };
-
-    super::ProbeResult {
-        ok,
-        detail: format!("{present}/{total} binaries present{age_str}"),
-    }
-}
-
-/// VCS parity probe: check that origin and forgejo are at the same commit for
-/// locally-cloned repos. Reports drift count — any drift is a WARN that auto-
-/// reconciliation should resolve within the next cascade cycle.
-async fn probe_vcs_parity() -> StatusProbe {
-    let Ok(workspace) = crate::temporal::resolve_workspace_root() else {
-        return StatusProbe {
-            name: "vcs.parity".into(),
-            ok: true,
-            detail: "workspace not found (VPS/minimal)".into(),
-        };
-    };
-
-    let local_paths: Vec<String> = crate::manifest::load_from_workspace_async(&workspace)
-        .await
-        .map_or_else(
-            |_| {
-                vec![
-                    cellmembrane_types::service::INFRA_PLASMID_BIN.into(),
-                    cellmembrane_types::service::INFRA_WATERING_HOLE.into(),
-                ]
-            },
-            |m| m.repos.values().map(|r| r.local_path.clone()).collect(),
-        );
-
-    let mut drift_count = 0u32;
-    let mut checked = 0u32;
-
-    for repo_path in &local_paths {
-        let repo_dir = workspace.join(repo_path);
-        if !repo_dir.join(".git").exists() {
-            continue;
-        }
-        let origin_head = git_rev_parse(&repo_dir, "origin/main").await;
-        let forgejo_head = git_rev_parse(&repo_dir, "forgejo/main").await;
-        if let (Some(o), Some(f)) = (origin_head, forgejo_head) {
-            checked += 1;
-            if o != f {
-                drift_count += 1;
-            }
-        }
-    }
-
-    let ok = drift_count == 0;
-    let detail = format!("{checked} repos checked, {drift_count} drifted");
-    StatusProbe {
-        name: "vcs.parity".into(),
-        ok,
-        detail,
-    }
-}
-
-async fn git_rev_parse(repo_dir: &Path, refspec: &str) -> Option<String> {
-    crate::git_ops::git_output_opt(repo_dir, &["rev-parse", refspec]).await
-}
-
 // ── Socket resolution (delegated to gate/sockets.rs) ──────────
 
 use super::sockets::resolve_mesh_relay_socket;
 pub(crate) use super::sockets::{resolve_primal_socket_paths, uds_jsonrpc_call};
-
-/// Probe rootpulse ledger state — checks if a session has been committed on this gate.
-///
-/// A missing session is a soft warning, not a failure — gates that haven't
-/// run cascade with freshness yet are healthy but un-attested.
-fn probe_rootpulse_ledger() -> StatusProbe {
-    crate::temporal::post_sync::load_rootpulse_session().map_or_else(
-        || StatusProbe {
-            name: "rootpulse.ledger".into(),
-            ok: true,
-            detail: "no session yet — will populate on next cascade with freshness".into(),
-        },
-        |s| StatusProbe {
-            name: "rootpulse.ledger".into(),
-            ok: true,
-            detail: format!("last session: {s}"),
-        },
-    )
-}
-
-/// Probe TLS cert expiry for publicly-served domains.
-///
-/// Only runs on gates that serve TLS (have a `caddy_tls` or `tls_terminator`
-/// role in the manifest). Returns `None` if TLS is not locally relevant.
-///
-/// Uses `openssl s_client` to probe each domain's cert expiry. Any cert
-/// with <14 days remaining triggers a probe failure (EXP-03 monitoring).
-async fn probe_tls_cert_expiry() -> Option<StatusProbe> {
-    let workspace = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
-        cellmembrane_types::service::DEFAULT_ECOPRIMALS_ROOT,
-    );
-    let manifest = match crate::manifest::load_from_workspace(std::path::Path::new(&workspace)) {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::debug!(error = %e, "TLS cert probe: manifest load failed");
-            return None;
-        }
-    };
-    let gate = super::resolve_local_gate_identity();
-
-    let profile = manifest.gates.get(&gate)?;
-    let is_tls_gate = profile
-        .roles
-        .iter()
-        .any(cellmembrane_types::GateRole::is_tls);
-    if !is_tls_gate {
-        return None;
-    }
-
-    let domains: Vec<String> = profile
-        .domains
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .take(MAX_CERT_PROBE_DOMAINS)
-        .collect();
-
-    if domains.is_empty() {
-        return Some(StatusProbe {
-            name: "tls.cert_expiry".into(),
-            ok: true,
-            detail: "no domains configured".into(),
-        });
-    }
-
-    let mut results: Vec<String> = Vec::new();
-    let mut any_expiring = false;
-
-    for domain in &domains {
-        let d = domain.clone();
-        let days = tokio::task::spawn_blocking(move || check_cert_days(&d))
-            .await
-            .unwrap_or(-1);
-        if days < 0 {
-            results.push(format!("{domain}: EXPIRED/unreachable"));
-            any_expiring = true;
-        } else if days < CERT_WARNING_THRESHOLD_DAYS {
-            results.push(format!("{domain}: {days}d remaining (WARNING)"));
-            any_expiring = true;
-        } else {
-            results.push(format!("{domain}: {days}d remaining"));
-        }
-    }
-
-    Some(StatusProbe {
-        name: "tls.cert_expiry".into(),
-        ok: !any_expiring,
-        detail: results.join(", "),
-    })
-}
-
-/// Check TLS cert days remaining for a domain via local openssl probe.
-fn check_cert_days(domain: &str) -> i64 {
-    let https_port = cellmembrane_types::service::DEFAULT_HTTPS_PORT;
-    let cmd = format!(
-        "echo | openssl s_client -connect {domain}:{https_port} -servername {domain} 2>/dev/null \
-         | openssl x509 -noout -enddate 2>/dev/null"
-    );
-    let Ok(result) = std::process::Command::new("sh").args(["-c", &cmd]).output() else {
-        return -1;
-    };
-    if !result.status.success() {
-        return -1;
-    }
-
-    let stdout = String::from_utf8_lossy(&result.stdout);
-    let not_after = stdout
-        .lines()
-        .find(|l| l.starts_with("notAfter="))
-        .map_or("", |l| l.trim_start_matches("notAfter=").trim());
-
-    crate::caddy::parse_days_remaining(not_after)
-}
 
 #[cfg(test)]
 mod tests {
@@ -693,7 +474,7 @@ mod tests {
 
     #[test]
     fn check_cert_days_unreachable_returns_negative() {
-        let days = check_cert_days("unreachable.invalid.test");
+        let days = auxiliary::check_cert_days("unreachable.invalid.test");
         assert!(days <= 0, "unreachable domain should return <=0 days");
     }
 
