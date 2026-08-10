@@ -1,6 +1,6 @@
 # VPS State Snapshot
 
-**Last updated:** 2026-08-10 (Wave 157e health method dispatch + deep debt cleanup + resolve fix)
+**Last updated:** 2026-08-10 (Wave 157g G72 dep pandemic + socket dedup + deep debt)
 **Deployed composition:** Full NUCLEUS (Wave 61→118) — 13 primals + 4 symbiotic + federation + WAN depot + sandbox/canary pipeline
 **VPS transport:** UDS + federation TCP :7700 — NUCLEUS primals on Unix domain sockets, Songbird federation on TCP for cross-gate mesh
 **VPS workspace:** `/opt/ecoPrimals/` — 17 repos cloned from sovereign Forgejo, cascade via Rust `membrane` binary

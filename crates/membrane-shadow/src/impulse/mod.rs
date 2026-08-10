@@ -25,4 +25,5 @@ pub use types::{ImpulseType, PostArgs, Priority, SyncDivergeArgs};
 
 pub use lifecycle::{ack, archive, check, post, sense};
 pub use primal::discover_socket;
+pub(crate) use primal::signer_socket_name;
 pub use sync::post_sync_diverge;

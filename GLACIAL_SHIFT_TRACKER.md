@@ -1,13 +1,24 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-10 (Wave 157e health method dispatch + deep debt cleanup + resolve fix)
+**Last updated:** 2026-08-10 (Wave 157g G72 dep pandemic + socket dedup + deep debt)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157g (G72 dep pandemic + socket dedup + deep debt):**
+G72 Dependency Pandemic: `time/macros` feature removed (eliminates `time-macros`
+proc-macro dep), `rt-multi-thread` split to dev-deps (production binary uses
+`current_thread` only, multi-thread only for tests), `serde_json` promoted to
+workspace dep (used in both crates). Cargo update: blake3 1.8.5→1.8.6, thiserror
+2.0.19→2.0.20, aho-corasick 1.1.4→1.1.5, cc 1.4.0→1.4.2. Transitive deps
+93→92. Socket name dedup: 3 copies of `signer_socket_name()` consolidated to
+one canonical in `impulse/primal.rs` with `pub(crate)` visibility. `-default.sock`
+vestigial pattern purged from `relay_socket_name()` and `signer_socket_name()`
+(no `-default.sock` files exist on any gate). 1353 tests, 0 clippy.
 
 **Wave 157e (health method dispatch + deep debt cleanup + resolve fix):**
 Health sweep evolution: wired `HealthCheckMethod` registry enum into runtime probes.

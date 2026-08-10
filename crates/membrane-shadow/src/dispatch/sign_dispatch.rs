@@ -208,10 +208,7 @@ fn dispatch_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
 }
 
 fn signer_socket_name() -> String {
-    let binary = cellmembrane_types::MembraneService::binary_for(
-        cellmembrane_types::ServiceCapability::CryptoSigner,
-    );
-    cellmembrane_types::service::constants::socket_filename(binary)
+    crate::impulse::signer_socket_name()
 }
 
 fn load_signatures_summary(

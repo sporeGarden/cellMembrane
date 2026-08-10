@@ -15,18 +15,12 @@ use super::types::{ImpulseFile, ImpulseSignature};
 
 fn relay_socket_name() -> String {
     let binary = cellmembrane_types::MembraneService::binary_for(ServiceCapability::MeshRelay);
-    format!(
-        "{binary}-default{}",
-        cellmembrane_types::service::constants::SOCKET_SUFFIX
-    )
+    cellmembrane_types::service::constants::socket_filename(binary)
 }
 
-fn signer_socket_name() -> String {
+pub(crate) fn signer_socket_name() -> String {
     let binary = cellmembrane_types::MembraneService::binary_for(ServiceCapability::CryptoSigner);
-    format!(
-        "{binary}-default{}",
-        cellmembrane_types::service::constants::SOCKET_SUFFIX
-    )
+    cellmembrane_types::service::constants::socket_filename(binary)
 }
 
 pub(super) fn try_relay_impulse(impulse: &ImpulseFile) {
@@ -208,7 +202,13 @@ mod tests {
             name.contains("songbird"),
             "relay socket should be songbird, got: {name}"
         );
-        assert!(name.ends_with("-default.sock"));
+        assert!(
+            std::path::Path::new(&name)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("sock")),
+            "should have .sock extension: {name}"
+        );
+        assert!(!name.contains("-default"), "should use canonical socket name, not -default: {name}");
     }
 
     #[test]
@@ -218,7 +218,13 @@ mod tests {
             name.contains("beardog"),
             "signer socket should be beardog, got: {name}"
         );
-        assert!(name.ends_with("-default.sock"));
+        assert!(
+            std::path::Path::new(&name)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("sock")),
+            "should have .sock extension: {name}"
+        );
+        assert!(!name.contains("-default"), "should use canonical socket name, not -default: {name}");
     }
 
     #[test]
