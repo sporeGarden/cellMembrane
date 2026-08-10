@@ -26,7 +26,7 @@ fn lan_dns_name_lowercases_gate() {
 }
 
 #[test]
-#[allow(clippy::assertions_on_constants)]
+#[allow(clippy::assertions_on_constants, reason = "validates const arithmetic correctness")]
 fn timeout_constants_reasonable() {
     assert!(DEFAULT_SSH_TIMEOUT_SECS >= 5);
     assert!(DEFAULT_GIT_OP_TIMEOUT_SECS >= 30);

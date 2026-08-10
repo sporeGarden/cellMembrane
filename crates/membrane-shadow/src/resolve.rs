@@ -125,6 +125,8 @@ fn is_local(ctx: &ResolutionContext, target_gate: &str) -> bool {
 ///
 /// For services without a socket (TCP-only), returns `Tcp` on loopback.
 fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<TransportEndpoint> {
+    use cellmembrane_types::service::constants::{socket_filename, SOCKET_SUFFIX};
+
     if !svc.has_socket {
         return svc.port.map(|port| TransportEndpoint::Tcp {
             host: cellmembrane_types::service::BIND_LOOPBACK.into(),
@@ -146,16 +148,16 @@ fn resolve_local_uds(ctx: &ResolutionContext, svc: &MembraneService) -> Option<T
     let mut candidates: Vec<String> = Vec::with_capacity(8);
 
     if let Some(api) = svc.api_socket {
-        candidates.push(format!("{}/{api}-default.sock", ctx.socket_base));
-        candidates.push(format!("{}/{api}.sock", ctx.socket_base));
+        candidates.push(format!("{}/{api}-default{SOCKET_SUFFIX}", ctx.socket_base));
+        candidates.push(format!("{}/{}", ctx.socket_base, socket_filename(api)));
     }
-    candidates.push(format!("{}/{}.sock", ctx.socket_base, svc.binary));
-    candidates.push(format!("{}/{ns}/{}.sock", ctx.xdg_runtime, svc.binary));
+    candidates.push(format!("{}/{}", ctx.socket_base, socket_filename(svc.binary)));
+    candidates.push(format!("{}/{ns}/{}", ctx.xdg_runtime, socket_filename(svc.binary)));
     if let Some(api) = svc.api_socket {
-        candidates.push(format!("{}/{ns}/{api}-default.sock", ctx.xdg_runtime));
+        candidates.push(format!("{}/{ns}/{api}-default{SOCKET_SUFFIX}", ctx.xdg_runtime));
     }
     for alias in svc.socket_aliases {
-        candidates.push(format!("{}/{alias}.sock", ctx.socket_base));
+        candidates.push(format!("{}/{}", ctx.socket_base, socket_filename(alias)));
     }
 
     for path in &candidates {
@@ -362,9 +364,10 @@ mod tests {
         let ep = resolve_local_uds(&ctx, svc);
         match ep.unwrap() {
             TransportEndpoint::Uds { path } => {
+                let known = ["neural-api", "biomeos", "ai"];
                 assert!(
-                    path.contains("neural-api") || path.contains("biomeos"),
-                    "biomeOS UDS should resolve to neural-api or biomeos socket, got: {path}"
+                    known.iter().any(|k| path.contains(k)),
+                    "biomeOS UDS should resolve to a known socket (neural-api, biomeos, or ai alias), got: {path}"
                 );
             }
             _ => panic!("expected UDS for biomeOS"),
@@ -377,9 +380,10 @@ mod tests {
         let svc = MembraneService::with_capability(ServiceCapability::Identity).unwrap();
         let ep = resolve_local_uds(&ctx, svc).unwrap();
         if let TransportEndpoint::Uds { path } = ep {
+            let known = ["neural-api", "biomeos", "ai"];
             assert!(
-                path.contains("neural-api") || path.contains("biomeos"),
-                "expected neural-api or biomeos in path, got: {path}"
+                known.iter().any(|k| path.contains(k)),
+                "expected neural-api, biomeos, or ai alias in path, got: {path}"
             );
         }
     }

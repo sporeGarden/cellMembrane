@@ -154,7 +154,7 @@ const fn const_str_eq(a: &str, b: &str) -> bool {
 /// All fields are `&'static str` — service definitions are compile-time
 /// constants, not runtime-allocated data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(clippy::struct_excessive_bools, reason = "registry entry — each bool is an independent service capability flag")]
 pub struct MembraneService {
     /// Binary name on disk (e.g. `"beardog"`, `"songbird"`).
     pub binary: &'static str,

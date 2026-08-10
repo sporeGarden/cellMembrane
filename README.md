@@ -56,7 +56,7 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1349 tests — ZERO clippy warnings
+cargo test                  # 1353 tests — ZERO clippy warnings
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
@@ -358,7 +358,7 @@ through Wave 157d are **DONE**. Full wave-by-wave audit trail is preserved in
 | NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh (10 named, 3 pending), UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1349 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1353 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
 | Dependencies | `nix`+`chrono` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, `time` crate, CSPRNG via `getrandom` | DONE |
@@ -583,7 +583,7 @@ Tests use both inline `#[cfg(test)]` modules and dedicated test files
 — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1349 tests)
+cargo test                  # Full suite (1353 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

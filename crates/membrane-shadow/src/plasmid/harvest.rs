@@ -28,7 +28,7 @@ const NUCLEUS_STOP_GRACE_SECS: u64 = 1;
 const PKILL_SETTLE_MS: u64 = 500;
 
 /// Parsed CLI arguments for `plasmid.harvest`.
-#[allow(clippy::struct_excessive_bools)]
+#[allow(clippy::struct_excessive_bools, reason = "CLI flags map 1:1 to boolean args")]
 pub struct HarvestArgs {
     /// Single primal to harvest (None = all with changes).
     pub primal: Option<String>,
@@ -722,7 +722,7 @@ pub(super) use toolchain::{
 /// Shared by both `plasmid.build` and `plasmid.harvest`.
 ///
 /// G69 Phase 3: before overwriting, archives the superseded binary's lineage
-/// via the depot_lineage graph (best-effort — never blocks staging).
+/// via the `depot_lineage` graph (best-effort — never blocks staging).
 pub(super) async fn stage_to_depot_async(
     primal: &str,
     bin_path: &Path,

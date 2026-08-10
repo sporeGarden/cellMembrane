@@ -136,6 +136,7 @@ pub struct HarvestProvenanceEntry {
 /// evolution event via the `depot_lineage` biomeOS graph — signing the hash,
 /// appending to the primal's spine, and creating an attribution braid.
 /// Graceful degradation: returns Ok(None) if NUCLEUS is unreachable.
+#[allow(clippy::too_many_arguments, reason = "neural-api graph params naturally require distinct fields")]
 pub async fn archive_superseded_binary(
     primal: &str,
     arch: &str,
@@ -146,16 +147,13 @@ pub async fn archive_superseded_binary(
     builder_gate: &str,
     binary_size: u64,
 ) -> Result<Option<String>> {
-    let endpoint = match resolve_neural_api_endpoint() {
-        Some(ep) => ep,
-        None => {
-            tracing::debug!(
-                primal,
-                arch,
-                "depot lineage skipped — NUCLEUS neural-api not reachable"
-            );
-            return Ok(None);
-        }
+    let Some(endpoint) = resolve_neural_api_endpoint() else {
+        tracing::debug!(
+            primal,
+            arch,
+            "depot lineage skipped — NUCLEUS neural-api not reachable"
+        );
+        return Ok(None);
     };
 
     let request = crate::jsonrpc::request_with_params(
@@ -398,9 +396,10 @@ mod tests {
     fn resolve_neural_api_endpoint_uses_resolver() {
         let ep = resolve_neural_api_endpoint();
         if let Some(cellmembrane_types::TransportEndpoint::Uds { path }) = &ep {
+            let known = ["neural-api", "biomeos", "ai"];
             assert!(
-                path.contains("neural-api") || path.contains("biomeos"),
-                "resolved path should reference neural-api or biomeos, got: {path}"
+                known.iter().any(|k| path.contains(k)),
+                "resolved path should reference neural-api, biomeos, or ai alias, got: {path}"
             );
         }
     }

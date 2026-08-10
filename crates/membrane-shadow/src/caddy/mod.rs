@@ -263,7 +263,7 @@ pub async fn dispatch(
 
 // ── Manifest-driven Caddyfile generation ────────────────────────────
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, reason = "Caddyfile generation builds structured output in one pass")]
 async fn dispatch_caddy_generate(args: &[&str]) -> Result<crate::ShadowOutcome> {
     use cellmembrane_types::caddy::{CaddyConfig, CaddySubRoute, CaddyVhost};
     use cellmembrane_types::service;

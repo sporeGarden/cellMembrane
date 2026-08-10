@@ -1,13 +1,27 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-09 (Wave 157d G69 Phase 2 lineage metadata + deprecated cleanup + socket consolidation)
+**Last updated:** 2026-08-10 (Wave 157e health method dispatch + deep debt cleanup + resolve fix)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157e (health method dispatch + deep debt cleanup + resolve fix):**
+Health sweep evolution: wired `HealthCheckMethod` registry enum into runtime probes.
+`health_sweep()` now dispatches per-service: JSON-RPC `Liveness` for primals,
+`TcpConnect` for RustDesk (hbbs/hbbr), `HttpsProbe` for Caddy, `DnsProbe` for
+Knot-DNS, `SocketExists` for UDS-only services. Added `probe_tcp_connect()`,
+`probe_https()`, `probe_dns()` functions. Dead service detail now includes
+failed method in output. Deep debt cleanup: all `#[allow(clippy::...)]` attributes
+now carry `reason = "..."` (6 production + 1 test). `sovereignty_ledger.rs` `match`
+→ `let...else`, `too_many_arguments` annotated. `freshness.rs` `WaveFile`/`GatesSection`
+dead-code annotated. `resolve.rs` socket paths migrated to `socket_filename()`.
+Pre-existing test failures fixed: biomeOS resolve tests updated to accept `ai`
+socket alias (live symlink on eastGate). `doc_markdown` backtick fixes.
+1353 tests, 0 clippy.
 
 **Wave 157d (G69 Phase 2 lineage metadata + deprecated cleanup + socket consolidation):**
 G69 Phase 2: `ProvenanceEntry` enriched with per-entry `blake3`, `built_at`,

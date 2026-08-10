@@ -202,11 +202,17 @@ fn parse_mesh_response(response: &str) -> super::ProbeResult {
     )
 }
 
-/// Health sweep: probe each primal via JSON-RPC, fall back to process detection.
+/// Health sweep: probe each primal using its registry-declared `HealthCheckMethod`.
+///
+/// Dispatches per-service: JSON-RPC liveness for primals, TCP connect for
+/// `RustDesk`, HTTPS probe for Caddy, DNS probe for Knot, socket existence for
+/// UDS-only services. Falls back to process detection when all probes fail.
 ///
 /// Scoped to the local gate's composition profile when available, otherwise
 /// checks all nucleus primals.
 pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
+    use cellmembrane_types::service::capability::HealthCheckMethod;
+
     let dest_root = super::resolve_plasmidbin_dir();
     let bin_dir = dest_root.join("primals").join(arch);
 
@@ -215,6 +221,7 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
     let primals: Vec<&str> = composition_primals.iter().map(String::as_str).collect();
     let mut alive = 0u32;
     let mut dead = 0u32;
+    let mut details: Vec<String> = Vec::new();
 
     tokio::time::sleep(std::time::Duration::from_secs(
         cellmembrane_types::service::MESH_SOCKET_WAIT_INTERVAL_SECS,
@@ -229,24 +236,49 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
             continue;
         }
 
-        let primal_name = (*primal).to_string();
-        let pgrep_found = tokio::task::spawn_blocking(move || probe_primal_pgrep(&primal_name))
-            .await
-            .unwrap_or(false);
-        if probe_primal_jsonrpc(primal).await || pgrep_found {
+        let svc = cellmembrane_types::MembraneService::for_binary(primal);
+        let method = svc.map_or(HealthCheckMethod::Liveness, cellmembrane_types::MembraneService::uds_health_check);
+
+        let probed = match method {
+            HealthCheckMethod::Liveness => probe_primal_jsonrpc(primal).await,
+            HealthCheckMethod::TcpConnect => {
+                svc.and_then(|s| s.port)
+                    .is_some_and(probe_tcp_connect)
+            }
+            HealthCheckMethod::HttpsProbe => probe_https(primal),
+            HealthCheckMethod::DnsProbe => probe_dns(),
+            HealthCheckMethod::SocketExists => {
+                let paths = resolve_primal_socket_paths(primal);
+                paths.iter().any(|p| Path::new(p).exists())
+            }
+        };
+
+        if probed {
             alive += 1;
         } else {
-            tracing::debug!(primal = %primal, "health: primal not responding — marking dead");
-            dead += 1;
+            let primal_name = (*primal).to_string();
+            let pgrep_found =
+                tokio::task::spawn_blocking(move || probe_primal_pgrep(&primal_name))
+                    .await
+                    .unwrap_or(false);
+            if pgrep_found {
+                alive += 1;
+            } else {
+                tracing::debug!(primal = %primal, method = %method, "health: primal not responding");
+                details.push(format!("{primal}({method})"));
+                dead += 1;
+            }
         }
     }
 
     let total = alive + dead;
     let ok = dead == 0;
-    super::ProbeResult {
-        ok,
-        detail: format!("{alive}/{total} primals alive"),
+    let mut detail = format!("{alive}/{total} primals alive");
+    if !details.is_empty() {
+        use std::fmt::Write;
+        let _ = write!(detail, " — dead: {}", details.join(", "));
     }
+    super::ProbeResult { ok, detail }
 }
 
 /// Probe a primal via neuralAPI `capability.call` with fallback to direct UDS JSON-RPC.
@@ -331,6 +363,25 @@ fn probe_primal_pgrep(primal: &str) -> bool {
         }
     }
     false
+}
+
+/// TCP connect probe — verifies a service is listening on the given port.
+fn probe_tcp_connect(port: u16) -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)).is_ok()
+}
+
+/// HTTPS probe — verifies a reverse proxy is listening on its declared port.
+fn probe_https(primal: &str) -> bool {
+    cellmembrane_types::MembraneService::for_binary(primal)
+        .and_then(|s| s.port)
+        .is_some_and(probe_tcp_connect)
+}
+
+/// DNS probe — verifies a DNS server is listening on port 53.
+fn probe_dns() -> bool {
+    probe_tcp_connect(53)
 }
 
 fn probe_depot_freshness(arch: &str) -> super::ProbeResult {
@@ -644,5 +695,44 @@ mod tests {
     fn check_cert_days_unreachable_returns_negative() {
         let days = check_cert_days("unreachable.invalid.test");
         assert!(days <= 0, "unreachable domain should return <=0 days");
+    }
+
+    #[test]
+    fn probe_tcp_connect_fails_on_unlikely_port() {
+        assert!(!probe_tcp_connect(1), "port 1 should not be listening");
+    }
+
+    #[test]
+    fn probe_https_unknown_primal_returns_false() {
+        assert!(!probe_https("nonexistent-primal-xyz"));
+    }
+
+    #[test]
+    fn health_method_registry_wiring() {
+        use cellmembrane_types::service::capability::HealthCheckMethod;
+        let caddy = cellmembrane_types::MembraneService::for_binary("caddy");
+        assert_eq!(
+            caddy.map(|s| s.health_method),
+            Some(HealthCheckMethod::HttpsProbe),
+            "caddy should use HttpsProbe"
+        );
+        let knot = cellmembrane_types::MembraneService::for_binary("knot-dns");
+        assert_eq!(
+            knot.map(|s| s.health_method),
+            Some(HealthCheckMethod::DnsProbe),
+            "knot-dns should use DnsProbe"
+        );
+        let hbbs = cellmembrane_types::MembraneService::for_binary("hbbs");
+        assert_eq!(
+            hbbs.map(|s| s.health_method),
+            Some(HealthCheckMethod::TcpConnect),
+            "hbbs should use TcpConnect"
+        );
+        let beardog = cellmembrane_types::MembraneService::for_binary("beardog");
+        assert_eq!(
+            beardog.map(|s| s.health_method),
+            Some(HealthCheckMethod::Liveness),
+            "beardog should use Liveness"
+        );
     }
 }
