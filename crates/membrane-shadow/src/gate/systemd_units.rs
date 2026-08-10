@@ -150,6 +150,87 @@ pub fn install_cascade_timer(opts: &CascadeTimerOpts<'_>, dry_run: bool) -> supe
     }
 }
 
+// ── Forgejo GC timer ────────────────────────────────────────────
+
+/// Generate systemd timer + service units for weekly Forgejo repo maintenance.
+///
+/// Runs `git gc --aggressive` on all Forgejo-managed repos to compact objects
+/// and reduce disk footprint on the golgi pepti relay.
+pub(crate) fn generate_forgejo_gc_timer() -> (String, String) {
+    let forgejo_data = "/opt/forgejo/data/gitea-repositories";
+
+    let service = format!(
+        "[Unit]\n\
+         Description=Forgejo Repository GC (weekly)\n\
+         After=forgejo.service\n\
+         \n\
+         [Service]\n\
+         Type=oneshot\n\
+         ExecStart=/bin/bash -c 'for repo in {forgejo_data}/*/*; do [ -d \"$repo\" ] && \
+         git -C \"$repo\" gc --aggressive --prune=now 2>&1; done'\n\
+         User=git\n\
+         TimeoutStartSec=3600\n\
+         StandardOutput=journal\n\
+         StandardError=journal\n"
+    );
+
+    let timer = r"[Unit]
+Description=Forgejo Repository GC Timer — weekly maintenance
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"
+    .to_string();
+
+    (service, timer)
+}
+
+/// Install the Forgejo GC timer on this gate.
+pub fn install_forgejo_gc_timer(dry_run: bool) -> super::BootstrapPhase {
+    if dry_run {
+        return super::BootstrapPhase {
+            name: "forgejo.gc-timer".into(),
+            ok: true,
+            detail: "dry-run: would install membrane-forgejo-gc.timer (weekly Sunday 04:00)"
+                .into(),
+        };
+    }
+
+    let (service_content, timer_content) = generate_forgejo_gc_timer();
+    let unit_dir = cellmembrane_types::service::resolve_systemd_unit_dir();
+    let systemd_dir = std::path::Path::new(&unit_dir);
+
+    let service_path = systemd_dir.join("membrane-forgejo-gc.service");
+    let timer_path = systemd_dir.join("membrane-forgejo-gc.timer");
+
+    let write_ok = std::fs::write(&service_path, &service_content).is_ok()
+        && std::fs::write(&timer_path, &timer_content).is_ok();
+
+    if !write_ok {
+        return super::BootstrapPhase {
+            name: "forgejo.gc-timer".into(),
+            ok: false,
+            detail: "failed to write Forgejo GC systemd units".into(),
+        };
+    }
+
+    if !super::nucleus::systemctl(&["daemon-reload"]) {
+        tracing::warn!("systemctl daemon-reload failed for Forgejo GC timer");
+    }
+    let enable_ok = super::nucleus::systemctl(&["enable", "--now", "membrane-forgejo-gc.timer"]);
+
+    super::BootstrapPhase {
+        name: "forgejo.gc-timer".into(),
+        ok: enable_ok,
+        detail: "membrane-forgejo-gc.timer installed (weekly Sunday 04:00)".into(),
+    }
+}
+
 // ── Tower gateway systemd units ──────────────────────────────────
 
 /// Parameters for Tower HTTP gateway systemd unit generation.

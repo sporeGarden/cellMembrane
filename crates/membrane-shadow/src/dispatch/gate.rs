@@ -180,14 +180,29 @@ fn dispatch_quorum(args: &[&str]) -> crate::Result<ShadowOutcome> {
     }
 
     let phase = crate::gate::systemd_units::install_cascade_timer(&opts, dry_run);
+
+    let with_gc = args.contains(&"--with-gc");
+    let gc_phase = if with_gc {
+        let gc = crate::gate::systemd_units::install_forgejo_gc_timer(dry_run);
+        Some(gc)
+    } else {
+        None
+    };
+
+    let mut detail = phase.detail.clone();
+    if let Some(gc) = &gc_phase {
+        detail = format!("{detail}\n{}", gc.detail);
+    }
+
     let data = serde_json::json!({
         "phase": phase.name,
         "ok": phase.ok,
-        "detail": &phase.detail,
+        "detail": &detail,
         "interval_minutes": interval,
         "gate": gate_name,
+        "forgejo_gc": gc_phase.as_ref().map(|g| g.ok),
     });
-    Ok(ShadowOutcome::ok_with(phase.detail, data))
+    Ok(ShadowOutcome::ok_with(detail, data))
 }
 
 // ── Gate info ────────────────────────────────────────────────────────

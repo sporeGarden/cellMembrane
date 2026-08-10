@@ -117,11 +117,6 @@ pub(super) fn summarize_depot_freshness() -> String {
     format!("  [depot] {present}/{total} binaries present{suffix}")
 }
 
-/// Check if this gate is the designated freshness publisher.
-pub(super) fn is_freshness_publisher() -> bool {
-    std::env::var(cellmembrane_types::service::ENV_FRESHNESS_PUBLISHER)
-        .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"))
-}
 
 /// Persist rootpulse session to gate-local state.
 pub(crate) fn persist_rootpulse_session(wave_id: u32, gate: &str, session_id: &str) {

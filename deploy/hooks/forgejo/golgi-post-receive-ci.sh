@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # golgi-post-receive-ci.sh — Sovereign CI trigger on primal push
 # Installed in each primal repo's hooks/post-receive.d/ on golgiBody.
-# Triggers sporeGate build pipeline via WireGuard SSH when a primal is pushed.
+# Triggers the build pipeline via membrane's mesh transport when a primal is pushed.
+#
+# Uses local membrane binary which dispatches to the primary build authority
+# over Tower Atomic (songBird mesh relay) — no SSH or hardcoded IPs.
 #
 # Install:
 #   for repo in /opt/forgejo/data/gitea-repositories/ecoPrimals/*.git; do
@@ -21,8 +24,7 @@ REPO_BARE="$(cd "${GIT_DIR:-.}" 2>/dev/null && pwd)"
 REPO_NAME=$(basename "$REPO_BARE" .git)
 
 MANIFEST="/opt/ecoPrimals/infra/wateringHole/ecosystem_manifest.toml"
-SPOREGATE_MESH_IP="10.13.37.2"
-MEMBRANE_BIN="/usr/local/bin/membrane"
+MEMBRANE_BIN="/opt/membrane/membrane"
 
 if [[ ! -f "$MANIFEST" ]]; then
     log "SKIP: ecosystem manifest not found"
@@ -45,13 +47,10 @@ fi
 
 PRIMAL_SLUG=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
 
-log "Triggering sovereign CI: $PRIMAL_SLUG commit=$COMMIT on sporeGate ($SPOREGATE_MESH_IP)"
+log "Triggering sovereign CI: $PRIMAL_SLUG commit=$COMMIT (mesh dispatch)"
 
-ssh -o StrictHostKeyChecking=accept-new \
-    -o ConnectTimeout=5 \
-    -o BatchMode=yes \
-    "root@$SPOREGATE_MESH_IP" \
-    "$MEMBRANE_BIN sovereign.ci.trigger --primal $PRIMAL_SLUG --commit $COMMIT" \
+ECOPRIMALS_ROOT=/opt/ecoPrimals "$MEMBRANE_BIN" \
+    sovereign.ci.trigger --primal "$PRIMAL_SLUG" --commit "$COMMIT" \
     </dev/null >/dev/null 2>&1 &
 
 log "CI trigger dispatched for $PRIMAL_SLUG (background)"

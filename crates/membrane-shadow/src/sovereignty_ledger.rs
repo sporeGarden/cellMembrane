@@ -130,6 +130,93 @@ pub struct HarvestProvenanceEntry {
     pub blake3: String,
 }
 
+/// G69 Phase 3: Record a binary supersession in the depot lineage graph.
+///
+/// Before a depot binary is overwritten by a new build, this records the
+/// evolution event via the `depot_lineage` biomeOS graph — signing the hash,
+/// appending to the primal's spine, and creating an attribution braid.
+/// Graceful degradation: returns Ok(None) if NUCLEUS is unreachable.
+pub async fn archive_superseded_binary(
+    primal: &str,
+    arch: &str,
+    old_blake3: &str,
+    new_blake3: &str,
+    commit: &str,
+    wave: &str,
+    builder_gate: &str,
+    binary_size: u64,
+) -> Result<Option<String>> {
+    let endpoint = match resolve_neural_api_endpoint() {
+        Some(ep) => ep,
+        None => {
+            tracing::debug!(
+                primal,
+                arch,
+                "depot lineage skipped — NUCLEUS neural-api not reachable"
+            );
+            return Ok(None);
+        }
+    };
+
+    let request = crate::jsonrpc::request_with_params(
+        "graph.execute",
+        &serde_json::json!({
+            "graph_id": "depot_lineage",
+            "params": {
+                "PRIMAL_NAME": primal,
+                "BINARY_HASH": old_blake3,
+                "BINARY_SIZE": binary_size.to_string(),
+                "ARCH": arch,
+                "BUILDER_GATE": builder_gate,
+                "WAVE": wave,
+                "COMMIT_SHA": commit,
+                "FAMILY_ID": "default",
+            },
+            "metadata": {
+                "event_type": "binary.supersede",
+                "old_blake3": old_blake3,
+                "new_blake3": new_blake3,
+                "primal": primal,
+                "arch": arch,
+            },
+        }),
+        45,
+    );
+
+    match crate::jsonrpc::call_endpoint(&endpoint, &request).await {
+        Ok(response) => {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
+                if parsed.get("error").is_some() && parsed.get("result").is_none() {
+                    tracing::warn!(
+                        primal,
+                        arch,
+                        error = %response,
+                        "depot lineage graph error — binary still overwritten"
+                    );
+                    return Ok(None);
+                }
+            }
+            tracing::info!(
+                primal,
+                arch,
+                old_blake3,
+                new_blake3,
+                "depot lineage recorded: binary.supersede"
+            );
+            Ok(Some(format!("lineage:{primal}:{arch}:{old_blake3}")))
+        }
+        Err(e) => {
+            tracing::warn!(
+                primal,
+                arch,
+                error = %e,
+                "depot lineage call failed — binary still overwritten"
+            );
+            Ok(None)
+        }
+    }
+}
+
 /// Sovereignty verification result for a single repo.
 #[derive(Debug)]
 pub struct SovereigntyCheck {

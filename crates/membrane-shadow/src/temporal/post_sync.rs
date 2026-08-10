@@ -24,8 +24,8 @@ use super::post_sync_harvest::plasmidbin_was_pulled;
 pub(super) use super::post_sync_harvest::run_post_cascade_sandbox;
 
 use super::post_sync_content::{
-    check_content_health, is_freshness_publisher, run_commit_drift_pipeline,
-    run_content_rebuild_if_needed, run_rootpulse_sovereignty,
+    check_content_health, run_commit_drift_pipeline, run_content_rebuild_if_needed,
+    run_rootpulse_sovereignty,
 };
 use super::post_sync_harvest::{run_depot_staleness_and_fetch, run_post_cascade_refresh};
 
@@ -114,15 +114,6 @@ pub(super) async fn run_post_sync_phases(
             Err(e) => lines.push(format!("  [freshness] gate heads FAIL: {e}")),
         }
 
-        let is_designated_publisher = is_freshness_publisher();
-        if is_designated_publisher {
-            match crate::freshness::unify_freshness(root).await {
-                Ok(()) => {
-                    lines.push("  [freshness] UNIFIED freshness.toml (compat)".to_string());
-                }
-                Err(e) => lines.push(format!("  [freshness] unify FAIL: {e}")),
-            }
-        }
     }
 
     if opts.mode == CascadeMode::Sync {

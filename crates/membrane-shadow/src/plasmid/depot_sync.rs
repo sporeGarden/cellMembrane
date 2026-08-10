@@ -256,6 +256,8 @@ enum PushBinaryResult {
 }
 
 /// Shared push loop: walks arch dirs, pushes changed binaries, syncs metadata.
+///
+/// Pre-flight: checks remote disk usage — warns at 80%, blocks at 90%.
 async fn push_depot_to_remote(
     config: &crate::ShadowConfig,
     local_depot: &std::path::Path,
@@ -268,6 +270,28 @@ async fn push_depot_to_remote(
             message: format!("depot push: no primals/ dir at {}", local_depot.display()),
             data: None,
         });
+    }
+
+    if let Ok((disk_out, 0)) =
+        crate::ssh::exec_raw(config, "df --output=pcent / | tail -1").await
+    {
+        if let Ok(pct) = disk_out.trim().trim_end_matches('%').trim().parse::<u8>() {
+            if pct >= 90 {
+                return Ok(crate::ShadowOutcome {
+                    ok: false,
+                    message: format!(
+                        "depot push BLOCKED: remote disk at {pct}% — free space before pushing"
+                    ),
+                    data: None,
+                });
+            }
+            if pct >= 80 {
+                tracing::warn!(
+                    disk_pct = pct,
+                    "remote disk at {pct}% — depot push proceeding but disk is low"
+                );
+            }
+        }
     }
 
     let mut synced = 0usize;

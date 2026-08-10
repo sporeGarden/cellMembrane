@@ -155,11 +155,12 @@ struct MeshEntry {
     aliases: &'static [&'static str],
 }
 
-/// Bootstrap mesh registry — single source of truth for gate identities.
+/// Bootstrap mesh registry — **DEPRECATED fallback only.**
 ///
 /// Authoritative source at runtime is `ecosystem_manifest.toml`; this const
-/// table is the fallback when the manifest is unavailable. IP assignments
-/// are permanent once allocated.
+/// table exists solely for bootstrap/type-level code that cannot load the
+/// manifest. **All new consumers must use `EcosystemManifest::mesh_ip_for()`
+/// from `membrane-shadow` instead.** IP assignments are permanent once allocated.
 const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "golgi",
@@ -204,6 +205,12 @@ const MESH_REGISTRY: &[MeshEntry] = &[
         aliases: &[],
     },
     MeshEntry {
+        name: "strandGate",
+        wg_ip: Some("10.13.37.10"),
+        lan_ip: None,
+        aliases: &[],
+    },
+    MeshEntry {
         name: "blueGate",
         wg_ip: None,
         lan_ip: Some("192.168.4.210"),
@@ -211,6 +218,12 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     },
     MeshEntry {
         name: "westGate",
+        wg_ip: None,
+        lan_ip: None,
+        aliases: &[],
+    },
+    MeshEntry {
+        name: "darwinGate",
         wg_ip: None,
         lan_ip: None,
         aliases: &[],
@@ -245,6 +258,7 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
     "ironGate",
     "northGate",
     "southGate",
+    "strandGate",
 ];
 
 /// All known active gates in the ecosystem (superset of mesh gates).
@@ -265,8 +279,10 @@ pub const KNOWN_GATES: &[&str] = &[
     "ironGate",
     "northGate",
     "southGate",
+    "strandGate",
     "blueGate",
     "westGate",
+    "darwinGate",
     "grapheneGate",
 ];
 

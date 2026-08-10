@@ -20,8 +20,7 @@ use tracing::{error, info, warn};
 
 /// Resolved sub-builder for dispatch.
 ///
-/// Uses `TransportEndpoint` — mesh relay (Tower Atomic) by default,
-/// with SSH legacy fallback for backward compatibility.
+/// Uses `TransportEndpoint::MeshRelay` via Tower Atomic (songBird).
 struct ResolvedSubBuilder {
     gate: String,
     target: String,
@@ -30,8 +29,7 @@ struct ResolvedSubBuilder {
 
 /// Load sub-builders from the ecosystem manifest.
 ///
-/// Resolves each entry to a `TransportEndpoint` — mesh relay for
-/// `transport = "mesh"` (default), SSH command fallback for `transport = "ssh"`.
+/// Resolves each entry to a `TransportEndpoint::MeshRelay` (Tower Atomic).
 fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
     let workspace = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_ECOPRIMALS_ROOT,
@@ -59,25 +57,13 @@ fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
     Vec::new()
 }
 
-/// Resolve a manifest entry to a transport endpoint.
+/// Resolve a manifest entry to a mesh relay endpoint.
 fn resolve_builder_endpoint(
     entry: &crate::manifest::SubBuilderEntry,
 ) -> cellmembrane_types::TransportEndpoint {
-    if entry.transport == "ssh" && !entry.ssh_host.is_empty() {
-        warn!(
-            gate = entry.gate,
-            ssh_host = entry.ssh_host,
-            "sub-builder using legacy SSH transport — migrate to transport = \"mesh\""
-        );
-        cellmembrane_types::TransportEndpoint::Tcp {
-            host: entry.ssh_host.clone(),
-            port: cellmembrane_types::service::DEFAULT_BUILDER_PORT,
-        }
-    } else {
-        cellmembrane_types::TransportEndpoint::MeshRelay {
-            peer_id: entry.gate.clone(),
-            capability: "build".into(),
-        }
+    cellmembrane_types::TransportEndpoint::MeshRelay {
+        peer_id: entry.gate.clone(),
+        capability: "build".into(),
     }
 }
 
@@ -647,17 +633,17 @@ mod tests {
     }
 
     #[test]
-    fn resolve_builder_endpoint_ssh_legacy() {
+    fn resolve_builder_endpoint_always_mesh() {
         let entry = crate::manifest::SubBuilderEntry {
-            gate: "legacyGate".into(),
-            transport: "ssh".into(),
-            ssh_host: "legacyGate".into(),
+            gate: "anyGate".into(),
+            transport: "mesh".into(),
+            ssh_host: String::new(),
             membrane_bin: "membrane.exe".into(),
         };
         let ep = resolve_builder_endpoint(&entry);
         assert!(matches!(
             ep,
-            cellmembrane_types::TransportEndpoint::Tcp { .. }
+            cellmembrane_types::TransportEndpoint::MeshRelay { .. }
         ));
     }
 }

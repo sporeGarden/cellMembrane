@@ -19,13 +19,6 @@ fn plasmidbin_was_pulled_negative() {
 }
 
 #[test]
-fn is_freshness_publisher_defaults_false() {
-    if std::env::var(cellmembrane_types::service::ENV_FRESHNESS_PUBLISHER).is_err() {
-        assert!(!is_freshness_publisher());
-    }
-}
-
-#[test]
 fn rootpulse_state_toml_roundtrip() {
     let toml_content = r#"wave = 116
 gate = "sporeGate"

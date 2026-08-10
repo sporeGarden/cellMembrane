@@ -320,6 +320,16 @@ async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], dep
     }
     let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
 
+    match super::depot::prune_depot(depot_dir, &["swarmvine"], false) {
+        Ok(report) if !report.pruned.is_empty() => info!(
+            pruned = report.pruned.len(),
+            retained = report.retained,
+            "depot auto-pruned non-registry binaries"
+        ),
+        Ok(_) => {}
+        Err(e) => warn!(error = %e, "depot auto-prune failed"),
+    }
+
     match super::integrity::generate_checksums(depot_dir) {
         Ok(report) => info!(
             binaries = report.total_binaries,
@@ -710,6 +720,9 @@ pub(super) use toolchain::{
 
 /// Async depot staging: copy binary → atomic rename → BLAKE3 checksum.
 /// Shared by both `plasmid.build` and `plasmid.harvest`.
+///
+/// G69 Phase 3: before overwriting, archives the superseded binary's lineage
+/// via the depot_lineage graph (best-effort — never blocks staging).
 pub(super) async fn stage_to_depot_async(
     primal: &str,
     bin_path: &Path,
@@ -726,13 +739,31 @@ pub(super) async fn stage_to_depot_async(
     tokio::fs::copy(bin_path, &tmp)
         .await
         .map_err(|e| crate::error::ShadowError::build(format!("copy to depot failed: {e}")))?;
+
+    let new_blake3 = super::compute_blake3_file_async(&tmp).await?;
+
+    if dest.exists() {
+        if let Ok(old_blake3) = super::compute_blake3_file_async(&dest).await {
+            if old_blake3 != new_blake3 {
+                let old_size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
+                let gate = cellmembrane_types::service::env_or(
+                    cellmembrane_types::service::ENV_GATE_NAME,
+                    "unknown",
+                );
+                let _ = crate::sovereignty_ledger::archive_superseded_binary(
+                    primal, target, &old_blake3, &new_blake3, "", "", &gate, old_size,
+                )
+                .await;
+            }
+        }
+    }
+
     tokio::fs::rename(&tmp, &dest)
         .await
         .map_err(|e| crate::error::ShadowError::build(format!("atomic rename failed: {e}")))?;
 
     let size = tokio::fs::metadata(&dest).await.map_or(0, |m| m.len());
-    let blake3 = super::compute_blake3_file_async(dest).await?;
-    Ok((size, blake3))
+    Ok((size, new_blake3))
 }
 
 pub(super) use super::depot::{load_provenance, load_sources, resolve_depot, update_provenance};
