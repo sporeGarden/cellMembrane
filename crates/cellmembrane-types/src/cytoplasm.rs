@@ -155,12 +155,15 @@ struct MeshEntry {
     aliases: &'static [&'static str],
 }
 
-/// Bootstrap mesh registry — **DEPRECATED fallback only.**
+/// Bootstrap mesh registry — **DEPRECATED fallback only (Wave 157h).**
 ///
 /// Authoritative source at runtime is `ecosystem_manifest.toml`; this const
 /// table exists solely for bootstrap/type-level code that cannot load the
 /// manifest. **All new consumers must use `EcosystemManifest::mesh_ip_for()`
 /// from `membrane-shadow` instead.** IP assignments are permanent once allocated.
+///
+/// Target: remove once all consumers resolve from manifest at runtime.
+#[deprecated(note = "Use EcosystemManifest::mesh_ip_for() from membrane-shadow instead")]
 const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "golgi",
@@ -223,7 +226,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
         aliases: &[],
     },
     MeshEntry {
-        name: "graftGate",
+        name: "darwinGate",
         wg_ip: None,
         lan_ip: None,
         aliases: &[],
@@ -241,6 +244,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
 /// Derived from [`MESH_REGISTRY`]. Used as a fallback when the ecosystem
 /// manifest is unavailable.
 #[must_use]
+#[allow(deprecated)]
 pub fn known_mesh_gates() -> Vec<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -266,6 +270,7 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
 /// Derived from [`MESH_REGISTRY`]. Includes gates using any transport
 /// (`WireGuard`, ADB, LAN-only).
 #[must_use]
+#[allow(deprecated)]
 pub fn known_gates() -> Vec<&'static str> {
     MESH_REGISTRY.iter().map(|e| e.name).collect()
 }
@@ -282,7 +287,7 @@ pub const KNOWN_GATES: &[&str] = &[
     "strandGate",
     "blueGate",
     "westGate",
-    "graftGate",
+    "darwinGate",
     "grapheneGate",
 ];
 
@@ -293,6 +298,7 @@ pub const KNOWN_GATES: &[&str] = &[
 /// At runtime, prefer [`mesh_address_from_topology`] or
 /// `EcosystemManifest::mesh_ip_for()` from `membrane-shadow`.
 #[must_use]
+#[allow(deprecated)]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -306,6 +312,7 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
 /// `ecosystem_manifest.toml` `[gates.<name>] lan_ip`. Used by songBird for
 /// local-priority routing when gates share a `MikroTik` switch.
 #[must_use]
+#[allow(deprecated)]
 pub fn lan_address(gate_name: &str) -> Option<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -509,6 +516,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn lan_addresses_in_subnet() {
         for entry in MESH_REGISTRY {
             if let Some(ip) = entry.lan_ip {

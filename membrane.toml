@@ -24,7 +24,7 @@ size = "s-1vcpu-2gb"
 [membrane.layers.inner]
 host = "golgi"
 ssh_alias = "golgi"
-ip = "157.230.3.183"
+ip = "golgi.primals.eco"
 size = "s-1vcpu-2gb"
 services = ["forgejo", "nucleus-primals", "knot-dns", "btsp-auth", "caddy-tls", "turn-relay", "rustdesk", "wan-depot"]
 bond_types = ["covalent", "metallic", "ionic"]

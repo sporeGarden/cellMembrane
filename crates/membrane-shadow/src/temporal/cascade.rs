@@ -48,7 +48,7 @@ pub struct CascadeOpts<'a> {
     pub mode: CascadeMode,
     /// If true, clone repos not yet present locally.
     pub clone_missing: bool,
-    /// If true, write freshness.toml after cascade.
+    /// If true, publish this gate's HEADs to `heads/<gate>.toml` after cascade.
     pub publish_freshness: bool,
     /// Post-sync phase: none, harvest-only, or full rebuild cycle.
     pub post_sync: PostSyncPhase,

@@ -55,6 +55,11 @@ pub const PROVENANCE_FILE: &str = "provenance.toml";
 pub const BLAKE3SUMS_FILE: &str = "BLAKE3SUMS";
 
 /// Depot freshness manifest filename.
+///
+/// DEPRECATED (Wave 157h): `freshness.toml` is no longer generated.
+/// Use `wave.toml` for wave metadata and `heads/<gate>.toml` for per-gate HEADs.
+/// Retained only for `REGENERABLE_METADATA` (safe to discard stale copies during pull).
+#[deprecated(note = "Use wave.toml + heads/<gate>.toml instead")]
 pub const FRESHNESS_FILE: &str = "freshness.toml";
 
 /// Environment variable to override the depot trust policy.
