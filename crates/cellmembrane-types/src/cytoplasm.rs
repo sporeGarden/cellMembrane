@@ -77,7 +77,7 @@ impl ZoneLabel {
             "strandGate" | "southGate" | "westGate" | "blueGate" | "swiftGate" | "fieldGate" => {
                 Self::House2
             }
-            "golgi" | "pepti" | "flockGate" => Self::Wan,
+            "golgi" | "pepti" | "flockGate" | "graftGate" => Self::Wan,
             _ => Self::Unassigned,
         }
     }
@@ -226,10 +226,10 @@ const MESH_REGISTRY: &[MeshEntry] = &[
         aliases: &[],
     },
     MeshEntry {
-        name: "darwinGate",
-        wg_ip: None,
+        name: "graftGate",
+        wg_ip: Some("10.13.37.13"),
         lan_ip: None,
-        aliases: &[],
+        aliases: &["darwinGate"],
     },
     MeshEntry {
         name: "grapheneGate",
