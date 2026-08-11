@@ -23,6 +23,7 @@ mod download;
 mod drift;
 mod fetch;
 mod harvest;
+mod harvest_install;
 mod harvest_manifest;
 mod harvest_support;
 pub(crate) mod integrity;
