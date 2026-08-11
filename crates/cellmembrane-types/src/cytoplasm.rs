@@ -223,7 +223,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
         aliases: &[],
     },
     MeshEntry {
-        name: "darwinGate",
+        name: "graftGate",
         wg_ip: None,
         lan_ip: None,
         aliases: &[],
@@ -282,7 +282,7 @@ pub const KNOWN_GATES: &[&str] = &[
     "strandGate",
     "blueGate",
     "westGate",
-    "darwinGate",
+    "graftGate",
     "grapheneGate",
 ];
 
