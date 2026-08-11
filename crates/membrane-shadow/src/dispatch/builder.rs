@@ -209,7 +209,7 @@ async fn register_build_capability(gate: &str) {
         .find(|p| std::path::Path::new(p).exists());
 
     let Some(socket_path) = relay_socket else {
-        warn!("no songBird socket found — builder will not be discoverable via mesh");
+        warn!("no relay socket found — builder will not be discoverable via mesh");
         return;
     };
 
@@ -227,8 +227,8 @@ async fn register_build_capability(gate: &str) {
     .to_string();
 
     match crate::jsonrpc::call(std::path::Path::new(&socket_path), &request).await {
-        Ok(resp) => info!(response = %resp, "registered build capability with songBird mesh"),
-        Err(e) => warn!(error = %e, "failed to register build capability with songBird"),
+        Ok(resp) => info!(response = %resp, "registered build capability with relay mesh"),
+        Err(e) => warn!(error = %e, "failed to register build capability with relay primal"),
     }
 }
 

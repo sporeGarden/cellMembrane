@@ -17,10 +17,10 @@ const POLL_TIMEOUT_SECS: u64 = 300;
 fn resolve_token() -> Result<String> {
     std::env::var(cellmembrane_types::service::ENV_DIGITALOCEAN_TOKEN)
         .or_else(|_| std::env::var(cellmembrane_types::service::ENV_DO_TOKEN_COMPAT))
-        .map_err(|_| {
-            ShadowError::config(
-                "DIGITALOCEAN_TOKEN or DO_TOKEN not set — required for cloud provisioning",
-            )
+        .map_err(|e| {
+            ShadowError::config(format!(
+                "DIGITALOCEAN_TOKEN or DO_TOKEN not set — required for cloud provisioning: {e}",
+            ))
         })
 }
 

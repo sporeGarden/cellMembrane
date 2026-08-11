@@ -177,7 +177,9 @@ async fn reconcile_and_push_inner(repo_dir: &Path, remote: &str) -> bool {
         if !git_success(repo_dir, &["merge", "--ff-only", &merge_ref]).await
             && !git_success(repo_dir, &["rebase", &merge_ref]).await
         {
-            let _ = git_success(repo_dir, &["rebase", "--abort"]).await;
+            if !git_success(repo_dir, &["rebase", "--abort"]).await {
+                tracing::warn!(repo = %repo_dir.display(), "rebase --abort failed after merge/rebase failure");
+            }
             return false;
         }
 
@@ -265,9 +267,9 @@ pub async fn git_output(repo_path: &Path, args: &[&str]) -> Result<String> {
 
     let output = tokio::time::timeout(GIT_OP_TIMEOUT, child)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
             ShadowError::git(format!(
-                "git {:?} timed out after {}s",
+                "git {:?} timed out after {}s: {e}",
                 args.first().unwrap_or(&"?"),
                 GIT_OP_TIMEOUT.as_secs(),
             ))
@@ -394,9 +396,9 @@ pub async fn git_clone(url: &str, dest: &Path) -> Result<()> {
             .status(),
     )
     .await
-    .map_err(|_| {
+    .map_err(|e| {
         ShadowError::git(format!(
-            "git clone timed out after {}s",
+            "git clone timed out after {}s: {e}",
             GIT_OP_TIMEOUT.as_secs()
         ))
     })??;

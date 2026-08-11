@@ -69,7 +69,9 @@ pub(super) async fn wg_keygen_phase(dry_run: bool) -> BootstrapPhase {
     let private_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if let Some(parent) = existing.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            tracing::warn!(path = %parent.display(), %e, "wg keygen: cannot create parent directory");
+        }
     }
     if let Err(e) = tokio::fs::write(&existing, &private_key).await {
         return BootstrapPhase {
@@ -162,7 +164,9 @@ pub(super) async fn wg_config_phase(
 
     let wg_config_path = wg_config_file_path();
     if let Some(parent) = wg_config_path.parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            tracing::warn!(path = %parent.display(), %e, "wg config: cannot create parent directory");
+        }
     }
 
     match tokio::fs::write(&wg_config_path, &rendered).await {

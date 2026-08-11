@@ -174,7 +174,9 @@ pub fn atomic_write(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, contents)?;
     std::fs::rename(&tmp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&tmp);
+        if let Err(e) = std::fs::remove_file(&tmp) {
+            tracing::debug!(path = %tmp.display(), %e, "atomic_write: tmp cleanup failed");
+        }
     })
 }
 

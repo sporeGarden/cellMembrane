@@ -233,7 +233,7 @@ impl RequestBuilder {
         let timeout = self.timeout_override.unwrap_or(self.client.timeout);
         tokio::time::timeout(timeout, self.send_inner())
             .await
-            .map_err(|_| ShadowError::http(format!("request timed out after {timeout:?}")))?
+            .map_err(|e| ShadowError::http(format!("request timed out after {timeout:?}: {e}")))?
     }
 
     async fn send_inner(self) -> Result<HttpResponse> {

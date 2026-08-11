@@ -60,7 +60,7 @@ async fn rpc_over_stream(
 
     let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
         .await
-        .map_err(|_| rpc_err(format_args!("read timeout: {label}")))?
+        .map_err(|e| rpc_err(format_args!("read timeout: {label}: {e}")))?
         .map_err(|e| rpc_err(format_args!("read: {e}")))?;
 
     if let Err(e) = writer.shutdown().await {
@@ -206,7 +206,12 @@ pub async fn call_btsp(socket_path: &Path, request: &str) -> Result<String> {
 
     let read_result = tokio::time::timeout(DEFAULT_TIMEOUT, buf_reader.read_line(&mut line))
         .await
-        .map_err(|_| rpc_err(format_args!("btsp read timeout: {}", socket_path.display())))?
+        .map_err(|e| {
+            rpc_err(format_args!(
+                "btsp read timeout: {}: {e}",
+                socket_path.display()
+            ))
+        })?
         .map_err(|e| rpc_err(format_args!("btsp read: {e}")))?;
 
     if let Err(e) = writer.shutdown().await {
@@ -245,7 +250,12 @@ pub async fn raw(socket_path: &Path, request: &str, with_signal: bool) -> Result
         crate::transport::connect_transport(&endpoint),
     )
     .await
-    .map_err(|_| rpc_err(format_args!("connect timeout: {}", socket_path.display())))?
+    .map_err(|e| {
+        rpc_err(format_args!(
+            "connect timeout: {}: {e}",
+            socket_path.display()
+        ))
+    })?
     .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
 
     rpc_over_stream(
@@ -310,7 +320,7 @@ pub async fn call_tcp(host: &str, port: u16, request: &str) -> Result<String> {
         crate::transport::connect_transport(&endpoint),
     )
     .await
-    .map_err(|_| rpc_err(format_args!("tcp connect timeout: {addr}")))?
+    .map_err(|e| rpc_err(format_args!("tcp connect timeout: {addr}: {e}")))?
     .map_err(|e| rpc_err(format_args!("tcp connect {addr}: {e}")))?;
 
     rpc_over_stream(stream, request, true, &addr).await
@@ -374,7 +384,12 @@ pub async fn send_notify(socket_path: &Path, request: &str) -> Result<()> {
         crate::transport::connect_transport(&endpoint),
     )
     .await
-    .map_err(|_| rpc_err(format_args!("connect timeout: {}", socket_path.display())))?
+    .map_err(|e| {
+        rpc_err(format_args!(
+            "connect timeout: {}: {e}",
+            socket_path.display()
+        ))
+    })?
     .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
 
     notify_over_stream(stream, request).await

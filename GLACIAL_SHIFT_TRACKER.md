@@ -1,13 +1,26 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-10 (Wave 157g deep debt sweep: error handling + module extraction + constant consolidation)
+**Last updated:** 2026-08-11 (Wave 157i deep debt sweep: error context + self-knowledge purge + I/O visibility)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157i (deep debt sweep: error context + self-knowledge purge + I/O visibility):**
+Error context preservation: all 11 remaining `map_err(|_|` patterns (jsonrpc timeouts,
+git_ops timeouts, http_client timeout, ELF phoff parse, env var resolution) replaced
+with `map_err(|e|` preserving original error. Self-knowledge purge: bearDog/songBird
+names removed from production error strings and JSON keys in `sign_dispatch.rs`,
+`gateway/mod.rs`, `enroll_crypto.rs`, `plasmid/mod.rs`, `builder.rs`, `signing.rs` —
+replaced with capability-based labels (crypto signer, relay primal, relay federation).
+I/O visibility: 6 `let _ =` on critical operations replaced with logged errors (git
+rebase abort, WG keygen/config dir creation, gate.apply services dir, nucleus PID file
+cleanup, atomic_write tmp cleanup). Hardcoded `swarmvine` allow-list removed from
+depot auto-prune — registry is sole truth. `#[allow(deprecated)]` on 4 TargetArch impl
+blocks now carry `reason` strings. Zero `map_err(|_|` remaining. 0 clippy, 1350 tests pass.
 
 **Wave 157g (deep debt sweep: error handling + module extraction + constant consolidation):**
 P1 silent error suppression: 5 `let _ =` on real I/O replaced with `if let Err(e)`

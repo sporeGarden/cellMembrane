@@ -68,7 +68,7 @@ pub(super) async fn mesh_enroll_phase(
             name: "mesh.enroll".into(),
             ok: false,
             detail: format!(
-                "songBird socket not found at {} — is songBird running?",
+                "relay socket not found at {} — is the relay primal running?",
                 songbird_socket.display()
             ),
         };

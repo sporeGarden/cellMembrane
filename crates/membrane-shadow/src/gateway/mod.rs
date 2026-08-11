@@ -92,7 +92,7 @@ async fn dispatch_health(_config: &ShadowConfig) -> Result<ShadowOutcome> {
             issues.push(format!("TLS not listening on :{tls_port}"));
         }
         if !mesh_connected {
-            issues.push(format!("songBird socket missing: {songbird_socket}"));
+            issues.push(format!("relay socket missing: {songbird_socket}"));
         }
         Ok(ShadowOutcome {
             ok: false,
@@ -208,8 +208,8 @@ fn dispatch_units(args: &[&str]) -> Result<ShadowOutcome> {
         format!("gateway units generated for {gate_name}"),
         serde_json::json!({
             "gate": gate_name,
-            "songbird_unit_lines": songbird_unit.lines().count(),
-            "beardog_unit_lines": beardog_unit.lines().count(),
+            "relay_unit_lines": songbird_unit.lines().count(),
+            "signer_unit_lines": beardog_unit.lines().count(),
         }),
     )
     .tap_lines(&lines))
@@ -281,7 +281,7 @@ async fn dispatch_deploy_check(args: &[&str]) -> Result<ShadowOutcome> {
     .await
     .is_ok();
     checks.push(DeployCheck {
-        name: "songbird reachable".into(),
+        name: "relay federation reachable".into(),
         ok: songbird_running,
         detail: if songbird_running {
             format!(

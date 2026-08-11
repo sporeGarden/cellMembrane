@@ -320,7 +320,7 @@ async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], dep
     }
     let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
 
-    match super::depot::prune_depot(depot_dir, &["swarmvine"], false) {
+    match super::depot::prune_depot(depot_dir, &[], false) {
         Ok(report) if !report.pruned.is_empty() => info!(
             pruned = report.pruned.len(),
             retained = report.retained,

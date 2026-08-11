@@ -208,7 +208,9 @@ pub(super) async fn dispatch_apply(args: &[&str]) -> crate::Result<ShadowOutcome
                 cellmembrane_types::service::DEFAULT_CONFIG_DIR,
             );
             let services_dir = format!("{config_dir}/services");
-            let _ = tokio::fs::create_dir_all(&services_dir).await;
+            if let Err(e) = tokio::fs::create_dir_all(&services_dir).await {
+                tracing::warn!(path = %services_dir, %e, "gate.apply: cannot create services directory");
+            }
             for spec in &specs {
                 let toml_name = format!("{}.toml", spec.binary);
                 let toml_path = format!("{services_dir}/{toml_name}");

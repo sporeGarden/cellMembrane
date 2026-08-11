@@ -41,7 +41,11 @@ impl CloudflareConfig {
     pub fn from_env() -> Result<Self> {
         let api_token = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_TOKEN)
             .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_API_TOKEN))
-            .map_err(|_| ShadowError::config("CLOUDFLARE_API_TOKEN or CF_API_TOKEN required"))?;
+            .map_err(|e| {
+                ShadowError::config(format!(
+                    "CLOUDFLARE_API_TOKEN or CF_API_TOKEN required: {e}"
+                ))
+            })?;
 
         let zone_id = std::env::var(cellmembrane_types::service::ENV_CLOUDFLARE_ZONE)
             .or_else(|_| std::env::var(cellmembrane_types::service::ENV_CF_ZONE_ID))

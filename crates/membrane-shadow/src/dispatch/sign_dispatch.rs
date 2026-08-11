@@ -43,7 +43,7 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     if dry_run {
         return Ok(ShadowOutcome::ok_with(
             format!(
-                "sign.activate preflight: depot={}, checksums=OK, bearDog={}",
+                "sign.activate preflight: depot={}, checksums=OK, signer={}",
                 depot_dir.display(),
                 if socket_available {
                     "REACHABLE"
@@ -54,7 +54,7 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
             serde_json::json!({
                 "depot": depot_dir.display().to_string(),
                 "checksums_exist": true,
-                "beardog_reachable": socket_available,
+                "signer_reachable": socket_available,
                 "dry_run": true,
             }),
         ));
@@ -62,7 +62,7 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
 
     if !socket_available {
         return Ok(ShadowOutcome::fail(format!(
-            "bearDog signer socket not found (looked for {signer_socket}) — is bearDog running?"
+            "crypto signer socket not found (looked for {signer_socket}) — is the signer primal running?"
         )));
     }
 
@@ -82,7 +82,7 @@ fn dispatch_activate(args: &[&str]) -> crate::Result<ShadowOutcome> {
         ))
     } else {
         Ok(ShadowOutcome::fail(
-            "signing failed — check bearDog logs and socket connectivity",
+            "signing failed — check crypto signer logs and socket connectivity",
         ))
     }
 }
@@ -172,7 +172,7 @@ fn dispatch_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
 
     let msg = if sigs.signatures.is_empty() {
         format!(
-            "depot: {} — no signatures (checksums={}, bearDog={})",
+            "depot: {} — no signatures (checksums={}, signer={})",
             depot_dir.display(),
             if checksums_exist {
                 "present"
@@ -201,7 +201,7 @@ fn dispatch_status(args: &[&str]) -> crate::Result<ShadowOutcome> {
         serde_json::json!({
             "depot": depot_dir.display().to_string(),
             "checksums_exist": checksums_exist,
-            "beardog_reachable": socket_available,
+            "signer_reachable": socket_available,
             "signatures": sig_details,
         }),
     ))

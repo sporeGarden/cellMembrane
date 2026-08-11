@@ -291,7 +291,9 @@ pub(crate) fn stop_bare_process(binary: &str) -> bool {
 
     let killed = kill_process(pid);
     if killed {
-        let _ = std::fs::remove_file(&pid_file);
+        if let Err(e) = std::fs::remove_file(&pid_file) {
+            tracing::debug!(path = %pid_file.display(), %e, "PID file cleanup after kill");
+        }
     }
     killed
 }

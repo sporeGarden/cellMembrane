@@ -411,7 +411,9 @@ pub(crate) async fn register_capabilities_with_mesh() -> crate::ShadowOutcome {
     let relay_socket = std::path::PathBuf::from(crate::gate::sockets::resolve_mesh_relay_socket());
 
     if !relay_socket.exists() {
-        return crate::ShadowOutcome::fail("mesh relay socket not found — songBird not running");
+        return crate::ShadowOutcome::fail(
+            "mesh relay socket not found — is the relay primal running?",
+        );
     }
 
     let mut registered = 0u32;

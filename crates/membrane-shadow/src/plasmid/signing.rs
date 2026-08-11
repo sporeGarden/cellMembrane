@@ -46,7 +46,7 @@ fn sign_depot_checksums(depot_dir: &Path) -> Option<DepotSignature> {
 /// Returns `true` if signing and persistence succeeded.
 pub(crate) fn sign_and_persist(depot_dir: &Path) -> bool {
     let Some(sig) = sign_depot_checksums(depot_dir) else {
-        tracing::debug!("depot signing: bearDog unavailable — skipping");
+        tracing::debug!("depot signing: crypto signer unavailable — skipping");
         return false;
     };
 

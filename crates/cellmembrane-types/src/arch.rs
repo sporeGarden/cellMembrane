@@ -376,7 +376,10 @@ pub enum TargetArch {
     Aarch64Musl,
 }
 
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "impl block for deprecated TargetArch migration shim"
+)]
 impl TargetArch {
     /// Rust target triple string.
     #[must_use]
@@ -436,14 +439,20 @@ impl TargetArch {
     }
 }
 
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "Display for deprecated TargetArch migration shim"
+)]
 impl fmt::Display for TargetArch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.triple())
     }
 }
 
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "From conversion for deprecated TargetArch migration shim"
+)]
 impl From<TargetArch> for Platform {
     fn from(arch: TargetArch) -> Self {
         arch.to_platform()
@@ -455,7 +464,10 @@ impl From<TargetArch> for Platform {
 #[error("unknown target arch: {0}")]
 pub struct ArchParseError(pub String);
 
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "FromStr for deprecated TargetArch migration shim"
+)]
 impl FromStr for TargetArch {
     type Err = ArchParseError;
 
