@@ -147,9 +147,9 @@
 | `/opt/ecoPrimals/infra/wateringHole/` | Ecosystem standards + membrane temporal.cascade |
 | `/opt/ecoPrimals/primals/` | 13 primal source repos (cloned from sovereign Forgejo) |
 | `/opt/ecoPrimals/gardens/` | cellMembrane + projectNUCLEUS |
-| `/opt/membrane/nucleus_launcher.sh` | Legacy symlink (superseded by `membrane gate.bootstrap`) |
-| `/opt/membrane/start_primal.sh` | Legacy symlink (superseded by `membrane gate.bootstrap`) |
-| `/opt/membrane/fetch.sh` | Legacy symlink (superseded by `membrane plasmid.fetch`) |
+| `/opt/membrane/nucleus_launcher.sh` | **ARCHIVED** — legacy symlink, superseded by `membrane gate.bootstrap` |
+| `/opt/membrane/start_primal.sh` | **ARCHIVED** — legacy symlink, superseded by `membrane gate.bootstrap` |
+| `/opt/membrane/fetch.sh` | **ARCHIVED** — legacy symlink, superseded by `membrane plasmid.fetch` |
 | `/run/membrane/` | Unix domain sockets (BearDog, Songbird, SkunkBat) |
 | `/var/cache/membrane/nestgate/` | sporePrint content cache (19 MB synced from NestGate) |
 | `/var/cache/membrane/lab/` | Static lab page root (intra layer — ecosystem dashboard) |
@@ -200,7 +200,7 @@ See `specs/K_DERM_TOPOLOGY.md` for the full cell envelope model.
 | `membrane gate.bootstrap` | 13/13 primals registered in Songbird | 2026-05-29 |
 | `benchScale vps-depot-lab` | 26/26 PASS — 7-node topology, 5 compositions validated | 2026-05-29 |
 | `onboard-gate-relay.sh --dry-run` | Relay env generation validated | 2026-05-29 |
-| `cargo test` (cellMembrane workspace) | 1353 PASS, 0 FAIL, 0 clippy | 2026-08-10 |
+| `cargo test` (cellMembrane workspace) | 1350+ PASS, 0 FAIL, 0 clippy | 2026-08-10 |
 | `cargo test` (benchScale) | 272 PASS, 0 FAIL | 2026-05-27 |
 | `cargo test` (agentReagents) | 94 PASS, 0 FAIL | 2026-05-27 |
 

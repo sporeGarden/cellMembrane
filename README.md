@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 11-peer mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 157d) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 157g) |
 
 ---
 
@@ -61,7 +61,7 @@ cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 157d G69): ~11k lines types, ~38k lines shadow. Crash-loop breaker
+Current state (Wave 157g): ~11k lines types, ~38k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -347,7 +347,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 157d are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 157g are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -361,7 +361,7 @@ through Wave 157d are **DONE**. Full wave-by-wave audit trail is preserved in
 | Code quality | 1353 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
-| Dependencies | `nix`+`chrono` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, `time` crate, CSPRNG via `getrandom` | DONE |
+| Dependencies | `nix`+`chrono`+`reqwest` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, `time` crate, CSPRNG via `getrandom`, G72 dep pandemic Tier 1 | DONE |
 | Pipeline | DIV-7 exit code reliability, cascade failure propagation, fire-and-forget mesh notify | DONE |
 
 ---
@@ -498,7 +498,9 @@ gardens/cellMembrane/
           bootstrap.rs        # Local deployment orchestrator (per-phase timeouts)
           bootstrap_phases.rs # Individual bootstrap phase implementations
           enroll.rs           # Mesh enrollment (WG keygen, config, Forgejo-first remotes)
-          health.rs           # Native async UDS probes + rootpulse + status
+          health/             # Gate health probes (modular: orchestrator + auxiliary)
+            mod.rs            # Orchestrator, mesh probes, primal sweep
+            auxiliary.rs      # Depot freshness, VCS parity, rootpulse, TLS cert
           verify.rs           # Dual checksum verification (git + WAN)
           mesh.rs             # Mesh peer configuration (transport, songbird UDS)
           nucleus.rs          # Cross-platform NUCLEUS (systemd + bare process, PID files)
@@ -529,6 +531,7 @@ gardens/cellMembrane/
           depot_sync.rs       # Depot sync (VPS ↔ local, --push mode)
           fetch.rs            # Fetch + WAN checksum verification + BLAKE3
           harvest.rs          # Build + checksum + sign + atomic publish to git
+          harvest_install.rs  # NUCLEUS install lifecycle (stop, copy, restart)
           harvest_manifest.rs # Manifest build config integration
           checksum.rs         # BLAKE3 checksum generation + checksums.toml parsing
           lineage.rs          # Depot lineage validation (PostPrimordial enforcement)
@@ -574,7 +577,7 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,349 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,350+ tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, transport
 abstraction (G65/G66), platform substrate (G68), sync IPC, process lifecycle, and
 user-space deploy.
