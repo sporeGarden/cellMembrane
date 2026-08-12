@@ -192,7 +192,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "ironGate",
         wg_ip: Some("10.13.37.7"),
-        lan_ip: None,
+        lan_ip: Some("192.168.4.237"),
         aliases: &[],
     },
     MeshEntry {
@@ -204,13 +204,13 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "southGate",
         wg_ip: Some("10.13.37.9"),
-        lan_ip: None,
+        lan_ip: Some("192.168.4.149"),
         aliases: &[],
     },
     MeshEntry {
         name: "strandGate",
         wg_ip: Some("10.13.37.10"),
-        lan_ip: None,
+        lan_ip: Some("192.168.4.169"),
         aliases: &[],
     },
     MeshEntry {
