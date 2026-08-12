@@ -386,6 +386,10 @@ async fn push_single_binary(
         return PushBinaryResult::Current;
     }
 
+    if !remote_hash.is_empty() {
+        record_lineage_event(&name_str, arch_str, &remote_hash, &local_hash);
+    }
+
     let remote_tmp = format!("{remote_arch_dir}/.{name_str}.new");
     match crate::ssh::scp_to(config, &local_path.to_string_lossy(), &remote_tmp).await {
         Ok(()) => {
@@ -401,6 +405,42 @@ async fn push_single_binary(
         Err(e) => {
             tracing::warn!(binary = %name_str, error = %e, "push: SCP failed");
             PushBinaryResult::Failed
+        }
+    }
+}
+
+/// Append a lineage event to the depot lineage log (JSONL).
+///
+/// Records every binary replacement so old hashes are never lost, even before
+/// CAS archival (G69 Phase 3) is wired. The log lives alongside the depot and
+/// can be ingested into loamSpine spines later.
+fn record_lineage_event(binary: &str, arch: &str, old_blake3: &str, new_blake3: &str) {
+    let depot = super::harvest::resolve_depot(None).unwrap_or_default();
+    let log_path = depot.join("lineage.jsonl");
+    let gate = crate::gate::resolve_local_gate_identity();
+    let now = crate::utc_now_iso8601();
+
+    let entry = serde_json::json!({
+        "event": "binary.evolve",
+        "binary": binary,
+        "arch": arch,
+        "old_blake3": old_blake3,
+        "new_blake3": new_blake3,
+        "builder": gate,
+        "timestamp": now,
+    });
+
+    use std::io::Write;
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(mut f) => {
+            let _ = writeln!(f, "{}", entry);
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "lineage: failed to write event to {}", log_path.display());
         }
     }
 }

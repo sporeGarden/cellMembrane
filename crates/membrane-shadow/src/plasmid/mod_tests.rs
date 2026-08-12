@@ -124,6 +124,8 @@ fn validate_lineage_per_entry_builder_fallback() {
             built_at: Some("2026-08-09T18:00:00Z".into()),
             target: Some("x86_64-unknown-linux-musl".into()),
             builder: Some("blueGate".into()),
+            previous_blake3: None,
+            generation: None,
         },
     );
     let prov = ProvenanceFile {

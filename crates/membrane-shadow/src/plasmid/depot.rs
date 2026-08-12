@@ -135,6 +135,15 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
                 .map(str::to_string)
         });
         if commit.is_some() || result.blake3.is_some() {
+            let (prev_blake3, next_generation) = existing_prov
+                .get(&result.binary)
+                .map(|old| {
+                    let prev = old.blake3.clone();
+                    let next_gen = old.generation.map_or(1, |g| g + 1);
+                    (prev, next_gen)
+                })
+                .unwrap_or((None, 0));
+
             existing_prov.insert(
                 result.binary.clone(),
                 ProvenanceEntry {
@@ -145,6 +154,8 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
                     built_at: Some(now.clone()),
                     target: result.target.clone(),
                     builder: Some(builder.clone()),
+                    previous_blake3: prev_blake3,
+                    generation: Some(next_generation),
                 },
             );
         }
@@ -172,6 +183,12 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
         }
         if let Some(bldr) = &entry.builder {
             let _ = writeln!(prov_out, "builder = \"{bldr}\"");
+        }
+        if let Some(prev) = &entry.previous_blake3 {
+            let _ = writeln!(prov_out, "previous_blake3 = \"{prev}\"");
+        }
+        if let Some(g) = entry.generation {
+            let _ = writeln!(prov_out, "generation = {g}");
         }
         prov_out.push('\n');
     }

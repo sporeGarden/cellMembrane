@@ -46,6 +46,8 @@ fn provenance_file_roundtrip() {
             version: Some("0.9.1".into()),
             commit: Some("abc123".into()),
             source: Some("forgejo".into()),
+            previous_blake3: None,
+            generation: None,
             blake3: None,
             built_at: None,
             target: None,
@@ -81,6 +83,8 @@ fn provenance_entry_g69_phase2_roundtrip() {
             built_at: Some("2026-08-09T18:00:00Z".into()),
             target: Some("x86_64-unknown-linux-musl".into()),
             builder: Some("blueGate".into()),
+            previous_blake3: Some("cafebabecafebabecafebabecafebabe".into()),
+            generation: Some(3),
         },
     );
     let prov = ProvenanceFile {
@@ -100,6 +104,11 @@ fn provenance_entry_g69_phase2_roundtrip() {
     assert_eq!(entry.built_at.as_deref(), Some("2026-08-09T18:00:00Z"));
     assert_eq!(entry.target.as_deref(), Some("x86_64-unknown-linux-musl"));
     assert_eq!(entry.builder.as_deref(), Some("blueGate"));
+    assert_eq!(
+        entry.previous_blake3.as_deref(),
+        Some("cafebabecafebabecafebabecafebabe")
+    );
+    assert_eq!(entry.generation, Some(3));
 }
 
 #[test]

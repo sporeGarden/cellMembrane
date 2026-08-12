@@ -24,6 +24,7 @@ use super::harvest_manifest::{
 use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
+
 /// Parsed CLI arguments for `plasmid.harvest`.
 #[allow(
     clippy::struct_excessive_bools,
@@ -141,6 +142,12 @@ pub struct ProvenanceEntry {
     /// G69 Phase 2 — which gate built this binary.
     #[serde(default)]
     pub builder: Option<String>,
+    /// G69 Phase 2 lineage — BLAKE3 of the binary this generation replaced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_blake3: Option<String>,
+    /// G69 Phase 2 lineage — generation counter (0 = genesis, increments on each harvest).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation: Option<u32>,
 }
 
 /// Full provenance file structure.
@@ -320,7 +327,7 @@ async fn finalize_depot(results: &[HarvestResult], targets_built: &[String], dep
     }
     let built_names: Vec<String> = built.iter().map(|r| r.binary.clone()).collect();
 
-    match super::depot::prune_depot(depot_dir, &[], false) {
+    match super::depot::prune_depot(depot_dir, &["swarmvine"], false) {
         Ok(report) if !report.pruned.is_empty() => info!(
             pruned = report.pruned.len(),
             retained = report.retained,
