@@ -254,6 +254,13 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
                 let paths = resolve_primal_socket_paths(primal);
                 paths.iter().any(|p| Path::new(p).exists())
             }
+            HealthCheckMethod::SystemdActive => {
+                let unit = svc.map_or_else(
+                    || format!("{primal}.service"),
+                    |s| s.systemd_unit.to_string(),
+                );
+                probe_systemd_active(&unit).await
+            }
         };
 
         if probed {
@@ -384,6 +391,18 @@ fn probe_https(primal: &str) -> bool {
 /// DNS probe — verifies a DNS server is listening on port 53.
 fn probe_dns() -> bool {
     probe_tcp_connect(53)
+}
+
+async fn probe_systemd_active(unit: &str) -> bool {
+    let unit_owned = unit.to_string();
+    tokio::task::spawn_blocking(move || {
+        std::process::Command::new("systemctl")
+            .args(["is-active", "--quiet", &unit_owned])
+            .status()
+            .is_ok_and(|s| s.success())
+    })
+    .await
+    .unwrap_or(false)
 }
 
 // ── Socket resolution (delegated to gate/sockets.rs) ──────────

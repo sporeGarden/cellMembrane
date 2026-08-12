@@ -22,7 +22,10 @@ fn composition_btsp_requirements() {
 fn tower_composition_spec() {
     let spec = MembraneComposition::Tower.spec();
     assert_eq!(spec.primals, vec!["beardog", "songbird", "skunkbat"]);
-    assert_eq!(spec.symbiotic, vec!["hbbs", "hbbr"]);
+    assert!(spec.symbiotic.contains(&"hbbs"));
+    assert!(spec.symbiotic.contains(&"hbbr"));
+    assert!(spec.symbiotic.contains(&"fail2ban"));
+    assert!(spec.symbiotic.contains(&"forgejo"));
     assert!(spec.boot_order[0] == "beardog");
 }
 

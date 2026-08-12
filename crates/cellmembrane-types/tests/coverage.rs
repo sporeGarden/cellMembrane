@@ -152,7 +152,7 @@ fn health_check_display() {
 
 #[test]
 fn service_all_returns_eighteen() {
-    assert_eq!(MembraneService::all().len(), 18);
+    assert_eq!(MembraneService::all().len(), 20);
 }
 
 #[test]

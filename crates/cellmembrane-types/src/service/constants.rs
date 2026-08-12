@@ -434,6 +434,8 @@ pub const ENV_CF_ZONE_ID: &str = "CF_ZONE_ID";
 pub const ENV_FORGEJO_GIT_ADDR: &str = "FORGEJO_GIT_ADDR";
 /// Default Forgejo SSH address for git operations.
 pub const DEFAULT_FORGEJO_GIT_ADDR: &str = "git.primals.eco:2222";
+/// Default Forgejo SSH port (git-over-SSH on the sovereign forge).
+pub const DEFAULT_FORGEJO_SSH_PORT: u16 = 2222;
 
 /// GitHub organization name (for release artifact URLs).
 pub const ENV_GITHUB_ORG: &str = "MEMBRANE_GITHUB_ORG";
@@ -486,11 +488,12 @@ pub const DEFAULT_CLOUDFLARE_API: &str = "https://api.cloudflare.com/client/v4";
 pub const DEFAULT_FORGEJO_ADMIN_USER: &str = "admin";
 /// Default push remotes for K-Derm relay chain operations.
 pub const DEFAULT_PUSH_REMOTES: &[&str] = &["forgejo", "origin"];
-/// Default systemd service filter for membrane-related units (ERE `grep -E` syntax).
+/// Additional infrastructure service names for `systemctl` filtering.
 ///
-/// Infrastructure services included in the service filter that are NOT in the
-/// membrane service registry (external daemons managed alongside the membrane).
-pub const INFRA_SERVICE_FILTER_EXTRAS: &[&str] = &["forgejo", "fail2ban"];
+/// Previously held `"forgejo"` and `"fail2ban"` before those were promoted
+/// to full `MembraneService` registry entries (Wave 157i). Retained as an
+/// extension point for future non-registry infra services.
+pub const INFRA_SERVICE_FILTER_EXTRAS: &[&str] = &[];
 
 // ── LAN service discovery ────────────────────────────────────────────
 

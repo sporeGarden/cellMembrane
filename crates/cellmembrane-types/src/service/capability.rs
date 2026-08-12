@@ -178,6 +178,10 @@ pub enum ServiceCapability {
     ContentAddressedStorage,
     /// Build — binary harvest, cross-compilation, depot staging.
     Build,
+    /// Sovereign defense — host-level intrusion prevention (fail2ban, rate limiting).
+    SovereignDefense,
+    /// Source forge — git hosting, code review, CI triggers.
+    SourceForge,
 }
 
 impl ServiceCapability {
@@ -202,6 +206,8 @@ impl ServiceCapability {
             Self::Visualization => "visualization",
             Self::ContentAddressedStorage => "content_addressed_storage",
             Self::Build => "build",
+            Self::SovereignDefense => "sovereign_defense",
+            Self::SourceForge => "source_forge",
         }
     }
 
@@ -223,6 +229,8 @@ impl ServiceCapability {
             "visualization" => Some(Self::Visualization),
             "content_addressed_storage" => Some(Self::ContentAddressedStorage),
             "build" => Some(Self::Build),
+            "sovereign_defense" => Some(Self::SovereignDefense),
+            "source_forge" => Some(Self::SourceForge),
             _ => None,
         }
     }
@@ -247,6 +255,9 @@ pub enum HealthCheckMethod {
     DnsProbe,
     /// UDS socket file existence check (VPS standard).
     SocketExists,
+    /// Systemd unit active check (`systemctl is-active`).
+    /// For host-level services (fail2ban, forgejo) that have no IPC socket.
+    SystemdActive,
 }
 
 impl fmt::Display for HealthCheckMethod {
@@ -257,6 +268,7 @@ impl fmt::Display for HealthCheckMethod {
             Self::HttpsProbe => write!(f, "https_probe"),
             Self::DnsProbe => write!(f, "dns_probe"),
             Self::SocketExists => write!(f, "socket_exists"),
+            Self::SystemdActive => write!(f, "systemd_active"),
         }
     }
 }

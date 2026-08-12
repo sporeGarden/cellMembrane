@@ -8,12 +8,12 @@
 //! capabilities, and composition tiers.
 
 use super::{
-    BIND_ALL, BIND_LOOPBACK, DEFAULT_DNS_PORT, DEFAULT_FEDERATION_PORT, DEFAULT_HTTPS_PORT,
-    DEFAULT_LOAMSPINE_PORT, DEFAULT_NESTGATE_PORT, DEFAULT_PETALTONGUE_PORT,
-    DEFAULT_RHIZOCRYPT_PORT, DEFAULT_RHIZOCRYPT_SECONDARY_PORT, DEFAULT_SHADOW_PORT,
-    DEFAULT_SKUNKBAT_PORT, DEFAULT_SWEETGRASS_PORT, DEFAULT_TURN_PORT, HealthCheckMethod,
-    IpcProtocol, MembraneService, Protocol, RUSTDESK_HBBR_PORT, RUSTDESK_HBBS_NAT_PORT,
-    RUSTDESK_HBBS_PORT, ServerContract, ServiceCapability, TransportMode,
+    BIND_ALL, BIND_LOOPBACK, DEFAULT_DNS_PORT, DEFAULT_FEDERATION_PORT, DEFAULT_FORGEJO_SSH_PORT,
+    DEFAULT_HTTPS_PORT, DEFAULT_LOAMSPINE_PORT, DEFAULT_NESTGATE_PORT,
+    DEFAULT_PETALTONGUE_PORT, DEFAULT_RHIZOCRYPT_PORT, DEFAULT_RHIZOCRYPT_SECONDARY_PORT,
+    DEFAULT_SHADOW_PORT, DEFAULT_SKUNKBAT_PORT, DEFAULT_SWEETGRASS_PORT, DEFAULT_TURN_PORT,
+    HealthCheckMethod, IpcProtocol, MembraneService, Protocol, RUSTDESK_HBBR_PORT,
+    RUSTDESK_HBBS_NAT_PORT, RUSTDESK_HBBS_PORT, ServerContract, ServiceCapability, TransportMode,
 };
 use crate::composition::MembraneComposition;
 
@@ -447,9 +447,55 @@ const MEMBRANE_BUILDER: MembraneService = MembraneService {
     gpu_required: false,
 };
 
+// ── Sovereign defense (host-level services) ──────────────────────────────
+
+const FAIL2BAN: MembraneService = MembraneService {
+    binary: "fail2ban",
+    systemd_unit: "fail2ban.service",
+    port: None,
+    protocol: Protocol::Uds,
+    has_socket: false,
+    protocols: JSONRPC_ONLY,
+    bind: "",
+    health_method: HealthCheckMethod::SystemdActive,
+    is_primal: false,
+    system_install_path: Some("/usr/bin/fail2ban-client"),
+    extra_ports: &[],
+    min_composition: MembraneComposition::Relay,
+    vps_transport: TransportMode::TcpDefault,
+    capabilities: &[ServiceCapability::SovereignDefense],
+    server_contract: ServerContract::External,
+    api_socket: None,
+    socket_aliases: &[],
+    requires_signed_lineage: false,
+    gpu_required: false,
+};
+
+const FORGEJO: MembraneService = MembraneService {
+    binary: "forgejo",
+    systemd_unit: "forgejo.service",
+    port: None,
+    protocol: Protocol::Tcp,
+    has_socket: false,
+    protocols: JSONRPC_ONLY,
+    bind: BIND_LOOPBACK,
+    health_method: HealthCheckMethod::SystemdActive,
+    is_primal: false,
+    system_install_path: Some("/usr/local/bin/forgejo"),
+    extra_ports: &[(DEFAULT_FORGEJO_SSH_PORT, Protocol::Tcp, "forgejo-ssh")],
+    min_composition: MembraneComposition::Relay,
+    vps_transport: TransportMode::TcpDefault,
+    capabilities: &[ServiceCapability::SourceForge],
+    server_contract: ServerContract::External,
+    api_socket: None,
+    socket_aliases: &[],
+    requires_signed_lineage: false,
+    gpu_required: false,
+};
+
 /// All known membrane services. Runtime discovery starts here.
 ///
-/// Order: Tower (3) → Nest provenance (4) → Nucleus compute (3) → Nucleus meta (3) → Infra (1) → Symbiotic (4).
+/// Order: Tower (3) → Nest provenance (4) → Nucleus compute (3) → Nucleus meta (3) → Infra (1) → Symbiotic (4) → Sovereign (2).
 pub(super) const ALL_SERVICES: &[MembraneService] = &[
     BEARDOG,
     SONGBIRD,
@@ -469,4 +515,6 @@ pub(super) const ALL_SERVICES: &[MembraneService] = &[
     HBBR,
     CADDY,
     KNOTDNS,
+    FAIL2BAN,
+    FORGEJO,
 ];

@@ -51,6 +51,7 @@ pub mod provider;
 pub mod service;
 pub mod signal;
 pub mod signing;
+pub mod sovereign_defense;
 pub mod sync;
 pub mod topology;
 pub mod transport;
@@ -89,6 +90,10 @@ pub use service::{
     ServiceCapability, binary_integrity_for,
 };
 pub use signing::{DepotSignature, DepotTrustPolicy, SignatureAlgorithm, SignaturesFile};
+pub use sovereign_defense::{
+    Fail2banBackend, Fail2banJail, JailStatus, SovereignDefenseConfig, SovereignDefenseHealth,
+    SovereignSeverity,
+};
 pub use sync::{
     CascadeSource, DivergencePolicy, GateTransport, MembraneSyncMode, PushTarget, RepoCategory,
     SyncPriority,

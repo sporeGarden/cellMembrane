@@ -263,6 +263,7 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
     "northGate",
     "southGate",
     "strandGate",
+    "graftGate",
 ];
 
 /// All known active gates in the ecosystem (superset of mesh gates).
@@ -287,7 +288,7 @@ pub const KNOWN_GATES: &[&str] = &[
     "strandGate",
     "blueGate",
     "westGate",
-    "darwinGate",
+    "graftGate",
     "grapheneGate",
 ];
 
