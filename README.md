@@ -9,7 +9,7 @@
 | **Role** | Rendezvous broker, never data plane |
 | **VPS** | `membrane-relay`, Debian 12 x64, DigitalOcean nyc1 ($12/mo) |
 | **Composition** | NUCLEUS (13 primals: Tower + Nest + Compute + Meta) + RustDesk, 11-peer mesh |
-| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 157g) |
+| **Escalation** | Phase 2 (NUCLEUS) — **stadial-ready** (Wave 107+, through Wave 157k) |
 
 ---
 
@@ -56,12 +56,12 @@ Formal architecture for deployable membrane infrastructure:
 Typed domain models for membrane configuration, validation, and deployment:
 
 ```bash
-cargo test                  # 1353 tests — ZERO clippy warnings
+cargo test                  # 1355 tests — ZERO clippy warnings
 cargo clippy                # Zero warnings (pedantic + nursery + option_if_let_else)
 cargo doc --open            # Full API documentation with doc-tests
 ```
 
-Current state (Wave 157g): ~11k lines types, ~38k lines shadow. Crash-loop breaker
+Current state (Wave 157k): ~11k lines types, ~38k lines shadow. Crash-loop breaker
 detects and disables services stuck in restart loops (Wave 150x: nestgate 17,920 restarts,
 biomeos-beacon 11,161 restarts — ISP throttled the gate). `tower.shadow` command ships
 continuous WG vs Tower transport shadow metrics across the mesh.
@@ -70,8 +70,8 @@ All manifest fields type-safe (`GateRole`, `CascadeSource`, `GateMobility`, `Bin
 Rich cross-field validation wired (`validate.rs`). SIGN-01 depot signing pipeline
 (BLAKE3 + ed25519). Fail-closed sandbox. ELF DT_NEEDED enforcement. Sovereign-first
 drift detection. OS Atheism Phase 1+2 (platform types, named pipes, process lifecycle).
-10-gate mesh topology (7 WG-enrolled: golgi, sporeGate, eastGate, flockGate,
-ironGate, northGate, southGate; 3 pending: blueGate, westGate, grapheneGate).
+11-gate mesh topology (golgi, sporeGate, eastGate, flockGate, ironGate,
+northGate, southGate, graftGate, westGate, blueGate, grapheneGate).
 Subdomain standard (`prefix.primals.eco`): `webb.primals.eco` vhost, CSP headers,
 root domain redirect to `sporeprint.primals.eco`, depot at `depot.primals.eco`.
 `gate.enroll` automated mesh enrollment + `hub.peer` hub-side addition.
@@ -347,7 +347,7 @@ ssh root@$VPS_IP "journalctl -u beardog-membrane -u songbird-membrane -f"
 ## Hardening Status
 
 All infrastructure hardening, sovereignty graduation, and evolution milestones
-through Wave 157g are **DONE**. Full wave-by-wave audit trail is preserved in
+through Wave 157k are **DONE**. Full wave-by-wave audit trail is preserved in
 `GLACIAL_SHIFT_TRACKER.md` and git log.
 
 | Category | Summary | Status |
@@ -355,10 +355,10 @@ through Wave 157g are **DONE**. Full wave-by-wave audit trail is preserved in
 | Infrastructure | exim4/droplet-agent purged, fail2ban, UFW, SSH key-only, journald persistence | DONE |
 | TLS | Caddy + Let's Encrypt sovereign TLS, Cloudflare removed | DONE |
 | Dark Forest | 21/21 PASS, 5-pillar compliance, stripped static ELF binaries | DONE |
-| NUCLEUS | 13/13 primals ALIVE, 7-node WG mesh (10 named, 3 pending), UDS-only, sandbox + canary pipeline | DONE |
+| NUCLEUS | 13/13 primals ALIVE, 11-gate mesh, UDS-only, sandbox + canary pipeline | DONE |
 | Sovereignty | S1–S4 all GRADUATED, BTSP enforced, sovereign DNS + relay + content | DONE |
 | Type safety | All manifest fields typed, `validate.rs` wired, `FromStr` for all CLI enums | DONE |
-| Code quality | 1353 tests, zero clippy warnings (pedantic), all files <800L | DONE |
+| Code quality | 1355 tests, zero clippy warnings (pedantic), all files <800L | DONE |
 | Security | SIGN-01 depot signing (BLAKE3 + ed25519), fail-closed sandbox, ELF DT_NEEDED enforcement | DONE |
 | Cross-platform | G68: `PlatformAccess` replaces all `PermissionsExt`, G66 `TransportStream`, G65 protocol negotiation | DONE |
 | Dependencies | `nix`+`chrono`+`reqwest` eliminated, `#![forbid(unsafe_code)]`, zero production `unwrap()`, `time` crate, CSPRNG via `getrandom`, G72 dep pandemic Tier 1 | DONE |
@@ -401,7 +401,7 @@ through Wave 157g are **DONE**. Full wave-by-wave audit trail is preserved in
 - Caddy TLS certificate management and reverse proxy on VPS
 - Sovereign DNS (knot-dns on VPS, replacing commercial DNS)
 - RustDesk self-hosted remote access
-- Multi-gate expansion (10-gate mesh: 7 WG-enrolled + 3 pending enrollment)
+- Multi-gate expansion (11-gate mesh: golgi through grapheneGate)
 - plasmidBin — binary harvesting, checksums, `sources.toml`, CI workflows
 - VPS deployment ops — systemd units, UDS probes, firewall, refresh cycles
 - Peptidoglycan self-refresh timer and auto-fetch evolution
@@ -464,7 +464,9 @@ gardens/cellMembrane/
           registry.rs         # 17 const service entries + ALL_SERVICES array
           resolve.rs          # Runtime helpers (XDG, socket base, UID resolution)
           constants_tests.rs  # Externalized unit tests for constants
-        arch.rs               # Platform, TargetOs, CpuArch, LinkModel (OS Atheism)
+        arch/                 # Platform, TargetOs, CpuArch, LinkModel (OS Atheism)
+          mod.rs              # Platform + CPU + OS + LinkModel types
+          legacy.rs           # Deprecated TargetArch shim (backward compat)
         process.rs            # ServiceStatus, InitSystem, ServiceOutcome
         transport.rs          # TransportEndpoint (UDS, TCP, NamedPipe, MeshRelay)
         platform_substrate.rs # PlatformAccess (G68 cross-platform permissions + links)
@@ -577,7 +579,7 @@ gardens/cellMembrane/
 
 ## Testing
 
-1,350+ tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
+1,355 tests cover types, manifest validation, dispatch, git_ops, cascade, plasmid,
 enrollment, sovereignty, BTSP, checksum verification, DNS, HTTP client, transport
 abstraction (G65/G66), platform substrate (G68), sync IPC, process lifecycle, and
 user-space deploy.
@@ -586,7 +588,7 @@ Tests use both inline `#[cfg(test)]` modules and dedicated test files
 — no external fixtures.
 
 ```bash
-cargo test                  # Full suite (1353 tests)
+cargo test                  # Full suite (1355 tests)
 cargo clippy                # Pedantic + nursery, zero warnings
 cargo doc --open            # Full API docs
 ```

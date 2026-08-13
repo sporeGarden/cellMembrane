@@ -1,7 +1,7 @@
 # ironGate Verification Procedure
 
 **Purpose**: Confirm ironGate has operational control of the cellMembrane.
-**Last validated:** Wave 157g (deep debt sweep: error handling hardened, health module extracted, constants consolidated, G72 dep pandemic Tier 1 complete, harvest install lifecycle extracted; 1350+ tests, ZERO clippy warnings, 2026-08-10)
+**Last validated:** Wave 157k (deep debt sweep: I/O visibility + dead code purge + arch legacy extraction; 1355 tests, ZERO clippy warnings, 2026-08-13)
 **Composition:** Full NUCLEUS — 13 primals, sovereign TLS, UDS-only posture, WAN depot + dual checksums, 7-node WG mesh (golgi/sporeGate/eastGate/flockGate/ironGate/northGate/southGate), capability-based registry with `requires_signed_lineage` + `gpu_required` fields, unified MESH_REGISTRY const table, riboCipher transport signals (UDS+TCP+MeshRelay), rootpulse sovereignty pipeline, webhook cascade wiring, native /proc+sysfs detection, manifest-driven config generation, autonomous cascade timer (Quorum P1), sovereign depot auto-build pipeline (4-phase: reactive trigger, convergent drift, hard lineage enforcement, build-pending mesh signal), shared canary/sandbox staging, capability-based signer naming, G65 IPC protocol negotiation, G66 platform substrate abstraction
 
 ---

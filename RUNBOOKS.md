@@ -1,7 +1,7 @@
 # Operational Runbooks
 
 **Audience:** cellMembrane operators (sporeGate team)
-**Last updated:** 2026-08-10 (Wave 157g deep debt sweep)
+**Last updated:** 2026-08-13 (Wave 157k deep debt sweep)
 **VPS_IP:** Set from `ecosystem_manifest.toml` topology → `MEMBRANE_VPS_IP`.
 
 > **Note (Wave 127):** The `membrane` Rust CLI has fully replaced `deploy_membrane.sh`
@@ -204,41 +204,41 @@ dig @$VPS_IP primals.eco NS
 
 ---
 
-## 6. VPS Deployment Standard (Wave 56)
+## 6. VPS Deployment Standard (Wave 157k)
 
-> **Standard:** primalSpring Wave 56 — three-step VPS deployment with UDS-only NUCLEUS.
+> **Standard:** Manifest-driven deployment via `membrane` CLI. The `deploy_membrane.sh`
+> script is archived in `infra/fossilRecord/cellMembrane/` — do not use operationally.
 
-### Full NUCLEUS deployment (UDS-only)
-
-```bash
-cd ../../infra/plasmidBin
-
-# Step 1: Deploy NUCLEUS base (13 primals, UDS-only)
-./deploy_membrane.sh deploy root@$VPS_IP --composition nucleus --uds-only --validate
-
-# Step 2: Deploy spring overlay (e.g. hotspring)
-./deploy_membrane.sh spring-overlay root@$VPS_IP --cell hotspring
-
-# Step 3: Spring runtime discovers NUCLEUS via UDS (automatic)
-# Spring uses CompositionContext::from_live_discovery() — no manual config needed
-```
-
-### Verify NUCLEUS launcher
+### Full NUCLEUS deployment
 
 ```bash
-ssh root@$VPS_IP "systemctl status nucleus-launcher"
+# Generate + install systemd units from ecosystem manifest
+membrane gate.configure --env GATE_NAME=golgiBody
+membrane gate.apply --env GATE_NAME=golgiBody
+
+# Or bootstrap a new gate (fetch, verify, mesh, start, health)
+membrane gate.bootstrap golgiBody
+
+# Verify all sockets
 ssh root@$VPS_IP "ls -la /run/membrane/*.sock"
 ```
 
-### VPS-ready springs
+### Binary refresh (build → validate → deploy)
 
-Only springs with `vps_standard = true` in the cell manifest can be deployed:
-- hotspring, wetspring, neuralspring, airspring, groundspring, healthspring
+```bash
+# Full pipeline: harvest → sandbox → refresh
+membrane plasmid.pipeline
+
+# Or step-by-step:
+membrane plasmid.harvest --local        # Build from local checkout
+membrane plasmid.sandbox --primal X     # Sandbox validation
+membrane plasmid.refresh                # Push binaries to VPS
+```
 
 ### What NOT to use on VPS
 
-- `desktop_nucleus.sh` — desktop-only
-- `cell_launcher.sh` — desktop-only
+- `deploy_membrane.sh` — **archived** (fossil record, Wave 56–120)
+- `desktop_nucleus.sh` / `cell_launcher.sh` — desktop-only
 - TCP port flags for NUCLEUS primals — UDS-only is the standard
 - Harness-based spawning — use `biomeos deploy` instead
 
@@ -278,42 +278,28 @@ cd ../../infra/plasmidBin
 
 ## 8. Credential Management
 
-### Encrypt credentials for sharing
-```bash
-cd ../../infra/plasmidBin
-./membrane/share_credentials.sh encrypt
-```
+> **Evolution (Wave 151b):** BearDog BTSP provides the primary credential
+> transport. The legacy `share_credentials.sh` script is archived in
+> `infra/fossilRecord/cellMembrane/` — do not use operationally.
 
-Creates `membrane-credentials.age` encrypted with SSH ed25519 keys.
+### Current model
 
-### Decrypt credentials
-```bash
-./membrane/share_credentials.sh decrypt membrane-credentials.age
-```
+Credentials are managed via BearDog HSM + BTSP handshake. Gate enrollment
+(`membrane gate.enroll`) bootstraps the credential chain automatically.
 
-### Push encrypted blob to VPS
-```bash
-./membrane/share_credentials.sh push root@$VPS_IP
-```
+### Credential inventory
 
-Deploys to `/opt/membrane/credentials.age` on VPS.
-
-### Pull and decrypt from VPS
-```bash
-./membrane/share_credentials.sh pull root@$VPS_IP
-```
-
-### Credential contents
 | Key | Description |
 |-----|-------------|
+| `FAMILY_SEED` | BTSP shared family secret (HMAC-SHA256 challenge-response) |
+| `FAMILY_ID` | Gate family identifier |
+| `GATE_NAME` | Local gate identity |
 | DOCTL_TOKEN | DigitalOcean API token |
 | SONGBIRD_TURN_KEY | TURN relay HMAC key |
-| SONGBIRD_TURN_USERNAME | TURN relay username |
-| MEMBRANE_VPS_IP | VPS IP (optional) |
 
 ### Evolution path
-- **Current:** age encryption via SSH ed25519 keys
-- **Phase 2:** BearDog BTSP secrets management
+- **Current:** BearDog BTSP secrets + age encryption backup
+- **Phase 3:** BingoCube zero-knowledge access
 - **Phase 4:** Autonomous Tower rotation
 
 ---
@@ -331,30 +317,14 @@ Deploys to `/opt/membrane/credentials.age` on VPS.
 > membrane gate.keys.renew --bootstrap      # First-time CA trust setup
 > ```
 
-### Legacy: List authorized keys
-```bash
-cd ../../infra/plasmidBin
-./deploy_membrane.sh keys list root@$VPS_IP
-```
-
-### Legacy: Add a gate's key
-```bash
-./deploy_membrane.sh keys add root@$VPS_IP \
-  --name "eastGate" \
-  --pubkey "ssh-ed25519 AAAA..."
-```
-
-Keys are tagged in `authorized_keys` with `# gate:<name> added:<date>`.
-
-### Legacy: Revoke a gate's key
-```bash
-./deploy_membrane.sh keys revoke root@$VPS_IP --name "eastGate"
-```
-
-### Audit keys manually
+### Manual key audit (fallback)
 ```bash
 ssh root@$VPS_IP "cat /root/.ssh/authorized_keys"
 ```
+
+> **Fossil note:** Legacy `deploy_membrane.sh keys` commands (`list`, `add`,
+> `revoke`) are archived in `infra/fossilRecord/cellMembrane/`. The `gate.keys`
+> CLI suite replaces all manual key management once step-ca is deployed.
 
 ---
 
@@ -382,31 +352,19 @@ Boot order: BearDog → Songbird → SkunkBat → NestGate → rhizoCrypt → lo
 
 ### VPS unreachable — reprovisioning
 ```bash
-cd ../../infra/plasmidBin
-
 # Check DO status
 doctl compute droplet list --tag-name membrane
 
 # If droplet exists but unresponsive, access via DO console
-# If droplet destroyed, reprovision:
-./deploy_membrane.sh provision --region nyc1
+# If droplet destroyed, reprovision via membrane CLI:
+membrane provision --region nyc1
 
-# Redeploy current composition (Nest Atomic)
-./deploy_membrane.sh deploy root@<new-ip> --composition nest --validate
+# Bootstrap the new gate
+membrane gate.bootstrap golgiBody
 
-# Push credentials
-./membrane/share_credentials.sh push root@<new-ip>
-
-# Re-add gate SSH keys
-./deploy_membrane.sh keys add root@<new-ip> --name "<gate>" --pubkey "..."
+# Enroll into mesh
+membrane gate.enroll golgiBody
 ```
-
-### Teardown (destructive)
-```bash
-./deploy_membrane.sh teardown --name membrane-relay
-```
-
-Requires typing `destroy` to confirm. Destroys the DO droplet.
 
 ### Firewall lockout recovery
 Access VPS via DigitalOcean console (web UI), then:
@@ -419,7 +377,7 @@ ufw allow 22/tcp
 ufw enable
 ```
 
-Then redeploy firewall rules via `deploy_membrane.sh`.
+Then regenerate firewall rules via `membrane gate.apply`.
 
 ---
 
