@@ -283,6 +283,14 @@ pub struct SubBuilderEntry {
     /// Transport method: `"mesh"` (Tower Atomic, default) or `"ssh"` (legacy).
     #[serde(default = "default_transport")]
     pub transport: String,
+    /// Direct TCP host for builder.serve fallback when mesh relay isn't available.
+    /// Uses LAN IP or WG mesh IP. Preferred over MeshRelay until songBird relay
+    /// registration is universal.
+    #[serde(default)]
+    pub builder_host: String,
+    /// TCP port for builder.serve (default: 9800).
+    #[serde(default)]
+    pub builder_port: Option<u16>,
     /// SSH host or alias for nanowire dispatch (deprecated — use `transport = "mesh"`).
     #[serde(default)]
     pub ssh_host: String,

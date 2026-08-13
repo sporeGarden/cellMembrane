@@ -58,16 +58,29 @@ pub(super) async fn serve(args: &[&str]) -> Result<ShadowOutcome> {
 }
 
 /// Handle a single JSON-RPC connection (one request per line, newline-delimited).
+///
+/// Accepts both raw NDJSON and riboCipher-framed connections (0xEC 0x01 prefix).
+/// The `call_tcp` path in `jsonrpc.rs` sends the riboCipher signal before the
+/// JSON payload — we detect and skip it so the builder works with both raw
+/// clients (nc, curl) and the foreman's cascade dispatch.
 async fn handle_connection(
     stream: tokio::net::TcpStream,
     gate: &str,
     peer: std::net::SocketAddr,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (reader, mut writer) = stream.into_split();
-    let mut lines = BufReader::new(reader).lines();
+    let mut buf_reader = BufReader::new(reader);
+    let mut raw_line = Vec::with_capacity(4096);
 
-    while let Some(line) = lines.next_line().await? {
-        let line = line.trim().to_string();
+    loop {
+        raw_line.clear();
+        let n = buf_reader.read_until(b'\n', &mut raw_line).await?;
+        if n == 0 {
+            break;
+        }
+
+        let payload = strip_ribocipher_prefix(&raw_line);
+        let line = String::from_utf8_lossy(payload).trim().to_string();
         if line.is_empty() {
             continue;
         }
@@ -81,6 +94,15 @@ async fn handle_connection(
 
     info!(peer = %peer, "builder connection closed");
     Ok(())
+}
+
+/// Strip riboCipher signal prefix (0xEC 0x01) if present.
+fn strip_ribocipher_prefix(data: &[u8]) -> &[u8] {
+    if data.len() >= 2 && data[0] == 0xEC {
+        &data[2..]
+    } else {
+        data
+    }
 }
 
 /// Parse a JSON-RPC request and route to the appropriate plasmid command.

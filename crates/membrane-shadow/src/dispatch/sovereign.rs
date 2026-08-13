@@ -62,10 +62,21 @@ fn load_sub_builders() -> Vec<ResolvedSubBuilder> {
     Vec::new()
 }
 
-/// Resolve a manifest entry to a mesh relay endpoint.
+/// Resolve a manifest entry to a transport endpoint.
+///
+/// Prefers direct TCP (builder_host:builder_port) when configured — this
+/// bypasses songBird relay registration which isn't universal yet.
+/// Falls back to MeshRelay for full mesh-native routing when available.
 fn resolve_builder_endpoint(
     entry: &crate::manifest::SubBuilderEntry,
 ) -> cellmembrane_types::TransportEndpoint {
+    if !entry.builder_host.is_empty() {
+        let port = entry.builder_port.unwrap_or(cellmembrane_types::service::DEFAULT_BUILDER_PORT);
+        return cellmembrane_types::TransportEndpoint::Tcp {
+            host: entry.builder_host.clone(),
+            port,
+        };
+    }
     cellmembrane_types::TransportEndpoint::MeshRelay {
         peer_id: entry.gate.clone(),
         capability: "build".into(),
