@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Content domain dispatch — sporePrint static site build + integrity verification.
+//! Content domain dispatch — sporePrint static site build, integrity verification,
+//! and provenance braiding (Phase 3 CAS).
 
 use crate::{ShadowConfig, ShadowOutcome};
 use tracing::{info, warn};
@@ -13,6 +14,7 @@ pub(super) async fn dispatch_content(
     match cmd {
         "content.rebuild" => dispatch_content_rebuild(args).await,
         "content.verify" => dispatch_content_verify(config).await,
+        "content.braid" => dispatch_content_braid(args).await,
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown content command: {cmd}"
         ))),
@@ -195,5 +197,438 @@ async fn dispatch_content_verify(config: &ShadowConfig) -> crate::Result<ShadowO
                 "content_files": content_files,
             })),
         }
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// content.braid — Rust-native provenance braiding (replaces native_braid.py)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DATA_ROOT_DEFAULT: &str = "/mnt/nestgate/cold/zfs/data";
+const COMMITTER_DID: &str = "did:eco:westgate";
+const BATCH_SIZE: usize = 500;
+const BRAIDED_MARKER: &str = ".braided";
+
+/// `content.braid <path> [--only ds1,ds2] [--skip ds3] [--dry-run] [--incremental]`
+///
+/// Pipeline per dataset chunk:
+///   1. content.ingest(directory) → manifest {filename: blake3}
+///   2. dag.session.create → session_id
+///   3. dag.event.append_batch (BATCH_SIZE events per call)
+///   4. dag.dehydration.trigger → merkle_root
+///   5. session.commit (spine_id, session_id, merkle_root)
+///   6. braid.create (dataset-level provenance braid)
+///   7. sign (bearDog composite signature on final hash)
+async fn dispatch_content_braid(args: &[&str]) -> crate::Result<ShadowOutcome> {
+    let bridge = match crate::bridge::NeuralBridge::discover() {
+        Some(b) => b,
+        None => {
+            return Ok(ShadowOutcome::fail(
+                "content.braid: biomeOS Neural API not reachable — braiding requires live primals",
+            ))
+        }
+    };
+
+    let data_root = crate::cli::extract_flag_value(args, "--path")
+        .or_else(|| args.iter().find(|a| !a.starts_with('-')).copied())
+        .unwrap_or(DATA_ROOT_DEFAULT);
+
+    let only: Vec<&str> = crate::cli::extract_flag_value(args, "--only")
+        .map(|v| v.split(',').collect())
+        .unwrap_or_default();
+
+    let skip: Vec<&str> = crate::cli::extract_flag_value(args, "--skip")
+        .map(|v| v.split(',').collect())
+        .unwrap_or_default();
+
+    let dry_run = args.iter().any(|a| *a == "--dry-run");
+    let incremental = args.iter().any(|a| *a == "--incremental");
+
+    let root = std::path::Path::new(data_root);
+    if !root.is_dir() {
+        return Ok(ShadowOutcome::fail(format!(
+            "content.braid: data root not found: {data_root}"
+        )));
+    }
+
+    let datasets = list_datasets(root, &only, &skip, incremental);
+    if datasets.is_empty() {
+        return Ok(ShadowOutcome::ok(format!(
+            "content.braid: no datasets to process in {data_root}"
+        )));
+    }
+
+    info!(
+        "content.braid: {} datasets queued from {}{}",
+        datasets.len(),
+        data_root,
+        if dry_run { " (dry-run)" } else { "" }
+    );
+
+    if dry_run {
+        let names: Vec<String> = datasets.iter().map(|d| d.name.clone()).collect();
+        return Ok(ShadowOutcome::ok_with(
+            format!("content.braid: dry-run — {} datasets", names.len()),
+            serde_json::json!({ "datasets": names, "dry_run": true }),
+        ));
+    }
+
+    let mut results = Vec::new();
+    let mut total_files = 0u64;
+    let mut total_bytes = 0u64;
+
+    for dataset in &datasets {
+        info!("content.braid: processing {}", dataset.name);
+
+        match braid_dataset(&bridge, dataset).await {
+            Ok(result) => {
+                total_files += result.files;
+                total_bytes += result.bytes;
+                info!(
+                    "content.braid: {} — {} files, {} bytes, merkle: {}",
+                    dataset.name,
+                    result.files,
+                    result.bytes,
+                    result.merkle_root.as_deref().unwrap_or("none"),
+                );
+                results.push(serde_json::json!({
+                    "dataset": dataset.name,
+                    "status": "complete",
+                    "files": result.files,
+                    "bytes": result.bytes,
+                    "merkle_root": result.merkle_root,
+                    "braid_hash": result.braid_hash,
+                }));
+            }
+            Err(e) => {
+                warn!("content.braid: {} failed: {}", dataset.name, e);
+                results.push(serde_json::json!({
+                    "dataset": dataset.name,
+                    "status": "failed",
+                    "error": e.to_string(),
+                }));
+            }
+        }
+    }
+
+    let summary = format!(
+        "content.braid: {} datasets processed — {} files, {} bytes total",
+        datasets.len(),
+        total_files,
+        total_bytes,
+    );
+
+    Ok(ShadowOutcome::ok_with(
+        summary,
+        serde_json::json!({
+            "datasets": results,
+            "total_files": total_files,
+            "total_bytes": total_bytes,
+        }),
+    ))
+}
+
+struct DatasetEntry {
+    name: String,
+    path: std::path::PathBuf,
+}
+
+struct BraidResult {
+    files: u64,
+    bytes: u64,
+    merkle_root: Option<String>,
+    braid_hash: Option<String>,
+}
+
+fn list_datasets(
+    root: &std::path::Path,
+    only: &[&str],
+    skip: &[&str],
+    incremental: bool,
+) -> Vec<DatasetEntry> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return vec![];
+    };
+
+    let mut datasets = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+
+        if !only.is_empty() && !only.contains(&name.as_str()) {
+            continue;
+        }
+        if skip.contains(&name.as_str()) {
+            continue;
+        }
+
+        let braided_marker = path.join(BRAIDED_MARKER);
+        if braided_marker.exists() && !incremental {
+            continue;
+        }
+
+        datasets.push(DatasetEntry { name, path });
+    }
+
+    datasets.sort_by(|a, b| a.name.cmp(&b.name));
+    datasets
+}
+
+async fn braid_dataset(
+    bridge: &crate::bridge::NeuralBridge,
+    dataset: &DatasetEntry,
+) -> std::result::Result<BraidResult, Box<dyn std::error::Error + Send + Sync>> {
+    // 1. Ingest dataset into CAS via nestGate
+    let ingest_result = bridge
+        .capability_call(
+            "content",
+            "ingest",
+            serde_json::json!({
+                "path": dataset.path.to_string_lossy(),
+                "recursive": true,
+            }),
+        )
+        .await;
+
+    let manifest = match ingest_result {
+        crate::bridge::BridgeResult::Handled(v) => v,
+        crate::bridge::BridgeResult::ApiError(e) => {
+            return Err(format!("content.ingest failed: {e}").into())
+        }
+        crate::bridge::BridgeResult::Fallthrough => {
+            return Err("content.ingest: Neural API unreachable".into())
+        }
+    };
+
+    let file_count = manifest
+        .get("file_count")
+        .or_else(|| manifest.get("files"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let byte_count = manifest
+        .get("total_bytes")
+        .or_else(|| manifest.get("bytes"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    // 2. Create DAG session via rhizoCrypt
+    let session_result = bridge
+        .capability_call(
+            "dag",
+            "session.create",
+            serde_json::json!({
+                "name": dataset.name,
+                "committer": COMMITTER_DID,
+            }),
+        )
+        .await;
+
+    let session = match session_result {
+        crate::bridge::BridgeResult::Handled(v) => v,
+        crate::bridge::BridgeResult::ApiError(e) => {
+            return Err(format!("dag.session.create failed: {e}").into())
+        }
+        crate::bridge::BridgeResult::Fallthrough => {
+            return Err("dag.session.create: Neural API unreachable".into())
+        }
+    };
+
+    let session_id = session
+        .get("session_id")
+        .or_else(|| session.get("id"))
+        .and_then(|v| v.as_str())
+        .ok_or("dag.session.create: no session_id in response")?
+        .to_string();
+
+    // 3. Build DAG events from manifest and append in batches
+    let entries = manifest
+        .get("manifest")
+        .or_else(|| manifest.get("entries"))
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+
+    let events: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|(filename, hash)| {
+            serde_json::json!({
+                "type": "DataCreate",
+                "filename": filename,
+                "blake3": hash,
+                "dataset": dataset.name,
+            })
+        })
+        .collect();
+
+    for chunk in events.chunks(BATCH_SIZE) {
+        let append_result = bridge
+            .capability_call(
+                "dag",
+                "event.append_batch",
+                serde_json::json!({
+                    "session_id": session_id,
+                    "events": chunk,
+                }),
+            )
+            .await;
+
+        match append_result {
+            crate::bridge::BridgeResult::Handled(_) => {}
+            crate::bridge::BridgeResult::ApiError(e) => {
+                warn!("dag.event.append_batch: {e} — trying individual append");
+                for event in chunk {
+                    let _ = bridge
+                        .capability_call(
+                            "dag",
+                            "event.append",
+                            serde_json::json!({
+                                "session_id": session_id,
+                                "event": event,
+                            }),
+                        )
+                        .await;
+                }
+            }
+            crate::bridge::BridgeResult::Fallthrough => {
+                return Err("dag.event.append_batch: Neural API unreachable".into())
+            }
+        }
+    }
+
+    // 4. Trigger dehydration → merkle root
+    let dehydrate_result = bridge
+        .capability_call(
+            "dag",
+            "dehydration.trigger",
+            serde_json::json!({ "session_id": session_id }),
+        )
+        .await;
+
+    let merkle_root = match dehydrate_result {
+        crate::bridge::BridgeResult::Handled(v) => v
+            .get("merkle_root")
+            .and_then(|m| m.as_str())
+            .map(String::from),
+        _ => None,
+    };
+
+    // 5. Create spine + commit session via loamSpine
+    let spine_result = bridge
+        .capability_call(
+            "spine",
+            "create",
+            serde_json::json!({
+                "name": dataset.name,
+                "committer": COMMITTER_DID,
+            }),
+        )
+        .await;
+
+    let spine_id = match spine_result {
+        crate::bridge::BridgeResult::Handled(v) => v
+            .get("spine_id")
+            .or_else(|| v.get("id"))
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        _ => None,
+    };
+
+    if let Some(ref sid) = spine_id {
+        let _ = bridge
+            .capability_call(
+                "session",
+                "commit",
+                serde_json::json!({
+                    "spine_id": sid,
+                    "session_id": session_id,
+                    "merkle_root": merkle_root,
+                    "vertex_count": events.len(),
+                    "committer": COMMITTER_DID,
+                }),
+            )
+            .await;
+    }
+
+    // 6. Sign composite hash via bearDog
+    let composite = merkle_root.as_deref().unwrap_or(&session_id);
+    let sign_result = bridge
+        .capability_call(
+            "crypto",
+            "sign",
+            serde_json::json!({ "message": composite }),
+        )
+        .await;
+
+    let signature = match sign_result {
+        crate::bridge::BridgeResult::Handled(v) => {
+            v.get("signature").and_then(|s| s.as_str()).map(String::from)
+        }
+        _ => None,
+    };
+
+    // 7. Create provenance braid via sweetGrass
+    let braid_result = bridge
+        .capability_call(
+            "braid",
+            "create",
+            serde_json::json!({
+                "data_hash": composite,
+                "strand_id": dataset.name,
+                "metadata": {
+                    "dataset": dataset.name,
+                    "files": file_count,
+                    "bytes": byte_count,
+                    "committer": COMMITTER_DID,
+                    "signature": signature,
+                    "spine_id": spine_id,
+                },
+            }),
+        )
+        .await;
+
+    let braid_hash = match braid_result {
+        crate::bridge::BridgeResult::Handled(v) => v
+            .get("braid_hash")
+            .or_else(|| v.get("hash"))
+            .and_then(|h| h.as_str())
+            .map(String::from),
+        _ => None,
+    };
+
+    // 8. Write .braided marker
+    let marker = dataset.path.join(BRAIDED_MARKER);
+    let marker_data = serde_json::json!({
+        "dataset": dataset.name,
+        "merkle_root": merkle_root,
+        "braid_hash": braid_hash,
+        "signature": signature,
+        "spine_id": spine_id,
+        "files": file_count,
+        "bytes": byte_count,
+        "committer": COMMITTER_DID,
+        "braided_at": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+        "braider": "membrane content.braid v1.0",
+    });
+
+    if let Err(e) = std::fs::write(&marker, serde_json::to_string_pretty(&marker_data).unwrap_or_default()) {
+        warn!("content.braid: failed to write marker {}: {e}", marker.display());
+    }
+
+    Ok(BraidResult {
+        files: file_count,
+        bytes: byte_count,
+        merkle_root,
+        braid_hash,
     })
 }

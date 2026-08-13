@@ -83,6 +83,10 @@ Potential — qS membrane potential (quorumSignal SENSE):
   potential.sense [--all] [--count]    Measure pending potential for this gate
   potential.check                      Gradient health across the mesh
 
+Content Braiding (provenance trio — replaces native_braid.py):
+  content.braid <path> [--only ds1,ds2] [--skip ds3] [--dry-run] [--incremental]
+                                   Braid dataset(s) through nestGate→rhizoCrypt→loamSpine→sweetGrass
+
 Context — sweetGrass-external braids (developer state weaving):
   context.weave --project <path> --summary <text>  Weave a context braid
   context.sense [--gate <gate>] [--project <path>] [--all]  Sense context
