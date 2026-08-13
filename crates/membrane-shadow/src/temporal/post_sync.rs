@@ -125,6 +125,7 @@ pub(super) async fn run_post_sync_phases(
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
         run_content_rebuild_if_needed(root, lines).await;
         check_content_health(root, lines).await;
+        run_gate_hygiene(lines).await;
     }
 
     (harvest_info, all_ok)
@@ -209,6 +210,116 @@ async fn delegate_harvest_to_primary(
             }
         }
     }
+}
+
+/// Gate self-hygiene — composition-native disk and cache cleanup.
+///
+/// Every gate runs this as part of its cascade post-sync, replacing
+/// external crons and jelly strings. Each gate knows its own topology
+/// role and cleans accordingly:
+/// - Forgejo repo-archive cache (relay gates with Forgejo)
+/// - Journal vacuum (all gates)
+/// - Temp file cleanup (all gates)
+///
+/// This is the primal composition's answer to "who keeps the house clean?"
+/// The gate does, autonomously, as part of its cascade lifecycle.
+async fn run_gate_hygiene(lines: &mut Vec<String>) {
+    let mut cleaned = Vec::new();
+
+    // Forgejo repo-archive: generated download tarballs that regrow unbounded
+    let forgejo_archive = std::path::Path::new("/opt/forgejo/data/repo-archive");
+    if forgejo_archive.exists() {
+        match purge_stale_cache(forgejo_archive, 86400) {
+            Ok(freed) if freed > 0 => {
+                cleaned.push(format!("forgejo-archive: {:.1}MB freed", freed as f64 / 1_048_576.0));
+            }
+            Ok(_) => {}
+            Err(e) => tracing::debug!(error = %e, "hygiene: forgejo-archive cleanup failed"),
+        }
+    }
+
+    // Journal vacuum — keep last 50MB
+    if let Ok(output) = tokio::process::Command::new("journalctl")
+        .args(["--vacuum-size=50M"])
+        .output()
+        .await
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.contains("Deleted") || stdout.contains("freed") {
+                cleaned.push("journal: vacuumed".into());
+            }
+        }
+    }
+
+    // Temp files older than 24h
+    let tmp = std::path::Path::new("/tmp");
+    if let Ok(freed) = purge_stale_cache(tmp, 86400) {
+        if freed > 100_000 {
+            cleaned.push(format!("tmp: {:.1}MB freed", freed as f64 / 1_048_576.0));
+        }
+    }
+
+    if !cleaned.is_empty() {
+        lines.push(format!("  [hygiene] {}", cleaned.join(", ")));
+    }
+}
+
+/// Remove files older than `max_age_secs` from a directory tree. Returns bytes freed.
+fn purge_stale_cache(dir: &std::path::Path, max_age_secs: u64) -> std::io::Result<u64> {
+    let now = std::time::SystemTime::now();
+    let threshold = std::time::Duration::from_secs(max_age_secs);
+    let mut freed = 0u64;
+
+    for entry in walkdir(dir)? {
+        let entry = entry?;
+        let meta = entry.metadata()?;
+        if !meta.is_file() {
+            continue;
+        }
+        if let Ok(modified) = meta.modified() {
+            if now.duration_since(modified).unwrap_or_default() > threshold {
+                freed += meta.len();
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+
+    // Clean empty dirs bottom-up
+    for entry in walkdir(dir)? {
+        let entry = entry?;
+        if entry.metadata()?.is_dir() && entry.path() != dir {
+            let _ = std::fs::remove_dir(entry.path());
+        }
+    }
+
+    Ok(freed)
+}
+
+/// Simple recursive directory walker (no external dep needed).
+fn walkdir(
+    dir: &std::path::Path,
+) -> std::io::Result<impl Iterator<Item = std::io::Result<std::fs::DirEntry>>> {
+    fn walk_inner(
+        dir: &std::path::Path,
+        entries: &mut Vec<std::io::Result<std::fs::DirEntry>>,
+    ) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            match entry {
+                Ok(e) => {
+                    if e.file_type().is_ok_and(|ft| ft.is_dir()) {
+                        let _ = walk_inner(&e.path(), entries);
+                    }
+                    entries.push(Ok(e));
+                }
+                Err(e) => entries.push(Err(e)),
+            }
+        }
+        Ok(())
+    }
+    let mut entries = Vec::new();
+    walk_inner(dir, &mut entries)?;
+    Ok(entries.into_iter())
 }
 
 /// Push local depot to golgi via SCP after successful harvest+refresh.
