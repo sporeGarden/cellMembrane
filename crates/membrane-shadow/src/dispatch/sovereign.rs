@@ -21,10 +21,15 @@ use tracing::{error, info, warn};
 /// Resolved sub-builder for dispatch.
 ///
 /// Uses `TransportEndpoint::MeshRelay` via Tower Atomic (songBird).
-struct ResolvedSubBuilder {
-    gate: String,
-    target: String,
-    endpoint: cellmembrane_types::TransportEndpoint,
+pub(crate) struct ResolvedSubBuilder {
+    pub(crate) gate: String,
+    pub(crate) target: String,
+    pub(crate) endpoint: cellmembrane_types::TransportEndpoint,
+}
+
+/// Public accessor for post-cascade sub-builder fan-out.
+pub(crate) fn public_sub_builders() -> Vec<ResolvedSubBuilder> {
+    load_sub_builders()
 }
 
 /// Load sub-builders from the ecosystem manifest.

@@ -37,6 +37,11 @@ mod temporal;
 use crate::error::ShadowError;
 use crate::{ShadowConfig, ShadowOutcome, bridge, forgejo};
 
+/// Public accessor for sub-builder list (used by cascade fan-out).
+pub(crate) fn sovereign_sub_builders() -> Vec<sovereign::ResolvedSubBuilder> {
+    sovereign::public_sub_builders()
+}
+
 /// Map a CLI command to its primal capability domain + method for bridge routing.
 ///
 /// Returns `None` for commands that are shadow-only (no primal equivalent)

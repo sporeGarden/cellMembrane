@@ -68,7 +68,8 @@ pub(super) async fn run_depot_staleness_and_fetch(
     }
 }
 
-/// Run harvest after cascade sync — build any drifted primals locally.
+/// Run harvest after cascade sync — build any drifted primals locally,
+/// then fan out to manifest-registered sub-builders for cross-arch targets.
 /// Returns `(built_count, built_primal_names, current_count, failure_count)`.
 pub(super) async fn run_post_cascade_harvest(
     lines: &mut Vec<String>,
@@ -111,7 +112,86 @@ pub(super) async fn run_post_cascade_harvest(
         if failures == 0 { "OK" } else { "PARTIAL" }
     ));
 
+    if built > 0 {
+        dispatch_to_sub_builders(&built_primals, lines).await;
+    }
+
     Ok((built, built_primals, current, failures))
+}
+
+/// Fan out harvest to manifest-registered sub-builders via Tower Atomic mesh.
+///
+/// For each primal that was rebuilt locally, dispatch a `plasmid.harvest`
+/// request to every sub-builder registered in `ecosystem_manifest.toml`.
+/// Sub-builders rebuild for their own target triple and stage to their
+/// local depot. The foreman collects results via mesh — zero SSH.
+async fn dispatch_to_sub_builders(built_primals: &[String], lines: &mut Vec<String>) {
+    let sub_builders = crate::dispatch::sovereign_sub_builders();
+    if sub_builders.is_empty() {
+        return;
+    }
+
+    let mut dispatched = 0u32;
+    let mut succeeded = 0u32;
+    let mut failed_gates: Vec<String> = Vec::new();
+
+    for sb in &sub_builders {
+        for primal in built_primals {
+            dispatched += 1;
+            let request = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "plasmid.harvest",
+                "params": {
+                    "primal": primal,
+                    "force": true,
+                    "local": true,
+                    "push": false,
+                },
+                "id": dispatched,
+            })
+            .to_string();
+
+            match crate::jsonrpc::call_endpoint(&sb.endpoint, &request).await {
+                Ok(response) => {
+                    let parsed: serde_json::Value =
+                        serde_json::from_str(&response).unwrap_or_default();
+                    let ok = parsed
+                        .get("result")
+                        .and_then(|r| r.get("ok"))
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false);
+                    if ok {
+                        succeeded += 1;
+                    } else {
+                        failed_gates.push(format!("{}:{}", sb.gate, primal));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        gate = %sb.gate,
+                        target = %sb.target,
+                        primal,
+                        error = %e,
+                        "sub-builder mesh dispatch failed"
+                    );
+                    failed_gates.push(format!("{}:{}", sb.gate, primal));
+                }
+            }
+        }
+    }
+
+    if dispatched > 0 {
+        if failed_gates.is_empty() {
+            lines.push(format!(
+                "  [sub-builders] OK — {succeeded}/{dispatched} cross-arch harvests via mesh"
+            ));
+        } else {
+            lines.push(format!(
+                "  [sub-builders] PARTIAL — {succeeded}/{dispatched} OK, failed: {}",
+                failed_gates.join(", ")
+            ));
+        }
+    }
 }
 
 /// Sandbox-validate built primals before allowing refresh.
