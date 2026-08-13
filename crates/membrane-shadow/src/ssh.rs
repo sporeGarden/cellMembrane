@@ -127,6 +127,31 @@ pub async fn scp_to(config: &ShadowConfig, local_path: &str, remote_path: &str) 
     }
 }
 
+/// Transfer a remote file FROM the VPS to a local path via SCP.
+///
+/// Inverse of `scp_to` — used by G69 Phase 3 CAS archival to pull old
+/// binaries from golgiBody before they are overwritten.
+pub async fn scp_from(config: &ShadowConfig, remote_path: &str, local_path: &str) -> Result<()> {
+    let src = format!("{}:{}", config.ssh_host, remote_path);
+    let mut args = ssh_args(config.ssh_timeout);
+    args.extend(scp_keepalive_args());
+    args.push(src);
+    args.push(local_path.into());
+
+    let output = Command::new("scp").args(&args).output().await?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(ShadowError::ssh(format!(
+            "scp_from failed (exit {}): {}",
+            exit_code(&output),
+            stderr.trim()
+        )))
+    }
+}
+
 /// Execute a command on a host using `user@ip` form (provisioning/enrollment).
 ///
 /// Accepts new host keys on first connect (`StrictHostKeyChecking=accept-new`).

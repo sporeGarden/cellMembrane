@@ -388,6 +388,7 @@ async fn push_single_binary(
 
     if !remote_hash.is_empty() {
         record_lineage_event(&name_str, arch_str, &remote_hash, &local_hash);
+        archive_old_binary_to_cas(config, &remote_path, &name_str, arch_str, &remote_hash).await;
     }
 
     let remote_tmp = format!("{remote_arch_dir}/.{name_str}.new");
@@ -409,14 +410,78 @@ async fn push_single_binary(
     }
 }
 
+/// G69 Phase 3: Archive the old binary from the remote depot to local CAS
+/// before it gets overwritten. The BLAKE3 hash IS the CAS key — no new
+/// addressing needed. Archives to `$DEPOT/cas/{arch}/{blake3}`.
+///
+/// This is the critical step that prevents golgiBody (10GB VPS) from being
+/// the only copy of old binaries. The flow:
+///   new binary ready → archive old to CAS → overwrite on golgiBody
+///
+/// CAS targets (future): ironGate 14TB NFT braid, westGate 50.7TB ZFS.
+/// For now, archives to the foreman's local CAS directory. The lineage.jsonl
+/// log records the mapping so we can always find old generations.
+async fn archive_old_binary_to_cas(
+    config: &crate::ShadowConfig,
+    remote_path: &str,
+    binary: &str,
+    arch: &str,
+    old_blake3: &str,
+) {
+    let depot = match super::harvest::resolve_depot(None) {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let cas_dir = depot.join("cas").join(arch);
+    if let Err(e) = std::fs::create_dir_all(&cas_dir) {
+        tracing::warn!(error = %e, "cas: failed to create archive dir");
+        return;
+    }
+
+    let cas_path = cas_dir.join(old_blake3);
+    if cas_path.exists() {
+        tracing::debug!(binary, blake3 = old_blake3, "cas: already archived (dedup hit)");
+        return;
+    }
+
+    let tmp_path = cas_dir.join(format!(".{old_blake3}.tmp"));
+    match crate::ssh::scp_from(config, remote_path, &tmp_path.to_string_lossy()).await {
+        Ok(()) => {
+            if let Ok(downloaded_hash) = super::compute_blake3_file_async(&tmp_path).await {
+                if downloaded_hash == old_blake3 {
+                    if std::fs::rename(&tmp_path, &cas_path).is_ok() {
+                        tracing::info!(
+                            binary,
+                            arch,
+                            blake3 = &old_blake3[..16],
+                            "cas: archived old generation before overwrite"
+                        );
+                        return;
+                    }
+                } else {
+                    tracing::warn!(
+                        binary,
+                        expected = old_blake3,
+                        got = %downloaded_hash,
+                        "cas: BLAKE3 mismatch on archived binary — discarding"
+                    );
+                }
+            }
+            let _ = std::fs::remove_file(&tmp_path);
+        }
+        Err(e) => {
+            tracing::warn!(binary, arch, error = %e, "cas: failed to archive old binary from remote");
+            let _ = std::fs::remove_file(&tmp_path);
+        }
+    }
+}
+
 /// Append a lineage event to the depot lineage log (JSONL).
 ///
 /// Records every binary replacement so old hashes are never lost, even before
 /// CAS archival (G69 Phase 3) is wired. The log lives alongside the depot and
 /// can be ingested into loamSpine spines later.
 fn record_lineage_event(binary: &str, arch: &str, old_blake3: &str, new_blake3: &str) {
-    use std::io::Write;
-
     let depot = super::harvest::resolve_depot(None).unwrap_or_default();
     let log_path = depot.join("lineage.jsonl");
     let gate = crate::gate::resolve_local_gate_identity();
@@ -432,15 +497,14 @@ fn record_lineage_event(binary: &str, arch: &str, old_blake3: &str, new_blake3: 
         "timestamp": now,
     });
 
+    use std::io::Write;
     match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_path)
     {
         Ok(mut f) => {
-            if let Err(e) = writeln!(f, "{entry}") {
-                tracing::debug!(%e, "lineage: write failed");
-            }
+            let _ = writeln!(f, "{}", entry);
         }
         Err(e) => {
             tracing::warn!(error = %e, "lineage: failed to write event to {}", log_path.display());

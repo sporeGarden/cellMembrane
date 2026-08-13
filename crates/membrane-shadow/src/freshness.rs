@@ -52,9 +52,12 @@ struct GateHeadsMeta {
 
 /// wave.toml representation.
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(
+    dead_code,
+    reason = "forward declaration for wave.toml deserialization"
+)]
 struct WaveFile {
     wave: WaveSection,
-    #[allow(dead_code, reason = "serde-populated; gates section not yet consumed")]
     #[serde(default)]
     gates: Option<GatesSection>,
 }
@@ -62,7 +65,7 @@ struct WaveFile {
 #[derive(Debug, Serialize, Deserialize)]
 #[allow(
     dead_code,
-    reason = "serde-populated via WaveFile; fields not yet consumed"
+    reason = "forward declaration for wave.toml deserialization"
 )]
 struct GatesSection {
     #[serde(default)]
@@ -385,4 +388,5 @@ source_path = "primals/bearDog"
         assert!(prov.installed_at.is_none());
         assert!(prov.binary_blake3.is_none());
     }
+
 }

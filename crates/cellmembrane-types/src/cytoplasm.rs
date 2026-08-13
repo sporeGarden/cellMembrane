@@ -244,10 +244,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
 /// Derived from [`MESH_REGISTRY`]. Used as a fallback when the ecosystem
 /// manifest is unavailable.
 #[must_use]
-#[allow(
-    deprecated,
-    reason = "wraps deprecated MESH_REGISTRY bootstrap fallback"
-)]
+#[allow(deprecated)]
 pub fn known_mesh_gates() -> Vec<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -274,10 +271,7 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
 /// Derived from [`MESH_REGISTRY`]. Includes gates using any transport
 /// (`WireGuard`, ADB, LAN-only).
 #[must_use]
-#[allow(
-    deprecated,
-    reason = "wraps deprecated MESH_REGISTRY bootstrap fallback"
-)]
+#[allow(deprecated)]
 pub fn known_gates() -> Vec<&'static str> {
     MESH_REGISTRY.iter().map(|e| e.name).collect()
 }
@@ -305,10 +299,7 @@ pub const KNOWN_GATES: &[&str] = &[
 /// At runtime, prefer [`mesh_address_from_topology`] or
 /// `EcosystemManifest::mesh_ip_for()` from `membrane-shadow`.
 #[must_use]
-#[allow(
-    deprecated,
-    reason = "wraps deprecated MESH_REGISTRY bootstrap fallback"
-)]
+#[allow(deprecated)]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -322,10 +313,7 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
 /// `ecosystem_manifest.toml` `[gates.<name>] lan_ip`. Used by songBird for
 /// local-priority routing when gates share a `MikroTik` switch.
 #[must_use]
-#[allow(
-    deprecated,
-    reason = "wraps deprecated MESH_REGISTRY bootstrap fallback"
-)]
+#[allow(deprecated)]
 pub fn lan_address(gate_name: &str) -> Option<&'static str> {
     MESH_REGISTRY
         .iter()
