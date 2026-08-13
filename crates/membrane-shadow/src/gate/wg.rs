@@ -81,7 +81,9 @@ pub(super) async fn wg_keygen_phase(dry_run: bool) -> BootstrapPhase {
         };
     }
 
-    let _ = cellmembrane_types::PlatformAccess::Restricted.apply(&existing);
+    if let Err(e) = cellmembrane_types::PlatformAccess::Restricted.apply(&existing) {
+        tracing::warn!(path = %existing.display(), %e, "wg keygen: cannot restrict private key permissions");
+    }
 
     let pubkey = derive_wg_pubkey(&private_key).await;
     BootstrapPhase {

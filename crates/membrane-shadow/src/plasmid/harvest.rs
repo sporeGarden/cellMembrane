@@ -24,7 +24,6 @@ use super::harvest_manifest::{
 use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
-
 /// Parsed CLI arguments for `plasmid.harvest`.
 #[allow(
     clippy::struct_excessive_bools,
@@ -573,7 +572,9 @@ async fn harvest_one(
     match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
             if resolved.cleanup {
-                let _ = tokio::fs::remove_dir_all(source_dir).await;
+                if let Err(e) = tokio::fs::remove_dir_all(source_dir).await {
+                    tracing::debug!(%primal, %e, "post-harvest source dir cleanup");
+                }
             }
             let mode = if local { "local" } else { "clone" };
             HarvestResult {

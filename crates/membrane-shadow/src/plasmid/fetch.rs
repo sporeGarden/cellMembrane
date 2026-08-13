@@ -480,7 +480,9 @@ async fn fetch_primals(
             continue;
         }
 
-        let _ = tokio::fs::remove_file(&local_path).await;
+        if let Err(e) = tokio::fs::remove_file(&local_path).await {
+            tracing::debug!(%primal, path = %local_path.display(), %e, "pre-fetch binary removal");
+        }
 
         if !download_with_retry(primal, arch, tag, &local_path, args, config).await {
             results.push(FetchResult {
@@ -500,7 +502,9 @@ async fn fetch_primals(
                     path = %local_path.display(),
                     "BLAKE3 verification FAILED — removing tampered/corrupt binary"
                 );
-                let _ = tokio::fs::remove_file(&local_path).await;
+                if let Err(e) = tokio::fs::remove_file(&local_path).await {
+                    tracing::debug!(%primal, path = %local_path.display(), %e, "removal of verification-failed binary");
+                }
                 results.push(FetchResult {
                     primal: (*primal).to_string(),
                     status: FetchStatus::VerificationFailed,

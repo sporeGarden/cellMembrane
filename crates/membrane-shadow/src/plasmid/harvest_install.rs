@@ -136,7 +136,9 @@ fn atomic_copy_binaries(
                 }
                 Err(e) => {
                     failed.push(format!("{primal}: rename failed — {e}"));
-                    let _ = std::fs::remove_file(&tmp);
+                    if let Err(e) = std::fs::remove_file(&tmp) {
+                        tracing::debug!(%primal, path = %tmp.display(), %e, "tmp cleanup after failed rename");
+                    }
                 }
             },
             Err(e) => {

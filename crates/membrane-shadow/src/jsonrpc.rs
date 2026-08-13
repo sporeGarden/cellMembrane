@@ -94,7 +94,9 @@ async fn notify_over_stream(
         .await
         .map_err(|e| rpc_err(format_args!("newline: {e}")))?;
 
-    let _ = writer.shutdown().await;
+    if let Err(e) = writer.shutdown().await {
+        tracing::debug!(%e, "notify writer shutdown (non-fatal)");
+    }
     Ok(())
 }
 

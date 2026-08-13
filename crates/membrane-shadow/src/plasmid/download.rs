@@ -136,7 +136,9 @@ pub(super) async fn cleanup_partial_downloads(bin_dir: &Path) {
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("tmp") {
-            let _ = tokio::fs::remove_file(&path).await;
+            if let Err(e) = tokio::fs::remove_file(&path).await {
+                tracing::debug!(path = %path.display(), %e, "partial download cleanup");
+            }
         }
     }
 }
@@ -146,12 +148,18 @@ pub(super) async fn cleanup_partial_downloads(bin_dir: &Path) {
 /// is interrupted mid-write. Cleans up the temp file on failure.
 pub(super) async fn atomic_write(dest: &Path, data: &[u8]) -> bool {
     let tmp = dest.with_extension("tmp");
-    if tokio::fs::write(&tmp, data).await.is_err() {
-        let _ = tokio::fs::remove_file(&tmp).await;
+    if let Err(e) = tokio::fs::write(&tmp, data).await {
+        tracing::debug!(path = %tmp.display(), %e, "atomic_write: write failed");
+        if let Err(e) = tokio::fs::remove_file(&tmp).await {
+            tracing::debug!(path = %tmp.display(), %e, "atomic_write: tmp cleanup after write failure");
+        }
         return false;
     }
-    if tokio::fs::rename(&tmp, dest).await.is_err() {
-        let _ = tokio::fs::remove_file(&tmp).await;
+    if let Err(e) = tokio::fs::rename(&tmp, dest).await {
+        tracing::debug!(src = %tmp.display(), dst = %dest.display(), %e, "atomic_write: rename failed");
+        if let Err(e) = tokio::fs::remove_file(&tmp).await {
+            tracing::debug!(path = %tmp.display(), %e, "atomic_write: tmp cleanup after rename failure");
+        }
         return false;
     }
     true

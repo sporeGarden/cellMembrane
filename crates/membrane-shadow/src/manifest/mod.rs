@@ -67,19 +67,6 @@ impl EcosystemManifest {
             .collect()
     }
 
-    /// Get local paths for a gate's repos (what cascade-pull iterates).
-    #[must_use]
-    #[allow(
-        dead_code,
-        reason = "manifest API — wired by tests, ready for consumers"
-    )]
-    pub fn gate_local_paths(&self, gate: &str) -> Vec<&str> {
-        self.gate_repos(gate)
-            .into_iter()
-            .map(|(_, entry)| entry.local_path.as_str())
-            .collect()
-    }
-
     /// Get all distinct org names from repos.
     #[must_use]
     pub fn orgs(&self) -> Vec<&str> {
@@ -89,43 +76,12 @@ impl EcosystemManifest {
         orgs
     }
 
-    /// Get repos filtered by membrane sync mode.
-    #[must_use]
-    #[allow(
-        dead_code,
-        reason = "manifest API — wired by tests, ready for consumers"
-    )]
-    pub fn repos_by_membrane(
-        &self,
-        membrane: cellmembrane_types::MembraneSyncMode,
-    ) -> Vec<(&str, &RepoEntry)> {
-        self.repos
-            .iter()
-            .filter(|(_, e)| e.membrane == membrane)
-            .map(|(name, entry)| (name.as_str(), entry))
-            .collect()
-    }
-
     /// Resolve divergence policy for a repo — per-repo override or global default.
     #[must_use]
     pub fn divergence_policy_for(&self, entry: &RepoEntry) -> DivergencePolicy {
         entry
             .divergence_policy
             .unwrap_or(self.sync.divergence_policy)
-    }
-
-    /// Build a GitHub clone URL for a repo.
-    #[must_use]
-    #[allow(
-        dead_code,
-        reason = "manifest API — wired by tests, ready for consumers"
-    )]
-    pub fn github_clone_url(entry: &RepoEntry) -> String {
-        format!(
-            "https://{}/{}.git",
-            cellmembrane_types::service::GITHUB_HOST,
-            entry.github_repo
-        )
     }
 
     /// Build a Forgejo SSH clone URL using the sync config.
@@ -170,28 +126,6 @@ impl EcosystemManifest {
             .filter(|(_, p)| p.build_authority)
             .map(|(name, _)| name.clone())
             .collect()
-    }
-
-    /// Check whether a specific gate is a build authority.
-    #[must_use]
-    #[allow(
-        dead_code,
-        reason = "manifest API — wired by tests, ready for consumers"
-    )]
-    pub fn is_build_authority(&self, gate: &str) -> bool {
-        self.build_authorities().iter().any(|g| g == gate)
-    }
-
-    /// Check whether a specific gate is the *primary* build authority (first in list).
-    ///
-    /// The primary builder compiles locally; non-primary gates delegate via mesh.
-    #[must_use]
-    #[allow(
-        dead_code,
-        reason = "manifest API — wired by tests, ready for consumers"
-    )]
-    pub fn is_primary_build_authority(&self, gate: &str) -> bool {
-        self.build_authorities().first().is_some_and(|g| g == gate)
     }
 
     /// Find gates that have a specific role in their roles list.

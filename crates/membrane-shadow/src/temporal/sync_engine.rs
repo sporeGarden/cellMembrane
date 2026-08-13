@@ -16,7 +16,10 @@ use crate::git_ops::{git_output as git, git_success as git_ok};
 use cellmembrane_types::PushTarget;
 
 /// Files that are machine-generated and safely discardable before a pull.
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "includes deprecated FRESHNESS_FILE for pull-discard compatibility"
+)]
 pub(super) const REGENERABLE_METADATA: &[&str] = &[
     cellmembrane_types::service::CHECKSUMS_FILE,
     cellmembrane_types::service::PROVENANCE_FILE,

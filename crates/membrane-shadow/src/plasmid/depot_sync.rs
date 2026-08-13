@@ -415,6 +415,8 @@ async fn push_single_binary(
 /// CAS archival (G69 Phase 3) is wired. The log lives alongside the depot and
 /// can be ingested into loamSpine spines later.
 fn record_lineage_event(binary: &str, arch: &str, old_blake3: &str, new_blake3: &str) {
+    use std::io::Write;
+
     let depot = super::harvest::resolve_depot(None).unwrap_or_default();
     let log_path = depot.join("lineage.jsonl");
     let gate = crate::gate::resolve_local_gate_identity();
@@ -430,14 +432,15 @@ fn record_lineage_event(binary: &str, arch: &str, old_blake3: &str, new_blake3: 
         "timestamp": now,
     });
 
-    use std::io::Write;
     match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_path)
     {
         Ok(mut f) => {
-            let _ = writeln!(f, "{}", entry);
+            if let Err(e) = writeln!(f, "{entry}") {
+                tracing::debug!(%e, "lineage: write failed");
+            }
         }
         Err(e) => {
             tracing::warn!(error = %e, "lineage: failed to write event to {}", log_path.display());

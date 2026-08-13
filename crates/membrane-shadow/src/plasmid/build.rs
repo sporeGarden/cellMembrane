@@ -140,7 +140,9 @@ async fn build_one(
 
     match stage_to_depot_async(primal, &bin_path, depot_dir, target).await {
         Ok((size, blake3)) => {
-            let _ = tokio::fs::remove_dir_all(&clone_dir).await;
+            if let Err(e) = tokio::fs::remove_dir_all(&clone_dir).await {
+                tracing::debug!(%primal, path = %clone_dir.display(), %e, "post-build clone dir cleanup");
+            }
             let mut result = HarvestResult::new(
                 primal,
                 HarvestStatus::Built,

@@ -97,7 +97,9 @@ pub(crate) async fn spin_up_with_deps(
     let sandbox_binary = bin_dir.join(format!("{}-{commit_short}", args.primal));
     let socket_path = socket_dir.join(format!("{}-{commit_short}.sock", args.primal));
 
-    let _ = tokio::fs::remove_file(&socket_path).await;
+    if let Err(e) = tokio::fs::remove_file(&socket_path).await {
+        tracing::debug!(primal = %args.primal, path = %socket_path.display(), %e, "pre-sandbox stale socket cleanup");
+    }
     super::stage_binary(&args.binary_path, &sandbox_binary).await?;
 
     let extra_args: Vec<(&str, &std::path::Path)> = security_socket
@@ -181,8 +183,12 @@ pub(crate) async fn teardown(instance: &SandboxInstance) {
         super::graceful_kill(pid, cellmembrane_types::service::DEFAULT_RESTART_SETTLE_MS).await;
     }
 
-    let _ = tokio::fs::remove_file(&instance.socket_path).await;
-    let _ = tokio::fs::remove_file(&instance.binary_path).await;
+    if let Err(e) = tokio::fs::remove_file(&instance.socket_path).await {
+        tracing::debug!(primal = %instance.primal, path = %instance.socket_path.display(), %e, "sandbox socket teardown");
+    }
+    if let Err(e) = tokio::fs::remove_file(&instance.binary_path).await {
+        tracing::debug!(primal = %instance.primal, path = %instance.binary_path.display(), %e, "sandbox binary teardown");
+    }
 }
 
 /// Full validation cycle: spin up → probe → teardown → return result.

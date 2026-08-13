@@ -1,13 +1,27 @@
 # Glacial Shift Tracker
 
 **Purpose:** Track cellMembrane's progress toward stadial entry (glacial shift).
-**Last updated:** 2026-08-11 (Wave 157i deep debt sweep: error context + self-knowledge purge + I/O visibility)
+**Last updated:** 2026-08-13 (Wave 157k deep debt sweep: I/O visibility + dead code purge + arch legacy extraction)
 **Overall status:** STADIAL-READY — Zero P1, S1-S4 GRADUATED, 7-node WG mesh, deterministic deployment CODIFIED, SIGN-01 depot signing landed, OS Atheism Phase 1+2 shipped, `gate.enroll` automated mesh enrollment + hub-side peer addition, subdomain standard adopted (`prefix.primals.eco`), sovereign depot auto-build pipeline (4-phase), depot provenance builder attribution + multi-target harvest + staleness alarm (Wave 151a), ALL 8 GLACIAL CRITERIA CLEAR
 **Full wave-by-wave history:** `infra/fossilRecord/cellMembrane/GLACIAL_SHIFT_TRACKER_FULL_HISTORY_wave142b.md`
 
 ---
 
 ## Recent Waves
+
+**Wave 157k (deep debt sweep: I/O visibility + dead code purge + arch legacy extraction):**
+I/O visibility: remaining 15 production `let _ =` on fallible I/O replaced with
+`if let Err(e)` + tracing (build/harvest dir cleanup, canary/sandbox socket & binary
+teardown, download partial/atomic cleanup, fetch binary removal, WG keygen permissions,
+jsonrpc notify shutdown, lineage event write). Dead code purge: 5 zero-caller manifest
+API methods deleted (`gate_local_paths`, `repos_by_membrane`, `github_clone_url`,
+`is_build_authority`, `is_primary_build_authority`). `WaveFile` dead_code narrowed from
+struct-level to field-level. Annotation hygiene: 6 bare `#[allow(deprecated)]` in
+`cytoplasm.rs` + `sync_engine.rs` given `reason` strings. Smart refactor: deprecated
+`TargetArch` legacy shim extracted from `arch.rs` (675L) to `arch/legacy.rs` (210L),
+reducing `arch/mod.rs` to 478L. `depot_sync.rs` clippy: items-after-statements +
+uninlined format args fixed, `let _ = writeln!` replaced with error-logging write.
+Zero new warnings, 1355 tests pass.
 
 **Wave 157i (deep debt sweep: error context + self-knowledge purge + I/O visibility):**
 Error context preservation: all 11 remaining `map_err(|_|` patterns (jsonrpc timeouts,

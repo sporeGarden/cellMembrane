@@ -86,7 +86,9 @@ pub(crate) async fn retire_to_canary(
         primal,
     ));
 
-    let _ = tokio::fs::remove_file(&socket_path).await;
+    if let Err(e) = tokio::fs::remove_file(&socket_path).await {
+        tracing::debug!(%primal, path = %socket_path.display(), %e, "pre-promote stale socket cleanup");
+    }
     super::stage_binary(old_binary, &canary_binary).await?;
     let child = super::spawn_primal_server(&canary_binary, &socket_path, &[])?;
 
@@ -350,7 +352,9 @@ async fn kill_canary(slot: &CanarySlot) {
         super::graceful_kill(pid, 300).await;
     }
 
-    let _ = tokio::fs::remove_file(&slot.socket_path).await;
+    if let Err(e) = tokio::fs::remove_file(&slot.socket_path).await {
+        tracing::debug!(primal = %slot.primal, path = %slot.socket_path.display(), %e, "canary socket cleanup");
+    }
 }
 
 async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
