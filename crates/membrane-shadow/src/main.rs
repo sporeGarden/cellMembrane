@@ -140,6 +140,23 @@ Webhook (push-driven cascade):
   webhook.verify <body> --signature <hex>
                                    Verify HMAC-SHA256 signature (requires MEMBRANE_WEBHOOK_SECRET)
 
+Experiment (provenance trio experiment suite):
+  experiment.break                 Tamper detection — corrupt CAS, verify detects, restore
+  experiment.rebraid               Delete + recreate braid cycle, verify determinism
+  experiment.falsify               Inject fabricated braid, verify rejection
+  experiment.audit [--limit N]     Estate-wide integrity sweep (default: 100 braids)
+  experiment.reward                Attribution chain + contributor reward scoring
+  experiment.export [--dataset D]  W3C PROV-O + RO-Crate + BagIt + DataCite export
+  experiment.translate [--dataset D]  Braid to paper-ready provenance statement
+  experiment.compress              Meta-braid aggregation across estate
+  experiment.dehydrate             DAG dehydration/rehydration + merkle proofs (rhizoCrypt)
+  experiment.spine                 Spine ops, inclusion proofs, certificates (loamSpine)
+  experiment.encrypt               Encrypt/decrypt round-trip: Ed25519+ChaCha20+AES-256 (bearDog)
+  experiment.zfs                   ZFS pool/dataset/snapshot lifecycle (nestGate)
+  experiment.compose               Cross-primal pipeline: hash→store→DAG→sign→braid
+  experiment.inventory             Full primal capability inventory + health
+  experiment.all                   Run all 14 experiments in sequence
+
 Caddy (outer membrane TLS / reverse proxy):
   caddy.status                     Service health and vhost count
   caddy.vhosts                     List configured vhosts

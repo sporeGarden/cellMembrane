@@ -21,6 +21,7 @@ mod deploy_dispatch;
 mod dispatch_harvest;
 mod dispatch_validate;
 mod dispatch_webhook;
+mod experiment_dispatch;
 mod gate;
 mod gate_configure;
 mod gate_keys;
@@ -158,6 +159,9 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("tower.") => crate::tower::dispatch(config, cmd, args).await,
         c if c.starts_with("gateway.") => crate::gateway::dispatch(config, cmd, args).await,
         c if c.starts_with("harvest.") => dispatch_harvest::dispatch_harvest(cmd, args).await,
+        c if c.starts_with("experiment.") => {
+            experiment_dispatch::dispatch_experiment(cmd, args).await
+        }
         c if c.starts_with("webhook.") => {
             dispatch_webhook::dispatch_webhook(config, cmd, args).await
         }
