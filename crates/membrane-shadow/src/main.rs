@@ -87,6 +87,17 @@ Content Braiding (provenance trio — replaces native_braid.py):
   content.braid <path> [--only ds1,ds2] [--skip ds3] [--dry-run] [--incremental]
                                    Braid dataset(s) through nestGate→rhizoCrypt→loamSpine→sweetGrass
 
+AlphaFold Ingestion (full Neural API pipeline — replaces alphafold_full_sync.sh):
+  alphafold.ingest [--phase a|b|c|all] [--batch-size 500] [--rate-limit-mbps 200]
+                   [--checkpoint-interval 50000] [--dry-run] [--resume]
+                   [--concurrency 4] [--skip-braided]
+                                   Ingest AlphaFold DB (~23 TB) through biomeOS Neural API
+                                   Phase A: proteome tars (on-disk, content.ingest)
+                                   Phase B: expanded structures (on-disk, per-bucket content.ingest)
+                                   Phase C: remote EBI fetch (content.fetch + braid at ingress)
+  alphafold.status                 Show ingestion progress across all phases
+  alphafold.manifest               Display AlphaFold manifest (accession count, tars, buckets)
+
 Context — sweetGrass-external braids (developer state weaving):
   context.weave --project <path> --summary <text>  Weave a context braid
   context.sense [--gate <gate>] [--project <path>] [--all]  Sense context

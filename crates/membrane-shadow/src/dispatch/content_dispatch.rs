@@ -392,8 +392,7 @@ async fn braid_dataset(
             "content",
             "ingest",
             serde_json::json!({
-                "path": dataset.path.to_string_lossy(),
-                "recursive": true,
+                "directory": dataset.path.to_string_lossy(),
             }),
         )
         .await;
@@ -409,12 +408,14 @@ async fn braid_dataset(
     };
 
     let file_count = manifest
-        .get("file_count")
+        .get("count")
+        .or_else(|| manifest.get("file_count"))
         .or_else(|| manifest.get("files"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
     let byte_count = manifest
-        .get("total_bytes")
+        .get("bytes_total")
+        .or_else(|| manifest.get("total_bytes"))
         .or_else(|| manifest.get("bytes"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
@@ -527,6 +528,7 @@ async fn braid_dataset(
             "create",
             serde_json::json!({
                 "name": dataset.name,
+                "owner": COMMITTER_DID,
                 "committer": COMMITTER_DID,
             }),
         )
