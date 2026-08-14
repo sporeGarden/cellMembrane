@@ -26,7 +26,7 @@ const JSONRPC_ONLY: &[IpcProtocol] = &[IpcProtocol::JsonRpc];
 
 const BEARDOG: MembraneService = MembraneService {
     binary: "beardog",
-    systemd_unit: "beardog-membrane.service",
+    systemd_unit: "membrane-beardog.service",
     port: None,
     protocol: Protocol::Uds,
     has_socket: true,
@@ -48,7 +48,7 @@ const BEARDOG: MembraneService = MembraneService {
 
 const SONGBIRD: MembraneService = MembraneService {
     binary: "songbird",
-    systemd_unit: "songbird-relay.service",
+    systemd_unit: "songbird-gateway.service",
     port: Some(DEFAULT_TURN_PORT),
     protocol: Protocol::TcpAndUdp,
     has_socket: false,
@@ -74,7 +74,7 @@ const SONGBIRD: MembraneService = MembraneService {
 
 const SKUNKBAT: MembraneService = MembraneService {
     binary: "skunkbat",
-    systemd_unit: "skunkbat-membrane.service",
+    systemd_unit: "membrane-skunkbat.service",
     port: Some(DEFAULT_SKUNKBAT_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
@@ -98,7 +98,7 @@ const SKUNKBAT: MembraneService = MembraneService {
 
 const NESTGATE: MembraneService = MembraneService {
     binary: "nestgate",
-    systemd_unit: "nestgate-membrane.service",
+    systemd_unit: "membrane-nestgate.service",
     port: Some(DEFAULT_NESTGATE_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
@@ -123,7 +123,7 @@ const NESTGATE: MembraneService = MembraneService {
 
 const RHIZOCRYPT: MembraneService = MembraneService {
     binary: "rhizocrypt",
-    systemd_unit: "rhizocrypt-membrane.service",
+    systemd_unit: "membrane-rhizocrypt.service",
     port: Some(DEFAULT_RHIZOCRYPT_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
@@ -149,7 +149,7 @@ const RHIZOCRYPT: MembraneService = MembraneService {
 
 const LOAMSPINE: MembraneService = MembraneService {
     binary: "loamspine",
-    systemd_unit: "loamspine-membrane.service",
+    systemd_unit: "membrane-loamspine.service",
     port: Some(DEFAULT_LOAMSPINE_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
@@ -171,7 +171,7 @@ const LOAMSPINE: MembraneService = MembraneService {
 
 const SWEETGRASS: MembraneService = MembraneService {
     binary: "sweetgrass",
-    systemd_unit: "sweetgrass-membrane.service",
+    systemd_unit: "membrane-sweetgrass.service",
     port: Some(DEFAULT_SWEETGRASS_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,
@@ -195,7 +195,7 @@ const SWEETGRASS: MembraneService = MembraneService {
 
 const TOADSTOOL: MembraneService = MembraneService {
     binary: "toadstool",
-    systemd_unit: "toadstool-membrane.service",
+    systemd_unit: "membrane-toadstool.service",
     port: None,
     protocol: Protocol::Uds,
     has_socket: true,
@@ -217,7 +217,7 @@ const TOADSTOOL: MembraneService = MembraneService {
 
 const BARRACUDA: MembraneService = MembraneService {
     binary: "barracuda",
-    systemd_unit: "barracuda-membrane.service",
+    systemd_unit: "membrane-barracuda.service",
     port: None,
     protocol: Protocol::Uds,
     has_socket: true,
@@ -239,7 +239,7 @@ const BARRACUDA: MembraneService = MembraneService {
 
 const CORALREEF: MembraneService = MembraneService {
     binary: "coralreef",
-    systemd_unit: "coralreef-membrane.service",
+    systemd_unit: "membrane-coralreef.service",
     port: None,
     protocol: Protocol::Uds,
     has_socket: true,
@@ -263,7 +263,7 @@ const CORALREEF: MembraneService = MembraneService {
 
 const BIOMEOS: MembraneService = MembraneService {
     binary: "biomeos",
-    systemd_unit: "biomeos-membrane.service",
+    systemd_unit: "membrane-biomeos.service",
     port: None,
     protocol: Protocol::Uds,
     has_socket: true,
@@ -288,7 +288,7 @@ const BIOMEOS: MembraneService = MembraneService {
 
 const SQUIRREL: MembraneService = MembraneService {
     binary: "squirrel",
-    systemd_unit: "squirrel-membrane.service",
+    systemd_unit: "membrane-squirrel.service",
     port: None,
     protocol: Protocol::Uds,
     has_socket: true,
@@ -310,7 +310,7 @@ const SQUIRREL: MembraneService = MembraneService {
 
 const PETALTONGUE: MembraneService = MembraneService {
     binary: "petaltongue",
-    systemd_unit: "petaltongue-membrane.service",
+    systemd_unit: "membrane-petaltongue.service",
     port: Some(DEFAULT_PETALTONGUE_PORT),
     protocol: Protocol::Tcp,
     has_socket: true,

@@ -418,9 +418,9 @@ async fn push_single_binary(
 /// the only copy of old binaries. The flow:
 ///   new binary ready → archive old to CAS → overwrite on golgiBody
 ///
-/// CAS targets (future): ironGate 14TB NFT braid, westGate 50.7TB ZFS.
-/// For now, archives to the foreman's local CAS directory. The lineage.jsonl
-/// log records the mapping so we can always find old generations.
+/// CAS archival with replication to ironGate (12TB at /mnt/nestgate/cas).
+/// Archives to the foreman's local CAS directory first, then replicates
+/// to configured CAS nodes. The lineage.jsonl log records every mapping.
 async fn archive_old_binary_to_cas(
     config: &crate::ShadowConfig,
     remote_path: &str,
@@ -441,6 +441,7 @@ async fn archive_old_binary_to_cas(
     let cas_path = cas_dir.join(old_blake3);
     if cas_path.exists() {
         tracing::debug!(binary, blake3 = old_blake3, "cas: already archived (dedup hit)");
+        replicate_to_cas_nodes(&cas_path, arch, old_blake3).await;
         return;
     }
 
@@ -456,6 +457,7 @@ async fn archive_old_binary_to_cas(
                             blake3 = &old_blake3[..16],
                             "cas: archived old generation before overwrite"
                         );
+                        replicate_to_cas_nodes(&cas_path, arch, old_blake3).await;
                         return;
                     }
                 } else {
@@ -474,6 +476,102 @@ async fn archive_old_binary_to_cas(
             let _ = std::fs::remove_file(&tmp_path);
         }
     }
+}
+
+/// Replicate a locally-archived CAS object to configured storage nodes.
+/// Currently: ironGate at /mnt/nestgate/cas/{arch}/{blake3}.
+/// Future: westGate ZFS, mesh-native braid replication.
+async fn replicate_to_cas_nodes(local_path: &std::path::Path, arch: &str, blake3: &str) {
+    let cas_nodes = load_cas_replication_targets();
+    for node in cas_nodes {
+        let remote_dir = format!("{}/primals/{}", node.cas_root, arch);
+        let remote_path = format!("{}/{}", remote_dir, blake3);
+
+        let check = tokio::process::Command::new("ssh")
+            .args([
+                "-o", "ConnectTimeout=5",
+                "-o", "BatchMode=yes",
+                &node.ssh_host,
+                &format!("test -f '{}' && echo EXISTS || mkdir -p '{}' && echo READY", remote_path, remote_dir),
+            ])
+            .output()
+            .await;
+
+        match check {
+            Ok(output) if output.status.success() => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if stdout.contains("EXISTS") {
+                    tracing::debug!(
+                        node = %node.gate,
+                        blake3 = &blake3[..16.min(blake3.len())],
+                        "cas-replicate: already present (dedup)"
+                    );
+                    continue;
+                }
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                tracing::warn!(
+                    node = %node.gate,
+                    error = %stderr.trim(),
+                    "cas-replicate: ssh check failed"
+                );
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!(node = %node.gate, error = %e, "cas-replicate: connect failed");
+                continue;
+            }
+        }
+
+        let scp_result = tokio::process::Command::new("scp")
+            .args([
+                "-o", "ConnectTimeout=10",
+                "-o", "BatchMode=yes",
+                &local_path.to_string_lossy(),
+                &format!("{}:{}", node.ssh_host, remote_path),
+            ])
+            .output()
+            .await;
+
+        match scp_result {
+            Ok(output) if output.status.success() => {
+                tracing::info!(
+                    node = %node.gate,
+                    arch,
+                    blake3 = &blake3[..16.min(blake3.len())],
+                    "cas-replicate: object replicated"
+                );
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                tracing::warn!(
+                    node = %node.gate,
+                    error = %stderr.trim(),
+                    "cas-replicate: scp failed"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(node = %node.gate, error = %e, "cas-replicate: scp spawn failed");
+            }
+        }
+    }
+}
+
+struct CasReplicationTarget {
+    gate: &'static str,
+    ssh_host: &'static str,
+    cas_root: &'static str,
+}
+
+/// Hardcoded for now — will move to `ecosystem_manifest.toml [cas_replication]`
+/// once westGate is enrolled and we have multiple targets.
+fn load_cas_replication_targets() -> &'static [CasReplicationTarget] {
+    &[CasReplicationTarget {
+        gate: "ironGate",
+        ssh_host: "irongate-lan",
+        cas_root: "/mnt/nestgate/cas",
+    }]
 }
 
 /// Append a lineage event to the depot lineage log (JSONL).

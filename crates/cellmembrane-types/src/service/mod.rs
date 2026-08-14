@@ -161,7 +161,7 @@ const fn const_str_eq(a: &str, b: &str) -> bool {
 pub struct MembraneService {
     /// Binary name on disk (e.g. `"beardog"`, `"songbird"`).
     pub binary: &'static str,
-    /// Systemd unit name (e.g. `"beardog-membrane.service"`).
+    /// Systemd unit name (e.g. `"membrane-beardog.service"`).
     pub systemd_unit: &'static str,
     /// Primary network port (`None` for UDS-only services).
     pub port: Option<u16>,
