@@ -335,6 +335,10 @@ fn mark_all_unverified(heads: &BTreeMap<String, String>, reason: &str) -> Vec<So
 /// Tries local Identity capability first (finds `neural-api-default.sock` or
 /// `biomeos.sock`), then cross-gate resolution via manifest roles. Returns
 /// `None` if no reachable endpoint exists — the caller should degrade gracefully.
+pub(crate) fn resolve_neural_api_endpoint_public() -> Option<cellmembrane_types::TransportEndpoint> {
+    resolve_neural_api_endpoint()
+}
+
 fn resolve_neural_api_endpoint() -> Option<cellmembrane_types::TransportEndpoint> {
     let ctx = crate::resolve::ResolutionContext::from_env();
 

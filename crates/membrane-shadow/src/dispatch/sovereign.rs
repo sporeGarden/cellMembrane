@@ -640,6 +640,8 @@ mod tests {
             transport: "mesh".into(),
             ssh_host: String::new(),
             membrane_bin: "membrane".into(),
+            builder_host: String::new(),
+            builder_port: None,
         };
         let ep = resolve_builder_endpoint(&entry);
         assert!(matches!(
@@ -655,6 +657,8 @@ mod tests {
             transport: "mesh".into(),
             ssh_host: String::new(),
             membrane_bin: "membrane.exe".into(),
+            builder_host: String::new(),
+            builder_port: None,
         };
         let ep = resolve_builder_endpoint(&entry);
         assert!(matches!(

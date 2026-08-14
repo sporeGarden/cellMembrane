@@ -411,6 +411,51 @@ async fn rootpulse_harvest_record(built: &[&HarvestResult], targets_built: &[Str
         ),
         Err(e) => warn!(error = %e, "rootPulse harvest commit skipped (NUCLEUS unavailable)"),
     }
+
+    record_per_entry_to_trio(&entries, &gate).await;
+}
+
+/// Record each build to rootpulse_harvest for per-target drift queries.
+async fn record_per_entry_to_trio(
+    entries: &[crate::sovereignty_ledger::HarvestProvenanceEntry],
+    gate: &str,
+) {
+    let Some(endpoint) = crate::sovereignty_ledger::resolve_neural_api_endpoint_public() else {
+        return;
+    };
+    let now = crate::utc_now_iso8601();
+
+    for entry in entries {
+        let request = crate::jsonrpc::request_with_params(
+            "graph.execute",
+            &serde_json::json!({
+                "graph_id": "rootpulse_harvest",
+                "params": {
+                    "PRIMAL_NAME": entry.primal,
+                    "TARGET_TRIPLE": entry.target,
+                    "COMMIT_SHA": entry.commit,
+                    "BLAKE3_HASH": entry.blake3,
+                    "BUILDER_GATE": gate,
+                    "BUILT_AT": now,
+                },
+            }),
+            47,
+        );
+
+        match crate::jsonrpc::call_endpoint(&endpoint, &request).await {
+            Ok(_) => tracing::debug!(
+                primal = %entry.primal,
+                target = %entry.target,
+                commit = %entry.commit,
+                "rootpulse_harvest: per-entry record stored"
+            ),
+            Err(e) => tracing::debug!(
+                primal = %entry.primal,
+                error = %e,
+                "rootpulse_harvest: per-entry record skipped"
+            ),
+        }
+    }
 }
 
 /// If any primals were built, push depot to VPS and append the result.

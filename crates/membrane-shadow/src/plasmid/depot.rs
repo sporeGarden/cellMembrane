@@ -120,9 +120,7 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
     );
 
     let mut existing_prov: BTreeMap<String, ProvenanceEntry> =
-        std::fs::read_to_string(&provenance_path)
-            .ok()
-            .and_then(|content| toml::from_str::<ProvenanceFile>(&content).ok())
+        load_provenance(depot_dir)
             .map_or_else(BTreeMap::new, |parsed| parsed.entries);
 
     for result in built {
@@ -378,7 +376,36 @@ pub(super) fn enrich_sources_from_manifest(sources: &mut BTreeMap<String, Source
 pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
     let path = depot_dir.join(cellmembrane_types::service::PROVENANCE_FILE);
     let content = std::fs::read_to_string(path).ok()?;
-    toml::from_str(&content).ok()
+
+    // Two-pass parse: serde(flatten) collides on `target` and `builder` fields
+    // shared between ProvenanceFile (top-level) and ProvenanceEntry (per-primal
+    // section). Parse raw TOML first, then build ProvenanceFile manually so
+    // per-entry fields survive.
+    let raw: toml::Value = toml::from_str(&content).ok()?;
+    let table = raw.as_table()?;
+
+    let generated = table.get("generated").and_then(|v| v.as_str()).map(String::from);
+    let builder = table.get("builder").and_then(|v| v.as_str()).map(String::from);
+    let target = table.get("target").and_then(|v| v.as_str()).map(String::from);
+    let rustc = table.get("rustc").and_then(|v| v.as_str()).map(String::from);
+
+    let mut entries = std::collections::BTreeMap::new();
+    for (key, value) in table {
+        if matches!(key.as_str(), "generated" | "builder" | "target" | "rustc") {
+            continue;
+        }
+        if let Ok(entry) = value.clone().try_into::<ProvenanceEntry>() {
+            entries.insert(key.clone(), entry);
+        }
+    }
+
+    Some(ProvenanceFile {
+        generated,
+        builder,
+        target,
+        rustc,
+        entries,
+    })
 }
 
 /// Staleness report for a single primal in the depot.
@@ -709,3 +736,43 @@ fn prune_provenance(depot_dir: &Path, known: &std::collections::HashSet<&str>) -
 #[cfg(test)]
 #[path = "depot_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod load_provenance_tests {
+    use super::*;
+
+    #[test]
+    fn two_pass_parse_preserves_target() {
+        let content = r#"
+generated = "2026-08-14T11:53:39Z"
+builder = "sporeGate"
+target = "x86_64-unknown-linux-musl"
+rustc = "rustc 1.96.1"
+
+[nestgate]
+commit = "31a31aba"
+blake3 = "ebe6d11141c96afb"
+built_at = "2026-08-13T20:46:04Z"
+target = "aarch64-unknown-linux-musl"
+builder = "sporeGate"
+generation = 2
+"#;
+
+        let raw: toml::Value = toml::from_str(content).unwrap();
+        let table = raw.as_table().unwrap();
+
+        for (key, value) in table {
+            if matches!(key.as_str(), "generated" | "builder" | "target" | "rustc") {
+                continue;
+            }
+            eprintln!("key={key} value={value:?}");
+            let entry: ProvenanceEntry = value.clone().try_into().unwrap();
+            eprintln!("  entry.target={:?}", entry.target);
+            eprintln!("  entry.commit={:?}", entry.commit);
+            eprintln!("  entry.builder={:?}", entry.builder);
+            assert_eq!(entry.target.as_deref(), Some("aarch64-unknown-linux-musl"), "target should survive");
+            assert_eq!(entry.commit.as_deref(), Some("31a31aba"));
+            assert_eq!(entry.builder.as_deref(), Some("sporeGate"));
+        }
+    }
+}

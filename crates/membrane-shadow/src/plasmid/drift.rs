@@ -17,6 +17,15 @@ pub(super) async fn has_upstream_changes(
     provenance: Option<&ProvenanceFile>,
     depot_dir: &Path,
 ) -> bool {
+    let current_target = super::detect_target_triple();
+
+    // Primary: query the provenance trio via neuralAPI for per-target authority.
+    if let Some(trio_result) = query_trio_provenance(primal, current_target).await {
+        let upstream_head = fetch_head_commit(&source.repo, depot_dir).await;
+        return upstream_head.is_none_or(|head| !commits_match(&head, &trio_result.commit));
+    }
+
+    // Fallback: flat provenance.toml (target-aware two-pass parse).
     let Some(prov) = provenance else {
         return true;
     };
@@ -27,9 +36,59 @@ pub(super) async fn has_upstream_changes(
         return true;
     };
 
+    if let Some(prov_target) = entry.target.as_deref() {
+        if prov_target != current_target {
+            tracing::info!(
+                primal,
+                prov_target,
+                current_target,
+                "provenance target mismatch — stale for this architecture"
+            );
+            return true;
+        }
+    }
+
     fetch_head_commit(&source.repo, depot_dir)
         .await
         .is_none_or(|head| !commits_match(&head, prev_commit))
+}
+
+/// Result from the provenance trio query.
+struct TrioProvenanceResult {
+    commit: String,
+}
+
+/// Query the rootpulse_harvest graph via neuralAPI for the last build
+/// of (primal, target). Returns None if the trio is unavailable or has
+/// no record — caller falls back to flat provenance.toml.
+async fn query_trio_provenance(primal: &str, target: &str) -> Option<TrioProvenanceResult> {
+    let endpoint = crate::sovereignty_ledger::resolve_neural_api_endpoint_public()?;
+
+    let request = crate::jsonrpc::request_with_params(
+        "graph.execute",
+        &serde_json::json!({
+            "graph_id": "rootpulse_harvest",
+            "params": {
+                "PRIMAL_NAME": primal,
+                "TARGET_TRIPLE": target,
+            },
+        }),
+        46,
+    );
+
+    let response = crate::jsonrpc::call_endpoint(&endpoint, &request).await.ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&response).ok()?;
+
+    if parsed.get("error").is_some() {
+        return None;
+    }
+
+    let result = parsed.get("result")?;
+    let commit = result.get("last_commit")?.as_str()?;
+
+    Some(TrioProvenanceResult {
+        commit: commit.to_string(),
+    })
 }
 
 /// Fetch HEAD from both outer (GitHub) and inner (Forgejo) membranes.
@@ -213,6 +272,13 @@ pub(super) async fn has_upstream_changes_lenient(
     let Some(prev_commit) = entry.commit.as_deref() else {
         return true;
     };
+
+    let current_target = super::detect_target_triple();
+    if let Some(prov_target) = entry.target.as_deref() {
+        if prov_target != current_target {
+            return true;
+        }
+    }
 
     fetch_head_commit(&source.repo, depot_dir)
         .await
