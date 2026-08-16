@@ -252,7 +252,11 @@ pub(crate) async fn health_sweep(arch: &str) -> super::ProbeResult {
             HealthCheckMethod::DnsProbe => probe_dns(),
             HealthCheckMethod::SocketExists => {
                 let paths = resolve_primal_socket_paths(primal);
-                paths.iter().any(|p| Path::new(p).exists())
+                if paths.iter().any(|p| Path::new(p).exists()) {
+                    true
+                } else {
+                    try_tcp_health_probe(primal).await
+                }
             }
             HealthCheckMethod::SystemdActive => {
                 let unit = svc.map_or_else(
@@ -348,7 +352,42 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
         }
     }
 
-    false
+    try_tcp_health_probe(primal).await
+}
+
+/// TCP JSON-RPC health fallback for platforms without UDS (Windows, NamedPipe-absent).
+///
+/// Checks the service registry for a known TCP port, then sends the standard
+/// health request over `TransportEndpoint::Tcp { 127.0.0.1, port }`. This
+/// mirrors the `builder.serve` pattern already used by sub-builders on port 9800.
+async fn try_tcp_health_probe(primal: &str) -> bool {
+    let svc = cellmembrane_types::MembraneService::for_binary(primal);
+    let Some(port) = svc.and_then(|s| s.port) else {
+        return false;
+    };
+
+    let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+        host: cellmembrane_types::service::BIND_LOOPBACK.into(),
+        port,
+    };
+    let request = crate::jsonrpc::HEALTH_REQUEST;
+
+    match crate::jsonrpc::call_endpoint(&endpoint, request).await {
+        Ok(response) => {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response) {
+                if json.get("result").is_some() || json.get("error").is_some() {
+                    tracing::debug!(
+                        primal = %primal,
+                        port,
+                        "health: TCP fallback succeeded"
+                    );
+                    return true;
+                }
+            }
+            false
+        }
+        Err(_) => false,
+    }
 }
 
 /// Fallback: detect running process via /proc/*/comm (no external deps).
@@ -507,7 +546,22 @@ mod tests {
         assert!(!probe_https("nonexistent-primal-xyz"));
     }
 
-    #[test]
+    #[tokio::test]
+    async fn tcp_fallback_no_port_returns_false() {
+        assert!(
+            !try_tcp_health_probe("beardog").await,
+            "beardog has no TCP port — should return false"
+        );
+    }
+
+    #[tokio::test]
+    async fn tcp_fallback_unknown_primal_returns_false() {
+        assert!(
+            !try_tcp_health_probe("nonexistent-primal-xyz").await,
+            "unknown primal has no registry entry — should return false"
+        );
+    }
+
     fn health_method_registry_wiring() {
         use cellmembrane_types::service::capability::HealthCheckMethod;
         let caddy = cellmembrane_types::MembraneService::for_binary("caddy");
