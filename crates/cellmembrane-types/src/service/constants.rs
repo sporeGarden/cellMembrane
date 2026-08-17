@@ -704,6 +704,15 @@ pub const DEFAULT_FOOTPRINT_BIND: &str = "127.0.0.1:8090";
 /// Default footPrint content port for health checks.
 pub const DEFAULT_FOOTPRINT_PORT: u16 = 8090;
 
+/// TCP health ports for primals that primarily use UDS.
+/// These enable the TCP fallback path on platforms without UDS (Windows).
+pub const DEFAULT_BEARDOG_PORT: u16 = 9110;
+pub const DEFAULT_TOADSTOOL_PORT: u16 = 9210;
+pub const DEFAULT_BARRACUDA_PORT: u16 = 9220;
+pub const DEFAULT_CORALREEF_PORT: u16 = 9230;
+pub const DEFAULT_BIOMEOS_PORT: u16 = 9300;
+pub const DEFAULT_SQUIRREL_PORT: u16 = 9310;
+
 // ── Domain names ─────────────────────────────────────────────────────
 
 /// Default git hosting domain.

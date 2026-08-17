@@ -8,12 +8,14 @@
 //! capabilities, and composition tiers.
 
 use super::{
-    BIND_ALL, BIND_LOOPBACK, DEFAULT_DNS_PORT, DEFAULT_FEDERATION_PORT, DEFAULT_FORGEJO_SSH_PORT,
+    BIND_ALL, BIND_LOOPBACK, DEFAULT_BARRACUDA_PORT, DEFAULT_BEARDOG_PORT, DEFAULT_BIOMEOS_PORT,
+    DEFAULT_CORALREEF_PORT, DEFAULT_DNS_PORT, DEFAULT_FEDERATION_PORT, DEFAULT_FORGEJO_SSH_PORT,
     DEFAULT_HTTPS_PORT, DEFAULT_LOAMSPINE_PORT, DEFAULT_NESTGATE_PORT,
     DEFAULT_PETALTONGUE_PORT, DEFAULT_RHIZOCRYPT_PORT, DEFAULT_RHIZOCRYPT_SECONDARY_PORT,
-    DEFAULT_SHADOW_PORT, DEFAULT_SKUNKBAT_PORT, DEFAULT_SWEETGRASS_PORT, DEFAULT_TURN_PORT,
-    HealthCheckMethod, IpcProtocol, MembraneService, Protocol, RUSTDESK_HBBR_PORT,
-    RUSTDESK_HBBS_NAT_PORT, RUSTDESK_HBBS_PORT, ServerContract, ServiceCapability, TransportMode,
+    DEFAULT_SHADOW_PORT, DEFAULT_SKUNKBAT_PORT, DEFAULT_SQUIRREL_PORT, DEFAULT_SWEETGRASS_PORT,
+    DEFAULT_TOADSTOOL_PORT, DEFAULT_TURN_PORT, HealthCheckMethod, IpcProtocol, MembraneService,
+    Protocol, RUSTDESK_HBBR_PORT, RUSTDESK_HBBS_NAT_PORT, RUSTDESK_HBBS_PORT, ServerContract,
+    ServiceCapability, TransportMode,
 };
 use crate::composition::MembraneComposition;
 
@@ -27,7 +29,7 @@ const JSONRPC_ONLY: &[IpcProtocol] = &[IpcProtocol::JsonRpc];
 const BEARDOG: MembraneService = MembraneService {
     binary: "beardog",
     systemd_unit: "membrane-beardog.service",
-    port: None,
+    port: Some(DEFAULT_BEARDOG_PORT),
     protocol: Protocol::Uds,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -196,7 +198,7 @@ const SWEETGRASS: MembraneService = MembraneService {
 const TOADSTOOL: MembraneService = MembraneService {
     binary: "toadstool",
     systemd_unit: "membrane-toadstool.service",
-    port: None,
+    port: Some(DEFAULT_TOADSTOOL_PORT),
     protocol: Protocol::Uds,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -218,7 +220,7 @@ const TOADSTOOL: MembraneService = MembraneService {
 const BARRACUDA: MembraneService = MembraneService {
     binary: "barracuda",
     systemd_unit: "membrane-barracuda.service",
-    port: None,
+    port: Some(DEFAULT_BARRACUDA_PORT),
     protocol: Protocol::Uds,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -240,7 +242,7 @@ const BARRACUDA: MembraneService = MembraneService {
 const CORALREEF: MembraneService = MembraneService {
     binary: "coralreef",
     systemd_unit: "membrane-coralreef.service",
-    port: None,
+    port: Some(DEFAULT_CORALREEF_PORT),
     protocol: Protocol::Uds,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -264,7 +266,7 @@ const CORALREEF: MembraneService = MembraneService {
 const BIOMEOS: MembraneService = MembraneService {
     binary: "biomeos",
     systemd_unit: "membrane-biomeos.service",
-    port: None,
+    port: Some(DEFAULT_BIOMEOS_PORT),
     protocol: Protocol::Uds,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
@@ -289,7 +291,7 @@ const BIOMEOS: MembraneService = MembraneService {
 const SQUIRREL: MembraneService = MembraneService {
     binary: "squirrel",
     systemd_unit: "membrane-squirrel.service",
-    port: None,
+    port: Some(DEFAULT_SQUIRREL_PORT),
     protocol: Protocol::Uds,
     has_socket: true,
     protocols: DUAL_PROTOCOL,
