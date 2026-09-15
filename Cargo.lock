@@ -333,6 +333,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hex",
  "hmac",
+ "ring",
  "rustls",
  "serde",
  "serde_json",
