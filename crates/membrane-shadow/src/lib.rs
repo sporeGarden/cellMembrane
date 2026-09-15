@@ -84,6 +84,7 @@ pub(crate) mod provision;
 pub(crate) mod relay;
 pub(crate) mod resolve;
 pub(crate) mod ribocipher;
+pub(crate) mod seo;
 pub mod service;
 pub(crate) mod sovereignty_ledger;
 pub(crate) mod ssh;

@@ -205,6 +205,13 @@ impl RequestBuilder {
         self.header("Authorization", format!("Bearer {token}"))
     }
 
+    /// Set a raw byte body (caller manages Content-Type).
+    #[must_use]
+    pub fn raw_body(mut self, bytes: Vec<u8>) -> Self {
+        self.body = Some(bytes);
+        self
+    }
+
     /// Serialize `body` as JSON and set `Content-Type: application/json`.
     #[must_use]
     pub fn json<T: serde::Serialize>(mut self, body: &T) -> Self {

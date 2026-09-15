@@ -125,6 +125,7 @@ pub(super) async fn run_post_sync_phases(
         run_depot_staleness_and_fetch(do_harvest, opts.restart_updated, lines).await;
         run_content_rebuild_if_needed(root, lines).await;
         check_content_health(root, lines).await;
+        run_seo_probe(lines).await;
         run_gate_hygiene(lines).await;
     }
 
@@ -209,6 +210,18 @@ async fn delegate_harvest_to_primary(
                 lines.push("  [delegate] local fallback harvest completed".into());
             }
         }
+    }
+}
+
+/// SEO probe — check indexing health after content rebuild.
+///
+/// Runs the `seo.cascade` probe, which attempts the Python agent first
+/// (jelly string) then falls back to pure-Rust GSC client. Non-fatal:
+/// probe failures are logged but never block the cascade.
+async fn run_seo_probe(lines: &mut Vec<String>) {
+    let probe = crate::seo::cascade_probe().await;
+    if !probe.is_empty() {
+        lines.push(probe);
     }
 }
 
