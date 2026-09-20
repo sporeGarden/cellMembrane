@@ -315,24 +315,29 @@ pub async fn status_report(client: &GscClient, days: u32) -> Result<String> {
     Ok(serde_json::to_string_pretty(&report)?)
 }
 
-/// Submit sitemap for `seo.submit`.
+/// Submit all sitemaps for `seo.submit`.
 #[cfg(feature = "http")]
 pub async fn submit_sitemap(client: &GscClient) -> Result<String> {
     let prop = urlencod(super::GSC_PROPERTY);
-    let sitemap = urlencod(super::SITEMAP_URL);
-    let path = format!(
-        "/webmasters/v3/sites/{prop}/sitemaps/{sitemap}"
-    );
-    // PUT with empty body submits the sitemap
-    let url = format!("{GSC_API_BASE}{path}");
     let http = crate::http_client(API_TIMEOUT)?;
-    http.put(&url)
-        .header("Authorization", &format!("Bearer {}", client.access_token))
-        .send()
-        .await
-        .map_err(|e| ShadowError::config(format!("GSC submit sitemap: {e}")))?;
+    let mut results = Vec::new();
 
-    Ok(format!("sitemap submitted: {}", super::SITEMAP_URL))
+    for sm_url in super::SITEMAP_URLS {
+        let sitemap = urlencod(sm_url);
+        let path = format!("/webmasters/v3/sites/{prop}/sitemaps/{sitemap}");
+        let url = format!("{GSC_API_BASE}{path}");
+        match http
+            .put(&url)
+            .header("Authorization", &format!("Bearer {}", client.access_token))
+            .send()
+            .await
+        {
+            Ok(_) => results.push(format!("submitted: {sm_url}")),
+            Err(e) => results.push(format!("FAILED: {sm_url} — {e}")),
+        }
+    }
+
+    Ok(results.join("; "))
 }
 
 /// Inspect a URL for `seo.inspect`.

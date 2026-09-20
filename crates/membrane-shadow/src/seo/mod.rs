@@ -29,8 +29,11 @@ const DEFAULT_CREDENTIALS_PATH: &str = "/opt/ecoPrimals/credentials/gsc-service-
 /// GSC property identifier (domain property covers all subdomains).
 const GSC_PROPERTY: &str = "sc-domain:primals.eco";
 
-/// Sitemap URL to submit/query.
-const SITEMAP_URL: &str = "https://sporeprint.primals.eco/sitemap.xml";
+/// Sitemap URLs to submit/query.
+const SITEMAP_URLS: &[&str] = &[
+    "https://sporeprint.primals.eco/sitemap.xml",
+    "https://detroit.primals.eco/sitemap.xml",
+];
 
 /// Python agent path (jelly string fallback).
 const PYTHON_AGENT: &str = "/opt/ecoPrimals/bin/gsc-agent.py";
@@ -81,7 +84,7 @@ async fn status(days: u32) -> Result<String> {
     python_agent(&["status", &days.to_string()]).await
 }
 
-/// Resubmit sitemap to Google.
+/// Resubmit all sitemaps to Google.
 async fn submit_sitemap() -> Result<String> {
     if let Ok(client) = gsc::GscClient::from_env().await {
         return gsc::submit_sitemap(&client).await;
@@ -161,7 +164,7 @@ mod tests {
     #[test]
     fn constants_are_correct() {
         assert!(GSC_PROPERTY.starts_with("sc-domain:"));
-        assert!(SITEMAP_URL.ends_with("sitemap.xml"));
+        assert!(SITEMAP_URLS.iter().all(|u| u.ends_with("sitemap.xml")));
         assert!(PYTHON_AGENT.ends_with(".py"));
     }
 
