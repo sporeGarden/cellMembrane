@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Google Search Console API client — agentic SEO management.
+//! Agentic SEO management — GSC + IndexNow + multi-site crawler notification.
 //!
 //! Wraps the GSC REST API for sitemap management, URL inspection, and
 //! search analytics. Authenticates via Google service account (RS256 JWT).
+//! Also provides IndexNow submission for instant crawler notification to
+//! Bing, DuckDuckGo, Yandex, and Seznam.
 //!
 //! ## Progression
 //!
@@ -11,12 +13,20 @@
 //! - **Composition**: This Rust module — `membrane seo.*` commands
 //! - **Capability**: SEO as a `petalTongue` routed capability (future)
 //!
+//! ## Multi-site Pattern
+//!
+//! All `*.primals.eco` sites share the `sc-domain:primals.eco` GSC property.
+//! IndexNow is submitted per-site (each site has its own key + sitemap).
+//! The `seo.notify` command is the webhook-triggered entry point:
+//! push → Forgejo webhook → classify_push → seo.notify → IndexNow + GSC.
+//!
 //! The cascade probe (`seo.cascade`) shells out to the Python agent when
 //! the Rust OAuth flow isn't available (no credentials file on this gate).
 //! As primals graduate, the bridge pattern routes to the Python fallback
 //! until the pure-Rust path handles all cases.
 
 mod gsc;
+mod indexnow;
 
 use crate::error::{Result, ShadowError};
 
@@ -29,11 +39,35 @@ const DEFAULT_CREDENTIALS_PATH: &str = "/opt/ecoPrimals/credentials/gsc-service-
 /// GSC property identifier (domain property covers all subdomains).
 const GSC_PROPERTY: &str = "sc-domain:primals.eco";
 
-/// Sitemap URLs to submit/query.
+/// Known sites with sitemaps (auto-discovered from Caddy in future).
+const SITES: &[SiteConfig] = &[
+    SiteConfig {
+        host: "detroit.primals.eco",
+        sitemap: "https://detroit.primals.eco/sitemap.xml",
+        indexnow_key: "de552b8179f84854854cd2e02788a130",
+    },
+    SiteConfig {
+        host: "sporeprint.primals.eco",
+        sitemap: "https://sporeprint.primals.eco/sitemap.xml",
+        indexnow_key: "de552b8179f84854854cd2e02788a130",
+    },
+];
+
+/// Sitemap URLs to submit/query (derived from SITES for backward compat).
 const SITEMAP_URLS: &[&str] = &[
     "https://sporeprint.primals.eco/sitemap.xml",
     "https://detroit.primals.eco/sitemap.xml",
 ];
+
+/// Configuration for a single site in the ecosystem.
+pub struct SiteConfig {
+    /// Hostname (e.g. "detroit.primals.eco").
+    pub host: &'static str,
+    /// Full sitemap URL.
+    pub sitemap: &'static str,
+    /// IndexNow verification key for this site.
+    pub indexnow_key: &'static str,
+}
 
 /// Python agent path (jelly string fallback).
 const PYTHON_AGENT: &str = "/opt/ecoPrimals/bin/gsc-agent.py";
@@ -60,6 +94,16 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
         "seo.inspect" => {
             let url = crate::cli::require_arg(args, 0, "URL")?;
             let report = inspect_url(url).await?;
+            Ok(crate::ShadowOutcome::ok(report))
+        }
+        "seo.indexnow" => {
+            let site = crate::cli::extract_flag_value(args, "--site");
+            let report = submit_indexnow(site.as_deref()).await?;
+            Ok(crate::ShadowOutcome::ok(report))
+        }
+        "seo.notify" => {
+            let site = crate::cli::extract_flag_value(args, "--site");
+            let report = notify_crawlers(site.as_deref()).await?;
             Ok(crate::ShadowOutcome::ok(report))
         }
         "seo.cascade" => {
@@ -98,6 +142,61 @@ async fn inspect_url(url: &str) -> Result<String> {
         return gsc::inspect_url(&client, url).await;
     }
     python_agent(&["inspect", url]).await
+}
+
+/// Submit URLs to IndexNow (Bing/DuckDuckGo/Yandex/Seznam).
+///
+/// If `site` is specified, only submits for that host.
+/// Otherwise submits for all known sites.
+async fn submit_indexnow(site: Option<&str>) -> Result<String> {
+    let sites = match site {
+        Some(host) => {
+            let s = SITES.iter().find(|s| s.host == host).ok_or_else(|| {
+                ShadowError::config(format!("unknown site: {host}"))
+            })?;
+            vec![s]
+        }
+        None => SITES.iter().collect(),
+    };
+
+    // Try pure-Rust first
+    #[cfg(feature = "http")]
+    {
+        let mut results = Vec::new();
+        for s in &sites {
+            match indexnow::submit(s).await {
+                Ok(msg) => results.push(msg),
+                Err(e) => results.push(format!("FAILED {}: {e}", s.host)),
+            }
+        }
+        return Ok(results.join("; "));
+    }
+
+    // Fallback to Python agent
+    #[cfg(not(feature = "http"))]
+    python_agent(&["indexnow"]).await
+}
+
+/// Notify all crawlers about site changes (IndexNow + GSC sitemap resubmit).
+///
+/// This is the agentic entry point — called by webhook handlers after deploy.
+/// Combines IndexNow (instant) + GSC sitemap resubmit (authoritative).
+pub async fn notify_crawlers(site: Option<&str>) -> Result<String> {
+    let mut lines = Vec::new();
+
+    // IndexNow — instant notification
+    match submit_indexnow(site).await {
+        Ok(msg) => lines.push(format!("  [seo] indexnow: {msg}")),
+        Err(e) => lines.push(format!("  [seo] indexnow: FAILED — {e}")),
+    }
+
+    // GSC sitemap resubmit — authoritative
+    match submit_sitemap().await {
+        Ok(msg) => lines.push(format!("  [seo] gsc: {msg}")),
+        Err(e) => lines.push(format!("  [seo] gsc: FAILED — {e}")),
+    }
+
+    Ok(lines.join("\n"))
 }
 
 /// Cascade probe: compact status line for cascade-sense output.
@@ -166,6 +265,26 @@ mod tests {
         assert!(GSC_PROPERTY.starts_with("sc-domain:"));
         assert!(SITEMAP_URLS.iter().all(|u| u.ends_with("sitemap.xml")));
         assert!(PYTHON_AGENT.ends_with(".py"));
+    }
+
+    #[test]
+    fn sites_have_consistent_sitemaps() {
+        for site in SITES {
+            assert!(site.sitemap.contains(site.host));
+            assert!(site.sitemap.ends_with("sitemap.xml"));
+            assert!(!site.indexnow_key.is_empty());
+        }
+    }
+
+    #[test]
+    fn sitemap_urls_match_sites() {
+        for site in SITES {
+            assert!(
+                SITEMAP_URLS.contains(&site.sitemap),
+                "SITES entry {} not in SITEMAP_URLS",
+                site.host
+            );
+        }
     }
 
     #[tokio::test]
