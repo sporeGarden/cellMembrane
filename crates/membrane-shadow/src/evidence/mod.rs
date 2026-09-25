@@ -21,6 +21,7 @@
 //! - **Braid**: Full provenance via nestGate CAS + sweetGrass (westGate scale)
 
 pub(crate) mod manifest;
+pub(crate) mod provenance;
 
 use crate::error::{Result, ShadowError, ShadowOutcome};
 use crate::seo::PublishSite;
@@ -391,6 +392,20 @@ pub async fn dispatch(
                 ))
             })?;
             evidence_status(config, &local, &remote).await
+        }
+        "evidence.braid" => {
+            let repo_name = crate::cli::require_arg(args, 0, "site_name")?;
+            let site = crate::seo::find_publish_site(repo_name).ok_or_else(|| {
+                ShadowError::config(format!("unknown publish site: {repo_name}"))
+            })?;
+            let evidence_dir = site.evidence_dir.ok_or_else(|| {
+                ShadowError::config(format!(
+                    "site {repo_name} has no evidence_dir configured"
+                ))
+            })?;
+            let collection = crate::cli::extract_flag_value(args, "--collection");
+            let local = std::path::Path::new(evidence_dir);
+            provenance::braid_site_evidence(local, collection.as_deref()).await
         }
         _ => Ok(ShadowOutcome::fail(format!(
             "unknown evidence command: {cmd}"

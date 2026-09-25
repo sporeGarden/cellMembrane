@@ -21,6 +21,8 @@
 
 pub(crate) mod listener;
 mod pipeline;
+pub(crate) mod publish_artifacts;
+pub(crate) mod verify_consistency;
 
 use crate::error::{Result, ShadowError};
 use serde::{Deserialize, Serialize};

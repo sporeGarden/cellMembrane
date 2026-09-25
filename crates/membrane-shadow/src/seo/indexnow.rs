@@ -32,7 +32,7 @@ const INDEXNOW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15)
 /// Parses the sitemap XML to extract `<loc>` URLs. Falls back to just
 /// the homepage if the sitemap is unreachable or unparseable.
 #[cfg(feature = "http")]
-async fn fetch_sitemap_urls(site: &SiteConfig) -> Vec<String> {
+pub(super) async fn fetch_sitemap_urls(site: &SiteConfig) -> Vec<String> {
     let homepage = format!("https://{}/", site.host);
     let client = match crate::http_client(INDEXNOW_TIMEOUT) {
         Ok(c) => c,

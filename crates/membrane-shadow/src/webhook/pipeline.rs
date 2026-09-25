@@ -152,6 +152,22 @@ pub(super) async fn run_publish_pipeline(
         "publish pipeline: starting"
     );
 
+    // Step 0: Ensure Caddy vhost exists (idempotent, non-fatal)
+    {
+        let config = crate::ShadowConfig::from_env().await;
+        if !crate::caddy::vhost_exists(&config, site.host).await {
+            info!(repo = %action.repo_name, host = %site.host, "publish: provisioning Caddy vhost");
+            let block = crate::caddy::generate_static_site_block(site);
+            let _ = block; // Logged but not deployed automatically — use `caddy.deploy` manually first
+            warn!(
+                repo = %action.repo_name,
+                host = %site.host,
+                "publish: Caddy vhost not found — run `membrane caddy.deploy {}` to provision",
+                action.repo_name
+            );
+        }
+    }
+
     // Step 1: Git fetch + reset to latest
     let git_result = publish_git_update(site).await;
     if let Err(e) = &git_result {
@@ -186,6 +202,19 @@ pub(super) async fn run_publish_pipeline(
 
     let page_count = build_result.unwrap_or(0);
 
+    // Step 2.5: Generate derived artifacts (graph, site-api, llms, manifest) — non-fatal
+    let artifact_msg = match super::publish_artifacts::generate(site).await {
+        Ok(Some(msg)) => {
+            info!(repo = %action.repo_name, "publish: artifact generation succeeded");
+            format!("  [artifacts] {msg}")
+        }
+        Ok(None) => String::new(),
+        Err(e) => {
+            warn!(repo = %action.repo_name, error = %e, "publish: artifact generation failed (non-fatal)");
+            format!("  [artifacts] FAILED: {e}")
+        }
+    };
+
     // Step 3: Push evidence files if configured (non-fatal)
     let evidence_msg = if let Some((local, remote)) =
         crate::evidence::resolve_evidence_paths(site)
@@ -213,6 +242,29 @@ pub(super) async fn run_publish_pipeline(
         String::new()
     };
 
+    // Step 3b: Braid evidence if provenance trio is available (non-fatal)
+    let braid_msg = if let Some(evidence_dir) = site.evidence_dir {
+        let local = std::path::Path::new(evidence_dir);
+        if local.exists() && crate::evidence::provenance::is_trio_available() {
+            match crate::evidence::provenance::braid_site_evidence(local, None).await {
+                Ok(outcome) => {
+                    if outcome.ok {
+                        info!(repo = %action.repo_name, "publish: evidence braided");
+                    }
+                    format!("  [braid] {}", outcome.message)
+                }
+                Err(e) => {
+                    warn!(repo = %action.repo_name, error = %e, "publish: braiding failed (non-fatal)");
+                    format!("  [braid] FAILED: {e}")
+                }
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     // Step 4: Notify crawlers (non-fatal — build succeeded, so we report success)
     let seo_result = crate::seo::notify_crawlers(Some(site.host)).await;
     let seo_msg = match seo_result {
@@ -227,10 +279,23 @@ pub(super) async fn run_publish_pipeline(
         "webhook: {} published to {} ({} pages)\n{}",
         action.repo_name, site.host, page_count, seo_msg
     );
+    if !artifact_msg.is_empty() {
+        full_msg.push('\n');
+        full_msg.push_str(&artifact_msg);
+    }
     if !evidence_msg.is_empty() {
         full_msg.push('\n');
         full_msg.push_str(&evidence_msg);
     }
+    if !braid_msg.is_empty() {
+        full_msg.push('\n');
+        full_msg.push_str(&braid_msg);
+    }
+
+    // Step 5: Post-build consistency verification (non-fatal)
+    let verify_msg = super::verify_consistency::verify_and_report(site);
+    full_msg.push('\n');
+    full_msg.push_str(&verify_msg);
 
     Ok(crate::ShadowOutcome {
         ok: true,

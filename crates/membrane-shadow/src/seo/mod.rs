@@ -78,6 +78,9 @@ pub struct PublishSite {
     /// Local evidence depot directory (sporeGate authority path).
     /// If set, `evidence.push` will sync files to golgiBody alongside the site.
     pub evidence_dir: Option<&'static str>,
+    /// Post-build artifact generation command (runs in worktree after zola).
+    /// Invoked as a subprocess; exit 0 = success.  `None` means no artifacts.
+    pub artifact_command: Option<&'static [&'static str]>,
 }
 
 /// Registry of all publishable static sites.
@@ -97,6 +100,7 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
             indexnow_key: "de552b8179f84854854cd2e02788a130",
         },
         evidence_dir: Some("/home/sporegate/Development/detroit/evidence"),
+        artifact_command: Some(&["detroit-build", "--root", "."]),
     },
     PublishSite {
         repo_name: "sporeprint",
@@ -110,6 +114,7 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
             indexnow_key: "de552b8179f84854854cd2e02788a130",
         },
         evidence_dir: None,
+        artifact_command: None,
     },
 ];
 
@@ -156,6 +161,11 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
         "seo.notify" => {
             let site = crate::cli::extract_flag_value(args, "--site");
             let report = notify_crawlers(site.as_deref()).await?;
+            Ok(crate::ShadowOutcome::ok(report))
+        }
+        "seo.url_notify" => {
+            let site = crate::cli::extract_flag_value(args, "--site");
+            let report = url_notify(site.as_deref()).await?;
             Ok(crate::ShadowOutcome::ok(report))
         }
         "seo.cascade" => {
@@ -230,14 +240,44 @@ async fn submit_indexnow(site: Option<&str>) -> Result<String> {
     python_agent(&["indexnow"]).await
 }
 
-/// Notify all crawlers about site changes (IndexNow + GSC sitemap resubmit).
+/// Notify Google Indexing API about updated URLs for a site.
+///
+/// Fetches the sitemap, extracts `<loc>` URLs, and notifies Google's
+/// Indexing API (`urlNotifications:publish` with `URL_UPDATED`).
+async fn url_notify(site: Option<&str>) -> Result<String> {
+    let sites: Vec<&PublishSite> = match site {
+        Some(host) => {
+            let s = PUBLISH_SITES
+                .iter()
+                .find(|s| s.seo.host == host)
+                .ok_or_else(|| ShadowError::config(format!("unknown site: {host}")))?;
+            vec![s]
+        }
+        None => PUBLISH_SITES.iter().collect(),
+    };
+
+    let mut all_urls = Vec::new();
+    for s in &sites {
+        let urls = indexnow::fetch_sitemap_urls(&s.seo).await;
+        all_urls.extend(urls);
+    }
+
+    if all_urls.is_empty() {
+        return Ok("no URLs to notify".to_string());
+    }
+
+    gsc::url_notify(&all_urls).await
+}
+
+/// Notify all crawlers about site changes (IndexNow + GSC sitemap resubmit + URL notify).
 ///
 /// This is the agentic entry point — called by webhook handlers after deploy.
-/// Combines IndexNow (instant) + GSC sitemap resubmit (authoritative).
+/// Combines IndexNow (instant) + GSC sitemap resubmit (authoritative) +
+/// Google URL Notification (Indexing API).
 pub async fn notify_crawlers(site: Option<&str>) -> Result<String> {
     let mut lines = Vec::new();
 
-    // IndexNow — instant notification
+    // IndexNow — instant notification to Bing/DuckDuckGo/Yandex/Seznam
     match submit_indexnow(site).await {
         Ok(msg) => lines.push(format!("  [seo] indexnow: {msg}")),
         Err(e) => lines.push(format!("  [seo] indexnow: FAILED — {e}")),
@@ -247,6 +287,12 @@ pub async fn notify_crawlers(site: Option<&str>) -> Result<String> {
     match submit_sitemap().await {
         Ok(msg) => lines.push(format!("  [seo] gsc: {msg}")),
         Err(e) => lines.push(format!("  [seo] gsc: FAILED — {e}")),
+    }
+
+    // Google URL Notification — direct indexing signal (non-fatal)
+    match url_notify(site).await {
+        Ok(msg) => lines.push(format!("  [seo] url_notify: {msg}")),
+        Err(e) => lines.push(format!("  [seo] url_notify: FAILED — {e}")),
     }
 
     Ok(lines.join("\n"))

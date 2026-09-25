@@ -398,6 +398,114 @@ pub async fn cascade_probe(client: &GscClient) -> Result<String> {
     ))
 }
 
+// ── Google Indexing API (URL Notification) ───────────────────────────
+
+const INDEXING_API_BASE: &str = "https://indexing.googleapis.com";
+
+/// Notify Google Indexing API about updated URLs.
+///
+/// Uses `urlNotifications:publish` with `URL_UPDATED` type.
+/// Requires the service account to have Indexing API enabled and
+/// the site verified in Search Console.
+///
+/// Note: The Indexing API uses a different OAuth scope than the
+/// Search Console API. We create a separate token for it.
+#[cfg(feature = "http")]
+pub async fn url_notify(urls: &[String]) -> Result<String> {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+
+    let creds_path = std::env::var(super::ENV_GSC_CREDENTIALS)
+        .unwrap_or_else(|_| super::DEFAULT_CREDENTIALS_PATH.to_string());
+
+    let creds_json = tokio::fs::read_to_string(&creds_path)
+        .await
+        .map_err(|e| ShadowError::config(format!("Indexing API credentials at {creds_path}: {e}")))?;
+
+    let sa: ServiceAccount = serde_json::from_str(&creds_json)
+        .map_err(|e| ShadowError::config(format!("Indexing API credentials parse: {e}")))?;
+
+    // Indexing API requires its own scope
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let header = serde_json::json!({"alg": "RS256", "typ": "JWT"});
+    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
+    let claims = serde_json::json!({
+        "iss": sa.client_email,
+        "scope": "https://www.googleapis.com/auth/indexing",
+        "aud": TOKEN_URI,
+        "iat": now,
+        "exp": now + 3600,
+    });
+    let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string().as_bytes());
+
+    let message = format!("{header_b64}.{claims_b64}");
+    let signature = rs256_sign(&sa.private_key, message.as_bytes())?;
+    let sig_b64 = URL_SAFE_NO_PAD.encode(&signature);
+    let jwt = format!("{message}.{sig_b64}");
+
+    let body = format!(
+        "grant_type={}&assertion={}",
+        urlencod("urn:ietf:params:oauth:grant-type:jwt-bearer"),
+        urlencod(&jwt)
+    );
+
+    let http = crate::http_client(API_TIMEOUT)?;
+    let resp = http
+        .post(TOKEN_URI)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .raw_body(body.into_bytes())
+        .send()
+        .await
+        .map_err(|e| ShadowError::config(format!("Indexing API token exchange: {e}")))?;
+
+    let resp_body = resp.text().map_err(|e| {
+        ShadowError::config(format!("Indexing API token response: {e}"))
+    })?;
+
+    let token: TokenResponse = serde_json::from_str(&resp_body).map_err(|e| {
+        ShadowError::config(format!(
+            "Indexing API token parse: {e} — body: {}",
+            &resp_body[..resp_body.len().min(200)]
+        ))
+    })?;
+
+    // Notify each URL
+    let mut results = Vec::new();
+    let url_path = format!("{INDEXING_API_BASE}/v3/urlNotifications:publish");
+
+    for url in urls {
+        let notify_body = serde_json::json!({
+            "url": url,
+            "type": "URL_UPDATED",
+        });
+
+        match http
+            .post(&url_path)
+            .header("Authorization", &format!("Bearer {}", token.access_token))
+            .header("Content-Type", "application/json")
+            .json(&notify_body)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let status = resp.status().as_u16();
+                if status == 200 {
+                    results.push(format!("notified: {url}"));
+                } else {
+                    let body = resp.text().unwrap_or_default();
+                    results.push(format!("FAILED {url} (HTTP {status}): {}", &body[..body.len().min(100)]));
+                }
+            }
+            Err(e) => results.push(format!("FAILED {url}: {e}")),
+        }
+    }
+
+    Ok(format!("{}/{} URLs notified", results.iter().filter(|r| r.starts_with("notified")).count(), urls.len()))
+}
+
 // Stubs for non-http builds
 #[cfg(not(feature = "http"))]
 pub async fn status_report(_client: &GscClient, _days: u32) -> Result<String> {
@@ -413,6 +521,10 @@ pub async fn inspect_url(_client: &GscClient, _url: &str) -> Result<String> {
 }
 #[cfg(not(feature = "http"))]
 pub async fn cascade_probe(_client: &GscClient) -> Result<String> {
+    Err(ShadowError::config("http feature required"))
+}
+#[cfg(not(feature = "http"))]
+pub async fn url_notify(_urls: &[String]) -> Result<String> {
     Err(ShadowError::config("http feature required"))
 }
 

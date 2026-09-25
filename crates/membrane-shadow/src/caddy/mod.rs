@@ -255,9 +255,208 @@ pub async fn dispatch(
             Ok(crate::ShadowOutcome::ok(msg))
         }
         "caddy.generate" => dispatch_caddy_generate(args).await,
+        "caddy.deploy" => dispatch_caddy_deploy(config, args).await,
         _ => Ok(crate::ShadowOutcome::fail(format!(
             "unknown caddy command: {cmd}"
         ))),
+    }
+}
+
+// ── Static site Caddy block generation ──────────────────────────────
+
+/// Generate the Caddy vhost block for a static site from `PublishSite` config.
+///
+/// Produces a complete, self-contained vhost block with:
+/// - `root * {public_dir}` + `encode gzip`
+/// - Security headers (inline)
+/// - SEO handles (`/sitemap.xml`, `/robots.txt`)
+/// - Evidence routes (if `evidence_dir` is set): landing page + file browser
+/// - SPA fallback (`try_files`)
+/// - 404 error page
+pub fn generate_static_site_block(site: &crate::seo::PublishSite) -> String {
+    let host = site.host;
+    let public_dir = site.public_dir;
+
+    // Evidence route block (if configured)
+    let evidence_block = if site.evidence_dir.is_some() {
+        // Evidence dir on golgiBody is always {parent_of_public}/evidence
+        let evidence_remote = public_dir
+            .rsplit_once('/')
+            .map(|(parent, _)| format!("{parent}/evidence"))
+            .unwrap_or_else(|| format!("{public_dir}/../evidence"));
+
+        format!(
+            r#"
+    # Evidence landing page — serve the Zola HTML page (not the file browser)
+    handle /evidence/ {{
+        try_files /evidence/index.html
+        file_server
+    }}
+
+    # Evidence depot — separate from Zola build output (survives zola --force)
+    handle /evidence/* {{
+        uri strip_prefix /evidence
+        root * {evidence_remote}
+        file_server browse
+    }}
+"#
+        )
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"{host} {{
+    root * {public_dir}
+    encode gzip
+
+    # Static files first
+    handle /sitemap.xml {{
+        file_server
+    }}
+    handle /robots.txt {{
+        file_server
+    }}
+{evidence_block}
+    # SPA fallback for Zola pages (must be after handle blocks)
+    handle {{
+        try_files {{path}} {{path}}/index.html /index.html
+        file_server
+    }}
+
+    handle_errors {{
+        @404 expression `{{http.error.status_code}} == 404`
+        rewrite @404 /404.html
+        file_server
+    }}
+
+    header {{
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+    }}
+}}
+"#
+    )
+}
+
+/// Deploy a static site vhost to golgiBody's Caddyfile.
+///
+/// Uses block replacement: finds the existing `{host} {` block and replaces it,
+/// or appends if not found. Validates + reloads, with rollback on failure.
+async fn dispatch_caddy_deploy(
+    config: &ShadowConfig,
+    args: &[&str],
+) -> Result<crate::ShadowOutcome> {
+    let caddy_bin = caddy_bin_path();
+    let caddyfile = caddyfile_path();
+
+    let dry_run = args.contains(&"--dry-run");
+
+    // Determine which sites to deploy
+    let sites: Vec<&crate::seo::PublishSite> = if let Some(site_name) =
+        args.iter().find(|a| !a.starts_with('-'))
+    {
+        let site = crate::seo::find_publish_site(site_name).ok_or_else(|| {
+            ShadowError::config(format!("unknown publish site: {site_name}"))
+        })?;
+        vec![site]
+    } else if args.contains(&"--all") {
+        crate::seo::PUBLISH_SITES.iter().collect()
+    } else {
+        return Ok(crate::ShadowOutcome::fail(
+            "usage: membrane caddy.deploy <site|--all> [--dry-run]".to_string(),
+        ));
+    };
+
+    let mut results = Vec::new();
+
+    for site in &sites {
+        let block = generate_static_site_block(site);
+
+        if dry_run {
+            results.push(format!("--- {} (dry-run) ---\n{}", site.host, block));
+            continue;
+        }
+
+        // Backup + replace/append on golgiBody
+        let host_escaped = site.host.replace('.', r"\.");
+        let replace_script = format!(
+            r#"python3 -c "
+import re, shutil, sys
+path = '{caddyfile}'
+shutil.copy2(path, path + '.bak')
+with open(path) as f:
+    content = f.read()
+
+# Find existing block: '{host} {{' ... matching '}}'
+pattern = r'^{host_escaped}\s*\{{.*?^\}}\n?'
+new_block = sys.stdin.read()
+
+if re.search(pattern, content, re.MULTILINE | re.DOTALL):
+    content = re.sub(pattern, new_block, content, count=1, flags=re.MULTILINE | re.DOTALL)
+    action = 'replaced'
+else:
+    content += '\n' + new_block
+    action = 'appended'
+
+with open(path, 'w') as f:
+    f.write(content)
+print(action)
+""#,
+            host = site.host,
+        );
+
+        // Write block via stdin to the python script
+        let full_cmd = format!("echo '{}' | {}", block.replace('\'', "'\\''"), replace_script);
+        let (action_out, code) = caddy_exec(config, &full_cmd).await?;
+
+        if code != 0 {
+            results.push(format!("FAILED {}: {}", site.host, action_out.trim()));
+            continue;
+        }
+
+        let action = action_out.trim();
+
+        // Validate + reload
+        let validate_reload = format!(
+            "{caddy_bin} validate --config {caddyfile} 2>&1 && \
+             {caddy_bin} reload --config {caddyfile} --force 2>&1"
+        );
+        let (reload_out, reload_code) = caddy_exec(config, &validate_reload).await?;
+
+        if reload_code != 0 {
+            // Rollback
+            let rollback = format!("cp {caddyfile}.bak {caddyfile} && {caddy_bin} reload --config {caddyfile} --force 2>&1");
+            let _ = caddy_exec(config, &rollback).await;
+            results.push(format!(
+                "FAILED {} (rolled back): {}",
+                site.host,
+                reload_out.trim()
+            ));
+        } else {
+            results.push(format!("{}: {} vhost block", site.host, action));
+        }
+    }
+
+    let msg = results.join("\n");
+    let ok = !msg.contains("FAILED");
+    Ok(crate::ShadowOutcome {
+        ok,
+        message: msg,
+        data: None,
+    })
+}
+
+/// Check if a site's vhost block exists in the golgiBody Caddyfile.
+pub async fn vhost_exists(config: &ShadowConfig, host: &str) -> bool {
+    let caddyfile = caddyfile_path();
+    let check_cmd = format!("grep -q '{host} {{' {caddyfile} 2>/dev/null && echo EXISTS || echo MISSING");
+    match caddy_exec(config, &check_cmd).await {
+        Ok((out, _)) => out.trim() == "EXISTS",
+        Err(_) => false,
     }
 }
 
