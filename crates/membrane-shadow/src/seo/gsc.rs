@@ -503,7 +503,23 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
         }
     }
 
-    Ok(format!("{}/{} URLs notified", results.iter().filter(|r| r.starts_with("notified")).count(), urls.len()))
+    let successes = results.iter().filter(|r| r.starts_with("notified")).count();
+    let failures: Vec<&String> = results.iter().filter(|r| r.starts_with("FAILED")).collect();
+
+    for fail in &failures {
+        tracing::warn!("Indexing API: {fail}");
+    }
+
+    if failures.is_empty() {
+        Ok(format!("{successes}/{} URLs notified", urls.len()))
+    } else {
+        Ok(format!(
+            "{successes}/{} URLs notified ({} failed: {})",
+            urls.len(),
+            failures.len(),
+            failures.iter().take(3).map(|f| f.as_str()).collect::<Vec<_>>().join("; ")
+        ))
+    }
 }
 
 // Stubs for non-http builds
