@@ -228,9 +228,12 @@ async fn publish_git_update(
         )));
     }
 
+    // Unset GIT_DIR — when called from a post-receive hook, Forgejo sets
+    // GIT_DIR to the bare repo, which breaks operations on the worktree.
     let output = tokio::process::Command::new("git")
         .args(["fetch", "origin", "main"])
         .current_dir(worktree)
+        .env_remove("GIT_DIR")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .output()
@@ -248,6 +251,7 @@ async fn publish_git_update(
     let output = tokio::process::Command::new("git")
         .args(["reset", "--hard", "origin/main"])
         .current_dir(worktree)
+        .env_remove("GIT_DIR")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .output()
