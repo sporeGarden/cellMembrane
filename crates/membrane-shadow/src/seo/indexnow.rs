@@ -86,7 +86,6 @@ pub async fn submit(site: &SiteConfig) -> Result<String> {
     let client = crate::http_client(INDEXNOW_TIMEOUT)?;
     let resp = client
         .post(INDEXNOW_ENDPOINT)
-        .header("Content-Type", "application/json; charset=utf-8")
         .json(&payload)
         .send()
         .await
