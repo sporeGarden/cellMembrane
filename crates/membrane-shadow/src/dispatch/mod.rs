@@ -156,6 +156,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("sovereign.") => sovereign::dispatch_sovereign(config, cmd, args).await,
         c if c.starts_with("rootpulse.") => dispatch_validate::dispatch_rootpulse(cmd, args).await,
         "site.publish" => dispatch_site_publish(args).await,
+        c if c.starts_with("evidence.") => crate::evidence::dispatch(config, cmd, args).await,
         c if c.starts_with("seo.") => crate::seo::dispatch(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
         c if c.starts_with("dns.") => crate::dns::dispatch(config, cmd, args).await,

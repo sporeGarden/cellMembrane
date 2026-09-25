@@ -75,6 +75,9 @@ pub struct PublishSite {
     pub build_subdir: Option<&'static str>,
     /// SEO config for this site.
     pub seo: SiteConfig,
+    /// Local evidence depot directory (sporeGate authority path).
+    /// If set, `evidence.push` will sync files to golgiBody alongside the site.
+    pub evidence_dir: Option<&'static str>,
 }
 
 /// Registry of all publishable static sites.
@@ -93,6 +96,7 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
             sitemap: "https://detroit.primals.eco/sitemap.xml",
             indexnow_key: "de552b8179f84854854cd2e02788a130",
         },
+        evidence_dir: Some("/home/sporegate/Development/detroit/evidence"),
     },
     PublishSite {
         repo_name: "sporeprint",
@@ -105,6 +109,7 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
             sitemap: "https://sporeprint.primals.eco/sitemap.xml",
             indexnow_key: "de552b8179f84854854cd2e02788a130",
         },
+        evidence_dir: None,
     },
 ];
 

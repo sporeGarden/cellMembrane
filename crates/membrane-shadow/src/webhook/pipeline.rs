@@ -186,7 +186,34 @@ pub(super) async fn run_publish_pipeline(
 
     let page_count = build_result.unwrap_or(0);
 
-    // Step 3: Notify crawlers (non-fatal — build succeeded, so we report success)
+    // Step 3: Push evidence files if configured (non-fatal)
+    let evidence_msg = if let Some((local, remote)) =
+        crate::evidence::resolve_evidence_paths(site)
+    {
+        if local.exists() {
+            let config = crate::ShadowConfig::from_env().await;
+            match crate::evidence::push_evidence(&config, &local, &remote).await {
+                Ok(outcome) => {
+                    if outcome.ok {
+                        info!(repo = %action.repo_name, "publish: evidence push succeeded");
+                    } else {
+                        warn!(repo = %action.repo_name, msg = %outcome.message, "publish: evidence push issue");
+                    }
+                    format!("  [evidence] {}", outcome.message)
+                }
+                Err(e) => {
+                    warn!(repo = %action.repo_name, error = %e, "publish: evidence push failed (non-fatal)");
+                    format!("  [evidence] FAILED: {e}")
+                }
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    // Step 4: Notify crawlers (non-fatal — build succeeded, so we report success)
     let seo_result = crate::seo::notify_crawlers(Some(site.host)).await;
     let seo_msg = match seo_result {
         Ok(msg) => msg,
@@ -196,12 +223,18 @@ pub(super) async fn run_publish_pipeline(
         }
     };
 
+    let mut full_msg = format!(
+        "webhook: {} published to {} ({} pages)\n{}",
+        action.repo_name, site.host, page_count, seo_msg
+    );
+    if !evidence_msg.is_empty() {
+        full_msg.push('\n');
+        full_msg.push_str(&evidence_msg);
+    }
+
     Ok(crate::ShadowOutcome {
         ok: true,
-        message: format!(
-            "webhook: {} published to {} ({} pages)\n{}",
-            action.repo_name, site.host, page_count, seo_msg
-        ),
+        message: full_msg,
         data: Some(serde_json::json!({
             "host": site.host,
             "pages": page_count,

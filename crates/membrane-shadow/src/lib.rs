@@ -66,6 +66,7 @@ pub(crate) mod crypto;
 pub mod dispatch;
 pub(crate) mod dns;
 pub mod error;
+pub(crate) mod evidence;
 pub mod forgejo;
 pub(crate) mod freshness;
 pub mod gate;
