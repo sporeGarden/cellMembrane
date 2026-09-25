@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Webhook receiver — Forgejo + GitHub push event handling for selective cascade.
+//! Webhook receiver — Forgejo + GitHub push event handling.
 //!
-//! CM-WEBHOOK-01: Push-driven cascade (replaces timer-polled model).
+//! CM-WEBHOOK-01: Push-driven dispatch (replaces timer-polled model).
 //! Webhook events arrive from either Forgejo (sovereign) or GitHub (outer membrane),
 //! are verified via HMAC-SHA256, classified, and dispatched to:
 //! - Selective harvest (plasmid pipeline) for primal repos
+//! - Static site publish (zola build + seo.notify) for publish sites
 //! - Git cascade (`temporal.sync` / `relay.run`) for ecosystem repos
 //!
 //! Provider abstraction: [`WebhookProvider`] distinguishes Forgejo vs GitHub
@@ -144,6 +145,8 @@ pub struct WebhookAction {
     pub should_harvest: bool,
     /// Whether this push should trigger git cascade (relay/temporal sync).
     pub should_cascade: bool,
+    /// Whether this push should trigger static site publish (zola build + seo.notify).
+    pub should_publish: bool,
     /// Which provider sent the webhook.
     pub provider: WebhookProvider,
     /// Human-readable reason for the decision.
@@ -214,8 +217,11 @@ fn cascade_repos_from_manifest(known_primals: &[&str]) -> Vec<String> {
 
 /// Determine what action to take for a push event.
 ///
-/// Triggers harvest for known primal repos on default branch.
-/// Triggers git cascade for ecosystem infrastructure repos (manifest-driven).
+/// Classification priority (highest to lowest):
+/// 1. **Harvest** — known primal binary repo on default branch
+/// 2. **Publish** — static site repo with a [`PublishSite`] entry
+/// 3. **Cascade** — ecosystem infra repo (manifest-driven git sync)
+/// 4. **Skip** — unknown repo or non-default branch
 #[must_use]
 pub fn classify_push(
     event: &PushEvent,
@@ -230,17 +236,27 @@ pub fn classify_push(
     let is_default_branch = branch == event.repository.default_branch;
     let repo_lower = event.repository.name.to_lowercase();
     let is_known_primal = known_primals.iter().any(|p| p.to_lowercase() == repo_lower);
+    let is_publish_site = crate::seo::find_publish_site(&event.repository.name).is_some();
     let cascade_repos = cascade_repos_from_manifest(known_primals);
     let is_cascade_repo = cascade_repos.contains(&repo_lower);
 
     let should_harvest = is_default_branch && is_known_primal;
-    let should_cascade = is_default_branch && is_cascade_repo && !is_known_primal;
+    let should_publish = is_default_branch && is_publish_site && !is_known_primal;
+    let should_cascade = is_default_branch && is_cascade_repo && !is_known_primal && !is_publish_site;
 
     let reason = if !is_default_branch {
         format!("non-default branch ({branch}), skipping")
     } else if should_harvest {
         format!(
             "{} pushed to {branch} — triggering selective harvest",
+            event.repository.name
+        )
+    } else if should_publish {
+        let host = crate::seo::find_publish_site(&event.repository.name)
+            .map(|s| s.host)
+            .unwrap_or("?");
+        format!(
+            "{} pushed to {branch} — publishing {host}",
             event.repository.name
         )
     } else if should_cascade {
@@ -250,7 +266,7 @@ pub fn classify_push(
         )
     } else {
         format!(
-            "{} not a known primal or cascade repo, skipping",
+            "{} not a known primal, publish site, or cascade repo, skipping",
             event.repository.name
         )
     };
@@ -260,6 +276,7 @@ pub fn classify_push(
         branch: branch.to_string(),
         should_harvest,
         should_cascade,
+        should_publish,
         provider,
         reason,
     }
@@ -269,7 +286,7 @@ pub fn classify_push(
 
 use crate::plasmid::nucleus_primals;
 
-/// Handle a verified push event — trigger selective cascade + harvest.
+/// Handle a verified push event — trigger harvest, publish, or cascade.
 ///
 /// Returns a `ShadowOutcome` describing what was done.
 pub async fn handle_push(
@@ -280,13 +297,25 @@ pub async fn handle_push(
     let primal_refs = nucleus_primals();
     let action = classify_push(event, &primal_refs, provider);
 
-    if !action.should_harvest && !action.should_cascade {
+    if !action.should_harvest && !action.should_cascade && !action.should_publish {
         return Ok(crate::ShadowOutcome::ok(format!(
             "webhook: {} — {}",
             event.repository.name, action.reason
         )));
     }
 
+    // Static site publish — zola build + crawler notification
+    if action.should_publish {
+        info!(
+            provider = ?action.provider,
+            repo = %action.repo_name,
+            branch = %action.branch,
+            "static site publish triggered by webhook"
+        );
+        return pipeline::run_publish_pipeline(&action).await;
+    }
+
+    // Git cascade — sync ecosystem repo
     if action.should_cascade && !action.should_harvest {
         info!(
             provider = ?action.provider,
@@ -297,6 +326,7 @@ pub async fn handle_push(
         return pipeline::run_cascade_pipeline(&action, config).await;
     }
 
+    // Primal harvest
     let has_signal = crate::plasmid::scheduler::has_harvest_signal(&event.commits);
 
     if has_signal {
@@ -325,6 +355,13 @@ pub async fn handle_push(
             action.repo_name, commit_short
         )))
     }
+}
+
+/// Public entry point for the publish pipeline (used by `site.publish` dispatch).
+pub async fn pipeline_run_publish(
+    action: &WebhookAction,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    pipeline::run_publish_pipeline(action).await
 }
 
 // ── Constant-time comparison ─────────────────────────────────────────

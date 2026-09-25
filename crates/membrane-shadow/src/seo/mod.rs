@@ -39,27 +39,13 @@ const DEFAULT_CREDENTIALS_PATH: &str = "/opt/ecoPrimals/credentials/gsc-service-
 /// GSC property identifier (domain property covers all subdomains).
 const GSC_PROPERTY: &str = "sc-domain:primals.eco";
 
-/// Known sites with sitemaps (auto-discovered from Caddy in future).
-const SITES: &[SiteConfig] = &[
-    SiteConfig {
-        host: "detroit.primals.eco",
-        sitemap: "https://detroit.primals.eco/sitemap.xml",
-        indexnow_key: "de552b8179f84854854cd2e02788a130",
-    },
-    SiteConfig {
-        host: "sporeprint.primals.eco",
-        sitemap: "https://sporeprint.primals.eco/sitemap.xml",
-        indexnow_key: "de552b8179f84854854cd2e02788a130",
-    },
-];
-
-/// Sitemap URLs to submit/query (derived from SITES for backward compat).
+/// Sitemap URLs to submit/query (derived from PUBLISH_SITES).
 const SITEMAP_URLS: &[&str] = &[
     "https://sporeprint.primals.eco/sitemap.xml",
     "https://detroit.primals.eco/sitemap.xml",
 ];
 
-/// Configuration for a single site in the ecosystem.
+/// Configuration for a single site's SEO (IndexNow + sitemap).
 pub struct SiteConfig {
     /// Hostname (e.g. "detroit.primals.eco").
     pub host: &'static str,
@@ -67,6 +53,67 @@ pub struct SiteConfig {
     pub sitemap: &'static str,
     /// IndexNow verification key for this site.
     pub indexnow_key: &'static str,
+}
+
+/// Publishable static site — repo-to-host-to-worktree mapping.
+///
+/// This is the single registry for all `*.primals.eco` static sites.
+/// The webhook pipeline uses this to classify pushes as `should_publish`,
+/// the SEO module uses it for crawler notification, and the publish
+/// pipeline uses it for zola build + deploy.
+pub struct PublishSite {
+    /// Forgejo repo name (case-insensitive match against push event).
+    pub repo_name: &'static str,
+    /// Hostname served by Caddy.
+    pub host: &'static str,
+    /// Git worktree path on golgiBody.
+    pub worktree: &'static str,
+    /// Output directory for built site (Caddy root).
+    pub public_dir: &'static str,
+    /// Subdirectory containing the zola project (relative to worktree).
+    /// `None` if zola.toml is at the worktree root.
+    pub build_subdir: Option<&'static str>,
+    /// SEO config for this site.
+    pub seo: SiteConfig,
+}
+
+/// Registry of all publishable static sites.
+///
+/// When a push matches one of these repos, the webhook pipeline runs
+/// `run_publish_pipeline` instead of harvest or cascade.
+pub const PUBLISH_SITES: &[PublishSite] = &[
+    PublishSite {
+        repo_name: "detroit",
+        host: "detroit.primals.eco",
+        worktree: "/opt/ecoPrimals/detroit/worktree",
+        public_dir: "/opt/ecoPrimals/detroit/public",
+        build_subdir: Some("site"),
+        seo: SiteConfig {
+            host: "detroit.primals.eco",
+            sitemap: "https://detroit.primals.eco/sitemap.xml",
+            indexnow_key: "de552b8179f84854854cd2e02788a130",
+        },
+    },
+    PublishSite {
+        repo_name: "sporeprint",
+        host: "sporeprint.primals.eco",
+        worktree: "/opt/ecoPrimals/sporePrint",
+        public_dir: "/opt/ecoPrimals/sporePrint/public",
+        build_subdir: None,
+        seo: SiteConfig {
+            host: "sporeprint.primals.eco",
+            sitemap: "https://sporeprint.primals.eco/sitemap.xml",
+            indexnow_key: "de552b8179f84854854cd2e02788a130",
+        },
+    },
+];
+
+/// Look up a publish site by repo name (case-insensitive).
+pub fn find_publish_site(repo_name: &str) -> Option<&'static PublishSite> {
+    let lower = repo_name.to_lowercase();
+    PUBLISH_SITES
+        .iter()
+        .find(|s| s.repo_name.to_lowercase() == lower)
 }
 
 /// Python agent path (jelly string fallback).
@@ -149,21 +196,22 @@ async fn inspect_url(url: &str) -> Result<String> {
 /// If `site` is specified, only submits for that host.
 /// Otherwise submits for all known sites.
 async fn submit_indexnow(site: Option<&str>) -> Result<String> {
-    let sites = match site {
+    let seo_configs: Vec<&SiteConfig> = match site {
         Some(host) => {
-            let s = SITES.iter().find(|s| s.host == host).ok_or_else(|| {
-                ShadowError::config(format!("unknown site: {host}"))
-            })?;
-            vec![s]
+            let s = PUBLISH_SITES
+                .iter()
+                .find(|s| s.seo.host == host)
+                .ok_or_else(|| ShadowError::config(format!("unknown site: {host}")))?;
+            vec![&s.seo]
         }
-        None => SITES.iter().collect(),
+        None => PUBLISH_SITES.iter().map(|s| &s.seo).collect(),
     };
 
     // Try pure-Rust first
     #[cfg(feature = "http")]
     {
         let mut results = Vec::new();
-        for s in &sites {
+        for s in &seo_configs {
             match indexnow::submit(s).await {
                 Ok(msg) => results.push(msg),
                 Err(e) => results.push(format!("FAILED {}: {e}", s.host)),
@@ -268,23 +316,42 @@ mod tests {
     }
 
     #[test]
-    fn sites_have_consistent_sitemaps() {
-        for site in SITES {
-            assert!(site.sitemap.contains(site.host));
-            assert!(site.sitemap.ends_with("sitemap.xml"));
-            assert!(!site.indexnow_key.is_empty());
+    fn publish_sites_have_consistent_seo() {
+        for site in PUBLISH_SITES {
+            assert!(site.seo.sitemap.contains(site.seo.host));
+            assert!(site.seo.sitemap.ends_with("sitemap.xml"));
+            assert!(!site.seo.indexnow_key.is_empty());
+            assert_eq!(site.host, site.seo.host, "host mismatch for {}", site.repo_name);
         }
     }
 
     #[test]
-    fn sitemap_urls_match_sites() {
-        for site in SITES {
+    fn publish_sites_have_valid_paths() {
+        for site in PUBLISH_SITES {
+            assert!(site.worktree.starts_with('/'), "worktree must be absolute: {}", site.repo_name);
+            assert!(site.public_dir.starts_with('/'), "public_dir must be absolute: {}", site.repo_name);
+            assert!(!site.repo_name.is_empty());
+        }
+    }
+
+    #[test]
+    fn sitemap_urls_match_publish_sites() {
+        for site in PUBLISH_SITES {
             assert!(
-                SITEMAP_URLS.contains(&site.sitemap),
-                "SITES entry {} not in SITEMAP_URLS",
+                SITEMAP_URLS.contains(&site.seo.sitemap),
+                "PUBLISH_SITES entry {} not in SITEMAP_URLS",
                 site.host
             );
         }
+    }
+
+    #[test]
+    fn find_publish_site_case_insensitive() {
+        assert!(find_publish_site("detroit").is_some());
+        assert!(find_publish_site("Detroit").is_some());
+        assert!(find_publish_site("DETROIT").is_some());
+        assert!(find_publish_site("sporePrint").is_some());
+        assert!(find_publish_site("nonexistent").is_none());
     }
 
     #[tokio::test]

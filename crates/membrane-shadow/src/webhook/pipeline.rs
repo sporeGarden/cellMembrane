@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Webhook harvest pipeline — selective build, sandbox, and refresh for push events.
+//! Webhook pipelines — harvest, publish, and cascade for push events.
 
 use super::{PushEvent, WebhookAction};
 use tracing::{error, info, warn};
@@ -127,6 +127,215 @@ pub(super) async fn run_cascade_pipeline(
         }
     }
 }
+
+// ── Publish Pipeline ────────────────────────────────────────────────
+
+/// Publish a static site: git fetch → zola build → seo.notify.
+///
+/// Replaces the per-repo bash hooks (`10-deploy-detroit`, `50-zola-publish`,
+/// `20-crawler-notify`, `60-seo-resubmit`) with a single Rust function
+/// driven by the [`PublishSite`] registry.
+pub(super) async fn run_publish_pipeline(
+    action: &WebhookAction,
+) -> crate::error::Result<crate::ShadowOutcome> {
+    let site = crate::seo::find_publish_site(&action.repo_name).ok_or_else(|| {
+        crate::error::ShadowError::config(format!(
+            "no publish site config for repo: {}",
+            action.repo_name
+        ))
+    })?;
+
+    info!(
+        repo = %action.repo_name,
+        host = %site.host,
+        worktree = %site.worktree,
+        "publish pipeline: starting"
+    );
+
+    // Step 1: Git fetch + reset to latest
+    let git_result = publish_git_update(site).await;
+    if let Err(e) = &git_result {
+        error!(repo = %action.repo_name, error = %e, "publish: git update failed");
+        return Ok(crate::ShadowOutcome {
+            ok: false,
+            message: format!("webhook: {} publish failed — git: {e}", action.repo_name),
+            data: None,
+        });
+    }
+
+    // Step 2: Zola build
+    let build_result = publish_zola_build(site).await;
+    match &build_result {
+        Ok(page_count) => {
+            info!(
+                repo = %action.repo_name,
+                host = %site.host,
+                pages = page_count,
+                "publish: zola build succeeded"
+            );
+        }
+        Err(e) => {
+            error!(repo = %action.repo_name, error = %e, "publish: zola build failed");
+            return Ok(crate::ShadowOutcome {
+                ok: false,
+                message: format!("webhook: {} publish failed — build: {e}", action.repo_name),
+                data: None,
+            });
+        }
+    }
+
+    let page_count = build_result.unwrap_or(0);
+
+    // Step 3: Notify crawlers (non-fatal — build succeeded, so we report success)
+    let seo_result = crate::seo::notify_crawlers(Some(site.host)).await;
+    let seo_msg = match seo_result {
+        Ok(msg) => msg,
+        Err(e) => {
+            warn!(repo = %action.repo_name, error = %e, "publish: seo notify failed (non-fatal)");
+            format!("  [seo] FAILED: {e}")
+        }
+    };
+
+    Ok(crate::ShadowOutcome {
+        ok: true,
+        message: format!(
+            "webhook: {} published to {} ({} pages)\n{}",
+            action.repo_name, site.host, page_count, seo_msg
+        ),
+        data: Some(serde_json::json!({
+            "host": site.host,
+            "pages": page_count,
+        })),
+    })
+}
+
+/// Git fetch + hard reset a publish site's worktree to latest.
+async fn publish_git_update(
+    site: &crate::seo::PublishSite,
+) -> crate::error::Result<()> {
+    let worktree = site.worktree;
+
+    // Check if worktree exists; if not, clone
+    if !std::path::Path::new(worktree).join(".git").exists()
+        && !std::path::Path::new(worktree).join("HEAD").exists()
+    {
+        warn!(
+            worktree = %worktree,
+            "publish: worktree missing, skipping git update (initial clone needed)"
+        );
+        return Err(crate::error::ShadowError::config(format!(
+            "worktree {worktree} does not exist — initial clone required"
+        )));
+    }
+
+    let output = tokio::process::Command::new("git")
+        .args(["fetch", "origin", "main"])
+        .current_dir(worktree)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| crate::error::ShadowError::Io(e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(crate::error::ShadowError::config(format!(
+            "git fetch failed: {}",
+            stderr.lines().next().unwrap_or("unknown")
+        )));
+    }
+
+    let output = tokio::process::Command::new("git")
+        .args(["reset", "--hard", "origin/main"])
+        .current_dir(worktree)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| crate::error::ShadowError::Io(e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(crate::error::ShadowError::config(format!(
+            "git reset failed: {}",
+            stderr.lines().next().unwrap_or("unknown")
+        )));
+    }
+
+    Ok(())
+}
+
+/// Run `zola build` for a publish site, returning the page count.
+async fn publish_zola_build(
+    site: &crate::seo::PublishSite,
+) -> crate::error::Result<usize> {
+    let build_dir = match site.build_subdir {
+        Some(sub) => format!("{}/{}", site.worktree, sub),
+        None => site.worktree.to_string(),
+    };
+
+    let output = tokio::process::Command::new("zola")
+        .args(["build", "--force", "--output-dir", site.public_dir])
+        .current_dir(&build_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| crate::error::ShadowError::Io(e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if stderr.is_empty() {
+            stdout.to_string()
+        } else {
+            stderr.to_string()
+        };
+        return Err(crate::error::ShadowError::config(format!(
+            "zola build failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            detail.lines().last().unwrap_or("unknown")
+        )));
+    }
+
+    // Count built HTML files
+    let page_count = count_html_files(site.public_dir).await;
+    Ok(page_count)
+}
+
+/// Count HTML files in a directory (recursive).
+async fn count_html_files(dir: &str) -> usize {
+    let mut count = 0;
+    let Ok(entries) = tokio::fs::read_dir(dir).await else {
+        return 0;
+    };
+    // Use a stack-based walk to avoid recursion depth issues
+    let mut dirs = vec![dir.to_string()];
+    while let Some(d) = dirs.pop() {
+        let Ok(mut rd) = tokio::fs::read_dir(&d).await else {
+            continue;
+        };
+        while let Ok(Some(entry)) = rd.next_entry().await {
+            let ft = entry.file_type().await;
+            if let Ok(ft) = ft {
+                if ft.is_dir() {
+                    dirs.push(entry.path().to_string_lossy().to_string());
+                } else if ft.is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.ends_with(".html") {
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Suppress unused variable warning — entries was used to validate dir access
+    drop(entries);
+    count
+}
+
+// ── Sandbox ─────────────────────────────────────────────────────────
 
 pub(super) async fn run_sandbox(
     primal_lower: &str,

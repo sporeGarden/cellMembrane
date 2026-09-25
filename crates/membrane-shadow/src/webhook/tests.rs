@@ -122,7 +122,39 @@ fn classify_push_unknown_repo() {
     let action = classify_push(&event, primals, WebhookProvider::Forgejo);
     assert!(!action.should_harvest);
     assert!(!action.should_cascade);
+    assert!(!action.should_publish);
     assert!(action.reason.contains("not a known primal"));
+}
+
+#[test]
+fn classify_push_publish_site_detroit() {
+    let event = sample_push_event("detroit", "main", "main");
+    let primals = &["biomeos", "beardog"];
+    let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+    assert!(!action.should_harvest);
+    assert!(!action.should_cascade);
+    assert!(action.should_publish);
+    assert!(action.reason.contains("publishing"));
+    assert!(action.reason.contains("detroit.primals.eco"));
+}
+
+#[test]
+fn classify_push_publish_site_sporeprint() {
+    let event = sample_push_event("sporePrint", "main", "main");
+    let primals = &["biomeos"];
+    let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+    assert!(action.should_publish);
+    assert!(!action.should_harvest);
+    assert!(!action.should_cascade);
+}
+
+#[test]
+fn classify_push_publish_site_non_default_branch_skips() {
+    let event = sample_push_event("detroit", "feature/x", "main");
+    let primals = &["biomeos"];
+    let action = classify_push(&event, primals, WebhookProvider::Forgejo);
+    assert!(!action.should_publish);
+    assert!(action.reason.contains("non-default branch"));
 }
 
 #[test]
@@ -286,9 +318,10 @@ fn classify_push_unknown_repo_skips() {
     let primals = &["beardog", "songbird"];
     let action = classify_push(&event, primals, WebhookProvider::Forgejo);
     assert!(!action.should_harvest);
+    assert!(!action.should_publish);
     assert!(
         !action.should_cascade,
-        "unknown repo is neither primal nor cascade"
+        "unknown repo is neither primal, publish site, nor cascade"
     );
 }
 

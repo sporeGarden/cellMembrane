@@ -155,6 +155,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         "builder.serve" => builder::serve(args).await,
         c if c.starts_with("sovereign.") => sovereign::dispatch_sovereign(config, cmd, args).await,
         c if c.starts_with("rootpulse.") => dispatch_validate::dispatch_rootpulse(cmd, args).await,
+        "site.publish" => dispatch_site_publish(args).await,
         c if c.starts_with("seo.") => crate::seo::dispatch(cmd, args).await,
         c if c.starts_with("caddy.") => crate::caddy::dispatch(config, cmd, args).await,
         c if c.starts_with("dns.") => crate::dns::dispatch(config, cmd, args).await,
@@ -220,6 +221,36 @@ fn spawn_blocking_err(e: &tokio::task::JoinError) -> ShadowError {
     ShadowError::Io(std::io::Error::other(format!(
         "spawn_blocking panicked: {e}"
     )))
+}
+
+/// Manual site publish: `membrane site.publish <repo_name>`
+///
+/// Triggers the same pipeline as a webhook push — git fetch, zola build,
+/// seo.notify — but invoked from the CLI instead of a webhook event.
+async fn dispatch_site_publish(args: &[&str]) -> crate::error::Result<ShadowOutcome> {
+    let repo_name = crate::cli::require_arg(args, 0, "repo_name")?;
+    let _site = crate::seo::find_publish_site(repo_name).ok_or_else(|| {
+        ShadowError::config(format!(
+            "unknown publish site: {repo_name} (known: {})",
+            crate::seo::PUBLISH_SITES
+                .iter()
+                .map(|s| s.repo_name)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    })?;
+
+    let action = crate::webhook::WebhookAction {
+        repo_name: repo_name.to_string(),
+        branch: "main".to_string(),
+        should_harvest: false,
+        should_cascade: false,
+        should_publish: true,
+        provider: crate::webhook::WebhookProvider::Forgejo,
+        reason: format!("manual publish via site.publish {repo_name}"),
+    };
+
+    crate::webhook::pipeline_run_publish(&action).await
 }
 
 #[cfg(test)]
