@@ -472,8 +472,10 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
         ))
     })?;
 
-    // Notify each URL
-    let mut results = Vec::new();
+    // Notify each URL (stop early on quota exhaustion)
+    let mut successes: usize = 0;
+    let mut failures: Vec<String> = Vec::new();
+    let mut quota_hit = false;
     let url_path = format!("{INDEXING_API_BASE}/v3/urlNotifications:publish");
 
     for url in urls {
@@ -493,29 +495,38 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
             Ok(resp) => {
                 let status = resp.status().as_u16();
                 if status == 200 {
-                    results.push(format!("notified: {url}"));
+                    successes += 1;
+                } else if status == 429 {
+                    tracing::warn!("Indexing API: quota exhausted after {successes} URLs");
+                    quota_hit = true;
+                    break;
                 } else {
                     let body = resp.text().unwrap_or_default();
-                    results.push(format!("FAILED {url} (HTTP {status}): {}", &body[..body.len().min(100)]));
+                    let msg = format!("FAILED {url} (HTTP {status}): {}", &body[..body.len().min(100)]);
+                    tracing::warn!("Indexing API: {msg}");
+                    failures.push(msg);
                 }
             }
-            Err(e) => results.push(format!("FAILED {url}: {e}")),
+            Err(e) => {
+                let msg = format!("FAILED {url}: {e}");
+                tracing::warn!("Indexing API: {msg}");
+                failures.push(msg);
+            }
         }
     }
 
-    let successes = results.iter().filter(|r| r.starts_with("notified")).count();
-    let failures: Vec<&String> = results.iter().filter(|r| r.starts_with("FAILED")).collect();
+    let total = urls.len();
+    let remaining = total - successes - failures.len() - if quota_hit { 1 } else { 0 };
 
-    for fail in &failures {
-        tracing::warn!("Indexing API: {fail}");
-    }
-
-    if failures.is_empty() {
-        Ok(format!("{successes}/{} URLs notified", urls.len()))
+    if quota_hit {
+        Ok(format!(
+            "{successes}/{total} URLs notified (quota exhausted — {remaining} remaining, retry tomorrow)"
+        ))
+    } else if failures.is_empty() {
+        Ok(format!("{successes}/{total} URLs notified"))
     } else {
         Ok(format!(
-            "{successes}/{} URLs notified ({} failed: {})",
-            urls.len(),
+            "{successes}/{total} URLs notified ({} failed: {})",
             failures.len(),
             failures.iter().take(3).map(|f| f.as_str()).collect::<Vec<_>>().join("; ")
         ))
