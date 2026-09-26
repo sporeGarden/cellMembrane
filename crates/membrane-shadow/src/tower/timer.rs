@@ -82,9 +82,9 @@ pub async fn dispatch_tower_status() -> Result<ShadowOutcome> {
         let svc = MembraneService::for_binary(binary);
         let needs_btsp = svc.is_some_and(|s| s.has_capability(ServiceCapability::CryptoSigner));
         let ok = if needs_btsp {
-            probe_socket_btsp(&socket).await
+            probe_socket_btsp(&socket, binary).await
         } else {
-            probe_socket(&socket).await
+            probe_socket(&socket, binary).await
         };
         if ok {
             live_count += 1;
@@ -365,16 +365,24 @@ fn resolve_primal_socket(binary: &str) -> PathBuf {
         .map_or_else(|| PathBuf::from(&paths[0]), PathBuf::from)
 }
 
-async fn probe_socket(path: &Path) -> bool {
-    crate::jsonrpc::call(path, crate::jsonrpc::HEALTH_REQUEST)
+async fn probe_socket(path: &Path, binary: &str) -> bool {
+    if crate::jsonrpc::call(path, crate::jsonrpc::HEALTH_REQUEST)
         .await
         .is_ok()
+    {
+        return true;
+    }
+    crate::gate::health::try_tcp_health_probe(binary).await
 }
 
-async fn probe_socket_btsp(path: &Path) -> bool {
-    crate::jsonrpc::call_btsp(path, crate::jsonrpc::HEALTH_REQUEST)
+async fn probe_socket_btsp(path: &Path, binary: &str) -> bool {
+    if crate::jsonrpc::call_btsp(path, crate::jsonrpc::HEALTH_REQUEST)
         .await
         .is_ok()
+    {
+        return true;
+    }
+    crate::gate::health::try_tcp_health_probe(binary).await
 }
 
 async fn probe_mesh(songbird_socket: &Path) -> Option<String> {
@@ -382,8 +390,19 @@ async fn probe_mesh(songbird_socket: &Path) -> Option<String> {
     let response = match crate::jsonrpc::call(songbird_socket, request).await {
         Ok(r) => r,
         Err(e) => {
-            tracing::debug!(error = %e, "mesh probe: songbird RPC failed");
-            return None;
+            tracing::debug!(error = %e, "mesh probe: UDS failed, trying TCP");
+            let port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+            let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+                host: cellmembrane_types::service::BIND_LOOPBACK.into(),
+                port,
+            };
+            match crate::jsonrpc::call_endpoint(&endpoint, request).await {
+                Ok(r) => r,
+                Err(e2) => {
+                    tracing::debug!(error = %e2, "mesh probe: TCP fallback also failed");
+                    return None;
+                }
+            }
         }
     };
     let json: serde_json::Value = match serde_json::from_str(&response) {

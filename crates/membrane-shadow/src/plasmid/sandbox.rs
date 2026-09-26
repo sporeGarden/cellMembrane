@@ -164,6 +164,16 @@ pub(crate) async fn probe_health(instance: &SandboxInstance) -> SandboxResult {
         }
     }
 
+    if crate::gate::health::try_tcp_health_probe(&instance.primal).await {
+        return SandboxResult {
+            primal: instance.primal.clone(),
+            commit: instance.commit.clone(),
+            health_ok: true,
+            detail: "responding (TCP fallback)".into(),
+            elapsed_ms: millis_u64(start.elapsed()),
+        };
+    }
+
     SandboxResult {
         primal: instance.primal.clone(),
         commit: instance.commit.clone(),

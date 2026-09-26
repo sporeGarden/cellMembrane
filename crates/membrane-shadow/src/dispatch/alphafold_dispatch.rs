@@ -17,8 +17,8 @@
 //!   3. braid.partial_update (checkpoint braids)
 //!   4. nest.complete_dataset (finalize: dehydrate → commit → sign → braid)
 
-use crate::bridge::{BridgeResult, NeuralBridge};
 use crate::ShadowOutcome;
+use crate::bridge::{BridgeResult, NeuralBridge};
 use serde_json::json;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -38,15 +38,14 @@ const STATE_FILE: &str = ".alphafold_ingress_state.json";
 // DISPATCH ENTRY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-pub(super) async fn dispatch_alphafold(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_alphafold(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
         "alphafold.ingest" => dispatch_ingest(args).await,
         "alphafold.status" => dispatch_status(args).await,
         "alphafold.manifest" => dispatch_manifest(args).await,
-        _ => Ok(ShadowOutcome::fail(format!("unknown alphafold command: {cmd}"))),
+        _ => Ok(ShadowOutcome::fail(format!(
+            "unknown alphafold command: {cmd}"
+        ))),
     }
 }
 
@@ -60,7 +59,7 @@ async fn dispatch_ingest(args: &[&str]) -> crate::Result<ShadowOutcome> {
         None => {
             return Ok(ShadowOutcome::fail(
                 "alphafold.ingest: biomeOS Neural API not reachable — ingestion requires live primals",
-            ))
+            ));
         }
     };
 
@@ -110,7 +109,10 @@ async fn dispatch_ingest(args: &[&str]) -> crate::Result<ShadowOutcome> {
             Ok(r) => results.push(("phase_a", r)),
             Err(e) => {
                 error!("Phase A failed: {e}");
-                results.push(("phase_a", json!({"status": "failed", "error": e.to_string()})));
+                results.push((
+                    "phase_a",
+                    json!({"status": "failed", "error": e.to_string()}),
+                ));
             }
         }
         state.save();
@@ -122,7 +124,10 @@ async fn dispatch_ingest(args: &[&str]) -> crate::Result<ShadowOutcome> {
             Ok(r) => results.push(("phase_b", r)),
             Err(e) => {
                 error!("Phase B failed: {e}");
-                results.push(("phase_b", json!({"status": "failed", "error": e.to_string()})));
+                results.push((
+                    "phase_b",
+                    json!({"status": "failed", "error": e.to_string()}),
+                ));
             }
         }
         state.save();
@@ -134,7 +139,10 @@ async fn dispatch_ingest(args: &[&str]) -> crate::Result<ShadowOutcome> {
             Ok(r) => results.push(("phase_c", r)),
             Err(e) => {
                 error!("Phase C failed: {e}");
-                results.push(("phase_c", json!({"status": "failed", "error": e.to_string()})));
+                results.push((
+                    "phase_c",
+                    json!({"status": "failed", "error": e.to_string()}),
+                ));
             }
         }
         state.save();
@@ -233,7 +241,10 @@ async fn phase_a_proteome_tars(
                     "bytes": bytes,
                     "status": "ok",
                 }));
-                info!("Phase A: {dir_name} — {files} files, {}", human_bytes(bytes));
+                info!(
+                    "Phase A: {dir_name} — {files} files, {}",
+                    human_bytes(bytes)
+                );
             }
             Err(e) => {
                 warn!("Phase A: {dir_name} — failed: {e}");
@@ -263,7 +274,9 @@ async fn phase_a_proteome_tars(
     // Finalize: dehydrate → commit → sign → braid
     let finalize = complete_dataset(bridge, &session_id, &spine_id, dataset_name).await;
     let braid_hash = finalize.as_ref().ok().and_then(|v| {
-        v.get("braid_hash").and_then(|h| h.as_str()).map(String::from)
+        v.get("braid_hash")
+            .and_then(|h| h.as_str())
+            .map(String::from)
     });
 
     state.total_files_ingested += phase_files;
@@ -271,7 +284,14 @@ async fn phase_a_proteome_tars(
     state.phase_a_complete = true;
 
     // Write .braided marker
-    write_braided_marker(root, dataset_name, phase_files, phase_bytes, &spine_id, braid_hash.as_deref());
+    write_braided_marker(
+        root,
+        dataset_name,
+        phase_files,
+        phase_bytes,
+        &spine_id,
+        braid_hash.as_deref(),
+    );
 
     Ok(json!({
         "status": "complete",
@@ -300,7 +320,9 @@ async fn phase_b_expanded_structures(
 ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
     let root = std::path::Path::new(ALPHAFOLD_STRUCTURES);
     if !root.is_dir() {
-        return Err(format!("AlphaFold structures directory not found: {ALPHAFOLD_STRUCTURES}").into());
+        return Err(
+            format!("AlphaFold structures directory not found: {ALPHAFOLD_STRUCTURES}").into(),
+        );
     }
 
     let dataset_name = "alphafold_structures";
@@ -329,18 +351,19 @@ async fn phase_b_expanded_structures(
     }
 
     // Declare dataset (or resume existing session)
-    let (session_id, spine_id) = if state.phase_b_session_id.is_some() && state.phase_b_spine_id.is_some() {
-        (
-            state.phase_b_session_id.clone().unwrap(),
-            state.phase_b_spine_id.clone().unwrap(),
-        )
-    } else {
-        let (sid, spid) = declare_dataset(bridge, dataset_name).await?;
-        state.phase_b_session_id = Some(sid.clone());
-        state.phase_b_spine_id = Some(spid.clone());
-        state.save();
-        (sid, spid)
-    };
+    let (session_id, spine_id) =
+        if state.phase_b_session_id.is_some() && state.phase_b_spine_id.is_some() {
+            (
+                state.phase_b_session_id.clone().unwrap(),
+                state.phase_b_spine_id.clone().unwrap(),
+            )
+        } else {
+            let (sid, spid) = declare_dataset(bridge, dataset_name).await?;
+            state.phase_b_session_id = Some(sid.clone());
+            state.phase_b_spine_id = Some(spid.clone());
+            state.save();
+            (sid, spid)
+        };
 
     info!("Phase B: DAG session={session_id} spine={spine_id}");
 
@@ -362,12 +385,17 @@ async fn phase_b_expanded_structures(
             config,
             state,
             &mut files_since_checkpoint,
-        ).await {
+        )
+        .await
+        {
             Ok((files, bytes)) => {
                 phase_files += files;
                 phase_bytes += bytes;
                 state.phase_b_completed_buckets.push(bucket_name.clone());
-                info!("Phase B: {bucket_name} — {files} files, {}", human_bytes(bytes));
+                info!(
+                    "Phase B: {bucket_name} — {files} files, {}",
+                    human_bytes(bytes)
+                );
             }
             Err(e) => {
                 warn!("Phase B: {bucket_name} — failed: {e}");
@@ -382,7 +410,8 @@ async fn phase_b_expanded_structures(
                 "Phase B: checkpoint at {} total files",
                 state.total_files_ingested + phase_files,
             );
-            let _ = checkpoint_braid(bridge, &session_id, &spine_id, dataset_name, phase_files).await;
+            let _ =
+                checkpoint_braid(bridge, &session_id, &spine_id, dataset_name, phase_files).await;
             files_since_checkpoint = 0;
             state.save();
         }
@@ -391,14 +420,23 @@ async fn phase_b_expanded_structures(
     // Finalize
     let finalize = complete_dataset(bridge, &session_id, &spine_id, dataset_name).await;
     let braid_hash = finalize.as_ref().ok().and_then(|v| {
-        v.get("braid_hash").and_then(|h| h.as_str()).map(String::from)
+        v.get("braid_hash")
+            .and_then(|h| h.as_str())
+            .map(String::from)
     });
 
     state.total_files_ingested += phase_files;
     state.total_bytes_ingested += phase_bytes;
     state.phase_b_complete = true;
 
-    write_braided_marker(root, dataset_name, phase_files, phase_bytes, &spine_id, braid_hash.as_deref());
+    write_braided_marker(
+        root,
+        dataset_name,
+        phase_files,
+        phase_bytes,
+        &spine_id,
+        braid_hash.as_deref(),
+    );
 
     Ok(json!({
         "status": "complete",
@@ -467,7 +505,8 @@ async fn stream_ingest_bucket(
                 "family_id": FAMILY_ID,
             }),
             Duration::from_secs(30),
-        ).await;
+        )
+        .await;
 
         match put_result {
             Ok(v) => {
@@ -500,7 +539,8 @@ async fn stream_ingest_bucket(
         if bucket_files % 10_000 == 0 && bucket_files > 0 {
             info!(
                 "Phase B: {bucket_name} progress — {} files, {}",
-                bucket_files, human_bytes(bucket_bytes),
+                bucket_files,
+                human_bytes(bucket_bytes),
             );
         }
 
@@ -508,11 +548,13 @@ async fn stream_ingest_bucket(
         if *files_since_checkpoint >= config.checkpoint_interval {
             info!("Phase B: mid-bucket checkpoint at {bucket_name} ({bucket_files} files)");
             let _ = checkpoint_braid(
-                bridge, session_id,
+                bridge,
+                session_id,
                 state.phase_b_spine_id.as_deref().unwrap_or("none"),
                 "alphafold_structures",
                 state.total_files_ingested + bucket_files,
-            ).await;
+            )
+            .await;
             *files_since_checkpoint = 0;
             state.save();
         }
@@ -590,18 +632,19 @@ async fn phase_c_remote_fetch(
     }
 
     // Declare dataset (or resume existing session)
-    let (session_id, spine_id) = if state.phase_c_session_id.is_some() && state.phase_c_spine_id.is_some() {
-        (
-            state.phase_c_session_id.clone().unwrap(),
-            state.phase_c_spine_id.clone().unwrap(),
-        )
-    } else {
-        let (sid, spid) = declare_dataset(bridge, dataset_name).await?;
-        state.phase_c_session_id = Some(sid.clone());
-        state.phase_c_spine_id = Some(spid.clone());
-        state.save();
-        (sid, spid)
-    };
+    let (session_id, spine_id) =
+        if state.phase_c_session_id.is_some() && state.phase_c_spine_id.is_some() {
+            (
+                state.phase_c_session_id.clone().unwrap(),
+                state.phase_c_spine_id.clone().unwrap(),
+            )
+        } else {
+            let (sid, spid) = declare_dataset(bridge, dataset_name).await?;
+            state.phase_c_session_id = Some(sid.clone());
+            state.phase_c_spine_id = Some(spid.clone());
+            state.save();
+            (sid, spid)
+        };
 
     info!("Phase C: DAG session={session_id} spine={spine_id}");
 
@@ -615,9 +658,7 @@ async fn phase_c_remote_fetch(
     for (i, chunk) in accessions.chunks(config.concurrency).enumerate() {
         // Fetch each file in the chunk via content.fetch
         for accession in chunk {
-            let url = format!(
-                "{EBI_BASE_URL}/AF-{accession}-F1-model_v6.cif"
-            );
+            let url = format!("{EBI_BASE_URL}/AF-{accession}-F1-model_v6.cif");
 
             // content.fetch can take minutes for large files — call nestGate directly
             let fetch_result = direct_nestgate_call(
@@ -628,7 +669,8 @@ async fn phase_c_remote_fetch(
                     "timeout_secs": 300,
                 }),
                 Duration::from_secs(600),
-            ).await;
+            )
+            .await;
 
             match fetch_result {
                 Ok(v) => {
@@ -666,14 +708,17 @@ async fn phase_c_remote_fetch(
             if files_since_checkpoint >= config.checkpoint_interval {
                 info!(
                     "Phase C: checkpoint at {} files ({} total, {} errors)",
-                    phase_files, i * config.concurrency, errors,
+                    phase_files,
+                    i * config.concurrency,
+                    errors,
                 );
                 // Flush remaining events
                 if !dag_events.is_empty() {
                     let _ = append_dag_batch(bridge, &session_id, &dag_events).await;
                     dag_events.clear();
                 }
-                let _ = checkpoint_braid(bridge, &session_id, &spine_id, dataset_name, phase_files).await;
+                let _ = checkpoint_braid(bridge, &session_id, &spine_id, dataset_name, phase_files)
+                    .await;
                 files_since_checkpoint = 0;
                 state.phase_c_files_fetched += phase_files;
                 state.save();
@@ -700,7 +745,9 @@ async fn phase_c_remote_fetch(
     // Finalize
     let finalize = complete_dataset(bridge, &session_id, &spine_id, dataset_name).await;
     let braid_hash = finalize.as_ref().ok().and_then(|v| {
-        v.get("braid_hash").and_then(|h| h.as_str()).map(String::from)
+        v.get("braid_hash")
+            .and_then(|h| h.as_str())
+            .map(String::from)
     });
 
     state.total_files_ingested += phase_files;
@@ -731,48 +778,52 @@ async fn declare_dataset(
     dataset_name: &str,
 ) -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
     // Create DAG session
-    let session_result = bridge.capability_call(
-        "dag",
-        "session.create",
-        json!({
-            "name": dataset_name,
-            "committer": COMMITTER_DID,
-        }),
-    ).await;
+    let session_result = bridge
+        .capability_call(
+            "dag",
+            "session.create",
+            json!({
+                "name": dataset_name,
+                "committer": COMMITTER_DID,
+            }),
+        )
+        .await;
 
     let session_id = match session_result {
-        BridgeResult::Handled(v) => {
-            v.get("session_id")
-                .or_else(|| v.get("id"))
-                .and_then(|x| x.as_str())
-                .or_else(|| v.as_str())
-                .ok_or("dag.session.create: no session_id")?
-                .to_string()
-        }
+        BridgeResult::Handled(v) => v
+            .get("session_id")
+            .or_else(|| v.get("id"))
+            .and_then(|x| x.as_str())
+            .or_else(|| v.as_str())
+            .ok_or("dag.session.create: no session_id")?
+            .to_string(),
         BridgeResult::ApiError(e) => return Err(format!("dag.session.create: {e}").into()),
-        BridgeResult::Fallthrough => return Err("dag.session.create: Neural API unreachable".into()),
+        BridgeResult::Fallthrough => {
+            return Err("dag.session.create: Neural API unreachable".into());
+        }
     };
 
     // Create spine
-    let spine_result = bridge.capability_call(
-        "spine",
-        "create",
-        json!({
-            "name": dataset_name,
-            "owner": COMMITTER_DID,
-            "committer": COMMITTER_DID,
-        }),
-    ).await;
+    let spine_result = bridge
+        .capability_call(
+            "spine",
+            "create",
+            json!({
+                "name": dataset_name,
+                "owner": COMMITTER_DID,
+                "committer": COMMITTER_DID,
+            }),
+        )
+        .await;
 
     let spine_id = match spine_result {
-        BridgeResult::Handled(v) => {
-            v.get("spine_id")
-                .or_else(|| v.get("id"))
-                .and_then(|x| x.as_str())
-                .or_else(|| v.as_str())
-                .unwrap_or("unknown")
-                .to_string()
-        }
+        BridgeResult::Handled(v) => v
+            .get("spine_id")
+            .or_else(|| v.get("id"))
+            .and_then(|x| x.as_str())
+            .or_else(|| v.as_str())
+            .unwrap_or("unknown")
+            .to_string(),
         BridgeResult::ApiError(e) => {
             warn!("spine.create: {e} — continuing without spine");
             "none".to_string()
@@ -784,21 +835,23 @@ async fn declare_dataset(
     };
 
     // Create intent braid
-    let _ = bridge.capability_call(
-        "braid",
-        "create",
-        json!({
-            "data_hash": &session_id,
-            "strand_id": dataset_name,
-            "metadata": {
-                "dataset": dataset_name,
-                "committer": COMMITTER_DID,
-                "family_id": FAMILY_ID,
-                "spine_id": &spine_id,
-                "status": "intent",
-            },
-        }),
-    ).await;
+    let _ = bridge
+        .capability_call(
+            "braid",
+            "create",
+            json!({
+                "data_hash": &session_id,
+                "strand_id": dataset_name,
+                "metadata": {
+                    "dataset": dataset_name,
+                    "committer": COMMITTER_DID,
+                    "family_id": FAMILY_ID,
+                    "spine_id": &spine_id,
+                    "status": "intent",
+                },
+            }),
+        )
+        .await;
 
     Ok((session_id, spine_id))
 }
@@ -817,7 +870,8 @@ async fn ingest_directory(
         "content.ingest",
         json!({ "directory": dir_path.to_string_lossy() }),
         Duration::from_secs(600),
-    ).await?;
+    )
+    .await?;
 
     let file_count = manifest
         .get("count")
@@ -887,25 +941,25 @@ async fn append_dag_batch(
         })
         .collect();
 
-    let result = bridge.capability_call(
-        "dag",
-        "event.append_batch",
-        json!({ "requests": requests }),
-    ).await;
+    let result = bridge
+        .capability_call("dag", "event.append_batch", json!({ "requests": requests }))
+        .await;
 
     match result {
         BridgeResult::Handled(_) => Ok(()),
         BridgeResult::ApiError(e) => {
             warn!("dag.event.append_batch: {e} — trying individual appends");
             for event in events {
-                let _ = bridge.capability_call(
-                    "dag",
-                    "event.append",
-                    json!({
-                        "session_id": session_id,
-                        "event": event,
-                    }),
-                ).await;
+                let _ = bridge
+                    .capability_call(
+                        "dag",
+                        "event.append",
+                        json!({
+                            "session_id": session_id,
+                            "event": event,
+                        }),
+                    )
+                    .await;
             }
             Ok(())
         }
@@ -922,34 +976,38 @@ async fn checkpoint_braid(
     files_so_far: u64,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Commit current state to spine
-    let _ = bridge.capability_call(
-        "session",
-        "commit",
-        json!({
-            "spine_id": spine_id,
-            "session_id": session_id,
-            "vertex_count": files_so_far,
-            "committer": COMMITTER_DID,
-        }),
-    ).await;
+    let _ = bridge
+        .capability_call(
+            "session",
+            "commit",
+            json!({
+                "spine_id": spine_id,
+                "session_id": session_id,
+                "vertex_count": files_so_far,
+                "committer": COMMITTER_DID,
+            }),
+        )
+        .await;
 
     // Create checkpoint braid
-    let _ = bridge.capability_call(
-        "braid",
-        "create",
-        json!({
-            "data_hash": session_id,
-            "strand_id": dataset_name,
-            "metadata": {
-                "dataset": dataset_name,
-                "committer": COMMITTER_DID,
-                "family_id": FAMILY_ID,
-                "spine_id": spine_id,
-                "status": "checkpoint",
-                "files_so_far": files_so_far,
-            },
-        }),
-    ).await;
+    let _ = bridge
+        .capability_call(
+            "braid",
+            "create",
+            json!({
+                "data_hash": session_id,
+                "strand_id": dataset_name,
+                "metadata": {
+                    "dataset": dataset_name,
+                    "committer": COMMITTER_DID,
+                    "family_id": FAMILY_ID,
+                    "spine_id": spine_id,
+                    "status": "checkpoint",
+                    "files_so_far": files_so_far,
+                },
+            }),
+        )
+        .await;
 
     info!("checkpoint: braid created at {files_so_far} files");
     Ok(())
@@ -963,16 +1021,19 @@ async fn complete_dataset(
     dataset_name: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
     // Dehydrate → merkle root
-    let dehydrate = bridge.capability_call(
-        "dag",
-        "dehydration.trigger",
-        json!({"session_id": session_id}),
-    ).await;
+    let dehydrate = bridge
+        .capability_call(
+            "dag",
+            "dehydration.trigger",
+            json!({"session_id": session_id}),
+        )
+        .await;
 
     let merkle_root = match dehydrate {
-        BridgeResult::Handled(v) => {
-            v.get("merkle_root").and_then(|m| m.as_str()).map(String::from)
-        }
+        BridgeResult::Handled(v) => v
+            .get("merkle_root")
+            .and_then(|m| m.as_str())
+            .map(String::from),
         _ => {
             warn!("dehydration.trigger: not available — using session_id as root");
             None
@@ -982,54 +1043,58 @@ async fn complete_dataset(
     let root_hash = merkle_root.as_deref().unwrap_or(session_id);
 
     // Commit to spine
-    let _ = bridge.capability_call(
-        "session",
-        "commit",
-        json!({
-            "spine_id": spine_id,
-            "session_id": session_id,
-            "merkle_root": root_hash,
-            "committer": COMMITTER_DID,
-        }),
-    ).await;
+    let _ = bridge
+        .capability_call(
+            "session",
+            "commit",
+            json!({
+                "spine_id": spine_id,
+                "session_id": session_id,
+                "merkle_root": root_hash,
+                "committer": COMMITTER_DID,
+            }),
+        )
+        .await;
 
     // Sign
-    let sign_result = bridge.capability_call(
-        "crypto",
-        "sign",
-        json!({"message": root_hash}),
-    ).await;
+    let sign_result = bridge
+        .capability_call("crypto", "sign", json!({"message": root_hash}))
+        .await;
 
     let signature = match sign_result {
-        BridgeResult::Handled(v) => {
-            v.get("signature").and_then(|s| s.as_str()).map(String::from)
-        }
+        BridgeResult::Handled(v) => v
+            .get("signature")
+            .and_then(|s| s.as_str())
+            .map(String::from),
         _ => None,
     };
 
     // Final braid
-    let braid_result = bridge.capability_call(
-        "braid",
-        "create",
-        json!({
-            "data_hash": root_hash,
-            "strand_id": dataset_name,
-            "metadata": {
-                "dataset": dataset_name,
-                "committer": COMMITTER_DID,
-                "family_id": FAMILY_ID,
-                "spine_id": spine_id,
-                "signature": signature,
-                "status": "complete",
-            },
-        }),
-    ).await;
+    let braid_result = bridge
+        .capability_call(
+            "braid",
+            "create",
+            json!({
+                "data_hash": root_hash,
+                "strand_id": dataset_name,
+                "metadata": {
+                    "dataset": dataset_name,
+                    "committer": COMMITTER_DID,
+                    "family_id": FAMILY_ID,
+                    "spine_id": spine_id,
+                    "signature": signature,
+                    "status": "complete",
+                },
+            }),
+        )
+        .await;
 
     let braid_hash = match braid_result {
-        BridgeResult::Handled(v) => {
-            v.get("braid_hash").or_else(|| v.get("hash"))
-                .and_then(|h| h.as_str()).map(String::from)
-        }
+        BridgeResult::Handled(v) => v
+            .get("braid_hash")
+            .or_else(|| v.get("hash"))
+            .and_then(|h| h.as_str())
+            .map(String::from),
         _ => None,
     };
 
@@ -1048,8 +1113,12 @@ async fn dispatch_status(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let state = IngestState::load().unwrap_or_default();
 
     // Check disk state
-    let proteome_braided = std::path::Path::new(ALPHAFOLD_DATA).join(".braided").exists();
-    let structures_braided = std::path::Path::new(ALPHAFOLD_STRUCTURES).join(".braided").exists();
+    let proteome_braided = std::path::Path::new(ALPHAFOLD_DATA)
+        .join(".braided")
+        .exists();
+    let structures_braided = std::path::Path::new(ALPHAFOLD_STRUCTURES)
+        .join(".braided")
+        .exists();
     let progress_file = std::path::Path::new(ALPHAFOLD_STRUCTURES).join(".progress");
     let fetched_count = if progress_file.exists() {
         std::fs::read_to_string(&progress_file)
@@ -1064,8 +1133,11 @@ async fn dispatch_status(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let bucket_count = if structures_root.is_dir() {
         std::fs::read_dir(structures_root)
             .map(|entries| {
-                entries.filter_map(|e| e.ok())
-                    .filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.'))
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.')
+                    })
                     .count()
             })
             .unwrap_or(0)
@@ -1076,7 +1148,12 @@ async fn dispatch_status(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let accession_csv = std::path::Path::new(ALPHAFOLD_DATA).join("accession_ids.csv");
     let total_accessions = if accession_csv.exists() {
         std::fs::read_to_string(&accession_csv)
-            .map(|s| s.lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#')).count().saturating_sub(1))
+            .map(|s| {
+                s.lines()
+                    .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+                    .count()
+                    .saturating_sub(1)
+            })
             .unwrap_or(0)
     } else {
         0
@@ -1085,11 +1162,23 @@ async fn dispatch_status(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     Ok(ShadowOutcome::ok_with(
         format!(
             "alphafold.status: Phase A {} | Phase B {} ({}/{} buckets) | Phase C {} ({}/{} accessions)",
-            if state.phase_a_complete || proteome_braided { "complete" } else { "pending" },
-            if state.phase_b_complete || structures_braided { "complete" } else { "in-progress" },
+            if state.phase_a_complete || proteome_braided {
+                "complete"
+            } else {
+                "pending"
+            },
+            if state.phase_b_complete || structures_braided {
+                "complete"
+            } else {
+                "in-progress"
+            },
             state.phase_b_completed_buckets.len(),
             bucket_count,
-            if state.phase_c_complete { "complete" } else { "in-progress" },
+            if state.phase_c_complete {
+                "complete"
+            } else {
+                "in-progress"
+            },
             fetched_count,
             total_accessions,
         ),
@@ -1126,8 +1215,8 @@ async fn dispatch_manifest(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         ));
     }
 
-    let csv_content = std::fs::read_to_string(&accession_csv)
-        .map_err(|e| crate::ShadowError::Io(e))?;
+    let csv_content =
+        std::fs::read_to_string(&accession_csv).map_err(|e| crate::ShadowError::Io(e))?;
 
     let total_lines = csv_content.lines().count();
     let sample: Vec<&str> = csv_content.lines().take(10).collect();
@@ -1137,7 +1226,8 @@ async fn dispatch_manifest(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let tar_count = if proteome_root.is_dir() {
         std::fs::read_dir(proteome_root)
             .map(|entries| {
-                entries.filter_map(|e| e.ok())
+                entries
+                    .filter_map(|e| e.ok())
                     .filter(|e| e.file_name().to_string_lossy().ends_with(".tar"))
                     .count()
             })
@@ -1150,8 +1240,11 @@ async fn dispatch_manifest(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let bucket_count = if structures_root.is_dir() {
         std::fs::read_dir(structures_root)
             .map(|entries| {
-                entries.filter_map(|e| e.ok())
-                    .filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.'))
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.')
+                    })
                     .count()
             })
             .unwrap_or(0)
@@ -1282,7 +1375,10 @@ fn write_braided_marker(
         "braider": "membrane alphafold.ingest v1.0",
         "braided_at": epoch_secs(),
     });
-    if let Err(e) = std::fs::write(&marker, serde_json::to_string_pretty(&data).unwrap_or_default()) {
+    if let Err(e) = std::fs::write(
+        &marker,
+        serde_json::to_string_pretty(&data).unwrap_or_default(),
+    ) {
         warn!("failed to write .braided marker: {e}");
     }
 }
@@ -1294,83 +1390,14 @@ fn epoch_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Direct UDS JSON-RPC call to nestGate with a custom timeout.
+/// Direct JSON-RPC call to nestGate with a custom timeout.
 ///
-/// Bypasses the NeuralBridge (3s default timeout) for operations that need
-/// minutes to complete (e.g. content.ingest on a large directory, content.fetch
-/// for multi-GB files). Sends the riboCipher `[0xEC, 0x01]` prefix that all
-/// primals expect on UDS connections.
+/// Delegates to `evidence::provenance::direct_uds_call` which uses the
+/// transport-agnostic endpoint resolution (UDS on Unix, TCP on Windows).
 async fn direct_nestgate_call(
     method: &str,
     params: serde_json::Value,
     timeout: Duration,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-    let socket_path = resolve_nestgate_socket();
-
-    let request = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": params,
-    });
-    let request_str = serde_json::to_string(&request)?;
-
-    let stream = tokio::time::timeout(
-        Duration::from_secs(5),
-        tokio::net::UnixStream::connect(&socket_path),
-    )
-    .await
-    .map_err(|_| format!("connect timeout: {}", socket_path.display()))?
-    .map_err(|e| format!("connect failed: {}: {e}", socket_path.display()))?;
-
-    let (reader, mut writer) = tokio::io::split(stream);
-
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-
-    // riboCipher ecosystem signal prefix — required on all UDS connections
-    writer.write_all(&[0xEC, 0x01]).await?;
-    writer.write_all(request_str.as_bytes()).await?;
-    writer.write_all(b"\n").await?;
-    writer.flush().await?;
-
-    let mut buf_reader = tokio::io::BufReader::new(reader);
-    let mut line = String::new();
-
-    let read_result = tokio::time::timeout(timeout, buf_reader.read_line(&mut line))
-        .await
-        .map_err(|_| format!("read timeout ({timeout:?}): {}", socket_path.display()))?
-        .map_err(|e| format!("read error: {e}"))?;
-
-    if read_result == 0 {
-        return Err("empty response from nestGate".into());
-    }
-
-    let response: serde_json::Value = serde_json::from_str(line.trim())?;
-
-    if let Some(error) = response.get("error") {
-        let msg = error.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
-        return Err(format!("{method}: {msg}").into());
-    }
-
-    response.get("result")
-        .cloned()
-        .ok_or_else(|| format!("{method}: no result in response").into())
-}
-
-/// Resolve the nestGate socket path from known locations.
-fn resolve_nestgate_socket() -> std::path::PathBuf {
-    let candidates = [
-        "/run/user/1000/membrane/nestgate-westgate-tower-155f.sock",
-        "/run/user/1000/membrane/nestgate.sock",
-        "/tmp/membrane/nestgate.sock",
-    ];
-
-    for candidate in &candidates {
-        let p = std::path::PathBuf::from(candidate);
-        if p.exists() {
-            return p;
-        }
-    }
-
-    std::path::PathBuf::from(candidates[0])
+    crate::evidence::provenance::direct_uds_call("nestgate", method, params, timeout).await
 }

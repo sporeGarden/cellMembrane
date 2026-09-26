@@ -166,10 +166,6 @@ pub async fn connect_transport(endpoint: &TransportEndpoint) -> io::Result<Trans
 /// This is the primary entry point for transport injection. Systemd units,
 /// biomeOS, and songBird inject the endpoint via the env var; local dev
 /// falls back to the platform default.
-#[allow(
-    dead_code,
-    reason = "G66 transport injection entry point — wired per-primal incrementally"
-)]
 pub fn endpoint_from_env_or_default(binary: &str, port: Option<u16>) -> TransportEndpoint {
     if let Ok(val) = std::env::var(cellmembrane_types::transport::ENV_TRANSPORT_ENDPOINT) {
         if let Ok(ep) = TransportEndpoint::from_env_value(&val) {

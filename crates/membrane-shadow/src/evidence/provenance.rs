@@ -28,23 +28,20 @@ const BRAIDED_MARKER: &str = ".braided";
 /// Default timeout for primal UDS calls.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
-// ── Direct UDS JSON-RPC Client ──────────────────────────────────────
+// ── Transport-Agnostic JSON-RPC Client ──────────────────────────────
 
-/// Direct UDS JSON-RPC call to a primal socket with custom timeout.
+/// JSON-RPC call to a primal via transport-agnostic endpoint resolution.
 ///
-/// Sends the riboCipher `[0xEC, 0x01]` prefix that all primals expect
-/// on UDS connections. This bypasses the NeuralBridge (3s default timeout)
-/// for operations that may take longer.
-///
-/// Extracted from `alphafold_dispatch.rs::direct_nestgate_call` and
-/// generalized to work with any primal socket.
+/// Uses `call_endpoint` (UDS on Unix, TCP on Windows) with riboCipher
+/// signal prefix. Bypasses the NeuralBridge (3s default timeout) for
+/// operations that may take longer (e.g. evidence braiding, CAS ingest).
 pub(crate) async fn direct_uds_call(
     socket_name: &str,
     method: &str,
     params: serde_json::Value,
     timeout: Duration,
 ) -> std::result::Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-    let socket_path = resolve_socket(socket_name);
+    let endpoint = resolve_primal_endpoint(socket_name);
 
     let request = json!({
         "jsonrpc": "2.0",
@@ -56,17 +53,15 @@ pub(crate) async fn direct_uds_call(
 
     let stream = tokio::time::timeout(
         Duration::from_secs(5),
-        tokio::net::UnixStream::connect(&socket_path),
+        crate::transport::connect_transport(&endpoint),
     )
     .await
-    .map_err(|_| format!("connect timeout: {}", socket_path.display()))?
-    .map_err(|e| format!("connect failed: {}: {e}", socket_path.display()))?;
-
-    let (reader, mut writer) = tokio::io::split(stream);
+    .map_err(|e| format!("connect timeout: {endpoint}: {e}"))?
+    .map_err(|e| format!("connect failed: {endpoint}: {e}"))?;
 
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let (reader, mut writer) = tokio::io::split(stream);
 
-    // riboCipher ecosystem signal prefix — required on all UDS connections
     writer.write_all(&[0xEC, 0x01]).await?;
     writer.write_all(request_str.as_bytes()).await?;
     writer.write_all(b"\n").await?;
@@ -77,7 +72,7 @@ pub(crate) async fn direct_uds_call(
 
     let read_result = tokio::time::timeout(timeout, buf_reader.read_line(&mut line))
         .await
-        .map_err(|_| format!("read timeout ({timeout:?}): {}", socket_path.display()))?
+        .map_err(|e| format!("read timeout ({timeout:?}): {endpoint}: {e}"))?
         .map_err(|e| format!("read error: {e}"))?;
 
     if read_result == 0 {
@@ -100,31 +95,29 @@ pub(crate) async fn direct_uds_call(
         .ok_or_else(|| format!("{method}: no result in response").into())
 }
 
-/// Resolve a primal socket path from known locations.
-fn resolve_socket(name: &str) -> PathBuf {
-    let candidates = [
-        format!("/run/membrane/{name}.sock"),
-        format!("/run/user/1000/membrane/{name}.sock"),
-        format!("/tmp/membrane/{name}.sock"),
-    ];
-
-    for candidate in &candidates {
-        let p = PathBuf::from(candidate);
-        if p.exists() {
-            return p;
-        }
-    }
-
-    PathBuf::from(&candidates[0])
+/// Resolve a primal endpoint using the transport layer.
+///
+/// On Unix: resolves to UDS socket from standard locations.
+/// On non-Unix: resolves to TCP loopback using the registry port.
+fn resolve_primal_endpoint(name: &str) -> cellmembrane_types::TransportEndpoint {
+    crate::transport::endpoint_from_env_or_default(
+        name,
+        cellmembrane_types::MembraneService::for_binary(name).and_then(|s| s.port),
+    )
 }
 
 /// Check whether the nest atomic provenance stack is available locally.
 ///
-/// Returns true if the rhizoCrypt DAG socket exists — the minimum
-/// requirement for evidence braiding. On golgiBody (VPS), the trio
-/// isn't running, so braiding is skipped.
+/// On Unix: checks if the rhizoCrypt DAG socket exists on disk.
+/// On non-Unix: returns true (deferred to runtime TCP probe during braiding).
+/// On golgiBody (VPS), the trio isn't running, so braiding is skipped.
 pub(crate) fn is_trio_available() -> bool {
-    resolve_socket("dag").exists()
+    let endpoint = resolve_primal_endpoint("dag");
+    match &endpoint {
+        cellmembrane_types::TransportEndpoint::Uds { path } => Path::new(path).exists(),
+        cellmembrane_types::TransportEndpoint::Tcp { .. } => true,
+        _ => false,
+    }
 }
 
 // ── Evidence Braid Pipeline ─────────────────────────────────────────
@@ -232,7 +225,11 @@ pub(crate) async fn braid_evidence_collection(
             Err(e) => warn!(file = %entry.path, error = %e, "evidence braid: event append failed"),
         }
     }
-    info!(appended = append_count, total = entries.len(), "evidence braid: DAG events appended");
+    info!(
+        appended = append_count,
+        total = entries.len(),
+        "evidence braid: DAG events appended"
+    );
 
     // Step 3: Trigger dehydration → merkle root
     let merkle_root = match direct_uds_call(
@@ -245,10 +242,11 @@ pub(crate) async fn braid_evidence_collection(
     {
         Ok(v) => {
             // dag.dehydrate returns the merkle root as a bare string
-            let root = v
-                .as_str()
-                .map(String::from)
-                .or_else(|| v.get("merkle_root").and_then(|m| m.as_str()).map(String::from));
+            let root = v.as_str().map(String::from).or_else(|| {
+                v.get("merkle_root")
+                    .and_then(|m| m.as_str())
+                    .map(String::from)
+            });
             info!(merkle_root = ?root, "evidence braid: dehydration complete");
             root
         }
@@ -316,7 +314,10 @@ pub(crate) async fn braid_evidence_collection(
             .await
         {
             crate::bridge::BridgeResult::Handled(v) => {
-                let sig = v.get("signature").and_then(|s| s.as_str()).map(String::from);
+                let sig = v
+                    .get("signature")
+                    .and_then(|s| s.as_str())
+                    .map(String::from);
                 info!(signed = sig.is_some(), "evidence braid: bearDog signature");
                 sig
             }
@@ -607,10 +608,7 @@ pub(crate) async fn braid_site_evidence(
 }
 
 /// Discover evidence collections (subdirectories) that haven't been braided yet.
-fn discover_collections(
-    evidence_dir: &Path,
-    filter: Option<&str>,
-) -> Vec<(String, PathBuf)> {
+fn discover_collections(evidence_dir: &Path, filter: Option<&str>) -> Vec<(String, PathBuf)> {
     let Ok(entries) = std::fs::read_dir(evidence_dir) else {
         return vec![];
     };
@@ -652,9 +650,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_socket_returns_path() {
-        let path = resolve_socket("dag");
-        assert!(path.to_string_lossy().contains("dag.sock"));
+    fn resolve_primal_endpoint_returns_valid() {
+        let endpoint = resolve_primal_endpoint("dag");
+        let s = format!("{endpoint}");
+        assert!(!s.is_empty(), "endpoint should be non-empty: {s}");
     }
 
     #[test]
@@ -801,11 +800,7 @@ mime = "image/png"
         let dir = std::env::temp_dir().join("membrane-provenance-braided");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("braided-collection")).unwrap();
-        std::fs::write(
-            dir.join("braided-collection/.braided"),
-            b"{}",
-        )
-        .unwrap();
+        std::fs::write(dir.join("braided-collection/.braided"), b"{}").unwrap();
         std::fs::create_dir_all(dir.join("fresh-collection")).unwrap();
 
         let collections = discover_collections(&dir, None);

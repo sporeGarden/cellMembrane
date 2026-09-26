@@ -132,21 +132,34 @@ async fn probe_mesh_status() -> super::ProbeResult {
     }
 
     let socket_path = resolve_mesh_relay_socket();
+    let request = crate::jsonrpc::HEALTH_REQUEST;
 
-    if !Path::new(&socket_path).exists() {
-        return super::ProbeResult::fail("mesh relay socket not found");
+    if Path::new(&socket_path).exists() {
+        let mesh_request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "mesh.status",
+            "params": {},
+            "id": 1
+        });
+        if let Ok(response) = uds_jsonrpc_call(&socket_path, &mesh_request.to_string()).await {
+            return parse_mesh_response(&response);
+        }
     }
 
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": "mesh.status",
-        "params": {},
-        "id": 1
-    });
-
-    match uds_jsonrpc_call(&socket_path, &request.to_string()).await {
-        Ok(response) => parse_mesh_response(&response),
-        Err(e) => super::ProbeResult::fail(e.to_string()),
+    let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+        host: cellmembrane_types::service::BIND_LOOPBACK.into(),
+        port: federation_port,
+    };
+    match crate::jsonrpc::call_endpoint(&endpoint, request).await {
+        Ok(response) => {
+            if response.contains("result") || response.contains("error") {
+                super::ProbeResult::pass("mesh relay responding (TCP fallback)")
+            } else {
+                super::ProbeResult::fail("mesh relay TCP: unexpected response")
+            }
+        }
+        Err(_) => super::ProbeResult::fail("mesh relay not reachable (UDS + TCP)"),
     }
 }
 
@@ -360,7 +373,7 @@ async fn probe_primal_jsonrpc(primal: &str) -> bool {
 /// Checks the service registry for a known TCP port, then sends the standard
 /// health request over `TransportEndpoint::Tcp { 127.0.0.1, port }`. This
 /// mirrors the `builder.serve` pattern already used by sub-builders on port 9800.
-async fn try_tcp_health_probe(primal: &str) -> bool {
+pub(crate) async fn try_tcp_health_probe(primal: &str) -> bool {
     let svc = cellmembrane_types::MembraneService::for_binary(primal);
     let Some(port) = svc.and_then(|s| s.port) else {
         return false;

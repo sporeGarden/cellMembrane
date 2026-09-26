@@ -49,9 +49,7 @@ pub async fn push_evidence(
     }
 
     // Pre-flight: check remote disk
-    if let Ok((disk_out, 0)) =
-        crate::ssh::exec_raw(config, "df --output=pcent / | tail -1").await
-    {
+    if let Ok((disk_out, 0)) = crate::ssh::exec_raw(config, "df --output=pcent / | tail -1").await {
         if let Ok(pct) = disk_out.trim().trim_end_matches('%').trim().parse::<u8>() {
             if pct >= 90 {
                 return Ok(ShadowOutcome {
@@ -209,9 +207,7 @@ async fn push_single_evidence(
     local_base: &std::path::Path,
     remote_base: &str,
 ) -> PushResult {
-    let rel_path = local_path
-        .strip_prefix(local_base)
-        .unwrap_or(local_path);
+    let rel_path = local_path.strip_prefix(local_base).unwrap_or(local_path);
     let rel_str = rel_path.to_string_lossy().replace('\\', "/");
 
     // BLAKE3 hash local file
@@ -267,7 +263,8 @@ async fn push_single_evidence(
 
     match crate::ssh::scp_to(config, &local_path.to_string_lossy(), &remote_tmp).await {
         Ok(()) => {
-            let mv_cmd = format!("chmod 644 '{remote_tmp}' && mv -f '{remote_tmp}' '{remote_path}'");
+            let mv_cmd =
+                format!("chmod 644 '{remote_tmp}' && mv -f '{remote_tmp}' '{remote_path}'");
             if let Err(e) = crate::ssh::exec_raw(config, &mv_cmd).await {
                 warn!(file = %rel_str, error = %e, "evidence: atomic rename failed");
                 PushResult::Failed
@@ -325,9 +322,7 @@ fn collect_evidence_files(dir: &std::path::Path) -> Result<Vec<std::path::PathBu
 /// Resolve evidence paths for a publish site.
 ///
 /// Returns `(local_evidence_dir, remote_evidence_dir)` if the site has evidence configured.
-pub fn resolve_evidence_paths(
-    site: &PublishSite,
-) -> Option<(std::path::PathBuf, String)> {
+pub fn resolve_evidence_paths(site: &PublishSite) -> Option<(std::path::PathBuf, String)> {
     let evidence_dir = site.evidence_dir?;
     let local = std::path::PathBuf::from(evidence_dir);
     // Remote evidence goes alongside the public_dir on golgiBody
@@ -362,46 +357,35 @@ pub async fn dispatch(
                 ))
             })?;
             let (local, remote) = resolve_evidence_paths(site).ok_or_else(|| {
-                ShadowError::config(format!(
-                    "site {repo_name} has no evidence_dir configured"
-                ))
+                ShadowError::config(format!("site {repo_name} has no evidence_dir configured"))
             })?;
             push_evidence(config, &local, &remote).await
         }
         "evidence.manifest" => {
             let repo_name = crate::cli::require_arg(args, 0, "site_name")?;
-            let site = crate::seo::find_publish_site(repo_name).ok_or_else(|| {
-                ShadowError::config(format!("unknown publish site: {repo_name}"))
-            })?;
+            let site = crate::seo::find_publish_site(repo_name)
+                .ok_or_else(|| ShadowError::config(format!("unknown publish site: {repo_name}")))?;
             let evidence_dir = site.evidence_dir.ok_or_else(|| {
-                ShadowError::config(format!(
-                    "site {repo_name} has no evidence_dir configured"
-                ))
+                ShadowError::config(format!("site {repo_name} has no evidence_dir configured"))
             })?;
             let local = std::path::Path::new(evidence_dir);
             manifest::generate_manifest(local).await
         }
         "evidence.status" => {
             let repo_name = crate::cli::require_arg(args, 0, "site_name")?;
-            let site = crate::seo::find_publish_site(repo_name).ok_or_else(|| {
-                ShadowError::config(format!("unknown publish site: {repo_name}"))
-            })?;
+            let site = crate::seo::find_publish_site(repo_name)
+                .ok_or_else(|| ShadowError::config(format!("unknown publish site: {repo_name}")))?;
             let (local, remote) = resolve_evidence_paths(site).ok_or_else(|| {
-                ShadowError::config(format!(
-                    "site {repo_name} has no evidence_dir configured"
-                ))
+                ShadowError::config(format!("site {repo_name} has no evidence_dir configured"))
             })?;
             evidence_status(config, &local, &remote).await
         }
         "evidence.braid" => {
             let repo_name = crate::cli::require_arg(args, 0, "site_name")?;
-            let site = crate::seo::find_publish_site(repo_name).ok_or_else(|| {
-                ShadowError::config(format!("unknown publish site: {repo_name}"))
-            })?;
+            let site = crate::seo::find_publish_site(repo_name)
+                .ok_or_else(|| ShadowError::config(format!("unknown publish site: {repo_name}")))?;
             let evidence_dir = site.evidence_dir.ok_or_else(|| {
-                ShadowError::config(format!(
-                    "site {repo_name} has no evidence_dir configured"
-                ))
+                ShadowError::config(format!("site {repo_name} has no evidence_dir configured"))
             })?;
             let collection = crate::cli::extract_flag_value(args, "--collection");
             let local = std::path::Path::new(evidence_dir);
@@ -456,6 +440,7 @@ mod tests {
             public_dir: "/opt/test/public",
             build_subdir: None,
             evidence_dir: None,
+            artifact_command: None,
             seo: crate::seo::SiteConfig {
                 host: "test.primals.eco",
                 sitemap: "https://test.primals.eco/sitemap.xml",
@@ -474,6 +459,7 @@ mod tests {
             public_dir: "/opt/ecoPrimals/detroit/public",
             build_subdir: Some("site"),
             evidence_dir: Some("/home/sporegate/Development/detroit/evidence"),
+            artifact_command: Some(&["detroit-build", "--root", "."]),
             seo: crate::seo::SiteConfig {
                 host: "detroit.primals.eco",
                 sitemap: "https://detroit.primals.eco/sitemap.xml",

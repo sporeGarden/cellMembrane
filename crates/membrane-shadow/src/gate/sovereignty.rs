@@ -263,10 +263,29 @@ async fn probe_s4_auth() -> StatusProbe {
         }
     }
 
+    if let Some(svc) = cellmembrane_types::MembraneService::for_binary(binary_name)
+        && let Some(port) = svc.port
+    {
+        let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+            host: cellmembrane_types::service::BIND_LOOPBACK.into(),
+            port,
+        };
+        if let Ok(response) = crate::jsonrpc::call_endpoint(&endpoint, request).await {
+            let is_alive = response.contains("result") || response.contains("error");
+            if is_alive {
+                return StatusProbe {
+                    name: "sovereignty.s4_auth".into(),
+                    ok: true,
+                    detail: format!("RESPONDING — {binary_name} alive (TCP fallback :{port})"),
+                };
+            }
+        }
+    }
+
     StatusProbe {
         name: "sovereignty.s4_auth".into(),
         ok: false,
-        detail: format!("UNREACHABLE — {binary_name} not responding on UDS"),
+        detail: format!("UNREACHABLE — {binary_name} not responding"),
     }
 }
 

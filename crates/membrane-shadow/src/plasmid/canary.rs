@@ -360,42 +360,48 @@ async fn kill_canary(slot: &CanarySlot) {
 async fn probe_canary(slot: &CanarySlot) -> CanaryHealth {
     let request = crate::jsonrpc::HEALTH_REQUEST;
 
-    if !slot.socket_path.exists() {
+    if slot.socket_path.exists() {
+        match crate::jsonrpc::call(&slot.socket_path, request).await {
+            Ok(response)
+                if serde_json::from_str::<serde_json::Value>(&response)
+                    .is_ok_and(|j| j.get("status").is_some() || j.get("result").is_some()) =>
+            {
+                return CanaryHealth {
+                    primal: slot.primal.clone(),
+                    commit: slot.commit.clone(),
+                    alive: true,
+                    detail: "healthy".into(),
+                };
+            }
+            Ok(response) => {
+                return CanaryHealth {
+                    primal: slot.primal.clone(),
+                    commit: slot.commit.clone(),
+                    alive: false,
+                    detail: format!(
+                        "unexpected response: {}",
+                        response.chars().take(80).collect::<String>()
+                    ),
+                };
+            }
+            Err(_) => {}
+        }
+    }
+
+    if crate::gate::health::try_tcp_health_probe(&slot.primal).await {
         return CanaryHealth {
             primal: slot.primal.clone(),
             commit: slot.commit.clone(),
-            alive: false,
-            detail: "socket not found".into(),
+            alive: true,
+            detail: "healthy (TCP fallback)".into(),
         };
     }
 
-    match crate::jsonrpc::call(&slot.socket_path, request).await {
-        Ok(response)
-            if serde_json::from_str::<serde_json::Value>(&response)
-                .is_ok_and(|j| j.get("status").is_some() || j.get("result").is_some()) =>
-        {
-            CanaryHealth {
-                primal: slot.primal.clone(),
-                commit: slot.commit.clone(),
-                alive: true,
-                detail: "healthy".into(),
-            }
-        }
-        Ok(response) => CanaryHealth {
-            primal: slot.primal.clone(),
-            commit: slot.commit.clone(),
-            alive: false,
-            detail: format!(
-                "unexpected response: {}",
-                response.chars().take(80).collect::<String>()
-            ),
-        },
-        Err(e) => CanaryHealth {
-            primal: slot.primal.clone(),
-            commit: slot.commit.clone(),
-            alive: false,
-            detail: e.to_string(),
-        },
+    CanaryHealth {
+        primal: slot.primal.clone(),
+        commit: slot.commit.clone(),
+        alive: false,
+        detail: "not reachable (UDS + TCP)".into(),
     }
 }
 
