@@ -165,7 +165,12 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
         }
         "seo.url_notify" => {
             let site = crate::cli::extract_flag_value(args, "--site");
-            let report = url_notify(site.as_deref()).await?;
+            let limit: usize = crate::cli::extract_flag_value(args, "--limit")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(200);
+            let tier: Option<u8> = crate::cli::extract_flag_value(args, "--tier")
+                .and_then(|v| v.parse().ok());
+            let report = url_notify(site.as_deref(), limit, tier).await?;
             Ok(crate::ShadowOutcome::ok(report))
         }
         "seo.cascade" => {
@@ -240,11 +245,69 @@ async fn submit_indexnow(site: Option<&str>) -> Result<String> {
     python_agent(&["indexnow"]).await
 }
 
+/// URL priority tier for Indexing API quota management.
+///
+/// Google's Indexing API has a 200 requests/day quota.
+/// Rather than blast all URLs and waste quota on taxonomy edges,
+/// we prioritize: homepage + nav sections first, then key content,
+/// then analysis, then taxonomy pages last.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum UrlTier {
+    /// Homepage + top-level nav sections (/, /evidence/, /network/, /timeline/, etc.)
+    Critical = 0,
+    /// Named content pages under /network/ (actors, judges, entities, political)
+    High = 1,
+    /// Analysis + evidence subpages
+    Medium = 2,
+    /// Taxonomy listing pages (/actors/*, /entities/*, /courts/*, /connections/*)
+    Low = 3,
+}
+
+/// Classify a URL into a priority tier for Indexing API batching.
+fn classify_url_tier(url: &str) -> UrlTier {
+    let path = url
+        .strip_prefix("https://")
+        .and_then(|s| s.find('/').map(|i| &s[i..]))
+        .unwrap_or("/");
+
+    // Tier 0: homepage + top-level section indexes
+    if path == "/" {
+        return UrlTier::Critical;
+    }
+    let top_sections = [
+        "/evidence/", "/network/", "/analysis/", "/timeline/",
+        "/sources/", "/validate/", "/about/", "/legal/",
+        "/contact/", "/open-letters/", "/books/", "/site-index/",
+    ];
+    if top_sections.iter().any(|s| path == *s) {
+        return UrlTier::Critical;
+    }
+
+    // Tier 1: named content pages under /network/
+    if path.starts_with("/network/") && path != "/network/" {
+        return UrlTier::High;
+    }
+
+    // Tier 2: analysis + evidence subpages
+    if path.starts_with("/analysis/") || path.starts_with("/evidence/") {
+        return UrlTier::Medium;
+    }
+
+    // Tier 3: taxonomy pages
+    UrlTier::Low
+}
+
 /// Notify Google Indexing API about updated URLs for a site.
 ///
-/// Fetches the sitemap, extracts `<loc>` URLs, and notifies Google's
-/// Indexing API (`urlNotifications:publish` with `URL_UPDATED`).
-async fn url_notify(site: Option<&str>) -> Result<String> {
+/// Fetches the sitemap, extracts `<loc>` URLs, sorts by priority tier,
+/// and respects the `--limit` flag to stay within daily quota.
+///
+/// Usage:
+///   membrane seo.url_notify [--site HOST] [--limit N] [--tier 0|1|2|3]
+///
+/// Default limit: 200 (daily quota). Use `--tier` to notify only a
+/// specific tier (0=critical, 1=high, 2=medium, 3=low).
+async fn url_notify(site: Option<&str>, limit: usize, tier_filter: Option<u8>) -> Result<String> {
     let sites: Vec<&PublishSite> = match site {
         Some(host) => {
             let s = PUBLISH_SITES
@@ -266,7 +329,64 @@ async fn url_notify(site: Option<&str>) -> Result<String> {
         return Ok("no URLs to notify".to_string());
     }
 
-    gsc::url_notify(&all_urls).await
+    // Classify and sort by tier
+    let mut tiered: Vec<(UrlTier, String)> = all_urls
+        .into_iter()
+        .map(|u| (classify_url_tier(&u), u))
+        .collect();
+    tiered.sort_by_key(|(tier, _)| *tier);
+
+    // Filter by tier if requested
+    if let Some(t) = tier_filter {
+        let target = match t {
+            0 => UrlTier::Critical,
+            1 => UrlTier::High,
+            2 => UrlTier::Medium,
+            _ => UrlTier::Low,
+        };
+        tiered.retain(|(tier, _)| *tier == target);
+    }
+
+    // Tier summary
+    let tier_counts: Vec<String> = [
+        (UrlTier::Critical, "critical"),
+        (UrlTier::High, "high"),
+        (UrlTier::Medium, "medium"),
+        (UrlTier::Low, "low"),
+    ]
+    .iter()
+    .filter_map(|(t, label)| {
+        let count = tiered.iter().filter(|(tier, _)| tier == t).count();
+        if count > 0 {
+            Some(format!("{count} {label}"))
+        } else {
+            None
+        }
+    })
+    .collect();
+
+    let total = tiered.len();
+    let batch_size = total.min(limit);
+    let batch_urls: Vec<String> = tiered.into_iter().take(batch_size).map(|(_, u)| u).collect();
+
+    tracing::info!(
+        "url_notify: {} total URLs, sending batch of {} (limit {}), tiers: {}",
+        total,
+        batch_urls.len(),
+        limit,
+        tier_counts.join(", ")
+    );
+
+    let result = gsc::url_notify(&batch_urls).await?;
+
+    if batch_size < total {
+        Ok(format!(
+            "{result} (batch {batch_size}/{total} — {remaining} remaining, use --tier or increase --limit)",
+            remaining = total - batch_size
+        ))
+    } else {
+        Ok(result)
+    }
 }
 
 /// Notify all crawlers about site changes (IndexNow + GSC sitemap resubmit + URL notify).
@@ -290,7 +410,9 @@ pub async fn notify_crawlers(site: Option<&str>) -> Result<String> {
     }
 
     // Google URL Notification — direct indexing signal (non-fatal)
-    match url_notify(site).await {
+    // Webhook path: only send critical+high tier (nav + content pages)
+    // to conserve daily quota (200/day) for the most impactful URLs.
+    match url_notify(site, 50, None).await {
         Ok(msg) => lines.push(format!("  [seo] url_notify: {msg}")),
         Err(e) => lines.push(format!("  [seo] url_notify: FAILED — {e}")),
     }
