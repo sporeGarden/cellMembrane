@@ -204,6 +204,37 @@ pub async fn pull(config: &ShadowConfig) -> Result<SyncResult> {
     Ok(parse_sync_output(&output))
 }
 
+/// Run cascade sync via mesh gossip — the NanoWire replacement for SSH pull.
+///
+/// 1. Emits `cascade.notify` gossip with this gate's current state
+/// 2. Queries `cascade.status` on the peer to verify convergence
+///
+/// During shadow period, both this and the SSH path run; results are compared.
+pub async fn pull_mesh(config: &ShadowConfig) -> Result<SyncResult> {
+    let gate = resolve_local_gate_identity();
+    let root = crate::temporal::resolve_workspace_root()?;
+    let m = crate::manifest::load_from_workspace(&root)?;
+
+    let repos: Vec<(&str, &crate::manifest::RepoEntry)> = m.gate_repos(&gate);
+    let total = u32::try_from(repos.len()).unwrap_or(u32::MAX);
+
+    let heads = crate::temporal::post_sync_content::collect_cascade_heads(&root, &repos).await;
+
+    crate::temporal::post_sync_content::emit_cascade_notify(
+        &gate,
+        m.meta.wave,
+        &heads,
+        0,
+        0,
+        0,
+        total,
+    )
+    .await;
+
+    let status = query_cascade_status(config).await?;
+    Ok(status)
+}
+
 /// Run parity check on the VPS workspace.
 ///
 /// Shadow for: `biomeOS gate.check`
@@ -212,6 +243,79 @@ pub async fn check(config: &ShadowConfig) -> Result<SyncResult> {
     let cmd = format!("cd {root} && membrane temporal.check 2>&1");
     let output = ssh::exec(config, &cmd).await?;
     Ok(parse_sync_output(&output))
+}
+
+/// Run parity check via mesh — queries `cascade.status` on the peer.
+///
+/// Uses songBird federation `mesh.query` to request the peer's cascade
+/// status without SSH. The peer must have `cascade.notify` handling wired.
+pub async fn check_mesh(config: &ShadowConfig) -> Result<SyncResult> {
+    query_cascade_status(config).await
+}
+
+/// Query cascade status from a mesh peer via songBird federation RPC.
+///
+/// Sends `cascade.status` to the peer's songBird `:7700` and parses
+/// the response into a `SyncResult`.
+async fn query_cascade_status(config: &ShadowConfig) -> Result<SyncResult> {
+    let peer_host = &config.ssh_host;
+    let port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+        host: peer_host.clone(),
+        port,
+    };
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "cascade.status",
+        "params": {
+            "gate": resolve_local_gate_identity(),
+        },
+        "id": 1
+    })
+    .to_string();
+
+    let response = crate::jsonrpc::call_endpoint(&endpoint, &request).await?;
+
+    let json: serde_json::Value = serde_json::from_str(&response).map_err(|e| {
+        crate::error::ShadowError::config(format!("cascade.status parse error: {e}"))
+    })?;
+
+    if let Some(result) = json.get("result") {
+        Ok(SyncResult {
+            gate: result
+                .get("gate")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            total: result
+                .get("total")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            synced: result
+                .get("synced")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            drifted: result
+                .get("drifted")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            missing: result
+                .get("missing")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            raw_output: response,
+        })
+    } else {
+        let error_msg = json
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown error");
+        Err(crate::error::ShadowError::config(format!(
+            "cascade.status error: {error_msg}"
+        )))
+    }
 }
 
 fn parse_sync_output(output: &str) -> SyncResult {

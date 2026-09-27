@@ -33,13 +33,17 @@ use super::post_sync_harvest::{run_depot_staleness_and_fetch, run_post_cascade_r
 ///
 /// Returns `(harvest_info_string, all_ok)` — `all_ok` is false if harvest
 /// or refresh reported failures (DIV-7 fix).
+/// Post-sync pipeline return: `(harvest_info, all_ok, cascade_heads)`.
+///
+/// `cascade_heads` contains `repo_name → tree SHA` for all synced repos,
+/// used by the caller to emit `cascade.notify` gossip.
 pub(super) async fn run_post_sync_phases(
     opts: &CascadeOpts<'_>,
     root: &std::path::Path,
     m: &crate::manifest::EcosystemManifest,
     repos: &[(&str, &crate::manifest::RepoEntry)],
     lines: &mut Vec<String>,
-) -> (String, bool) {
+) -> (String, bool, std::collections::BTreeMap<String, String>) {
     let mut harvest_info = String::new();
     let mut all_ok = true;
     let do_harvest = opts.post_sync != PostSyncPhase::None && opts.mode == CascadeMode::Sync;
@@ -115,10 +119,12 @@ pub(super) async fn run_post_sync_phases(
         }
     }
 
+    let mut cascade_heads = std::collections::BTreeMap::new();
+
     if opts.mode == CascadeMode::Sync {
-        let heads = collect_cascade_heads(root, repos).await;
-        if !heads.is_empty() {
-            run_rootpulse_sovereignty(m.meta.wave, opts.gate, &heads, lines).await;
+        cascade_heads = collect_cascade_heads(root, repos).await;
+        if !cascade_heads.is_empty() {
+            run_rootpulse_sovereignty(m.meta.wave, opts.gate, &cascade_heads, lines).await;
         }
 
         run_commit_drift_pipeline(lines).await;
@@ -129,7 +135,7 @@ pub(super) async fn run_post_sync_phases(
         run_gate_hygiene(lines).await;
     }
 
-    (harvest_info, all_ok)
+    (harvest_info, all_ok, cascade_heads)
 }
 
 /// Check whether this gate should delegate builds to the primary build authority.
@@ -244,7 +250,10 @@ async fn run_gate_hygiene(lines: &mut Vec<String>) {
     if forgejo_archive.exists() {
         match purge_stale_cache(forgejo_archive, 86400) {
             Ok(freed) if freed > 0 => {
-                cleaned.push(format!("forgejo-archive: {:.1}MB freed", freed as f64 / 1_048_576.0));
+                cleaned.push(format!(
+                    "forgejo-archive: {:.1}MB freed",
+                    freed as f64 / 1_048_576.0
+                ));
             }
             Ok(_) => {}
             Err(e) => tracing::debug!(error = %e, "hygiene: forgejo-archive cleanup failed"),

@@ -281,3 +281,99 @@ pub(super) async fn check_content_health(root: &std::path::Path, lines: &mut Vec
         "  [content] sporePrint healthy ({file_count} files, index {size}B)"
     ));
 }
+
+// ── Cascade Gossip ──────────────────────────────────────────────────
+
+/// Emit `cascade.notify` gossip event via songBird mesh.
+///
+/// Tells all mesh peers what repos this gate just synced and their tree SHAs.
+/// Peers that are stale on any repo can then pull autonomously.
+/// Fire-and-forget — failures are non-fatal (tracing visibility only).
+pub(crate) async fn emit_cascade_notify(
+    gate: &str,
+    wave: u32,
+    heads: &std::collections::BTreeMap<String, String>,
+    synced: u32,
+    failed: u32,
+    cloned: u32,
+    total: u32,
+) {
+    use crate::temporal::types::{CascadeNotify, CascadeSyncStatus, RepoSyncResult};
+
+    let repos: Vec<RepoSyncResult> = heads
+        .iter()
+        .map(|(name, sha)| RepoSyncResult {
+            name: name.clone(),
+            head_sha: sha.clone(),
+            status: CascadeSyncStatus::Synced,
+        })
+        .collect();
+
+    let notify = CascadeNotify {
+        gate: gate.to_string(),
+        wave,
+        repos,
+        total,
+        synced,
+        failed,
+        cloned,
+        synced_at: time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_else(|_| "unknown".into()),
+    };
+
+    let socket_path = std::path::PathBuf::from(crate::gate::sockets::resolve_mesh_relay_socket());
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "mesh.publish",
+        "params": {
+            "topic": "cascade.notify",
+            "payload": notify,
+        },
+        "id": 1
+    });
+    let request_str = request.to_string();
+
+    if socket_path.exists() {
+        match crate::jsonrpc::send_notify(&socket_path, &request_str).await {
+            Ok(()) => {
+                tracing::info!(
+                    gate = gate,
+                    wave = wave,
+                    repos = heads.len(),
+                    "cascade.notify gossiped via songBird UDS"
+                );
+                return;
+            }
+            Err(e) => {
+                tracing::debug!(
+                    error = %e,
+                    "cascade.notify UDS failed, trying TCP fallback"
+                );
+            }
+        }
+    }
+
+    let port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
+    let endpoint = cellmembrane_types::TransportEndpoint::Tcp {
+        host: cellmembrane_types::service::BIND_LOOPBACK.into(),
+        port,
+    };
+    match crate::jsonrpc::send_notify_endpoint(&endpoint, &request_str).await {
+        Ok(()) => {
+            tracing::info!(
+                gate = gate,
+                wave = wave,
+                repos = heads.len(),
+                "cascade.notify gossiped via songBird TCP :{port}"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "cascade.notify gossip failed (non-fatal) — songBird not reachable"
+            );
+        }
+    }
+}

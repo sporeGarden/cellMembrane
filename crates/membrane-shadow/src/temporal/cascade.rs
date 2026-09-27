@@ -124,8 +124,21 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
 
     let (synced, failed, cloned, mut lines) = tally_results(results);
 
-    let (harvest_info, post_sync_ok) =
+    let (harvest_info, post_sync_ok, cascade_heads) =
         post_sync::run_post_sync_phases(opts, &root, &shared_manifest, &repos, &mut lines).await;
+
+    if opts.mode == CascadeMode::Sync && !cascade_heads.is_empty() {
+        super::post_sync_content::emit_cascade_notify(
+            opts.gate,
+            shared_manifest.meta.wave,
+            &cascade_heads,
+            synced,
+            failed,
+            cloned,
+            total,
+        )
+        .await;
+    }
 
     let action = if opts.mode == CascadeMode::CheckOnly {
         "checked"

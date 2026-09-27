@@ -20,34 +20,96 @@ pub(super) async fn dispatch(
     match cmd {
         "gate.info" => dispatch_info(config).await,
         "gate.pull" => {
-            let result = gate::pull(config).await?;
-            Ok(ShadowOutcome::ok_with(
-                format!(
-                    "pulled {}/{} repos on {}",
-                    result.synced, result.total, result.gate
-                ),
-                serde_json::to_value(&result)?,
-            ))
+            let use_mesh = args.contains(&"--mesh");
+            if use_mesh {
+                let mesh_result = gate::pull_mesh(config).await?;
+                let ssh_result = gate::pull(config).await?;
+                let shadow_match = mesh_result.synced == ssh_result.synced
+                    && mesh_result.total == ssh_result.total;
+                let method = if shadow_match {
+                    "mesh (shadow: SSH matches)"
+                } else {
+                    "mesh (shadow: SSH DIVERGED)"
+                };
+                Ok(ShadowOutcome::ok_with(
+                    format!(
+                        "pulled {}/{} repos on {} via {method}",
+                        ssh_result.synced, ssh_result.total, ssh_result.gate
+                    ),
+                    serde_json::json!({
+                        "ssh": serde_json::to_value(&ssh_result)?,
+                        "mesh": serde_json::to_value(&mesh_result)?,
+                        "shadow_match": shadow_match,
+                    }),
+                ))
+            } else {
+                let result = gate::pull(config).await?;
+                Ok(ShadowOutcome::ok_with(
+                    format!(
+                        "pulled {}/{} repos on {}",
+                        result.synced, result.total, result.gate
+                    ),
+                    serde_json::to_value(&result)?,
+                ))
+            }
         }
         "gate.check" => {
-            let result = gate::check(config).await?;
-            let msg = format!(
-                "{}: {}/{} in sync{}{}",
-                result.gate,
-                result.synced,
-                result.total,
-                if result.drifted > 0 {
-                    format!(", {} drifted", result.drifted)
+            let use_mesh = args.contains(&"--mesh");
+            if use_mesh {
+                let mesh_result = gate::check_mesh(config).await?;
+                let ssh_result = gate::check(config).await?;
+                let shadow_match = mesh_result.synced == ssh_result.synced
+                    && mesh_result.total == ssh_result.total
+                    && mesh_result.drifted == ssh_result.drifted;
+                let method = if shadow_match {
+                    "mesh (shadow: SSH matches)"
                 } else {
-                    String::new()
-                },
-                if result.missing > 0 {
-                    format!(", {} missing", result.missing)
-                } else {
-                    String::new()
-                },
-            );
-            Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
+                    "mesh (shadow: SSH DIVERGED)"
+                };
+                let msg = format!(
+                    "{}: {}/{} in sync{}{} via {method}",
+                    ssh_result.gate,
+                    ssh_result.synced,
+                    ssh_result.total,
+                    if ssh_result.drifted > 0 {
+                        format!(", {} drifted", ssh_result.drifted)
+                    } else {
+                        String::new()
+                    },
+                    if ssh_result.missing > 0 {
+                        format!(", {} missing", ssh_result.missing)
+                    } else {
+                        String::new()
+                    },
+                );
+                Ok(ShadowOutcome::ok_with(
+                    msg,
+                    serde_json::json!({
+                        "ssh": serde_json::to_value(&ssh_result)?,
+                        "mesh": serde_json::to_value(&mesh_result)?,
+                        "shadow_match": shadow_match,
+                    }),
+                ))
+            } else {
+                let result = gate::check(config).await?;
+                let msg = format!(
+                    "{}: {}/{} in sync{}{}",
+                    result.gate,
+                    result.synced,
+                    result.total,
+                    if result.drifted > 0 {
+                        format!(", {} drifted", result.drifted)
+                    } else {
+                        String::new()
+                    },
+                    if result.missing > 0 {
+                        format!(", {} missing", result.missing)
+                    } else {
+                        String::new()
+                    },
+                );
+                Ok(ShadowOutcome::ok_with(msg, serde_json::to_value(&result)?))
+            }
         }
         "gate.health" => dispatch_health(config).await,
         "health.audit" => dispatch_health_audit(config, args).await,

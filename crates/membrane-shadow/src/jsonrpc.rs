@@ -381,18 +381,25 @@ pub async fn send_notify(socket_path: &Path, request: &str) -> Result<()> {
     let endpoint = cellmembrane_types::TransportEndpoint::Uds {
         path: socket_path.display().to_string(),
     };
+    send_notify_endpoint(&endpoint, request).await
+}
+
+/// Transport-agnostic fire-and-forget notification.
+///
+/// Same as [`send_notify`] but routes through any [`TransportEndpoint`]
+/// (UDS, TCP, mesh relay). Used by cascade gossip and capability
+/// registration on platforms where UDS is unavailable.
+pub async fn send_notify_endpoint(
+    endpoint: &cellmembrane_types::TransportEndpoint,
+    request: &str,
+) -> Result<()> {
     let stream = tokio::time::timeout(
         DEFAULT_TIMEOUT,
-        crate::transport::connect_transport(&endpoint),
+        crate::transport::connect_transport(endpoint),
     )
     .await
-    .map_err(|e| {
-        rpc_err(format_args!(
-            "connect timeout: {}: {e}",
-            socket_path.display()
-        ))
-    })?
-    .map_err(|e| rpc_err(format_args!("connect {}: {e}", socket_path.display())))?;
+    .map_err(|e| rpc_err(format_args!("connect timeout: {endpoint}: {e}")))?
+    .map_err(|e| rpc_err(format_args!("connect {endpoint}: {e}")))?;
 
     notify_over_stream(stream, request).await
 }

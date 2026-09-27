@@ -139,6 +139,75 @@ pub struct TemporalSyncResult {
     pub pushed_to: Vec<String>,
 }
 
+// ── Cascade Gossip Types ────────────────────────────────────────────
+
+/// Sync status for a single repo in a cascade notify event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CascadeSyncStatus {
+    /// Repo was pulled/pushed to reach parity.
+    Synced,
+    /// Repo was already at parity — no action needed.
+    AlreadyCurrent,
+    /// Repo was freshly cloned.
+    Cloned,
+    /// Sync failed.
+    Failed,
+    /// Repo was skipped (not cloned, not in manifest).
+    Skipped,
+}
+
+impl std::fmt::Display for CascadeSyncStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Synced => write!(f, "synced"),
+            Self::AlreadyCurrent => write!(f, "current"),
+            Self::Cloned => write!(f, "cloned"),
+            Self::Failed => write!(f, "failed"),
+            Self::Skipped => write!(f, "skipped"),
+        }
+    }
+}
+
+/// Per-repo sync result in a cascade gossip event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoSyncResult {
+    /// Repo name (e.g. `cellMembrane`, `primals/songBird`).
+    pub name: String,
+    /// Content-addressed tree SHA (`HEAD^{tree}`) after sync.
+    pub head_sha: String,
+    /// What happened to this repo.
+    pub status: CascadeSyncStatus,
+}
+
+/// Gossip event: a gate completed `temporal.cascade` on one or more repos.
+///
+/// Emitted via `mesh.publish { topic: "cascade.notify" }` after a successful
+/// cascade sync. Mesh peers that are stale on any of these repos can then
+/// pull autonomously — no SSH dispatch needed.
+///
+/// This is the **NanoWire Tier 2** unlock: `gate.pull` and `gate.check`
+/// retire SSH in favor of gossip-driven convergence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CascadeNotify {
+    /// Gate that completed the cascade.
+    pub gate: String,
+    /// Manifest wave at cascade time.
+    pub wave: u32,
+    /// Per-repo sync results.
+    pub repos: Vec<RepoSyncResult>,
+    /// Aggregate: total repos in gate profile.
+    pub total: u32,
+    /// Aggregate: repos synced (pulled or pushed).
+    pub synced: u32,
+    /// Aggregate: repos that failed.
+    pub failed: u32,
+    /// Aggregate: repos freshly cloned.
+    pub cloned: u32,
+    /// ISO 8601 timestamp of cascade completion.
+    pub synced_at: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,5 +435,76 @@ mod tests {
         assert!(deser.ok);
         assert_eq!(deser.pulled_from.as_deref(), Some("forgejo"));
         assert_eq!(deser.pushed_to, vec!["origin"]);
+    }
+
+    #[test]
+    fn cascade_sync_status_serde() {
+        assert_eq!(
+            serde_json::to_string(&CascadeSyncStatus::Synced).unwrap(),
+            "\"synced\""
+        );
+        assert_eq!(
+            serde_json::to_string(&CascadeSyncStatus::AlreadyCurrent).unwrap(),
+            "\"already_current\""
+        );
+        let deser: CascadeSyncStatus = serde_json::from_str("\"failed\"").unwrap();
+        assert_eq!(deser, CascadeSyncStatus::Failed);
+    }
+
+    #[test]
+    fn cascade_sync_status_display() {
+        assert_eq!(CascadeSyncStatus::Synced.to_string(), "synced");
+        assert_eq!(CascadeSyncStatus::AlreadyCurrent.to_string(), "current");
+        assert_eq!(CascadeSyncStatus::Cloned.to_string(), "cloned");
+        assert_eq!(CascadeSyncStatus::Failed.to_string(), "failed");
+        assert_eq!(CascadeSyncStatus::Skipped.to_string(), "skipped");
+    }
+
+    #[test]
+    fn cascade_notify_roundtrip() {
+        let notify = CascadeNotify {
+            gate: "sporeGate".into(),
+            wave: 159,
+            repos: vec![
+                RepoSyncResult {
+                    name: "cellMembrane".into(),
+                    head_sha: "abc123".into(),
+                    status: CascadeSyncStatus::Synced,
+                },
+                RepoSyncResult {
+                    name: "primals/songBird".into(),
+                    head_sha: "def456".into(),
+                    status: CascadeSyncStatus::AlreadyCurrent,
+                },
+            ],
+            total: 15,
+            synced: 14,
+            failed: 0,
+            cloned: 1,
+            synced_at: "2026-09-27T23:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&notify).unwrap();
+        let deser: CascadeNotify = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.gate, "sporeGate");
+        assert_eq!(deser.wave, 159);
+        assert_eq!(deser.repos.len(), 2);
+        assert_eq!(deser.repos[0].status, CascadeSyncStatus::Synced);
+        assert_eq!(deser.repos[1].status, CascadeSyncStatus::AlreadyCurrent);
+        assert_eq!(deser.total, 15);
+        assert_eq!(deser.synced, 14);
+    }
+
+    #[test]
+    fn repo_sync_result_roundtrip() {
+        let r = RepoSyncResult {
+            name: "detroit".into(),
+            head_sha: "aabbcc".into(),
+            status: CascadeSyncStatus::Failed,
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        let deser: RepoSyncResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.name, "detroit");
+        assert_eq!(deser.head_sha, "aabbcc");
+        assert_eq!(deser.status, CascadeSyncStatus::Failed);
     }
 }
