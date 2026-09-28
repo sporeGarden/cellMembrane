@@ -77,7 +77,7 @@ impl ZoneLabel {
             "strandGate" | "southGate" | "westGate" | "blueGate" | "swiftGate" | "fieldGate" => {
                 Self::House2
             }
-            "golgi" | "pepti" | "flockGate" | "graftGate" => Self::Wan,
+            "golgi" | "pepti" | "flockGate" => Self::Wan,
             _ => Self::Unassigned,
         }
     }
@@ -155,15 +155,12 @@ struct MeshEntry {
     aliases: &'static [&'static str],
 }
 
-/// Bootstrap mesh registry — **DEPRECATED fallback only (Wave 157h).**
+/// Bootstrap mesh registry — **DEPRECATED fallback only.**
 ///
 /// Authoritative source at runtime is `ecosystem_manifest.toml`; this const
 /// table exists solely for bootstrap/type-level code that cannot load the
 /// manifest. **All new consumers must use `EcosystemManifest::mesh_ip_for()`
 /// from `membrane-shadow` instead.** IP assignments are permanent once allocated.
-///
-/// Target: remove once all consumers resolve from manifest at runtime.
-#[deprecated(note = "Use EcosystemManifest::mesh_ip_for() from membrane-shadow instead")]
 const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "golgi",
@@ -192,7 +189,7 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "ironGate",
         wg_ip: Some("10.13.37.7"),
-        lan_ip: Some("192.168.4.237"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
@@ -204,13 +201,13 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     MeshEntry {
         name: "southGate",
         wg_ip: Some("10.13.37.9"),
-        lan_ip: Some("192.168.4.149"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
         name: "strandGate",
         wg_ip: Some("10.13.37.10"),
-        lan_ip: Some("192.168.4.169"),
+        lan_ip: None,
         aliases: &[],
     },
     MeshEntry {
@@ -227,9 +224,9 @@ const MESH_REGISTRY: &[MeshEntry] = &[
     },
     MeshEntry {
         name: "graftGate",
-        wg_ip: Some("10.13.37.13"),
+        wg_ip: None,
         lan_ip: None,
-        aliases: &["darwinGate"],
+        aliases: &[],
     },
     MeshEntry {
         name: "grapheneGate",
@@ -244,7 +241,6 @@ const MESH_REGISTRY: &[MeshEntry] = &[
 /// Derived from [`MESH_REGISTRY`]. Used as a fallback when the ecosystem
 /// manifest is unavailable.
 #[must_use]
-#[allow(deprecated)]
 pub fn known_mesh_gates() -> Vec<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -263,7 +259,6 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
     "northGate",
     "southGate",
     "strandGate",
-    "graftGate",
 ];
 
 /// All known active gates in the ecosystem (superset of mesh gates).
@@ -271,7 +266,6 @@ pub const KNOWN_MESH_GATES: &[&str] = &[
 /// Derived from [`MESH_REGISTRY`]. Includes gates using any transport
 /// (`WireGuard`, ADB, LAN-only).
 #[must_use]
-#[allow(deprecated)]
 pub fn known_gates() -> Vec<&'static str> {
     MESH_REGISTRY.iter().map(|e| e.name).collect()
 }
@@ -299,7 +293,6 @@ pub const KNOWN_GATES: &[&str] = &[
 /// At runtime, prefer [`mesh_address_from_topology`] or
 /// `EcosystemManifest::mesh_ip_for()` from `membrane-shadow`.
 #[must_use]
-#[allow(deprecated)]
 pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -313,7 +306,6 @@ pub fn mesh_address(gate_name: &str) -> Option<&'static str> {
 /// `ecosystem_manifest.toml` `[gates.<name>] lan_ip`. Used by songBird for
 /// local-priority routing when gates share a `MikroTik` switch.
 #[must_use]
-#[allow(deprecated)]
 pub fn lan_address(gate_name: &str) -> Option<&'static str> {
     MESH_REGISTRY
         .iter()
@@ -517,7 +509,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn lan_addresses_in_subnet() {
         for entry in MESH_REGISTRY {
             if let Some(ip) = entry.lan_ip {
