@@ -607,6 +607,15 @@ Wave-by-wave evolution history is preserved in `GLACIAL_SHIFT_TRACKER.md` and gi
 | Dark Forest standard | `infra/wateringHole/foundations/DARK_FOREST_GLACIAL_GATE_STANDARD.md` | 5-pillar security audit |
 | Fossil record | `infra/fossilRecord/cellMembrane/` | Archived Wave 59/119 scripts (deploy, provision) |
 
+### Live Sites (powered by cellMembrane)
+
+| Site | Purpose |
+|------|---------|
+| [sporeprint.primals.eco](https://sporeprint.primals.eco) | ecoPrimals ecosystem documentation |
+| [detroit.primals.eco](https://detroit.primals.eco) | Public evidence library — Detroit charter school investigation |
+| [gorilla.primals.eco](https://gorilla.primals.eco) | guerillaGorilla accountability infrastructure |
+| [git.primals.eco](https://git.primals.eco) | Sovereign Forgejo instance |
+
 ---
 
 ## License
