@@ -111,7 +111,7 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
         seo: SiteConfig {
             host: "sporeprint.primals.eco",
             sitemap: "https://sporeprint.primals.eco/sitemap.xml",
-            indexnow_key: "de552b8179f84854854cd2e02788a130",
+            indexnow_key: "0CB4A351F4F113D99E0E1970B2AA29A6",
         },
         evidence_dir: None,
         artifact_command: None,
@@ -168,8 +168,8 @@ pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> 
             let limit: usize = crate::cli::extract_flag_value(args, "--limit")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(200);
-            let tier: Option<u8> = crate::cli::extract_flag_value(args, "--tier")
-                .and_then(|v| v.parse().ok());
+            let tier: Option<u8> =
+                crate::cli::extract_flag_value(args, "--tier").and_then(|v| v.parse().ok());
             let report = url_notify(site.as_deref(), limit, tier).await?;
             Ok(crate::ShadowOutcome::ok(report))
         }
@@ -275,9 +275,18 @@ fn classify_url_tier(url: &str) -> UrlTier {
         return UrlTier::Critical;
     }
     let top_sections = [
-        "/evidence/", "/network/", "/analysis/", "/timeline/",
-        "/sources/", "/validate/", "/about/", "/legal/",
-        "/contact/", "/open-letters/", "/books/", "/site-index/",
+        "/evidence/",
+        "/network/",
+        "/analysis/",
+        "/timeline/",
+        "/sources/",
+        "/validate/",
+        "/about/",
+        "/legal/",
+        "/contact/",
+        "/open-letters/",
+        "/books/",
+        "/site-index/",
     ];
     if top_sections.iter().any(|s| path == *s) {
         return UrlTier::Critical;
@@ -367,7 +376,11 @@ async fn url_notify(site: Option<&str>, limit: usize, tier_filter: Option<u8>) -
 
     let total = tiered.len();
     let batch_size = total.min(limit);
-    let batch_urls: Vec<String> = tiered.into_iter().take(batch_size).map(|(_, u)| u).collect();
+    let batch_urls: Vec<String> = tiered
+        .into_iter()
+        .take(batch_size)
+        .map(|(_, u)| u)
+        .collect();
 
     tracing::info!(
         "url_notify: {} total URLs, sending batch of {} (limit {}), tiers: {}",
@@ -494,15 +507,27 @@ mod tests {
             assert!(site.seo.sitemap.contains(site.seo.host));
             assert!(site.seo.sitemap.ends_with("sitemap.xml"));
             assert!(!site.seo.indexnow_key.is_empty());
-            assert_eq!(site.host, site.seo.host, "host mismatch for {}", site.repo_name);
+            assert_eq!(
+                site.host, site.seo.host,
+                "host mismatch for {}",
+                site.repo_name
+            );
         }
     }
 
     #[test]
     fn publish_sites_have_valid_paths() {
         for site in PUBLISH_SITES {
-            assert!(site.worktree.starts_with('/'), "worktree must be absolute: {}", site.repo_name);
-            assert!(site.public_dir.starts_with('/'), "public_dir must be absolute: {}", site.repo_name);
+            assert!(
+                site.worktree.starts_with('/'),
+                "worktree must be absolute: {}",
+                site.repo_name
+            );
+            assert!(
+                site.public_dir.starts_with('/'),
+                "public_dir must be absolute: {}",
+                site.repo_name
+            );
             assert!(!site.repo_name.is_empty());
         }
     }

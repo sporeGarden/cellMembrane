@@ -356,20 +356,18 @@ async fn dispatch_caddy_deploy(
     let dry_run = args.contains(&"--dry-run");
 
     // Determine which sites to deploy
-    let sites: Vec<&crate::seo::PublishSite> = if let Some(site_name) =
-        args.iter().find(|a| !a.starts_with('-'))
-    {
-        let site = crate::seo::find_publish_site(site_name).ok_or_else(|| {
-            ShadowError::config(format!("unknown publish site: {site_name}"))
-        })?;
-        vec![site]
-    } else if args.contains(&"--all") {
-        crate::seo::PUBLISH_SITES.iter().collect()
-    } else {
-        return Ok(crate::ShadowOutcome::fail(
-            "usage: membrane caddy.deploy <site|--all> [--dry-run]".to_string(),
-        ));
-    };
+    let sites: Vec<&crate::seo::PublishSite> =
+        if let Some(site_name) = args.iter().find(|a| !a.starts_with('-')) {
+            let site = crate::seo::find_publish_site(site_name)
+                .ok_or_else(|| ShadowError::config(format!("unknown publish site: {site_name}")))?;
+            vec![site]
+        } else if args.contains(&"--all") {
+            crate::seo::PUBLISH_SITES.iter().collect()
+        } else {
+            return Ok(crate::ShadowOutcome::fail(
+                "usage: membrane caddy.deploy <site|--all> [--dry-run]".to_string(),
+            ));
+        };
 
     let mut results = Vec::new();
 
@@ -410,7 +408,11 @@ print(action)
         );
 
         // Write block via stdin to the python script
-        let full_cmd = format!("echo '{}' | {}", block.replace('\'', "'\\''"), replace_script);
+        let full_cmd = format!(
+            "echo '{}' | {}",
+            block.replace('\'', "'\\''"),
+            replace_script
+        );
         let (action_out, code) = caddy_exec(config, &full_cmd).await?;
 
         if code != 0 {
@@ -429,7 +431,9 @@ print(action)
 
         if reload_code != 0 {
             // Rollback
-            let rollback = format!("cp {caddyfile}.bak {caddyfile} && {caddy_bin} reload --config {caddyfile} --force 2>&1");
+            let rollback = format!(
+                "cp {caddyfile}.bak {caddyfile} && {caddy_bin} reload --config {caddyfile} --force 2>&1"
+            );
             let _ = caddy_exec(config, &rollback).await;
             results.push(format!(
                 "FAILED {} (rolled back): {}",
@@ -451,9 +455,16 @@ print(action)
 }
 
 /// Check if a site's vhost block exists in the golgiBody Caddyfile.
+///
+/// Uses a permissive regex: `^{host}\s*\{` to match the host followed by
+/// optional whitespace and an opening brace. This handles both `host {`
+/// and `host{` formatting without false negatives from strict space matching.
 pub async fn vhost_exists(config: &ShadowConfig, host: &str) -> bool {
     let caddyfile = caddyfile_path();
-    let check_cmd = format!("grep -q '{host} {{' {caddyfile} 2>/dev/null && echo EXISTS || echo MISSING");
+    let host_escaped = host.replace('.', r"\.");
+    let check_cmd = format!(
+        "grep -qE '^{host_escaped}\\s*\\{{' {caddyfile} 2>/dev/null && echo EXISTS || echo MISSING"
+    );
     match caddy_exec(config, &check_cmd).await {
         Ok((out, _)) => out.trim() == "EXISTS",
         Err(_) => false,
