@@ -27,6 +27,7 @@
 
 mod gsc;
 mod indexnow;
+pub(crate) mod observatory;
 pub(crate) mod receptor;
 
 use crate::error::{Result, ShadowError};

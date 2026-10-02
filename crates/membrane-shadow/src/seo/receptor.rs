@@ -285,7 +285,7 @@ pub struct ReceptorReport {
 
 impl ReceptorReport {
     /// Create an empty report.
-    fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -298,6 +298,12 @@ impl ReceptorReport {
             window_end: 0.0,
             generated_at: now,
         }
+    }
+
+    /// Test helper — same as `empty()` but publicly named for cross-module tests.
+    #[cfg(test)]
+    pub(crate) fn empty_for_test() -> Self {
+        Self::empty()
     }
 
     /// Ingest a single parsed log entry into the report.

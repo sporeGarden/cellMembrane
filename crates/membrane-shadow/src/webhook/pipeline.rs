@@ -215,6 +215,22 @@ pub(super) async fn run_publish_pipeline(
         }
     };
 
+    // Step 2.7: Observatory receptor snapshot (sporePrint only, non-fatal)
+    let observatory_msg = {
+        let config = crate::ShadowConfig::from_env().await;
+        match crate::seo::observatory::generate_snapshot(&config, site).await {
+            Ok(Some(msg)) => {
+                info!(repo = %action.repo_name, "publish: observatory snapshot written");
+                format!("  [observatory] {msg}")
+            }
+            Ok(None) => String::new(), // Not sporePrint — skipped
+            Err(e) => {
+                warn!(repo = %action.repo_name, error = %e, "publish: observatory snapshot failed (non-fatal)");
+                format!("  [observatory] FAILED: {e}")
+            }
+        }
+    };
+
     // Step 3: Push evidence files if configured (non-fatal)
     let evidence_msg = if let Some((local, remote)) = crate::evidence::resolve_evidence_paths(site)
     {
@@ -289,6 +305,10 @@ pub(super) async fn run_publish_pipeline(
     if !braid_msg.is_empty() {
         full_msg.push('\n');
         full_msg.push_str(&braid_msg);
+    }
+    if !observatory_msg.is_empty() {
+        full_msg.push('\n');
+        full_msg.push_str(&observatory_msg);
     }
 
     // Step 5: Post-build consistency verification (non-fatal)
