@@ -244,7 +244,8 @@ pub fn classify_push(
 
     let should_harvest = is_default_branch && is_known_primal;
     let should_publish = is_default_branch && is_publish_site && !is_known_primal;
-    let should_cascade = is_default_branch && is_cascade_repo && !is_known_primal && !is_publish_site;
+    let should_cascade =
+        is_default_branch && is_cascade_repo && !is_known_primal && !is_publish_site;
 
     let reason = if !is_default_branch {
         format!("non-default branch ({branch}), skipping")

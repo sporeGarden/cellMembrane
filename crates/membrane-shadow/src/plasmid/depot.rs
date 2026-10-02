@@ -120,8 +120,7 @@ pub(super) async fn update_provenance(depot_dir: &Path, built: &[&HarvestResult]
     );
 
     let mut existing_prov: BTreeMap<String, ProvenanceEntry> =
-        load_provenance(depot_dir)
-            .map_or_else(BTreeMap::new, |parsed| parsed.entries);
+        load_provenance(depot_dir).map_or_else(BTreeMap::new, |parsed| parsed.entries);
 
     for result in built {
         let commit = result.commit.clone().or_else(|| {
@@ -384,10 +383,22 @@ pub(super) fn load_provenance(depot_dir: &Path) -> Option<ProvenanceFile> {
     let raw: toml::Value = toml::from_str(&content).ok()?;
     let table = raw.as_table()?;
 
-    let generated = table.get("generated").and_then(|v| v.as_str()).map(String::from);
-    let builder = table.get("builder").and_then(|v| v.as_str()).map(String::from);
-    let target = table.get("target").and_then(|v| v.as_str()).map(String::from);
-    let rustc = table.get("rustc").and_then(|v| v.as_str()).map(String::from);
+    let generated = table
+        .get("generated")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let builder = table
+        .get("builder")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let target = table
+        .get("target")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let rustc = table
+        .get("rustc")
+        .and_then(|v| v.as_str())
+        .map(String::from);
 
     let mut entries = std::collections::BTreeMap::new();
     for (key, value) in table {
@@ -770,7 +781,11 @@ generation = 2
             eprintln!("  entry.target={:?}", entry.target);
             eprintln!("  entry.commit={:?}", entry.commit);
             eprintln!("  entry.builder={:?}", entry.builder);
-            assert_eq!(entry.target.as_deref(), Some("aarch64-unknown-linux-musl"), "target should survive");
+            assert_eq!(
+                entry.target.as_deref(),
+                Some("aarch64-unknown-linux-musl"),
+                "target should survive"
+            );
             assert_eq!(entry.commit.as_deref(), Some("31a31aba"));
             assert_eq!(entry.builder.as_deref(), Some("sporeGate"));
         }

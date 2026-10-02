@@ -24,7 +24,6 @@ use super::harvest_manifest::{
 use super::harvest_support::{format_harvest_outcome, notify_mesh_depot_updated};
 use super::{detect_target_triple, nucleus_primals, toolchain};
 
-
 /// Parsed CLI arguments for `plasmid.harvest`.
 #[allow(
     clippy::struct_excessive_bools,

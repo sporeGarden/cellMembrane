@@ -388,5 +388,4 @@ source_path = "primals/bearDog"
         assert!(prov.installed_at.is_none());
         assert!(prov.binary_blake3.is_none());
     }
-
 }

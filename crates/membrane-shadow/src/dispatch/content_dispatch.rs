@@ -225,7 +225,7 @@ async fn dispatch_content_braid(args: &[&str]) -> crate::Result<ShadowOutcome> {
         None => {
             return Ok(ShadowOutcome::fail(
                 "content.braid: biomeOS Neural API not reachable — braiding requires live primals",
-            ))
+            ));
         }
     };
 
@@ -400,10 +400,10 @@ async fn braid_dataset(
     let manifest = match ingest_result {
         crate::bridge::BridgeResult::Handled(v) => v,
         crate::bridge::BridgeResult::ApiError(e) => {
-            return Err(format!("content.ingest failed: {e}").into())
+            return Err(format!("content.ingest failed: {e}").into());
         }
         crate::bridge::BridgeResult::Fallthrough => {
-            return Err("content.ingest: Neural API unreachable".into())
+            return Err("content.ingest: Neural API unreachable".into());
         }
     };
 
@@ -435,10 +435,10 @@ async fn braid_dataset(
     let session = match session_result {
         crate::bridge::BridgeResult::Handled(v) => v,
         crate::bridge::BridgeResult::ApiError(e) => {
-            return Err(format!("dag.session.create failed: {e}").into())
+            return Err(format!("dag.session.create failed: {e}").into());
         }
         crate::bridge::BridgeResult::Fallthrough => {
-            return Err("dag.session.create: Neural API unreachable".into())
+            return Err("dag.session.create: Neural API unreachable".into());
         }
     };
 
@@ -499,7 +499,7 @@ async fn braid_dataset(
                 }
             }
             crate::bridge::BridgeResult::Fallthrough => {
-                return Err("dag.event.append_batch: Neural API unreachable".into())
+                return Err("dag.event.append_batch: Neural API unreachable".into());
             }
         }
     }
@@ -570,9 +570,10 @@ async fn braid_dataset(
         .await;
 
     let signature = match sign_result {
-        crate::bridge::BridgeResult::Handled(v) => {
-            v.get("signature").and_then(|s| s.as_str()).map(String::from)
-        }
+        crate::bridge::BridgeResult::Handled(v) => v
+            .get("signature")
+            .and_then(|s| s.as_str())
+            .map(String::from),
         _ => None,
     };
 
@@ -623,8 +624,14 @@ async fn braid_dataset(
         "braider": "membrane content.braid v1.0",
     });
 
-    if let Err(e) = std::fs::write(&marker, serde_json::to_string_pretty(&marker_data).unwrap_or_default()) {
-        warn!("content.braid: failed to write marker {}: {e}", marker.display());
+    if let Err(e) = std::fs::write(
+        &marker,
+        serde_json::to_string_pretty(&marker_data).unwrap_or_default(),
+    ) {
+        warn!(
+            "content.braid: failed to write marker {}: {e}",
+            marker.display()
+        );
     }
 
     Ok(BraidResult {

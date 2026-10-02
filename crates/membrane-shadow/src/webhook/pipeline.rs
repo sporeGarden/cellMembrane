@@ -216,8 +216,7 @@ pub(super) async fn run_publish_pipeline(
     };
 
     // Step 3: Push evidence files if configured (non-fatal)
-    let evidence_msg = if let Some((local, remote)) =
-        crate::evidence::resolve_evidence_paths(site)
+    let evidence_msg = if let Some((local, remote)) = crate::evidence::resolve_evidence_paths(site)
     {
         if local.exists() {
             let config = crate::ShadowConfig::from_env().await;
@@ -308,9 +307,7 @@ pub(super) async fn run_publish_pipeline(
 }
 
 /// Git fetch + hard reset a publish site's worktree to latest.
-async fn publish_git_update(
-    site: &crate::seo::PublishSite,
-) -> crate::error::Result<()> {
+async fn publish_git_update(site: &crate::seo::PublishSite) -> crate::error::Result<()> {
     let worktree = site.worktree;
 
     // Check if worktree exists; if not, clone
@@ -368,9 +365,7 @@ async fn publish_git_update(
 }
 
 /// Run `zola build` for a publish site, returning the page count.
-async fn publish_zola_build(
-    site: &crate::seo::PublishSite,
-) -> crate::error::Result<usize> {
+async fn publish_zola_build(site: &crate::seo::PublishSite) -> crate::error::Result<usize> {
     let build_dir = match site.build_subdir {
         Some(sub) => format!("{}/{}", site.worktree, sub),
         None => site.worktree.to_string(),

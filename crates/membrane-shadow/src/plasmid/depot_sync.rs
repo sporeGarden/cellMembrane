@@ -440,7 +440,11 @@ async fn archive_old_binary_to_cas(
 
     let cas_path = cas_dir.join(old_blake3);
     if cas_path.exists() {
-        tracing::debug!(binary, blake3 = old_blake3, "cas: already archived (dedup hit)");
+        tracing::debug!(
+            binary,
+            blake3 = old_blake3,
+            "cas: already archived (dedup hit)"
+        );
         replicate_to_cas_nodes(&cas_path, arch, old_blake3).await;
         return;
     }
@@ -489,10 +493,15 @@ async fn replicate_to_cas_nodes(local_path: &std::path::Path, arch: &str, blake3
 
         let check = tokio::process::Command::new("ssh")
             .args([
-                "-o", "ConnectTimeout=5",
-                "-o", "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=5",
+                "-o",
+                "BatchMode=yes",
                 &node.ssh_host,
-                &format!("test -f '{}' && echo EXISTS || mkdir -p '{}' && echo READY", remote_path, remote_dir),
+                &format!(
+                    "test -f '{}' && echo EXISTS || mkdir -p '{}' && echo READY",
+                    remote_path, remote_dir
+                ),
             ])
             .output()
             .await;
@@ -526,8 +535,10 @@ async fn replicate_to_cas_nodes(local_path: &std::path::Path, arch: &str, blake3
 
         let scp_result = tokio::process::Command::new("scp")
             .args([
-                "-o", "ConnectTimeout=10",
-                "-o", "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "BatchMode=yes",
                 &local_path.to_string_lossy(),
                 &format!("{}:{}", node.ssh_host, remote_path),
             ])

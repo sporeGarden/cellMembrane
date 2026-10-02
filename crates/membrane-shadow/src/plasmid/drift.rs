@@ -76,7 +76,9 @@ async fn query_trio_provenance(primal: &str, target: &str) -> Option<TrioProvena
         46,
     );
 
-    let response = crate::jsonrpc::call_endpoint(&endpoint, &request).await.ok()?;
+    let response = crate::jsonrpc::call_endpoint(&endpoint, &request)
+        .await
+        .ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&response).ok()?;
 
     if parsed.get("error").is_some() {

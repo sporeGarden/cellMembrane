@@ -17,11 +17,7 @@ pub struct ConsistencyReport {
 impl std::fmt::Display for ConsistencyReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.ok {
-            write!(
-                f,
-                "consistency OK: sitemap={} pages",
-                self.sitemap_urls
-            )?;
+            write!(f, "consistency OK: sitemap={} pages", self.sitemap_urls)?;
             if let Some(json_pages) = self.site_json_pages {
                 write!(f, ", site.json={json_pages} pages")?;
             }
@@ -69,20 +65,17 @@ pub fn verify(public_dir: &Path) -> ConsistencyReport {
     let site_json_path = public_dir.join("api/site.json");
     let site_json_pages = if site_json_path.exists() {
         match std::fs::read_to_string(&site_json_path) {
-            Ok(json_str) => {
-                match serde_json::from_str::<serde_json::Value>(&json_str) {
-                    Ok(val) => {
-                        val.get("meta")
-                            .and_then(|m| m.get("total_pages"))
-                            .and_then(serde_json::Value::as_u64)
-                            .map(|n| n as usize)
-                    }
-                    Err(e) => {
-                        warnings.push(format!("site.json parse error: {e}"));
-                        None
-                    }
+            Ok(json_str) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+                Ok(val) => val
+                    .get("meta")
+                    .and_then(|m| m.get("total_pages"))
+                    .and_then(serde_json::Value::as_u64)
+                    .map(|n| n as usize),
+                Err(e) => {
+                    warnings.push(format!("site.json parse error: {e}"));
+                    None
                 }
-            }
+            },
             Err(e) => {
                 warnings.push(format!("site.json unreadable: {e}"));
                 None
@@ -111,7 +104,8 @@ pub fn verify(public_dir: &Path) -> ConsistencyReport {
     if site_json_pages.is_some() {
         let manifest_path = public_dir.join("content-manifest.toml");
         if !manifest_path.exists() {
-            warnings.push("content-manifest.toml missing (expected alongside site.json)".to_string());
+            warnings
+                .push("content-manifest.toml missing (expected alongside site.json)".to_string());
         }
     }
 
@@ -125,9 +119,7 @@ pub fn verify(public_dir: &Path) -> ConsistencyReport {
 }
 
 /// Run verify and log results.  Returns formatted message for the pipeline.
-pub fn verify_and_report(
-    site: &crate::seo::PublishSite,
-) -> String {
+pub fn verify_and_report(site: &crate::seo::PublishSite) -> String {
     let public = Path::new(site.public_dir);
     let report = verify(public);
 

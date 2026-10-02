@@ -71,7 +71,9 @@ fn resolve_builder_endpoint(
     entry: &crate::manifest::SubBuilderEntry,
 ) -> cellmembrane_types::TransportEndpoint {
     if !entry.builder_host.is_empty() {
-        let port = entry.builder_port.unwrap_or(cellmembrane_types::service::DEFAULT_BUILDER_PORT);
+        let port = entry
+            .builder_port
+            .unwrap_or(cellmembrane_types::service::DEFAULT_BUILDER_PORT);
         return cellmembrane_types::TransportEndpoint::Tcp {
             host: entry.builder_host.clone(),
             port,

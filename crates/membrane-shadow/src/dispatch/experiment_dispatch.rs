@@ -20,15 +20,12 @@
 //! 13. `experiment.compose`   — cross-primal compositional pipeline
 //! 14. `experiment.inventory` — full primal capability inventory + health
 
-use crate::bridge::{BridgeResult, NeuralBridge};
 use crate::ShadowOutcome;
-use serde_json::{json, Value};
+use crate::bridge::{BridgeResult, NeuralBridge};
+use serde_json::{Value, json};
 use tracing::{info, warn};
 
-pub(super) async fn dispatch_experiment(
-    cmd: &str,
-    args: &[&str],
-) -> crate::Result<ShadowOutcome> {
+pub(super) async fn dispatch_experiment(cmd: &str, args: &[&str]) -> crate::Result<ShadowOutcome> {
     match cmd {
         "experiment.break" => experiment_break(args).await,
         "experiment.rebraid" => experiment_rebraid(args).await,
@@ -45,9 +42,7 @@ pub(super) async fn dispatch_experiment(
         "experiment.compose" => experiment_compose(args).await,
         "experiment.inventory" => experiment_inventory(args).await,
         "experiment.all" => experiment_all(args).await,
-        _ => Ok(ShadowOutcome::fail(format!(
-            "unknown experiment: {cmd}"
-        ))),
+        _ => Ok(ShadowOutcome::fail(format!("unknown experiment: {cmd}"))),
     }
 }
 
@@ -88,7 +83,10 @@ fn write_report(name: &str, report: &Value) {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let path = dir.join(format!("{name}_{ts}.json"));
-    match std::fs::write(&path, serde_json::to_string_pretty(report).unwrap_or_default()) {
+    match std::fs::write(
+        &path,
+        serde_json::to_string_pretty(report).unwrap_or_default(),
+    ) {
         Ok(_) => info!("Report written: {}", path.display()),
         Err(e) => warn!("Failed to write report {}: {e}", path.display()),
     }
@@ -120,7 +118,11 @@ async fn experiment_break(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         Err(e) => return Ok(ShadowOutcome::fail(format!("experiment.break: {e}"))),
     };
 
-    let items = braids.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
+    let items = braids
+        .get("items")
+        .and_then(|i| i.as_array())
+        .cloned()
+        .unwrap_or_default();
     if items.is_empty() {
         return Ok(ShadowOutcome::fail("experiment.break: no braids available"));
     }
@@ -137,13 +139,7 @@ async fn experiment_break(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         }
 
         // Step 1: verify braid is currently valid
-        let verify = bridge_call(
-            &bridge,
-            "braid",
-            "verify",
-            json!({"braid_id": braid_id}),
-        )
-        .await;
+        let verify = bridge_call(&bridge, "braid", "verify", json!({"braid_id": braid_id})).await;
 
         let verified = verify
             .as_ref()
@@ -160,13 +156,15 @@ async fn experiment_break(_args: &[&str]) -> crate::Result<ShadowOutcome> {
             .cloned()
             .unwrap_or_default();
 
-        let integrity_status = checks.iter()
+        let integrity_status = checks
+            .iter()
             .find(|c| c.get("check").and_then(|v| v.as_str()) == Some("content_integrity"))
             .and_then(|c| c.get("status").and_then(|v| v.as_str()))
             .unwrap_or("unknown")
             .to_string();
 
-        let sig_status = checks.iter()
+        let sig_status = checks
+            .iter()
             .find(|c| c.get("check").and_then(|v| v.as_str()) == Some("signature"))
             .and_then(|c| c.get("status").and_then(|v| v.as_str()))
             .unwrap_or("unknown")
@@ -179,13 +177,7 @@ async fn experiment_break(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         }
 
         // Step 2: check CAS existence for the data hash
-        let cas_check = bridge_call(
-            &bridge,
-            "content",
-            "exists",
-            json!({"hash": data_hash}),
-        )
-        .await;
+        let cas_check = bridge_call(&bridge, "content", "exists", json!({"hash": data_hash})).await;
 
         let cas_exists = cas_check
             .as_ref()
@@ -196,13 +188,8 @@ async fn experiment_break(_args: &[&str]) -> crate::Result<ShadowOutcome> {
 
         // Step 3: attempt verify with a tampered hash to simulate detection
         let tampered_hash = format!("{}ff", &data_hash[..data_hash.len().saturating_sub(2)]);
-        let _tampered_verify = bridge_call(
-            &bridge,
-            "braid",
-            "verify",
-            json!({"braid_id": braid_id}),
-        )
-        .await;
+        let _tampered_verify =
+            bridge_call(&bridge, "braid", "verify", json!({"braid_id": braid_id})).await;
 
         results.push(json!({
             "braid_id": braid_id,
@@ -417,13 +404,7 @@ async fn experiment_falsify(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let fake_hash = &fake_hash[..64];
 
     // Step 1: confirm the hash doesn't exist in CAS
-    let cas_check = bridge_call(
-        &bridge,
-        "content",
-        "exists",
-        json!({"hash": fake_hash}),
-    )
-    .await;
+    let cas_check = bridge_call(&bridge, "content", "exists", json!({"hash": fake_hash})).await;
 
     let cas_exists_before = cas_check
         .as_ref()
@@ -453,13 +434,7 @@ async fn experiment_falsify(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let braid_id = format!("urn:braid:{fake_hash}");
 
     // Step 3: verify the fabricated braid — expect content_integrity FAIL
-    let verify = bridge_call(
-        &bridge,
-        "braid",
-        "verify",
-        json!({"braid_id": &braid_id}),
-    )
-    .await;
+    let verify = bridge_call(&bridge, "braid", "verify", json!({"braid_id": &braid_id})).await;
 
     let verified = verify
         .as_ref()
@@ -476,19 +451,14 @@ async fn experiment_falsify(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         .cloned()
         .unwrap_or_default();
 
-    let integrity_result = checks.iter()
+    let integrity_result = checks
+        .iter()
         .find(|c| c.get("check").and_then(|v| v.as_str()) == Some("content_integrity"))
         .cloned()
         .unwrap_or(json!({"status": "not_checked"}));
 
     // Step 4: cleanup — delete the fabricated braid
-    let cleanup = bridge_call(
-        &bridge,
-        "braid",
-        "delete",
-        json!({"id": &braid_id}),
-    )
-    .await;
+    let cleanup = bridge_call(&bridge, "braid", "delete", json!({"id": &braid_id})).await;
 
     let cleaned = cleanup.is_ok();
 
@@ -521,7 +491,11 @@ async fn experiment_falsify(_args: &[&str]) -> crate::Result<ShadowOutcome> {
             "experiment.falsify: fabricated={} verified={} detection={}",
             braid_created,
             verified,
-            if falsification_detected { "PASS" } else { "INCONCLUSIVE" },
+            if falsification_detected {
+                "PASS"
+            } else {
+                "INCONCLUSIVE"
+            },
         ),
         report,
     ))
@@ -545,8 +519,15 @@ async fn experiment_audit(args: &[&str]) -> crate::Result<ShadowOutcome> {
         Err(e) => return Ok(ShadowOutcome::fail(format!("experiment.audit: {e}"))),
     };
 
-    let items = braids.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
-    let total_reported = braids.get("total").and_then(|t| t.as_u64()).unwrap_or(items.len() as u64);
+    let items = braids
+        .get("items")
+        .and_then(|i| i.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let total_reported = braids
+        .get("total")
+        .and_then(|t| t.as_u64())
+        .unwrap_or(items.len() as u64);
 
     let mut pass = 0u32;
     let mut fail = 0u32;
@@ -565,13 +546,7 @@ async fn experiment_audit(args: &[&str]) -> crate::Result<ShadowOutcome> {
             continue;
         }
 
-        let verify = bridge_call(
-            &bridge,
-            "braid",
-            "verify",
-            json!({"braid_id": braid_id}),
-        )
-        .await;
+        let verify = bridge_call(&bridge, "braid", "verify", json!({"braid_id": braid_id})).await;
 
         let verified = verify
             .as_ref()
@@ -594,34 +569,38 @@ async fn experiment_audit(args: &[&str]) -> crate::Result<ShadowOutcome> {
             .cloned()
             .unwrap_or_default();
 
-        let integrity = checks.iter()
+        let integrity = checks
+            .iter()
             .find(|c| c.get("check").and_then(|v| v.as_str()) == Some("content_integrity"))
             .and_then(|c| c.get("status").and_then(|v| v.as_str()))
             .unwrap_or("unknown");
 
-        let sig = checks.iter()
+        let sig = checks
+            .iter()
             .find(|c| c.get("check").and_then(|v| v.as_str()) == Some("signature"))
             .and_then(|c| c.get("status").and_then(|v| v.as_str()))
             .unwrap_or("unknown");
 
-        if sig == "pass" { sig_pass += 1; } else { sig_fail += 1; }
+        if sig == "pass" {
+            sig_pass += 1;
+        } else {
+            sig_fail += 1;
+        }
 
         // CAS cross-check
         if !data_hash.is_empty() {
-            let cas = bridge_call(
-                &bridge,
-                "content",
-                "exists",
-                json!({"hash": data_hash}),
-            )
-            .await;
+            let cas = bridge_call(&bridge, "content", "exists", json!({"hash": data_hash})).await;
             let exists = cas
                 .as_ref()
                 .ok()
                 .and_then(|v| v.get("exists"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            if exists { cas_confirmed += 1; } else { cas_missing += 1; }
+            if exists {
+                cas_confirmed += 1;
+            } else {
+                cas_missing += 1;
+            }
         }
 
         details.push(json!({
@@ -683,7 +662,14 @@ async fn experiment_audit(args: &[&str]) -> crate::Result<ShadowOutcome> {
     Ok(ShadowOutcome::ok_with(
         format!(
             "experiment.audit: {}/{} audited — pass={} fail={} sig_pass={} cas_confirmed={} spines={} dag_sessions={}",
-            items.len(), total_reported, pass, fail, sig_pass, cas_confirmed, spine_count, dag_sessions,
+            items.len(),
+            total_reported,
+            pass,
+            fail,
+            sig_pass,
+            cas_confirmed,
+            spine_count,
+            dag_sessions,
         ),
         report,
     ))
@@ -715,20 +701,18 @@ async fn experiment_reward(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|b| b.get("data_hash").and_then(|v| v.as_str()).map(String::from))
+                .filter_map(|b| {
+                    b.get("data_hash")
+                        .and_then(|v| v.as_str())
+                        .map(String::from)
+                })
                 .collect()
         })
         .unwrap_or_default();
 
     let mut chains = Vec::new();
     for hash in &sample_hashes {
-        let chain = bridge_call(
-            &bridge,
-            "attribution",
-            "chain",
-            json!({"data_hash": hash}),
-        )
-        .await;
+        let chain = bridge_call(&bridge, "attribution", "chain", json!({"data_hash": hash})).await;
         chains.push(json!({
             "data_hash": &hash[..std::cmp::min(16, hash.len())],
             "chain": chain.unwrap_or(json!({"error": "chain unavailable"})),
@@ -736,13 +720,7 @@ async fn experiment_reward(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     }
 
     // Calculate rewards
-    let rewards = bridge_call(
-        &bridge,
-        "attribution",
-        "calculate_rewards",
-        json!({}),
-    )
-    .await;
+    let rewards = bridge_call(&bridge, "attribution", "calculate_rewards", json!({})).await;
 
     let report = json!({
         "experiment": "reward",
@@ -771,8 +749,7 @@ async fn experiment_export(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let bridge = require_bridge!();
     info!("experiment.export: W3C PROV-O + RO-Crate + BagIt + DataCite");
 
-    let dataset = crate::cli::extract_flag_value(args, "--dataset")
-        .unwrap_or("cell_ontology");
+    let dataset = crate::cli::extract_flag_value(args, "--dataset").unwrap_or("cell_ontology");
 
     // Step 1: W3C PROV-O export via sweetGrass
     let braids = bridge_call(&bridge, "braid", "list", json!({"limit": 3})).await;
@@ -926,8 +903,7 @@ async fn experiment_translate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     let bridge = require_bridge!();
     info!("experiment.translate: braid to paper-ready provenance statement");
 
-    let dataset = crate::cli::extract_flag_value(args, "--dataset")
-        .unwrap_or("alphafold");
+    let dataset = crate::cli::extract_flag_value(args, "--dataset").unwrap_or("alphafold");
 
     let braids = bridge_call(&bridge, "braid", "list", json!({"limit": 10})).await;
     let items = braids
@@ -939,12 +915,24 @@ async fn experiment_translate(args: &[&str]) -> crate::Result<ShadowOutcome> {
         .unwrap_or_default();
 
     let braid_count = items.len();
-    let signed_count = items.iter().filter(|b| b.get("signed").and_then(|v| v.as_bool()).unwrap_or(false)).count();
+    let signed_count = items
+        .iter()
+        .filter(|b| b.get("signed").and_then(|v| v.as_bool()).unwrap_or(false))
+        .count();
 
     let sample = items.first().cloned().unwrap_or(json!({}));
-    let data_hash = sample.get("data_hash").and_then(|v| v.as_str()).unwrap_or("unknown");
-    let attributed_to = sample.get("attributed_to").and_then(|v| v.as_str()).unwrap_or("unknown");
-    let _created_at = sample.get("created_at").and_then(|v| v.as_u64()).unwrap_or(0);
+    let data_hash = sample
+        .get("data_hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let attributed_to = sample
+        .get("attributed_to")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let _created_at = sample
+        .get("created_at")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
 
     // Build FAIR-compliant provenance statement
     let provenance_statement = format!(
@@ -982,13 +970,20 @@ async fn experiment_translate(args: &[&str]) -> crate::Result<ShadowOutcome> {
     );
 
     // Build supplementary materials table (TSV)
-    let mut tsv = String::from("Data_Hash\tBraid_ID\tSigned\tMIME_Type\tAttribued_To\tCreated_At\n");
+    let mut tsv =
+        String::from("Data_Hash\tBraid_ID\tSigned\tMIME_Type\tAttribued_To\tCreated_At\n");
     for item in &items {
         let dh = item.get("data_hash").and_then(|v| v.as_str()).unwrap_or("");
         let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
-        let signed = item.get("signed").and_then(|v| v.as_bool()).unwrap_or(false);
+        let signed = item
+            .get("signed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let mime = item.get("mime_type").and_then(|v| v.as_str()).unwrap_or("");
-        let attr = item.get("attributed_to").and_then(|v| v.as_str()).unwrap_or("");
+        let attr = item
+            .get("attributed_to")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let ts = item.get("created_at").and_then(|v| v.as_u64()).unwrap_or(0);
         tsv.push_str(&format!("{dh}\t{id}\t{signed}\t{mime}\t{attr}\t{ts}\n"));
     }
@@ -1050,8 +1045,13 @@ async fn experiment_compress(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
 
-    let braid_hashes: Vec<String> = items.iter()
-        .filter_map(|b| b.get("data_hash").and_then(|v| v.as_str()).map(String::from))
+    let braid_hashes: Vec<String> = items
+        .iter()
+        .filter_map(|b| {
+            b.get("data_hash")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
         .collect();
 
     // Try compression.compress_session
@@ -1147,11 +1147,15 @@ async fn experiment_dehydrate(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     }
 
     // Step 2: append test events
-    let events = (0..10).map(|i| json!({
-        "type": "file_ingest",
-        "hash": format!("experiment_dehydrate_event_{i:04}"),
-        "metadata": {"index": i, "experiment": "dehydrate"},
-    })).collect::<Vec<_>>();
+    let events = (0..10)
+        .map(|i| {
+            json!({
+                "type": "file_ingest",
+                "hash": format!("experiment_dehydrate_event_{i:04}"),
+                "metadata": {"index": i, "experiment": "dehydrate"},
+            })
+        })
+        .collect::<Vec<_>>();
 
     let append = bridge_call(
         &bridge,
@@ -1431,13 +1435,7 @@ async fn experiment_spine(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     .await;
 
     // Step 10: query trust events
-    let trust = bridge_call(
-        &bridge,
-        "trust",
-        "event_count",
-        json!({}),
-    )
-    .await;
+    let trust = bridge_call(&bridge, "trust", "event_count", json!({})).await;
 
     // Step 11: bonding ledger operations
     let bonding_store = bridge_call(
@@ -1448,13 +1446,7 @@ async fn experiment_spine(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     )
     .await;
 
-    let bonding_list = bridge_call(
-        &bridge,
-        "bonding",
-        "ledger.list",
-        json!({}),
-    )
-    .await;
+    let bonding_list = bridge_call(&bridge, "bonding", "ledger.list", json!({})).await;
 
     let report = json!({
         "experiment": "spine",
@@ -1494,7 +1486,8 @@ async fn experiment_encrypt(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let bridge = require_bridge!();
     info!("experiment.encrypt: bearDog encrypt/decrypt round-trip");
 
-    let test_payload = "experiment.encrypt: sovereign data encryption test — ecoPrimals provenance trio";
+    let test_payload =
+        "experiment.encrypt: sovereign data encryption test — ecoPrimals provenance trio";
 
     // Step 1: BLAKE3 hash the test payload
     let hash = bridge_call(
@@ -1514,13 +1507,7 @@ async fn experiment_encrypt(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         .to_string();
 
     // Step 2: generate an Ed25519 keypair
-    let keypair = bridge_call(
-        &bridge,
-        "crypto",
-        "ed25519_generate_keypair",
-        json!({}),
-    )
-    .await;
+    let keypair = bridge_call(&bridge, "crypto", "ed25519_generate_keypair", json!({})).await;
 
     let pubkey = keypair
         .as_ref()
@@ -1531,13 +1518,7 @@ async fn experiment_encrypt(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         .to_string();
 
     // Step 3: sign the hash with Ed25519
-    let signature = bridge_call(
-        &bridge,
-        "crypto",
-        "sign_ed25519",
-        json!({"data": &blake3}),
-    )
-    .await;
+    let signature = bridge_call(&bridge, "crypto", "sign_ed25519", json!({"data": &blake3})).await;
 
     let sig_hex = signature
         .as_ref()
@@ -1811,7 +1792,10 @@ async fn experiment_compose(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let bridge = require_bridge!();
     info!("experiment.compose: cross-primal compositional pipeline");
 
-    let test_data = format!("experiment.compose: compositional test at epoch {}", current_epoch());
+    let test_data = format!(
+        "experiment.compose: compositional test at epoch {}",
+        current_epoch()
+    );
     let mut pipeline_steps = Vec::new();
     // Step 1: bearDog — BLAKE3 hash the data
     let hash_result = bridge_call(
@@ -1913,13 +1897,7 @@ async fn experiment_compose(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     }
 
     // Step 6: bearDog — Ed25519 sign the hash
-    let sign = bridge_call(
-        &bridge,
-        "crypto",
-        "sign",
-        json!({"data": &data_hash}),
-    )
-    .await;
+    let sign = bridge_call(&bridge, "crypto", "sign", json!({"data": &data_hash})).await;
 
     let signature = sign
         .as_ref()
@@ -1993,7 +1971,8 @@ async fn experiment_compose(_args: &[&str]) -> crate::Result<ShadowOutcome> {
         .await;
     }
 
-    let steps_ok = pipeline_steps.iter()
+    let steps_ok = pipeline_steps
+        .iter()
         .filter(|s| s.get("ok").and_then(|v| v.as_bool()).unwrap_or(false))
         .count();
 
@@ -2014,7 +1993,9 @@ async fn experiment_compose(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     Ok(ShadowOutcome::ok_with(
         format!(
             "experiment.compose: {}/{} steps passed, braid_verified={}",
-            steps_ok, pipeline_steps.len(), verified,
+            steps_ok,
+            pipeline_steps.len(),
+            verified,
         ),
         report,
     ))
@@ -2029,18 +2010,18 @@ async fn experiment_inventory(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     info!("experiment.inventory: full primal capability inventory");
 
     let primals = [
-        ("nestGate",   "nestgate"),
+        ("nestGate", "nestgate"),
         ("rhizoCrypt", "rhizocrypt"),
-        ("loamSpine",  "loamspine"),
+        ("loamSpine", "loamspine"),
         ("sweetGrass", "sweetgrass"),
-        ("bearDog",    "beardog"),
-        ("songBird",   "songbird"),
-        ("skunkBat",   "skunkbat"),
-        ("barracuda",  "barracuda"),
-        ("coralReef",  "coralreef"),
-        ("petalTongue","petaltongue"),
-        ("squirrel",   "squirrel"),
-        ("swarmVine",  "swarmvine"),
+        ("bearDog", "beardog"),
+        ("songBird", "songbird"),
+        ("skunkBat", "skunkbat"),
+        ("barracuda", "barracuda"),
+        ("coralReef", "coralreef"),
+        ("petalTongue", "petaltongue"),
+        ("squirrel", "squirrel"),
+        ("swarmVine", "swarmvine"),
     ];
 
     let mut inventory = Vec::new();
@@ -2049,13 +2030,7 @@ async fn experiment_inventory(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     let mut degraded = 0usize;
 
     for (display_name, _primal_id) in &primals {
-        let health = bridge_call(
-            &bridge,
-            "health",
-            "check",
-            json!({"primal": display_name}),
-        )
-        .await;
+        let health = bridge_call(&bridge, "health", "check", json!({"primal": display_name})).await;
 
         let status = health
             .as_ref()
@@ -2065,15 +2040,13 @@ async fn experiment_inventory(_args: &[&str]) -> crate::Result<ShadowOutcome> {
             .unwrap_or("unknown")
             .to_string();
 
-        if status == "healthy" || status == "ok" { healthy += 1; } else { degraded += 1; }
+        if status == "healthy" || status == "ok" {
+            healthy += 1;
+        } else {
+            degraded += 1;
+        }
 
-        let caps = bridge_call(
-            &bridge,
-            "primal",
-            "capabilities",
-            json!({}),
-        )
-        .await;
+        let caps = bridge_call(&bridge, "primal", "capabilities", json!({})).await;
 
         let cap_list = caps
             .as_ref()
@@ -2085,13 +2058,7 @@ async fn experiment_inventory(_args: &[&str]) -> crate::Result<ShadowOutcome> {
 
         total_caps += cap_list;
 
-        let identity = bridge_call(
-            &bridge,
-            "identity",
-            "get",
-            json!({}),
-        )
-        .await;
+        let identity = bridge_call(&bridge, "identity", "get", json!({})).await;
 
         inventory.push(json!({
             "primal": display_name,
@@ -2122,7 +2089,9 @@ async fn experiment_inventory(_args: &[&str]) -> crate::Result<ShadowOutcome> {
     Ok(ShadowOutcome::ok_with(
         format!(
             "experiment.inventory: {}/{} primals healthy, {} total capabilities",
-            healthy, primals.len(), total_caps,
+            healthy,
+            primals.len(),
+            total_caps,
         ),
         report,
     ))
@@ -2163,19 +2132,19 @@ async fn experiment_all(args: &[&str]) -> crate::Result<ShadowOutcome> {
         }};
     }
 
-    run_exp!("break",     experiment_break(args).await);
-    run_exp!("falsify",   experiment_falsify(args).await);
-    run_exp!("rebraid",   experiment_rebraid(args).await);
-    run_exp!("audit",     experiment_audit(args).await);
-    run_exp!("reward",    experiment_reward(args).await);
-    run_exp!("export",    experiment_export(args).await);
+    run_exp!("break", experiment_break(args).await);
+    run_exp!("falsify", experiment_falsify(args).await);
+    run_exp!("rebraid", experiment_rebraid(args).await);
+    run_exp!("audit", experiment_audit(args).await);
+    run_exp!("reward", experiment_reward(args).await);
+    run_exp!("export", experiment_export(args).await);
     run_exp!("translate", experiment_translate(args).await);
-    run_exp!("compress",  experiment_compress(args).await);
+    run_exp!("compress", experiment_compress(args).await);
     run_exp!("dehydrate", experiment_dehydrate(args).await);
-    run_exp!("spine",     experiment_spine(args).await);
-    run_exp!("encrypt",   experiment_encrypt(args).await);
-    run_exp!("zfs",       experiment_zfs(args).await);
-    run_exp!("compose",   experiment_compose(args).await);
+    run_exp!("spine", experiment_spine(args).await);
+    run_exp!("encrypt", experiment_encrypt(args).await);
+    run_exp!("zfs", experiment_zfs(args).await);
+    run_exp!("compose", experiment_compose(args).await);
     run_exp!("inventory", experiment_inventory(args).await);
 
     let total = 14u32;

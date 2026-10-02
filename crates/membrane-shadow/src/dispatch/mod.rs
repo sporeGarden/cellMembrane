@@ -163,9 +163,7 @@ pub async fn run(config: &ShadowConfig, cmd: &str, args: &[&str]) -> crate::Resu
         c if c.starts_with("tower.") => crate::tower::dispatch(config, cmd, args).await,
         c if c.starts_with("gateway.") => crate::gateway::dispatch(config, cmd, args).await,
         c if c.starts_with("harvest.") => dispatch_harvest::dispatch_harvest(cmd, args).await,
-        c if c.starts_with("alphafold.") => {
-            alphafold_dispatch::dispatch_alphafold(cmd, args).await
-        }
+        c if c.starts_with("alphafold.") => alphafold_dispatch::dispatch_alphafold(cmd, args).await,
         c if c.starts_with("experiment.") => {
             experiment_dispatch::dispatch_experiment(cmd, args).await
         }

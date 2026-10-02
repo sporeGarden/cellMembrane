@@ -124,9 +124,9 @@ async fn exchange_jwt_for_token(sa: &ServiceAccount) -> Result<String> {
         .await
         .map_err(|e| ShadowError::config(format!("GSC token exchange: {e}")))?;
 
-    let resp_body = resp.text().map_err(|e| {
-        ShadowError::config(format!("GSC token response: {e}"))
-    })?;
+    let resp_body = resp
+        .text()
+        .map_err(|e| ShadowError::config(format!("GSC token response: {e}")))?;
 
     let token: TokenResponse = serde_json::from_str(&resp_body).map_err(|e| {
         ShadowError::config(format!(
@@ -146,11 +146,8 @@ fn rs256_sign(pem_key: &str, message: &[u8]) -> Result<Vec<u8>> {
         .lines()
         .filter(|l| !l.starts_with("-----"))
         .collect();
-    let der = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        &pem_body,
-    )
-    .map_err(|e| ShadowError::config(format!("RSA key decode: {e}")))?;
+    let der = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &pem_body)
+        .map_err(|e| ShadowError::config(format!("RSA key decode: {e}")))?;
 
     // ring requires PKCS#8 DER format (Google service accounts use this)
     let key_pair = ring::signature::RsaKeyPair::from_pkcs8(&der)
@@ -219,18 +216,14 @@ pub async fn status_report(client: &GscClient, days: u32) -> Result<String> {
     let prop = urlencod(super::GSC_PROPERTY);
 
     // Sitemaps
-    let sm_path = format!(
-        "/webmasters/v3/sites/{prop}/sitemaps"
-    );
+    let sm_path = format!("/webmasters/v3/sites/{prop}/sitemaps");
     let sm_body = gsc_get(client, &sm_path).await?;
     let sitemaps: serde_json::Value = serde_json::from_str(&sm_body).unwrap_or_default();
 
     // Analytics
     let end = time::OffsetDateTime::now_utc().date();
     let start = end - time::Duration::days(i64::from(days));
-    let analytics_path = format!(
-        "/webmasters/v3/sites/{prop}/searchAnalytics/query"
-    );
+    let analytics_path = format!("/webmasters/v3/sites/{prop}/searchAnalytics/query");
     let analytics_body = gsc_post(
         client,
         &analytics_path,
@@ -417,9 +410,9 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
     let creds_path = std::env::var(super::ENV_GSC_CREDENTIALS)
         .unwrap_or_else(|_| super::DEFAULT_CREDENTIALS_PATH.to_string());
 
-    let creds_json = tokio::fs::read_to_string(&creds_path)
-        .await
-        .map_err(|e| ShadowError::config(format!("Indexing API credentials at {creds_path}: {e}")))?;
+    let creds_json = tokio::fs::read_to_string(&creds_path).await.map_err(|e| {
+        ShadowError::config(format!("Indexing API credentials at {creds_path}: {e}"))
+    })?;
 
     let sa: ServiceAccount = serde_json::from_str(&creds_json)
         .map_err(|e| ShadowError::config(format!("Indexing API credentials parse: {e}")))?;
@@ -461,9 +454,9 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
         .await
         .map_err(|e| ShadowError::config(format!("Indexing API token exchange: {e}")))?;
 
-    let resp_body = resp.text().map_err(|e| {
-        ShadowError::config(format!("Indexing API token response: {e}"))
-    })?;
+    let resp_body = resp
+        .text()
+        .map_err(|e| ShadowError::config(format!("Indexing API token response: {e}")))?;
 
     let token: TokenResponse = serde_json::from_str(&resp_body).map_err(|e| {
         ShadowError::config(format!(
@@ -502,7 +495,10 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
                     break;
                 } else {
                     let body = resp.text().unwrap_or_default();
-                    let msg = format!("FAILED {url} (HTTP {status}): {}", &body[..body.len().min(100)]);
+                    let msg = format!(
+                        "FAILED {url} (HTTP {status}): {}",
+                        &body[..body.len().min(100)]
+                    );
                     tracing::warn!("Indexing API: {msg}");
                     failures.push(msg);
                 }
@@ -528,7 +524,12 @@ pub async fn url_notify(urls: &[String]) -> Result<String> {
         Ok(format!(
             "{successes}/{total} URLs notified ({} failed: {})",
             failures.len(),
-            failures.iter().take(3).map(|f| f.as_str()).collect::<Vec<_>>().join("; ")
+            failures
+                .iter()
+                .take(3)
+                .map(|f| f.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
         ))
     }
 }

@@ -27,6 +27,7 @@
 
 mod gsc;
 mod indexnow;
+pub(crate) mod receptor;
 
 use crate::error::{Result, ShadowError};
 
@@ -136,6 +137,10 @@ const PYTHON_VENV: &str = "/opt/ecoPrimals/venv-gsc/bin/python3";
 
 /// Dispatch `seo.*` CLI commands.
 pub async fn dispatch(cmd: &str, args: &[&str]) -> Result<crate::ShadowOutcome> {
+    if cmd == "seo.receptor" {
+        let config = crate::ShadowConfig::from_env().await;
+        return receptor::dispatch(&config, args).await;
+    }
     match cmd {
         "seo.status" => {
             let days: u32 = crate::cli::extract_flag_value(args, "--days")

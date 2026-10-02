@@ -288,22 +288,10 @@ async fn query_cascade_status(config: &ShadowConfig) -> Result<SyncResult> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown")
                 .to_string(),
-            total: result
-                .get("total")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            synced: result
-                .get("synced")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            drifted: result
-                .get("drifted")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            missing: result
-                .get("missing")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
+            total: result.get("total").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            synced: result.get("synced").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            drifted: result.get("drifted").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            missing: result.get("missing").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             raw_output: response,
         })
     } else {

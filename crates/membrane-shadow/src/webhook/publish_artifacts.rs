@@ -14,9 +14,7 @@ use tracing::{info, warn};
 ///
 /// Returns `Ok(Some(msg))` on success, `Ok(None)` if no command configured,
 /// or `Err` on failure.
-pub async fn generate(
-    site: &PublishSite,
-) -> Result<Option<String>, String> {
+pub async fn generate(site: &PublishSite) -> Result<Option<String>, String> {
     let Some(cmd_parts) = site.artifact_command else {
         return Ok(None);
     };
