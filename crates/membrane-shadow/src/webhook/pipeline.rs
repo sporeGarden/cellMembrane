@@ -215,6 +215,27 @@ pub(super) async fn run_publish_pipeline(
         }
     };
 
+    // Step 2.6: Evidence depot symlinks (detroit only, non-fatal)
+    //
+    // After zola build, raw evidence files (PDFs, braids, FOIA docs) in the
+    // depot directory need symlinks into public/evidence/ so Caddy serves them
+    // alongside the Zola-generated evidence section pages.
+    let symlink_msg = if site.evidence_dir.is_some() {
+        match symlink_evidence_depot(site).await {
+            Ok(count) if count > 0 => {
+                info!(repo = %action.repo_name, count, "publish: evidence depot symlinks created");
+                format!("  [symlinks] {count} evidence depot files linked")
+            }
+            Ok(_) => String::new(),
+            Err(e) => {
+                warn!(repo = %action.repo_name, error = %e, "publish: evidence symlinks failed (non-fatal)");
+                format!("  [symlinks] FAILED: {e}")
+            }
+        }
+    } else {
+        String::new()
+    };
+
     // Step 2.7: Observatory receptor snapshot (sporePrint only, non-fatal)
     let observatory_msg = {
         let config = crate::ShadowConfig::from_env().await;
@@ -305,6 +326,10 @@ pub(super) async fn run_publish_pipeline(
     if !braid_msg.is_empty() {
         full_msg.push('\n');
         full_msg.push_str(&braid_msg);
+    }
+    if !symlink_msg.is_empty() {
+        full_msg.push('\n');
+        full_msg.push_str(&symlink_msg);
     }
     if !observatory_msg.is_empty() {
         full_msg.push('\n');
@@ -528,4 +553,83 @@ pub(super) async fn run_sandbox(
             Ok(None)
         }
     }
+}
+
+// ── Evidence Depot Symlinks ─────────────────────────────────────────
+
+/// Symlink raw evidence depot files into the built site's public/evidence/ dir.
+///
+/// After `zola build`, evidence *pages* exist in `public/evidence/` but raw
+/// files (PDFs, braids, FOIA docs) live in a separate depot directory.  This
+/// creates symlinks so Caddy serves both at `/evidence/`.
+///
+/// Only creates links for files that don't already exist in the target
+/// (Zola-generated HTML pages take precedence). Skips `README.md`.
+async fn symlink_evidence_depot(site: &crate::seo::PublishSite) -> crate::error::Result<usize> {
+    // Depot sits alongside public_dir: /opt/ecoPrimals/detroit/evidence
+    let depot = std::path::Path::new(site.public_dir)
+        .parent()
+        .ok_or_else(|| crate::error::ShadowError::config("public_dir has no parent"))?
+        .join("evidence");
+
+    if !depot.exists() {
+        return Ok(0);
+    }
+
+    let target_dir = std::path::Path::new(site.public_dir).join("evidence");
+    tokio::fs::create_dir_all(&target_dir)
+        .await
+        .map_err(crate::error::ShadowError::Io)?;
+
+    let mut count = 0usize;
+    let mut entries = tokio::fs::read_dir(&depot)
+        .await
+        .map_err(crate::error::ShadowError::Io)?;
+
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .map_err(crate::error::ShadowError::Io)?
+    {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Skip README.md — not a servable evidence file.
+        if name_str == "README.md" {
+            continue;
+        }
+
+        let target = target_dir.join(&name);
+
+        // Don't overwrite existing files (Zola HTML pages take precedence).
+        if target.exists() {
+            continue;
+        }
+
+        let source = entry.path();
+
+        // Create symlink: target → source (depot file).
+        #[cfg(unix)]
+        {
+            if let Err(e) = tokio::fs::symlink(&source, &target).await {
+                warn!(
+                    source = %source.display(),
+                    target = %target.display(),
+                    error = %e,
+                    "evidence symlink failed"
+                );
+            } else {
+                count += 1;
+            }
+        }
+
+        // On non-Unix (Windows cross-compile), skip symlinks entirely.
+        #[cfg(not(unix))]
+        {
+            let _ = source;
+            let _ = target;
+        }
+    }
+
+    Ok(count)
 }
