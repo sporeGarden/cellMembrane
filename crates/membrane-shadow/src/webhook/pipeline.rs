@@ -316,6 +316,14 @@ pub(super) async fn run_publish_pipeline(
     full_msg.push('\n');
     full_msg.push_str(&verify_msg);
 
+    // Step 6: Append publish signal to dual signal log (non-fatal)
+    {
+        let mut sig = crate::signal::publish_signal(&action.repo_name, page_count);
+        crate::signal::parse_seo_msg(&mut sig, &seo_msg);
+        crate::signal::parse_observatory_msg(&mut sig, &observatory_msg);
+        crate::signal::append_signal(&crate::signal::SignalEvent::Publish(sig));
+    }
+
     Ok(crate::ShadowOutcome {
         ok: true,
         message: full_msg,

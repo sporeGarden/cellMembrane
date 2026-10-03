@@ -245,6 +245,10 @@ pub async fn generate_snapshot(
         "observatory snapshot written"
     );
 
+    // Append receptor signal to dual signal log (non-fatal).
+    let receptor_sig = crate::signal::receptor_signal(&report);
+    crate::signal::append_signal(&crate::signal::SignalEvent::Receptor(receptor_sig));
+
     Ok(Some(format!(
         "observatory: {lines_processed} lines, {host_count} hosts, {} history days → {}",
         snapshot.history.len(),
