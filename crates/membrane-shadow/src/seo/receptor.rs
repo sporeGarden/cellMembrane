@@ -87,7 +87,13 @@ pub struct CaddyHeaders {
 
 // ── Visitor Classification ──────────────────────────────────────────
 
-/// Classification of a visitor based on User-Agent analysis.
+/// Classification of a visitor based on User-Agent + behavioral analysis.
+///
+/// The taxonomy is ordered by signal reliability: UA-identified bots are
+/// classified first, then behavioral signals refine the classification.
+/// A "Human" classification means the visitor passed ALL checks — UA looks
+/// like a real browser, path isn't a probe target, velocity is human-speed,
+/// and session behavior is consistent with reading content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VisitorClass {
@@ -99,12 +105,23 @@ pub enum VisitorClass {
     AiBot,
     /// Monitoring/uptime checker (UptimeRobot, Pingdom, etc.)
     MonitorBot,
+    /// Automated reconnaissance/scraping (credential scanners, vuln probes).
+    ScraperBot,
     /// Generic bot (curl, wget, python-requests, scrapy, etc.)
     GenericBot,
-    /// Human visitor with a standard browser.
+    /// Human visitor with a standard browser (provably human — passed all checks).
     Human,
+    /// Human using automated tools (API clients, research scripts).
+    AgenticHuman,
     /// Unclassifiable (empty or missing User-Agent).
     Unknown,
+}
+
+impl VisitorClass {
+    /// Whether this class counts as a bot (not a real human reader).
+    pub fn is_bot(self) -> bool {
+        !matches!(self, Self::Human | Self::AgenticHuman)
+    }
 }
 
 impl std::fmt::Display for VisitorClass {
@@ -114,11 +131,79 @@ impl std::fmt::Display for VisitorClass {
             Self::SocialBot => write!(f, "social_bot"),
             Self::AiBot => write!(f, "ai_bot"),
             Self::MonitorBot => write!(f, "monitor_bot"),
+            Self::ScraperBot => write!(f, "scraper_bot"),
             Self::GenericBot => write!(f, "generic_bot"),
             Self::Human => write!(f, "human"),
+            Self::AgenticHuman => write!(f, "agentic_human"),
             Self::Unknown => write!(f, "unknown"),
         }
     }
+}
+
+/// Known probe/recon paths that indicate automated scanning.
+///
+/// Any hit to these patterns is immediately classified as `ScraperBot`
+/// regardless of User-Agent. Real humans never request `/.env`.
+const PROBE_PREFIXES: &[&str] = &[
+    "/.env",
+    "/.aws",
+    "/.git/",
+    "/.svn/",
+    "/.DS_Store",
+    "/wp-admin",
+    "/wp-login",
+    "/wp-content",
+    "/wp-includes",
+    "/xmlrpc.php",
+    "/admin",
+    "/phpmyadmin",
+    "/actuator",
+    "/api/v1",
+    "/cgi-bin",
+    "/config.",
+    "/backup",
+    "/debug",
+    "/.htaccess",
+    "/.htpasswd",
+    "/server-status",
+    "/telescope",
+    "/vendor/",
+    "/node_modules/",
+    "/composer.",
+    "/package.json",
+    "/yarn.lock",
+    "/Dockerfile",
+    "/docker-compose",
+];
+
+/// Classify a request path as a probe/recon target.
+///
+/// Returns `Some(ScraperBot)` if the path matches known probe patterns.
+/// Returns `None` if the path looks like legitimate content.
+pub fn classify_path(path: &str) -> Option<VisitorClass> {
+    let lower = path.to_lowercase();
+
+    // Dotfile probes (/.env, /.env.backup, /.env.prod, etc.)
+    if lower.starts_with("/.") && lower != "/.well-known/acme-challenge/" {
+        return Some(VisitorClass::ScraperBot);
+    }
+
+    for prefix in PROBE_PREFIXES {
+        if lower.starts_with(prefix) {
+            return Some(VisitorClass::ScraperBot);
+        }
+    }
+
+    // PHP/ASP/JSP probes on a static Zola site
+    if lower.ends_with(".php")
+        || lower.ends_with(".asp")
+        || lower.ends_with(".aspx")
+        || lower.ends_with(".jsp")
+    {
+        return Some(VisitorClass::ScraperBot);
+    }
+
+    None
 }
 
 /// Classify a visitor from their User-Agent string.
@@ -218,6 +303,20 @@ pub fn classify_visitor(user_agent: &str) -> VisitorClass {
     VisitorClass::Unknown
 }
 
+/// Composite classification: combine UA-based and path-based signals.
+///
+/// Path classification overrides UA classification when the path is a
+/// known probe target — a clean Chrome UA requesting `/.env` is a scanner.
+pub fn classify_request(user_agent: &str, path: &str) -> VisitorClass {
+    // Path-based override: probe paths are always ScraperBot.
+    if let Some(path_class) = classify_path(path) {
+        return path_class;
+    }
+
+    // Fall through to UA-based classification.
+    classify_visitor(user_agent)
+}
+
 // ── Signal Aggregation ──────────────────────────────────────────────
 
 /// Aggregated signal for a single page (URI path) on a single host.
@@ -235,6 +334,9 @@ pub struct PageSignal {
     pub social_bot_hits: u64,
     /// AI bot crawls.
     pub ai_bot_hits: u64,
+    /// Scraper/recon bot hits (credential scanners, vuln probes).
+    #[serde(default)]
+    pub scraper_bot_hits: u64,
     /// Other bot hits (monitor + generic).
     pub other_bot_hits: u64,
     /// HTTP 200 responses.
@@ -382,7 +484,8 @@ impl ReceptorReport {
             .user_agent
             .first()
             .map_or("", String::as_str);
-        let class = classify_visitor(ua);
+        let normalized = normalize_path(&entry.request.uri);
+        let class = classify_request(ua, &normalized);
 
         let host_signal = self
             .hosts
@@ -394,25 +497,26 @@ impl ReceptorReport {
 
         host_signal.total_requests += 1;
         match class {
-            VisitorClass::Human => host_signal.total_human += 1,
+            VisitorClass::Human | VisitorClass::AgenticHuman => host_signal.total_human += 1,
             VisitorClass::SearchBot => host_signal.total_search_bot += 1,
             _ => {}
         }
 
         let page = host_signal
             .pages
-            .entry(normalize_path(&entry.request.uri))
+            .entry(normalized.clone())
             .or_insert_with(|| PageSignal {
-                path: normalize_path(&entry.request.uri),
+                path: normalized.clone(),
                 ..Default::default()
             });
 
         page.total_hits += 1;
         match class {
-            VisitorClass::Human => page.human_hits += 1,
+            VisitorClass::Human | VisitorClass::AgenticHuman => page.human_hits += 1,
             VisitorClass::SearchBot => page.search_bot_hits += 1,
             VisitorClass::SocialBot => page.social_bot_hits += 1,
             VisitorClass::AiBot => page.ai_bot_hits += 1,
+            VisitorClass::ScraperBot => page.scraper_bot_hits += 1,
             VisitorClass::MonitorBot | VisitorClass::GenericBot | VisitorClass::Unknown => {
                 page.other_bot_hits += 1;
             }
@@ -432,7 +536,7 @@ impl ReceptorReport {
         // Collect raw hit for session grouping.
         self.raw_hits.push(RawHit {
             host: entry.request.host.clone(),
-            path: normalize_path(&entry.request.uri),
+            path: normalized,
             ua: ua.to_string(),
             class,
             ts: entry.ts,
@@ -622,7 +726,10 @@ fn build_session_summaries(raw_hits: &[RawHit]) -> BTreeMap<String, SessionSumma
     for session in &all_sessions {
         let summary = summaries.entry(session.host.clone()).or_default();
         summary.total_sessions += 1;
-        if session.classification == VisitorClass::Human {
+        if matches!(
+            session.classification,
+            VisitorClass::Human | VisitorClass::AgenticHuman
+        ) {
             summary.human_sessions += 1;
             let depth = session.pages.len() as f64;
             let n = summary.human_sessions as f64;
@@ -639,7 +746,13 @@ fn build_session_summaries(raw_hits: &[RawHit]) -> BTreeMap<String, SessionSumma
     summaries
 }
 
-/// Build a single session from a sorted slice of hits.
+/// Velocity threshold: more than this many hits in VELOCITY_WINDOW_SECS → not human.
+const VELOCITY_THRESHOLD: usize = 5;
+
+/// Velocity window in seconds.
+const VELOCITY_WINDOW_SECS: f64 = 10.0;
+
+/// Build a single session from a sorted slice of hits, applying behavioral reclassification.
 fn build_session(host: &str, hits: &[&&RawHit]) -> Session {
     let first = hits[0];
     let last = hits[hits.len() - 1];
@@ -650,15 +763,51 @@ fn build_session(host: &str, hits: &[&&RawHit]) -> Session {
         0
     };
 
+    // Start with the UA-based classification from the first hit.
+    let mut classification = first.class;
+
+    // Apply behavioral reclassification for "Human" sessions.
+    if classification == VisitorClass::Human || classification == VisitorClass::Unknown {
+        classification = reclassify_session(hits, classification);
+    }
+
     Session {
         ua_hash: sha256_hex(&first.ua),
-        classification: first.class,
+        classification,
         pages: pages.clone(),
         entry_page: pages.first().cloned().unwrap_or_default(),
         duration_s,
         host: host.to_string(),
         start_ts: first.ts,
     }
+}
+
+/// Apply behavioral signals to reclassify a session.
+///
+/// Catches bots that use clean browser UAs but exhibit non-human behavior:
+/// - Velocity: >5 hits in <10 seconds → ScraperBot
+/// - Probe paths: any hit to a known probe path → ScraperBot
+/// - All 404s: session of only 404 responses → ScraperBot (path scanning)
+fn reclassify_session(hits: &[&&RawHit], initial_class: VisitorClass) -> VisitorClass {
+    // Check 1: Any probe path in the session → entire session is ScraperBot.
+    // (Individual hits already classified by classify_request, but a session
+    // mixing normal + probe paths should be flagged too.)
+    let has_probe = hits.iter().any(|h| h.class == VisitorClass::ScraperBot);
+    if has_probe {
+        return VisitorClass::ScraperBot;
+    }
+
+    // Check 2: Velocity — too many hits too fast.
+    if hits.len() > VELOCITY_THRESHOLD {
+        let first_ts = hits[0].ts;
+        let window_end_ts = first_ts + VELOCITY_WINDOW_SECS;
+        let hits_in_window = hits.iter().filter(|h| h.ts <= window_end_ts).count();
+        if hits_in_window > VELOCITY_THRESHOLD {
+            return VisitorClass::ScraperBot;
+        }
+    }
+
+    initial_class
 }
 
 // ── Log Retrieval + Parsing ─────────────────────────────────────────
@@ -1065,6 +1214,176 @@ mod tests {
         assert_eq!(VisitorClass::SearchBot.to_string(), "search_bot");
         assert_eq!(VisitorClass::Human.to_string(), "human");
         assert_eq!(VisitorClass::AiBot.to_string(), "ai_bot");
+        assert_eq!(VisitorClass::ScraperBot.to_string(), "scraper_bot");
+        assert_eq!(VisitorClass::AgenticHuman.to_string(), "agentic_human");
+    }
+
+    #[test]
+    fn classify_path_dotenv() {
+        assert_eq!(classify_path("/.env"), Some(VisitorClass::ScraperBot));
+        assert_eq!(
+            classify_path("/.env.backup"),
+            Some(VisitorClass::ScraperBot)
+        );
+        assert_eq!(classify_path("/.env.prod"), Some(VisitorClass::ScraperBot));
+    }
+
+    #[test]
+    fn classify_path_aws_credentials() {
+        assert_eq!(
+            classify_path("/.aws/credentials"),
+            Some(VisitorClass::ScraperBot)
+        );
+    }
+
+    #[test]
+    fn classify_path_git() {
+        assert_eq!(
+            classify_path("/.git/config"),
+            Some(VisitorClass::ScraperBot)
+        );
+    }
+
+    #[test]
+    fn classify_path_wordpress() {
+        assert_eq!(classify_path("/wp-admin"), Some(VisitorClass::ScraperBot));
+        assert_eq!(
+            classify_path("/wp-login.php"),
+            Some(VisitorClass::ScraperBot)
+        );
+        assert_eq!(classify_path("/xmlrpc.php"), Some(VisitorClass::ScraperBot));
+    }
+
+    #[test]
+    fn classify_path_php_on_static_site() {
+        assert_eq!(classify_path("/index.php"), Some(VisitorClass::ScraperBot));
+        assert_eq!(classify_path("/admin.php"), Some(VisitorClass::ScraperBot));
+    }
+
+    #[test]
+    fn classify_path_normal_content() {
+        assert_eq!(classify_path("/"), None);
+        assert_eq!(classify_path("/evidence/"), None);
+        assert_eq!(classify_path("/network/dpsc/"), None);
+        assert_eq!(classify_path("/analysis/rico-pattern/"), None);
+    }
+
+    #[test]
+    fn classify_request_probe_overrides_ua() {
+        // Clean Chrome UA but requesting /.env → ScraperBot, not Human
+        assert_eq!(
+            classify_request(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+                "/.env"
+            ),
+            VisitorClass::ScraperBot
+        );
+    }
+
+    #[test]
+    fn classify_request_normal_path_uses_ua() {
+        assert_eq!(
+            classify_request(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+                "/evidence/"
+            ),
+            VisitorClass::Human
+        );
+    }
+
+    #[test]
+    fn scraper_session_not_counted_as_human() {
+        let mut report = ReceptorReport::empty();
+
+        let ua = "Mozilla/5.0 Chrome/152.0.0.0 Safari/537.36";
+
+        // Scanner hitting 28 dotfiles in 30 seconds
+        let probes = [
+            "/.env",
+            "/.env.backup",
+            "/.env.prod",
+            "/.env.local",
+            "/.aws/credentials",
+            "/.git/config",
+            "/wp-admin",
+            "/xmlrpc.php",
+        ];
+        for (i, path) in probes.iter().enumerate() {
+            report.ingest(&CaddyLogEntry {
+                request: CaddyRequest {
+                    remote_ip: "5.6.7.8".into(),
+                    host: "detroit.primals.eco".into(),
+                    uri: path.to_string(),
+                    method: "GET".into(),
+                    headers: CaddyHeaders {
+                        user_agent: vec![ua.into()],
+                    },
+                },
+                status: 404,
+                size: 0,
+                duration: 0.001,
+                ts: 1727800000.0 + (i as f64 * 1.0), // 1 second apart
+            });
+        }
+
+        report.finalize();
+
+        let host = report.hosts.get("detroit.primals.eco").unwrap();
+        // Zero human hits — all probe paths classified as ScraperBot
+        assert_eq!(host.total_human, 0, "probe hits should not count as human");
+        assert_eq!(host.total_requests, 8);
+
+        // Session should also be ScraperBot, not Human
+        let sess = report.sessions.get("detroit.primals.eco").unwrap();
+        assert_eq!(
+            sess.human_sessions, 0,
+            "scraper session should not be counted as human"
+        );
+    }
+
+    #[test]
+    fn velocity_reclassifies_fast_session() {
+        let mut report = ReceptorReport::empty();
+
+        let ua = "Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36";
+
+        // 8 legitimate-looking pages in 5 seconds — too fast for a human
+        let pages = [
+            "/",
+            "/evidence/",
+            "/network/",
+            "/analysis/",
+            "/timeline/",
+            "/sources/",
+            "/about/",
+            "/contact/",
+        ];
+        for (i, path) in pages.iter().enumerate() {
+            report.ingest(&CaddyLogEntry {
+                request: CaddyRequest {
+                    remote_ip: "1.2.3.4".into(),
+                    host: "detroit.primals.eco".into(),
+                    uri: path.to_string(),
+                    method: "GET".into(),
+                    headers: CaddyHeaders {
+                        user_agent: vec![ua.into()],
+                    },
+                },
+                status: 200,
+                size: 1000,
+                duration: 0.01,
+                ts: 1727800000.0 + (i as f64 * 0.5), // 0.5 seconds apart
+            });
+        }
+
+        report.finalize();
+
+        let sess = report.sessions.get("detroit.primals.eco").unwrap();
+        assert_eq!(
+            sess.human_sessions, 0,
+            "velocity-flagged session should not be human"
+        );
+        assert_eq!(sess.total_sessions, 1);
     }
 
     #[test]
