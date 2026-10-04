@@ -34,6 +34,17 @@ use tracing::{debug, info};
 
 use crate::error::Result;
 
+// Re-export classification types from cellmembrane-types so existing
+// consumers of `seo::receptor::VisitorClass` continue to work, and
+// skunky-ingest can import the same types from cellmembrane-types directly.
+// Re-export classification types from cellmembrane-types for downstream
+// consumers and internal `use super::*` in tests.
+#[allow(unused_imports)]
+pub use cellmembrane_types::visitor::{
+    PROBE_PREFIXES, SESSION_WINDOW_SECS, VELOCITY_THRESHOLD, VELOCITY_WINDOW_SECS, VisitorClass,
+    classify_path, classify_request, classify_visitor,
+};
+
 // ── Caddy Log Types ─────────────────────────────────────────────────
 
 /// A single Caddy JSON access log entry.
@@ -83,238 +94,6 @@ pub struct CaddyHeaders {
     /// User-Agent header values (Caddy stores as array).
     #[serde(default, rename = "User-Agent")]
     pub user_agent: Vec<String>,
-}
-
-// ── Visitor Classification ──────────────────────────────────────────
-
-/// Classification of a visitor based on User-Agent + behavioral analysis.
-///
-/// The taxonomy is ordered by signal reliability: UA-identified bots are
-/// classified first, then behavioral signals refine the classification.
-/// A "Human" classification means the visitor passed ALL checks — UA looks
-/// like a real browser, path isn't a probe target, velocity is human-speed,
-/// and session behavior is consistent with reading content.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VisitorClass {
-    /// Search engine crawler (Googlebot, Bingbot, etc.)
-    SearchBot,
-    /// Social media preview bot (Twitterbot, facebookexternalhit, etc.)
-    SocialBot,
-    /// AI/LLM training crawler (GPTBot, ClaudeBot, etc.)
-    AiBot,
-    /// Monitoring/uptime checker (UptimeRobot, Pingdom, etc.)
-    MonitorBot,
-    /// Automated reconnaissance/scraping (credential scanners, vuln probes).
-    ScraperBot,
-    /// Generic bot (curl, wget, python-requests, scrapy, etc.)
-    GenericBot,
-    /// Human visitor with a standard browser (provably human — passed all checks).
-    Human,
-    /// Human using automated tools (API clients, research scripts).
-    AgenticHuman,
-    /// Unclassifiable (empty or missing User-Agent).
-    Unknown,
-}
-
-impl VisitorClass {
-    /// Whether this class counts as a bot (not a real human reader).
-    pub fn is_bot(self) -> bool {
-        !matches!(self, Self::Human | Self::AgenticHuman)
-    }
-}
-
-impl std::fmt::Display for VisitorClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SearchBot => write!(f, "search_bot"),
-            Self::SocialBot => write!(f, "social_bot"),
-            Self::AiBot => write!(f, "ai_bot"),
-            Self::MonitorBot => write!(f, "monitor_bot"),
-            Self::ScraperBot => write!(f, "scraper_bot"),
-            Self::GenericBot => write!(f, "generic_bot"),
-            Self::Human => write!(f, "human"),
-            Self::AgenticHuman => write!(f, "agentic_human"),
-            Self::Unknown => write!(f, "unknown"),
-        }
-    }
-}
-
-/// Known probe/recon paths that indicate automated scanning.
-///
-/// Any hit to these patterns is immediately classified as `ScraperBot`
-/// regardless of User-Agent. Real humans never request `/.env`.
-const PROBE_PREFIXES: &[&str] = &[
-    "/.env",
-    "/.aws",
-    "/.git/",
-    "/.svn/",
-    "/.DS_Store",
-    "/wp-admin",
-    "/wp-login",
-    "/wp-content",
-    "/wp-includes",
-    "/xmlrpc.php",
-    "/admin",
-    "/phpmyadmin",
-    "/actuator",
-    "/api/v1",
-    "/cgi-bin",
-    "/config.",
-    "/backup",
-    "/debug",
-    "/.htaccess",
-    "/.htpasswd",
-    "/server-status",
-    "/telescope",
-    "/vendor/",
-    "/node_modules/",
-    "/composer.",
-    "/package.json",
-    "/yarn.lock",
-    "/Dockerfile",
-    "/docker-compose",
-];
-
-/// Classify a request path as a probe/recon target.
-///
-/// Returns `Some(ScraperBot)` if the path matches known probe patterns.
-/// Returns `None` if the path looks like legitimate content.
-pub fn classify_path(path: &str) -> Option<VisitorClass> {
-    let lower = path.to_lowercase();
-
-    // Dotfile probes (/.env, /.env.backup, /.env.prod, etc.)
-    if lower.starts_with("/.") && lower != "/.well-known/acme-challenge/" {
-        return Some(VisitorClass::ScraperBot);
-    }
-
-    for prefix in PROBE_PREFIXES {
-        if lower.starts_with(prefix) {
-            return Some(VisitorClass::ScraperBot);
-        }
-    }
-
-    // PHP/ASP/JSP probes on a static Zola site
-    if lower.ends_with(".php")
-        || lower.ends_with(".asp")
-        || lower.ends_with(".aspx")
-        || lower.ends_with(".jsp")
-    {
-        return Some(VisitorClass::ScraperBot);
-    }
-
-    None
-}
-
-/// Classify a visitor from their User-Agent string.
-///
-/// Search bots are identified first (highest signal value for SEO),
-/// then social/AI/monitor bots, then generic bots. Remaining traffic
-/// with standard browser signatures is classified as human.
-pub fn classify_visitor(user_agent: &str) -> VisitorClass {
-    if user_agent.is_empty() {
-        return VisitorClass::Unknown;
-    }
-
-    let ua = user_agent.to_lowercase();
-
-    // Search engine crawlers — high SEO signal
-    if ua.contains("googlebot")
-        || ua.contains("bingbot")
-        || ua.contains("yandexbot")
-        || ua.contains("duckduckbot")
-        || ua.contains("baiduspider")
-        || ua.contains("slurp")
-        || ua.contains("seznambot")
-        || ua.contains("applebot")
-        || ua.contains("google-inspectiontool")
-        || ua.contains("adsbot-google")
-        || ua.contains("mediapartners-google")
-    {
-        return VisitorClass::SearchBot;
-    }
-
-    // Social media preview bots
-    if ua.contains("twitterbot")
-        || ua.contains("facebookexternalhit")
-        || ua.contains("linkedinbot")
-        || ua.contains("slackbot")
-        || ua.contains("discordbot")
-        || ua.contains("telegrambot")
-        || ua.contains("whatsapp")
-        || ua.contains("mastodon")
-    {
-        return VisitorClass::SocialBot;
-    }
-
-    // AI/LLM training crawlers
-    if ua.contains("gptbot")
-        || ua.contains("claudebot")
-        || ua.contains("anthropic")
-        || ua.contains("chatgpt")
-        || ua.contains("cohere-ai")
-        || ua.contains("perplexitybot")
-        || ua.contains("bytespider")
-        || ua.contains("ccbot")
-    {
-        return VisitorClass::AiBot;
-    }
-
-    // Monitoring/uptime bots
-    if ua.contains("uptimerobot")
-        || ua.contains("pingdom")
-        || ua.contains("statuscake")
-        || ua.contains("site24x7")
-        || ua.contains("datadog")
-        || ua.contains("newrelic")
-        || ua.contains("prometheus")
-    {
-        return VisitorClass::MonitorBot;
-    }
-
-    // Generic bots (tools, libraries, scrapers)
-    if ua.contains("curl/")
-        || ua.contains("wget/")
-        || ua.contains("python-requests")
-        || ua.contains("python-urllib")
-        || ua.contains("httpx")
-        || ua.contains("scrapy")
-        || ua.contains("go-http-client")
-        || ua.contains("java/")
-        || ua.contains("libwww")
-        || ua.contains("ahrefs")
-        || ua.contains("semrush")
-        || ua.contains("mj12bot")
-        || ua.contains("dotbot")
-        || ua.contains("petalbot")
-        || ua.starts_with("mozilla/5.0 (compatible;")
-        || !ua.contains("mozilla")
-    {
-        return VisitorClass::GenericBot;
-    }
-
-    // Standard browser User-Agents contain "Mozilla/5.0" with a rendering engine
-    if (ua.contains("chrome/") || ua.contains("firefox/") || ua.contains("safari/"))
-        && ua.contains("mozilla/5.0")
-    {
-        return VisitorClass::Human;
-    }
-
-    VisitorClass::Unknown
-}
-
-/// Composite classification: combine UA-based and path-based signals.
-///
-/// Path classification overrides UA classification when the path is a
-/// known probe target — a clean Chrome UA requesting `/.env` is a scanner.
-pub fn classify_request(user_agent: &str, path: &str) -> VisitorClass {
-    // Path-based override: probe paths are always ScraperBot.
-    if let Some(path_class) = classify_path(path) {
-        return path_class;
-    }
-
-    // Fall through to UA-based classification.
-    classify_visitor(user_agent)
 }
 
 // ── Signal Aggregation ──────────────────────────────────────────────
@@ -369,9 +148,6 @@ pub struct HostSignal {
 }
 
 // ── Session Detection ───────────────────────────────────────────────
-
-/// Session window — hits from the same UA within this many seconds are grouped.
-const SESSION_WINDOW_SECS: f64 = 1800.0; // 30 minutes
 
 /// A detected visitor session (same UA within a time window).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -745,12 +521,6 @@ fn build_session_summaries(raw_hits: &[RawHit]) -> BTreeMap<String, SessionSumma
 
     summaries
 }
-
-/// Velocity threshold: more than this many hits in VELOCITY_WINDOW_SECS → not human.
-const VELOCITY_THRESHOLD: usize = 5;
-
-/// Velocity window in seconds.
-const VELOCITY_WINDOW_SECS: f64 = 10.0;
 
 /// Build a single session from a sorted slice of hits, applying behavioral reclassification.
 fn build_session(host: &str, hits: &[&&RawHit]) -> Session {

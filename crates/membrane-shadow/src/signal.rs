@@ -20,6 +20,17 @@
 //! - `indexnow_ok` = false → IndexNow key invalidated
 //! - `crawl_coverage` regression → pages dropping out of bot reach
 //! - `url_notify_quota_exhausted` persistent → need to optimize tiers
+//!
+//! ## skunky-ingest Integration
+//!
+//! skunky-ingest tails this log file for pre-classified visitor data.
+//! Receptor events emit per-host `HostDigest` summaries with visitor
+//! counts already broken down by `VisitorClass` — no re-classification
+//! needed for trend analysis.
+//!
+//! For real-time classification during log ingestion (Phase 2 scanner
+//! fingerprinting), import `classify_request()` from `cellmembrane-types`
+//! directly. See `cellmembrane_types::visitor` module docs for usage.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

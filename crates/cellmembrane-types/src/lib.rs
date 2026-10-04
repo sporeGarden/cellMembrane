@@ -56,6 +56,7 @@ pub mod sync;
 pub mod topology;
 pub mod transport;
 pub mod validation;
+pub mod visitor;
 pub mod wireguard;
 
 pub use arch::{CpuArch, LinkModel, Platform, TargetOs};
@@ -104,6 +105,10 @@ pub use topology::{
 };
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
+pub use visitor::{
+    PROBE_PREFIXES, SESSION_WINDOW_SECS, VELOCITY_THRESHOLD, VELOCITY_WINDOW_SECS, VisitorClass,
+    classify_path, classify_request, classify_visitor,
+};
 
 /// Shared serde default for boolean fields that should be `true` when omitted.
 pub(crate) const fn default_true() -> bool {
