@@ -30,7 +30,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::error::Result;
 
@@ -266,6 +266,55 @@ pub struct HostSignal {
     pub unique_paths: u64,
 }
 
+// ── Session Detection ───────────────────────────────────────────────
+
+/// Session window — hits from the same UA within this many seconds are grouped.
+const SESSION_WINDOW_SECS: f64 = 1800.0; // 30 minutes
+
+/// A detected visitor session (same UA within a time window).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    /// SHA-256 hash of the User-Agent string (never stored raw).
+    pub ua_hash: String,
+    /// Visitor classification for this session.
+    pub classification: VisitorClass,
+    /// Ordered navigation path (pages visited in sequence).
+    pub pages: Vec<String>,
+    /// First page hit (entry page — correlates to which link was clicked).
+    pub entry_page: String,
+    /// Session duration in seconds (last hit - first hit).
+    pub duration_s: u64,
+    /// Host this session was on.
+    pub host: String,
+    /// Session start timestamp (epoch seconds).
+    pub start_ts: f64,
+}
+
+/// Per-host session summary (aggregated from raw sessions).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionSummary {
+    /// Total sessions detected.
+    pub total_sessions: u64,
+    /// Human sessions.
+    pub human_sessions: u64,
+    /// Average pages per human session (navigation depth).
+    pub avg_depth: f64,
+    /// Sessions with only 1 page hit (bounces).
+    pub bounces: u64,
+    /// Sessions with 3+ page hits (deep readers).
+    pub deep_readers: u64,
+}
+
+/// Raw hit record for session grouping (internal, not serialized in report).
+#[derive(Debug, Clone)]
+struct RawHit {
+    host: String,
+    path: String,
+    ua: String,
+    class: VisitorClass,
+    ts: f64,
+}
+
 /// Complete receptor report across all hosts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceptorReport {
@@ -281,6 +330,12 @@ pub struct ReceptorReport {
     pub window_end: f64,
     /// Report generation timestamp (epoch seconds).
     pub generated_at: u64,
+    /// Per-host session summaries (populated during finalize).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sessions: BTreeMap<String, SessionSummary>,
+    /// Raw hits for session grouping (not serialized).
+    #[serde(skip)]
+    raw_hits: Vec<RawHit>,
 }
 
 impl ReceptorReport {
@@ -297,6 +352,8 @@ impl ReceptorReport {
             window_start: f64::MAX,
             window_end: 0.0,
             generated_at: now,
+            sessions: BTreeMap::new(),
+            raw_hits: Vec::new(),
         }
     }
 
@@ -371,9 +428,18 @@ impl ReceptorReport {
         let duration_ms = entry.duration * 1000.0;
         let n = page.total_hits as f64;
         page.avg_duration_ms = page.avg_duration_ms * ((n - 1.0) / n) + duration_ms / n;
+
+        // Collect raw hit for session grouping.
+        self.raw_hits.push(RawHit {
+            host: entry.request.host.clone(),
+            path: normalize_path(&entry.request.uri),
+            ua: ua.to_string(),
+            class,
+            ts: entry.ts,
+        });
     }
 
-    /// Finalize crawl coverage counts after all entries are ingested.
+    /// Finalize crawl coverage counts and build session summaries.
     fn finalize(&mut self) {
         for host in self.hosts.values_mut() {
             host.unique_paths = u64::try_from(host.pages.len()).unwrap_or(u64::MAX);
@@ -389,6 +455,9 @@ impl ReceptorReport {
         if self.window_start == f64::MAX {
             self.window_start = 0.0;
         }
+
+        // Build session summaries from raw hits.
+        self.sessions = build_session_summaries(&self.raw_hits);
     }
 
     /// Format the report as a human-readable summary.
@@ -429,6 +498,18 @@ impl ReceptorReport {
 
             let mut pages: Vec<&PageSignal> = signal.pages.values().collect();
             pages.sort_by(|a, b| b.total_hits.cmp(&a.total_hits));
+
+            // Session summary for this host.
+            if let Some(sess) = self.sessions.get(host) {
+                lines.push(format!(
+                    "  sessions: {} total, {} human (avg depth {:.1}, {} bounces, {} deep readers)",
+                    sess.total_sessions,
+                    sess.human_sessions,
+                    sess.avg_depth,
+                    sess.bounces,
+                    sess.deep_readers,
+                ));
+            }
 
             lines.push("  top pages:".into());
             for page in pages.iter().take(15) {
@@ -494,6 +575,92 @@ fn normalize_path(uri: &str) -> String {
     }
 }
 
+/// SHA-256 hash of a string, returned as hex. Used for UA hashing.
+fn sha256_hex(s: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(s.as_bytes());
+    hex::encode(digest)
+}
+
+/// Group raw hits into sessions and compute per-host summaries.
+///
+/// A session is: same User-Agent string, hits within [`SESSION_WINDOW_SECS`],
+/// ordered by timestamp. Different hosts = separate sessions.
+fn build_session_summaries(raw_hits: &[RawHit]) -> BTreeMap<String, SessionSummary> {
+    if raw_hits.is_empty() {
+        return BTreeMap::new();
+    }
+
+    // Group by (host, UA) and sort by timestamp.
+    let mut grouped: BTreeMap<(String, String), Vec<&RawHit>> = BTreeMap::new();
+    for hit in raw_hits {
+        grouped
+            .entry((hit.host.clone(), hit.ua.clone()))
+            .or_default()
+            .push(hit);
+    }
+
+    // Build sessions from each group.
+    let mut all_sessions: Vec<Session> = Vec::new();
+    for ((host, _ua), hits) in &grouped {
+        let mut sorted: Vec<&&RawHit> = hits.iter().collect();
+        sorted.sort_by(|a, b| a.ts.partial_cmp(&b.ts).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Split into sessions at gaps > SESSION_WINDOW_SECS.
+        let mut session_start = 0;
+        for i in 1..sorted.len() {
+            if sorted[i].ts - sorted[i - 1].ts > SESSION_WINDOW_SECS {
+                all_sessions.push(build_session(host, &sorted[session_start..i]));
+                session_start = i;
+            }
+        }
+        all_sessions.push(build_session(host, &sorted[session_start..]));
+    }
+
+    // Aggregate into per-host summaries.
+    let mut summaries: BTreeMap<String, SessionSummary> = BTreeMap::new();
+    for session in &all_sessions {
+        let summary = summaries.entry(session.host.clone()).or_default();
+        summary.total_sessions += 1;
+        if session.classification == VisitorClass::Human {
+            summary.human_sessions += 1;
+            let depth = session.pages.len() as f64;
+            let n = summary.human_sessions as f64;
+            summary.avg_depth = summary.avg_depth * ((n - 1.0) / n) + depth / n;
+            if session.pages.len() == 1 {
+                summary.bounces += 1;
+            }
+            if session.pages.len() >= 3 {
+                summary.deep_readers += 1;
+            }
+        }
+    }
+
+    summaries
+}
+
+/// Build a single session from a sorted slice of hits.
+fn build_session(host: &str, hits: &[&&RawHit]) -> Session {
+    let first = hits[0];
+    let last = hits[hits.len() - 1];
+    let pages: Vec<String> = hits.iter().map(|h| h.path.clone()).collect();
+    let duration_s = if last.ts > first.ts {
+        (last.ts - first.ts) as u64
+    } else {
+        0
+    };
+
+    Session {
+        ua_hash: sha256_hex(&first.ua),
+        classification: first.class,
+        pages: pages.clone(),
+        entry_page: pages.first().cloned().unwrap_or_default(),
+        duration_s,
+        host: host.to_string(),
+        start_ts: first.ts,
+    }
+}
+
 // ── Log Retrieval + Parsing ─────────────────────────────────────────
 
 /// Default number of Caddy log lines to analyze.
@@ -502,13 +669,53 @@ const DEFAULT_LOG_LINES: u32 = 5000;
 /// Caddy access log path on golgiBody.
 const CADDY_LOG_PATH: &str = "/var/log/caddy/access.log";
 
+/// Rotated log file (uncompressed, previous rotation).
+const CADDY_LOG_ROTATED: &str = "/var/log/caddy/access.log.1";
+
+/// Compressed rotated log file (rotation before previous).
+const CADDY_LOG_ROTATED_GZ: &str = "/var/log/caddy/access.log.2.gz";
+
+/// Build an SSH command that reads across log rotation boundaries.
+///
+/// Combines current + rotated logs (newest last) so `tail -n N` gets
+/// the most recent N lines regardless of when rotation happened.
+///
+/// Without `include_rotated`, reads only the current log file.
+fn build_log_command(lines: u32, include_rotated: bool) -> String {
+    if include_rotated {
+        // Cat rotated files (oldest first) + current, then tail.
+        // .2.gz needs zcat; .1 and current are plain text.
+        // Use subshell with conditional existence checks.
+        format!(
+            "{{ [ -f {CADDY_LOG_ROTATED_GZ} ] && zcat {CADDY_LOG_ROTATED_GZ} 2>/dev/null; \
+             [ -f {CADDY_LOG_ROTATED} ] && cat {CADDY_LOG_ROTATED} 2>/dev/null; \
+             cat {CADDY_LOG_PATH} 2>/dev/null; }} | tail -n {lines}"
+        )
+    } else {
+        format!("tail -n {lines} {CADDY_LOG_PATH} 2>/dev/null")
+    }
+}
+
 /// Retrieve and analyze Caddy access logs from golgiBody via SSH.
 ///
 /// Fetches the last `lines` entries from the Caddy JSON access log,
 /// parses each into a [`CaddyLogEntry`], classifies visitors, and
 /// aggregates into a [`ReceptorReport`].
+///
+/// When `include_rotated` is true, reads across rotation boundaries
+/// (`access.log.1` and `access.log.2.gz`) to prevent data loss during
+/// Caddy reloads.
 pub async fn analyze(config: &crate::ShadowConfig, lines: u32) -> Result<ReceptorReport> {
-    let cmd = format!("tail -n {lines} {CADDY_LOG_PATH} 2>/dev/null");
+    analyze_opts(config, lines, false).await
+}
+
+/// Analyze with full options including rotated log support.
+pub async fn analyze_opts(
+    config: &crate::ShadowConfig,
+    lines: u32,
+    include_rotated: bool,
+) -> Result<ReceptorReport> {
+    let cmd = build_log_command(lines, include_rotated);
     let raw_output = crate::ssh::exec(config, &cmd).await?;
 
     let mut report = ReceptorReport::empty();
@@ -552,8 +759,18 @@ pub async fn analyze_host(
     config: &crate::ShadowConfig,
     host: &str,
     lines: u32,
+    include_rotated: bool,
 ) -> Result<ReceptorReport> {
-    let cmd = format!("grep '\"host\":\"{host}\"' {CADDY_LOG_PATH} 2>/dev/null | tail -n {lines}");
+    let source = if include_rotated {
+        format!(
+            "{{ [ -f {CADDY_LOG_ROTATED_GZ} ] && zcat {CADDY_LOG_ROTATED_GZ} 2>/dev/null; \
+             [ -f {CADDY_LOG_ROTATED} ] && cat {CADDY_LOG_ROTATED} 2>/dev/null; \
+             cat {CADDY_LOG_PATH} 2>/dev/null; }}"
+        )
+    } else {
+        format!("cat {CADDY_LOG_PATH} 2>/dev/null")
+    };
+    let cmd = format!("{source} | grep '\"host\":\"{host}\"' | tail -n {lines}");
     let raw_output = crate::ssh::exec(config, &cmd).await?;
 
     let mut report = ReceptorReport::empty();
@@ -577,43 +794,6 @@ pub async fn analyze_host(
     Ok(report)
 }
 
-/// Analyze with receptor-driven IndexNow feedback.
-///
-/// Returns the report plus a list of URLs that should be re-submitted
-/// to IndexNow with elevated priority (hot uncrawled pages).
-pub async fn analyze_with_feedback(
-    config: &crate::ShadowConfig,
-    lines: u32,
-) -> Result<(ReceptorReport, Vec<(String, Vec<String>)>)> {
-    let report = analyze(config, lines).await?;
-
-    let feedback: Vec<(String, Vec<String>)> = super::PUBLISH_SITES
-        .iter()
-        .filter_map(|site| {
-            let hot = report.hot_uncrawled(site.host);
-            if hot.is_empty() {
-                None
-            } else {
-                let urls: Vec<String> = hot
-                    .iter()
-                    .map(|path| format!("https://{}{path}", site.host))
-                    .collect();
-                Some((site.host.to_string(), urls))
-            }
-        })
-        .collect();
-
-    if !feedback.is_empty() {
-        let total: usize = feedback.iter().map(|(_, urls)| urls.len()).sum();
-        warn!(
-            hot_uncrawled = total,
-            "receptor: {} pages have human traffic but no search bot coverage", total
-        );
-    }
-
-    Ok((report, feedback))
-}
-
 // ── Dispatch Entry Points ───────────────────────────────────────────
 
 /// Dispatch `seo.receptor` commands.
@@ -631,9 +811,25 @@ pub async fn dispatch(config: &crate::ShadowConfig, args: &[&str]) -> Result<cra
         .and_then(|i| args.get(i + 1).copied());
 
     let with_feedback = args.contains(&"--feedback");
+    let include_rotated = args.contains(&"--include-rotated");
 
     if with_feedback {
-        let (report, feedback) = analyze_with_feedback(config, lines).await?;
+        let report = analyze_opts(config, lines, include_rotated).await?;
+        let feedback: Vec<(String, Vec<String>)> = super::PUBLISH_SITES
+            .iter()
+            .filter_map(|site| {
+                let hot = report.hot_uncrawled(site.host);
+                if hot.is_empty() {
+                    None
+                } else {
+                    let urls: Vec<String> = hot
+                        .iter()
+                        .map(|path| format!("https://{}{path}", site.host))
+                        .collect();
+                    Some((site.host.to_string(), urls))
+                }
+            })
+            .collect();
         let mut msg = report.summary();
 
         if !feedback.is_empty() {
@@ -657,13 +853,13 @@ pub async fn dispatch(config: &crate::ShadowConfig, args: &[&str]) -> Result<cra
             }),
         ))
     } else if let Some(host) = host_filter {
-        let report = analyze_host(config, host, lines).await?;
+        let report = analyze_host(config, host, lines, include_rotated).await?;
         Ok(crate::ShadowOutcome::ok_with(
             report.summary(),
             serde_json::to_value(&report)?,
         ))
     } else {
-        let report = analyze(config, lines).await?;
+        let report = analyze_opts(config, lines, include_rotated).await?;
         Ok(crate::ShadowOutcome::ok_with(
             report.summary(),
             serde_json::to_value(&report)?,
@@ -897,5 +1093,132 @@ mod tests {
         assert!(summary.contains("Receptor Report"));
         assert!(summary.contains("sporeprint.primals.eco"));
         assert!(summary.contains("human: 1"));
+    }
+
+    #[test]
+    fn build_log_command_single() {
+        let cmd = build_log_command(5000, false);
+        assert!(cmd.contains("tail -n 5000"));
+        assert!(!cmd.contains("access.log.1"));
+    }
+
+    #[test]
+    fn build_log_command_rotated() {
+        let cmd = build_log_command(50000, true);
+        assert!(cmd.contains("access.log.1"));
+        assert!(cmd.contains("access.log.2.gz"));
+        assert!(cmd.contains("zcat"));
+        assert!(cmd.contains("tail -n 50000"));
+    }
+
+    #[test]
+    fn session_detection_groups_by_ua() {
+        let mut report = ReceptorReport::empty();
+
+        let ua = "Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36";
+
+        // Three hits from same UA within 30 minutes = one session
+        for (i, path) in ["/", "/evidence/", "/network/"].iter().enumerate() {
+            report.ingest(&CaddyLogEntry {
+                request: CaddyRequest {
+                    remote_ip: "1.2.3.4".into(),
+                    host: "detroit.primals.eco".into(),
+                    uri: path.to_string(),
+                    method: "GET".into(),
+                    headers: CaddyHeaders {
+                        user_agent: vec![ua.into()],
+                    },
+                },
+                status: 200,
+                size: 1000,
+                duration: 0.01,
+                ts: 1727800000.0 + (i as f64 * 300.0), // 5 min apart
+            });
+        }
+
+        report.finalize();
+
+        let sess = report.sessions.get("detroit.primals.eco").unwrap();
+        assert_eq!(sess.total_sessions, 1);
+        assert_eq!(sess.human_sessions, 1);
+        assert_eq!(sess.deep_readers, 1); // 3 pages = deep reader
+        assert_eq!(sess.bounces, 0);
+        assert!((sess.avg_depth - 3.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn session_detection_splits_at_gap() {
+        let mut report = ReceptorReport::empty();
+
+        let ua = "Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36";
+
+        // Hit 1: time T
+        report.ingest(&CaddyLogEntry {
+            request: CaddyRequest {
+                remote_ip: "1.2.3.4".into(),
+                host: "detroit.primals.eco".into(),
+                uri: "/".into(),
+                method: "GET".into(),
+                headers: CaddyHeaders {
+                    user_agent: vec![ua.into()],
+                },
+            },
+            status: 200,
+            size: 1000,
+            duration: 0.01,
+            ts: 1727800000.0,
+        });
+
+        // Hit 2: T + 2 hours (beyond 30min window)
+        report.ingest(&CaddyLogEntry {
+            request: CaddyRequest {
+                remote_ip: "1.2.3.4".into(),
+                host: "detroit.primals.eco".into(),
+                uri: "/evidence/".into(),
+                method: "GET".into(),
+                headers: CaddyHeaders {
+                    user_agent: vec![ua.into()],
+                },
+            },
+            status: 200,
+            size: 1000,
+            duration: 0.01,
+            ts: 1727800000.0 + 7200.0, // 2 hours later
+        });
+
+        report.finalize();
+
+        let sess = report.sessions.get("detroit.primals.eco").unwrap();
+        assert_eq!(sess.total_sessions, 2); // Two separate sessions
+        assert_eq!(sess.human_sessions, 2);
+        assert_eq!(sess.bounces, 2); // Both are single-page
+    }
+
+    #[test]
+    fn session_summary_in_report_summary() {
+        let mut report = ReceptorReport::empty();
+
+        report.ingest(&CaddyLogEntry {
+            request: CaddyRequest {
+                remote_ip: "1.2.3.4".into(),
+                host: "detroit.primals.eco".into(),
+                uri: "/".into(),
+                method: "GET".into(),
+                headers: CaddyHeaders {
+                    user_agent: vec!["Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36".into()],
+                },
+            },
+            status: 200,
+            size: 1000,
+            duration: 0.01,
+            ts: 1727800000.0,
+        });
+
+        report.finalize();
+
+        let summary = report.summary();
+        assert!(summary.contains("sessions:"));
+        assert!(summary.contains("1 total"));
+        assert!(summary.contains("1 human"));
     }
 }
