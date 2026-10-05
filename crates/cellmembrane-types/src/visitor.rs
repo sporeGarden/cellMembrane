@@ -90,13 +90,26 @@ pub enum VisitorClass {
 
 /// Ecological relationship between a visitor and the host membrane.
 ///
-/// Guides the membrane response:
+/// Guides the membrane response — both inner and outer thymus use this:
+///
 /// - **Mutualist** — humans. Full access, privacy respected.
-/// - **Commensal** — honest bots. Welcome, guided to external membrane
-///   for efficiency. We want the signal (SEO, discoverability, lysogeny
-///   propagation). We just don't want the resource loss.
-/// - **Pathogenic** — stealth fleets, scrapers. Deceptive, resource-draining.
-///   Routed to external membrane with warning.
+/// - **Commensal** — honest bots, metadata scrapers. Welcome, guided to
+///   external membrane for efficiency. We want the signal (SEO,
+///   discoverability, lysogeny propagation). We just don't want the
+///   resource loss. May become mutualists if they register/authenticate.
+/// - **Parasitic** — vulnerability scanners, credential probers. These
+///   probe for disease — weaknesses in the membrane itself. Not targeted
+///   adversaries, but opportunistic infections testing every surface.
+///   Response: instant 403, no content, no signal, don't engage.
+/// - **Pathogenic** — stealth fleets. Deceptive, resource-draining,
+///   deliberately evading detection. The adaptive immune system targets
+///   these with antibodies, opsonization, and scatter poison.
+///
+/// The distinction between Parasitic and Pathogenic matters:
+/// - A scanner is **disease**: probing for general vulnerabilities, not
+///   targeting *us* specifically. It will move on.
+/// - A stealth fleet is **predation**: deliberately targeting *our* data,
+///   adapting to *our* defenses. It persists until defeated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Symbiosis {
@@ -105,8 +118,11 @@ pub enum Symbiosis {
     /// Honest bot — welcome, guided to external membrane for efficiency.
     /// Lysogeny travels with the data either way.
     Commensal,
-    /// Stealth fleet — deceptive, resource-draining, route + warn.
-    /// Antibodies target these patterns exclusively.
+    /// Vulnerability scanner / credential prober — opportunistic infection.
+    /// Instant rejection, no engagement, no signal. Disease, not predation.
+    Parasitic,
+    /// Stealth fleet — deceptive, resource-draining, deliberately targeting.
+    /// Antibodies, opsonization, and scatter poison. Predation, not disease.
     Pathogenic,
 }
 
@@ -134,7 +150,8 @@ impl VisitorClass {
             Self::Human | Self::AgenticHuman => Symbiosis::Mutualist,
             Self::SearchBot | Self::SocialBot | Self::AiBot
             | Self::MonitorBot | Self::GenericBot => Symbiosis::Commensal,
-            Self::ScraperBot | Self::StealthFleet | Self::Unknown => Symbiosis::Pathogenic,
+            Self::ScraperBot | Self::Unknown => Symbiosis::Parasitic,
+            Self::StealthFleet => Symbiosis::Pathogenic,
         }
     }
 }
@@ -471,14 +488,20 @@ mod tests {
 
     #[test]
     fn symbiosis_mapping() {
+        // Mutualists — humans
         assert_eq!(VisitorClass::Human.symbiosis(), Symbiosis::Mutualist);
         assert_eq!(VisitorClass::AgenticHuman.symbiosis(), Symbiosis::Mutualist);
+        // Commensals — honest bots
         assert_eq!(VisitorClass::SearchBot.symbiosis(), Symbiosis::Commensal);
         assert_eq!(VisitorClass::AiBot.symbiosis(), Symbiosis::Commensal);
         assert_eq!(VisitorClass::SocialBot.symbiosis(), Symbiosis::Commensal);
+        assert_eq!(VisitorClass::GenericBot.symbiosis(), Symbiosis::Commensal);
+        assert_eq!(VisitorClass::MonitorBot.symbiosis(), Symbiosis::Commensal);
+        // Parasitic — disease (scanners, probers)
+        assert_eq!(VisitorClass::ScraperBot.symbiosis(), Symbiosis::Parasitic);
+        assert_eq!(VisitorClass::Unknown.symbiosis(), Symbiosis::Parasitic);
+        // Pathogenic — predation (stealth fleets)
         assert_eq!(VisitorClass::StealthFleet.symbiosis(), Symbiosis::Pathogenic);
-        assert_eq!(VisitorClass::ScraperBot.symbiosis(), Symbiosis::Pathogenic);
-        assert_eq!(VisitorClass::Unknown.symbiosis(), Symbiosis::Pathogenic);
     }
 
     #[test]
