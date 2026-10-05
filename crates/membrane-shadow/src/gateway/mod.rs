@@ -598,7 +598,12 @@ mod tests {
     #[tokio::test]
     async fn deploy_check_default_gate() {
         let result = dispatch_deploy_check(&[]).await.unwrap();
-        assert!(result.message.contains("sporeGate"));
+        let local_gate = crate::gate::resolve_local_gate_identity();
+        assert!(
+            result.message.contains(&local_gate),
+            "deploy check should reference local gate ({local_gate}), got: {}",
+            result.message
+        );
     }
 
     #[test]
