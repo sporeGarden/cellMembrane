@@ -215,6 +215,27 @@ pub(super) async fn run_publish_pipeline(
         }
     };
 
+    // Step 2.55: Signal data generation (detroit only, non-fatal)
+    //
+    // After zola build + artifacts, regenerate signal-data.js from Caddy access
+    // logs. This overwrites the stale copy that zola copied from static/js/ with
+    // fresh classified traffic data. The script lives in the worktree at
+    // scripts/signal_gen.py and reads all available Caddy logs on stdin.
+    let signal_msg = if site.repo_name == "detroit" {
+        match publish_signal_data(site).await {
+            Ok(msg) => {
+                info!(repo = %action.repo_name, "publish: signal data generated");
+                format!("  [signal] {msg}")
+            }
+            Err(e) => {
+                warn!(repo = %action.repo_name, error = %e, "publish: signal data generation failed (non-fatal)");
+                format!("  [signal] FAILED: {e}")
+            }
+        }
+    } else {
+        String::new()
+    };
+
     // Step 2.6: Evidence depot symlinks (detroit only, non-fatal)
     //
     // After zola build, raw evidence files (PDFs, braids, FOIA docs) in the
@@ -334,6 +355,10 @@ pub(super) async fn run_publish_pipeline(
     if !observatory_msg.is_empty() {
         full_msg.push('\n');
         full_msg.push_str(&observatory_msg);
+    }
+    if !signal_msg.is_empty() {
+        full_msg.push('\n');
+        full_msg.push_str(&signal_msg);
     }
 
     // Step 5: Post-build consistency verification (non-fatal)
@@ -553,6 +578,71 @@ pub(super) async fn run_sandbox(
             Ok(None)
         }
     }
+}
+
+// ── Signal Data Generation ──────────────────────────────────────────
+
+/// Generate fresh signal-data.js from Caddy access logs (detroit only).
+///
+/// Pipes all available Caddy logs through `scripts/signal_gen.py` in the
+/// worktree, writing the output directly to `{public_dir}/js/signal-data.js`.
+/// This overwrites the stale copy that zola placed there from `static/js/`.
+///
+/// Non-fatal — the site works fine with stale signal data.
+async fn publish_signal_data(site: &crate::seo::PublishSite) -> crate::error::Result<String> {
+    let script = format!(
+        "{}/{}scripts/signal_gen.py",
+        site.worktree,
+        site.build_subdir.map_or(String::new(), |s| format!("{s}/"))
+    );
+
+    if !std::path::Path::new(&script).exists() {
+        return Ok("signal_gen.py not found in worktree, skipping".to_string());
+    }
+
+    let output_dir = format!("{}/js", site.public_dir);
+    tokio::fs::create_dir_all(&output_dir)
+        .await
+        .map_err(crate::error::ShadowError::Io)?;
+    let output_path = format!("{output_dir}/signal-data.js");
+
+    // Pipe all Caddy logs (rotated + current) through signal_gen.py
+    // Shell pipeline: { zcat rotated; cat current } | python3 script > output
+    let shell_cmd = format!(
+        "{{ zcat /var/log/caddy/access-*.log.gz 2>/dev/null; \
+           cat /var/log/caddy/access.log.1 /var/log/caddy/access.log 2>/dev/null; \
+        }} | python3 {script} > {output_path}"
+    );
+
+    let output = tokio::process::Command::new("bash")
+        .args(["-c", &shell_cmd])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(crate::error::ShadowError::Io)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(crate::error::ShadowError::config(format!(
+            "signal_gen.py failed: {}",
+            stderr.lines().next().unwrap_or("unknown")
+        )));
+    }
+
+    // Verify the output file exists and has content
+    let meta = tokio::fs::metadata(&output_path)
+        .await
+        .map_err(crate::error::ShadowError::Io)?;
+    let size = meta.len();
+
+    if size < 100 {
+        return Err(crate::error::ShadowError::config(format!(
+            "signal-data.js too small ({size} bytes) — likely no data"
+        )));
+    }
+
+    Ok(format!("signal-data.js regenerated ({size} bytes)"))
 }
 
 // ── Evidence Depot Symlinks ─────────────────────────────────────────
