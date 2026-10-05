@@ -590,11 +590,8 @@ pub(super) async fn run_sandbox(
 ///
 /// Non-fatal — the site works fine with stale signal data.
 async fn publish_signal_data(site: &crate::seo::PublishSite) -> crate::error::Result<String> {
-    let script = format!(
-        "{}/{}scripts/signal_gen.py",
-        site.worktree,
-        site.build_subdir.map_or(String::new(), |s| format!("{s}/"))
-    );
+    // scripts/ lives at repo root, not inside build_subdir (site/)
+    let script = format!("{}/scripts/signal_gen.py", site.worktree);
 
     if !std::path::Path::new(&script).exists() {
         return Ok("signal_gen.py not found in worktree, skipping".to_string());
