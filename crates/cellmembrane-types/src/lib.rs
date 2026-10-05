@@ -43,6 +43,7 @@ pub mod dns;
 pub mod envelope;
 pub mod error;
 pub mod firewall;
+pub mod fleet;
 pub mod gateway;
 pub mod identity;
 pub mod platform_substrate;
@@ -105,9 +106,13 @@ pub use topology::{
 };
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
+pub use fleet::{
+    DeceptionSignals, FleetAntibody, FleetObservation, PathPattern, TimingSignature,
+    UaFingerprint,
+};
 pub use visitor::{
-    PROBE_PREFIXES, SESSION_WINDOW_SECS, VELOCITY_THRESHOLD, VELOCITY_WINDOW_SECS, VisitorClass,
-    classify_path, classify_request, classify_visitor,
+    PROBE_PREFIXES, SESSION_WINDOW_SECS, VELOCITY_THRESHOLD, VELOCITY_WINDOW_SECS, Symbiosis,
+    VisitorClass, classify_path, classify_request, classify_visitor,
 };
 
 /// Shared serde default for boolean fields that should be `true` when omitted.

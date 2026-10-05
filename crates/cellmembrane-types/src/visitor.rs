@@ -75,12 +75,39 @@ pub enum VisitorClass {
     ScraperBot,
     /// Generic bot (curl, wget, python-requests, scrapy, etc.)
     GenericBot,
+    /// Stealth fleet — hides identity, rotates IPs, evades detection.
+    /// Classified by population-level behavioral analysis, not individual UA.
+    StealthFleet,
     /// Human visitor with a standard browser (provably human — passed all checks).
     Human,
     /// Human using automated tools (API clients, research scripts).
     AgenticHuman,
     /// Unclassifiable (empty or missing User-Agent).
     Unknown,
+}
+
+// ── Ecological Symbiosis ────────────────────────────────────────────
+
+/// Ecological relationship between a visitor and the host membrane.
+///
+/// Guides the membrane response:
+/// - **Mutualist** — humans. Full access, privacy respected.
+/// - **Commensal** — honest bots. Welcome, guided to external membrane
+///   for efficiency. We want the signal (SEO, discoverability, lysogeny
+///   propagation). We just don't want the resource loss.
+/// - **Pathogenic** — stealth fleets, scrapers. Deceptive, resource-draining.
+///   Routed to external membrane with warning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Symbiosis {
+    /// Human — full access, privacy respected.
+    Mutualist,
+    /// Honest bot — welcome, guided to external membrane for efficiency.
+    /// Lysogeny travels with the data either way.
+    Commensal,
+    /// Stealth fleet — deceptive, resource-draining, route + warn.
+    /// Antibodies target these patterns exclusively.
+    Pathogenic,
 }
 
 impl VisitorClass {
@@ -95,6 +122,21 @@ impl VisitorClass {
     pub fn is_human(self) -> bool {
         matches!(self, Self::Human | Self::AgenticHuman)
     }
+
+    /// Ecological relationship with the host membrane.
+    ///
+    /// Commensals identify honestly and we want their signal — they're
+    /// guided to efficient paths (external membrane), not blocked.
+    /// Pathogens hide and drain resources — antibodies target them.
+    #[must_use]
+    pub fn symbiosis(self) -> Symbiosis {
+        match self {
+            Self::Human | Self::AgenticHuman => Symbiosis::Mutualist,
+            Self::SearchBot | Self::SocialBot | Self::AiBot
+            | Self::MonitorBot | Self::GenericBot => Symbiosis::Commensal,
+            Self::ScraperBot | Self::StealthFleet | Self::Unknown => Symbiosis::Pathogenic,
+        }
+    }
 }
 
 impl std::fmt::Display for VisitorClass {
@@ -106,6 +148,7 @@ impl std::fmt::Display for VisitorClass {
             Self::MonitorBot => write!(f, "monitor_bot"),
             Self::ScraperBot => write!(f, "scraper_bot"),
             Self::GenericBot => write!(f, "generic_bot"),
+            Self::StealthFleet => write!(f, "stealth_fleet"),
             Self::Human => write!(f, "human"),
             Self::AgenticHuman => write!(f, "agentic_human"),
             Self::Unknown => write!(f, "unknown"),
@@ -414,6 +457,7 @@ mod tests {
             VisitorClass::MonitorBot,
             VisitorClass::ScraperBot,
             VisitorClass::GenericBot,
+            VisitorClass::StealthFleet,
             VisitorClass::Unknown,
         ] {
             assert!(class.is_bot(), "{class} should be bot");
@@ -426,10 +470,23 @@ mod tests {
     }
 
     #[test]
+    fn symbiosis_mapping() {
+        assert_eq!(VisitorClass::Human.symbiosis(), Symbiosis::Mutualist);
+        assert_eq!(VisitorClass::AgenticHuman.symbiosis(), Symbiosis::Mutualist);
+        assert_eq!(VisitorClass::SearchBot.symbiosis(), Symbiosis::Commensal);
+        assert_eq!(VisitorClass::AiBot.symbiosis(), Symbiosis::Commensal);
+        assert_eq!(VisitorClass::SocialBot.symbiosis(), Symbiosis::Commensal);
+        assert_eq!(VisitorClass::StealthFleet.symbiosis(), Symbiosis::Pathogenic);
+        assert_eq!(VisitorClass::ScraperBot.symbiosis(), Symbiosis::Pathogenic);
+        assert_eq!(VisitorClass::Unknown.symbiosis(), Symbiosis::Pathogenic);
+    }
+
+    #[test]
     fn serde_roundtrip() {
         for class in [
             VisitorClass::SearchBot,
             VisitorClass::ScraperBot,
+            VisitorClass::StealthFleet,
             VisitorClass::Human,
             VisitorClass::AgenticHuman,
         ] {
