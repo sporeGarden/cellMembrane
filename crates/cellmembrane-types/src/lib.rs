@@ -107,8 +107,8 @@ pub use topology::{
 pub use transport::{ENV_TRANSPORT_ENDPOINT, TransportEndpoint};
 pub use validation::{Report, ReportEntry, Severity};
 pub use fleet::{
-    DeceptionSignals, FleetAntibody, FleetObservation, PathPattern, TimingSignature,
-    UaFingerprint,
+    DeceptionSignals, DefensePosture, FleetAntibody, FleetObservation, PathPattern,
+    TimingSignature, TrustDescriptor, UaFingerprint, DEFAULT_FORGIVE_WINDOW_SECS,
 };
 pub use visitor::{
     PROBE_PREFIXES, SESSION_WINDOW_SECS, VELOCITY_THRESHOLD, VELOCITY_WINDOW_SECS, Symbiosis,

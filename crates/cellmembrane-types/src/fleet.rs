@@ -24,6 +24,171 @@
 
 use serde::{Deserialize, Serialize};
 
+// ── Defense Posture ─────────────────────────────────────────────────
+
+/// Tit-for-tat escalation posture for fleet defense.
+///
+/// Ordered from least to most aggressive. The immune system starts at
+/// `Observe` and escalates on repeat defection (same behavioral shape
+/// returning after rejection). De-escalates one level per `forgive_window`
+/// of silence.
+///
+/// The ordering is significant: `PartialOrd`/`Ord` derive means
+/// `Observe < WarnRoute < SlowDegrade < Scatter < Vanish`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DefensePosture {
+    /// P0: Normal traffic, antibodies watch but do not intervene.
+    Observe,
+    /// P1: 403 + warning page + redirect to external membrane (GitHub).
+    WarnRoute,
+    /// P2: Tarpit — artificial delays, partial content, randomized timing.
+    /// Wastes attacker compute without revealing they are detected.
+    SlowDegrade,
+    /// P3: Plausible-but-wrong content. Poisons training data.
+    /// Anti-AI defense: the shape looks correct, the content is garbage.
+    Scatter,
+    /// P4: Connection reset / abort. The membrane vanishes.
+    /// Real humans still see everything — only antibody-matched shapes disappear.
+    Vanish,
+}
+
+impl DefensePosture {
+    /// Escalate one level (capped at Vanish).
+    #[must_use]
+    pub const fn escalate(self) -> Self {
+        match self {
+            Self::Observe => Self::WarnRoute,
+            Self::WarnRoute => Self::SlowDegrade,
+            Self::SlowDegrade => Self::Scatter,
+            Self::Scatter => Self::Vanish,
+            Self::Vanish => Self::Vanish,
+        }
+    }
+
+    /// De-escalate one level (capped at Observe).
+    #[must_use]
+    pub const fn deescalate(self) -> Self {
+        match self {
+            Self::Observe => Self::Observe,
+            Self::WarnRoute => Self::Observe,
+            Self::SlowDegrade => Self::WarnRoute,
+            Self::Scatter => Self::SlowDegrade,
+            Self::Vanish => Self::Scatter,
+        }
+    }
+
+    /// Numeric level (0-4) for threshold comparisons.
+    #[must_use]
+    pub const fn level(self) -> u8 {
+        match self {
+            Self::Observe => 0,
+            Self::WarnRoute => 1,
+            Self::SlowDegrade => 2,
+            Self::Scatter => 3,
+            Self::Vanish => 4,
+        }
+    }
+}
+
+impl Default for DefensePosture {
+    fn default() -> Self {
+        Self::Observe
+    }
+}
+
+/// Trust descriptor for bearDog ecosystem mapping.
+///
+/// Provides the semantic bridge between defense postures and the bearDog
+/// trust spectrum. bearDog's ecosystem evolution engine consumes these
+/// values to construct its own `EcosystemMembership` variants.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrustDescriptor {
+    /// Trust level on bearDog's 0.0–1.0 spectrum.
+    pub trust_level: f64,
+    /// Which `EcosystemMembership` variant this maps to.
+    pub membership_hint: &'static str,
+    /// Which `SymbiosisType` this implies.
+    pub symbiosis_hint: &'static str,
+    /// Whether healing/restoration is available.
+    pub restoration_available: bool,
+}
+
+impl DefensePosture {
+    /// Map this posture to a bearDog trust descriptor.
+    ///
+    /// The descriptor tells bearDog's ecosystem evolution engine what
+    /// trust level and membership category to assign to traffic matching
+    /// this posture's antibody.
+    ///
+    /// # Mapping
+    ///
+    /// | Posture      | Trust  | Membership              | Symbiosis     |
+    /// |--------------|--------|-------------------------|---------------|
+    /// | Observe      | 0.7    | `ActiveContributor`     | Commensal     |
+    /// | WarnRoute    | 0.45   | `CautiousInteraction`   | Commensal     |
+    /// | SlowDegrade  | 0.25   | `CautiousInteraction`   | Competitive   |
+    /// | Scatter      | 0.10   | `EcosystemProtection`   | Protective    |
+    /// | Vanish       | 0.0    | `EcosystemProtection`   | Protective    |
+    #[must_use]
+    pub const fn trust_descriptor(&self) -> TrustDescriptor {
+        match self {
+            Self::Observe => TrustDescriptor {
+                trust_level: 0.7,
+                membership_hint: "ActiveContributor",
+                symbiosis_hint: "Commensal",
+                restoration_available: true,
+            },
+            Self::WarnRoute => TrustDescriptor {
+                trust_level: 0.45,
+                membership_hint: "CautiousInteraction",
+                symbiosis_hint: "Commensal",
+                restoration_available: true,
+            },
+            Self::SlowDegrade => TrustDescriptor {
+                trust_level: 0.25,
+                membership_hint: "CautiousInteraction",
+                symbiosis_hint: "Competitive",
+                restoration_available: true,
+            },
+            Self::Scatter => TrustDescriptor {
+                trust_level: 0.10,
+                membership_hint: "EcosystemProtection",
+                symbiosis_hint: "Protective",
+                restoration_available: true,
+            },
+            Self::Vanish => TrustDescriptor {
+                trust_level: 0.0,
+                membership_hint: "EcosystemProtection",
+                symbiosis_hint: "Protective",
+                restoration_available: false,
+            },
+        }
+    }
+}
+
+impl std::fmt::Display for DefensePosture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Observe => write!(f, "observe"),
+            Self::WarnRoute => write!(f, "warn_route"),
+            Self::SlowDegrade => write!(f, "slow_degrade"),
+            Self::Scatter => write!(f, "scatter"),
+            Self::Vanish => write!(f, "vanish"),
+        }
+    }
+}
+
+/// Default forgive window: 4 hours (14400 seconds).
+pub const DEFAULT_FORGIVE_WINDOW_SECS: u64 = 14_400;
+
+/// Escalation thresholds: consecutive defection windows to trigger each level.
+pub const ESCALATE_TO_SLOW: u32 = 1;    // P1→P2: came back after 403
+/// Consecutive defection windows to escalate from P2 to P3.
+pub const ESCALATE_TO_SCATTER: u32 = 3; // P2→P3: persists despite tarpit
+/// Consecutive defection windows to escalate from P3 to P4.
+pub const ESCALATE_TO_VANISH: u32 = 6;  // P3→P4: persists despite scatter
+
 // ── Fleet Antibody ──────────────────────────────────────────────────
 
 /// A behavioral fingerprint that recognizes a pathogenic fleet pattern.
@@ -51,6 +216,25 @@ pub struct FleetAntibody {
     pub last_matched_epoch: u64,
     /// Total number of times this antibody has matched.
     pub match_count: u64,
+
+    // ── Escalation state (tit-for-tat + forgive-1) ──────────────
+
+    /// Current defense posture for this antibody's behavioral shape.
+    #[serde(default)]
+    pub escalation: DefensePosture,
+    /// When the last defection (matched observation) occurred.
+    #[serde(default)]
+    pub last_defection_epoch: u64,
+    /// Consecutive observation windows with a match (resets on forgive).
+    #[serde(default)]
+    pub defection_count: u32,
+    /// Seconds of silence before de-escalating one level.
+    #[serde(default = "default_forgive_window")]
+    pub forgive_window_secs: u64,
+}
+
+fn default_forgive_window() -> u64 {
+    DEFAULT_FORGIVE_WINDOW_SECS
 }
 
 /// What distinguishes a pathogen from a commensal.
@@ -168,6 +352,66 @@ impl FleetAntibody {
     pub fn decay(&mut self, decay_factor: f64) {
         self.confidence *= decay_factor;
     }
+
+    /// Tick the escalation state machine.
+    ///
+    /// Call once per observation window with `matched = true` if this
+    /// antibody matched any observation in the window, `false` otherwise.
+    ///
+    /// Returns the previous posture if it changed (for audit logging).
+    pub fn tick_escalation(&mut self, matched: bool, now_epoch: u64) -> Option<DefensePosture> {
+        let prev = self.escalation;
+
+        if matched {
+            self.last_defection_epoch = now_epoch;
+            self.defection_count = self.defection_count.saturating_add(1);
+
+            let new = match self.escalation {
+                DefensePosture::Observe => DefensePosture::WarnRoute,
+                DefensePosture::WarnRoute => {
+                    if self.deception.ignores_rejection
+                        || self.defection_count >= ESCALATE_TO_SLOW
+                    {
+                        DefensePosture::SlowDegrade
+                    } else {
+                        DefensePosture::WarnRoute
+                    }
+                }
+                DefensePosture::SlowDegrade => {
+                    if self.defection_count >= ESCALATE_TO_SCATTER {
+                        DefensePosture::Scatter
+                    } else {
+                        DefensePosture::SlowDegrade
+                    }
+                }
+                DefensePosture::Scatter => {
+                    if self.defection_count >= ESCALATE_TO_VANISH {
+                        DefensePosture::Vanish
+                    } else {
+                        DefensePosture::Scatter
+                    }
+                }
+                DefensePosture::Vanish => DefensePosture::Vanish,
+            };
+
+            self.escalation = new;
+        } else {
+            // Forgive-1: de-escalate if silent for forgive_window
+            let silence = now_epoch.saturating_sub(self.last_defection_epoch);
+            if silence >= self.forgive_window_secs && self.escalation != DefensePosture::Observe {
+                self.escalation = self.escalation.deescalate();
+                self.defection_count = 0;
+                // Reset the timer so next forgive needs another full window
+                self.last_defection_epoch = now_epoch;
+            }
+        }
+
+        if self.escalation != prev {
+            Some(prev)
+        } else {
+            None
+        }
+    }
 }
 
 /// Cosine-like similarity between two UA fingerprints.
@@ -251,6 +495,10 @@ mod tests {
             first_seen_epoch: 1000,
             last_matched_epoch: 2000,
             match_count: 50,
+            escalation: DefensePosture::Observe,
+            last_defection_epoch: 0,
+            defection_count: 0,
+            forgive_window_secs: DEFAULT_FORGIVE_WINDOW_SECS,
         }
     }
 
@@ -341,5 +589,154 @@ mod tests {
         let parsed: FleetAntibody = serde_json::from_str(&json).unwrap();
         assert_eq!(ab.id, parsed.id);
         assert_eq!(ab.match_count, parsed.match_count);
+        assert_eq!(parsed.escalation, DefensePosture::Observe);
+    }
+
+    #[test]
+    fn serde_backwards_compat() {
+        // Old antibodies without escalation fields should deserialize with defaults
+        let json = r#"{"id":"old","ua_fingerprint":{"ua_count":2,"top_ua_pct":0.5,"platform_split":[0.5,0.5,0.0]},"timing":{"mean_interval_ms":6000,"interval_cv":0.15},"path_pattern":{"commit_url_pct":0.9,"single_page_pct":0.9,"has_referrer_pct":0.0},"deception":{"hides_identity":true,"rotates_ips":true,"ignores_rejection":true,"encoding_uniform":true},"confidence":0.8,"first_seen_epoch":1000,"last_matched_epoch":2000,"match_count":10}"#;
+        let parsed: FleetAntibody = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.escalation, DefensePosture::Observe);
+        assert_eq!(parsed.defection_count, 0);
+        assert_eq!(parsed.forgive_window_secs, DEFAULT_FORGIVE_WINDOW_SECS);
+    }
+
+    #[test]
+    fn posture_escalation_ladder() {
+        assert_eq!(DefensePosture::Observe.escalate(), DefensePosture::WarnRoute);
+        assert_eq!(DefensePosture::WarnRoute.escalate(), DefensePosture::SlowDegrade);
+        assert_eq!(DefensePosture::SlowDegrade.escalate(), DefensePosture::Scatter);
+        assert_eq!(DefensePosture::Scatter.escalate(), DefensePosture::Vanish);
+        assert_eq!(DefensePosture::Vanish.escalate(), DefensePosture::Vanish);
+    }
+
+    #[test]
+    fn posture_deescalation_ladder() {
+        assert_eq!(DefensePosture::Vanish.deescalate(), DefensePosture::Scatter);
+        assert_eq!(DefensePosture::Scatter.deescalate(), DefensePosture::SlowDegrade);
+        assert_eq!(DefensePosture::SlowDegrade.deescalate(), DefensePosture::WarnRoute);
+        assert_eq!(DefensePosture::WarnRoute.deescalate(), DefensePosture::Observe);
+        assert_eq!(DefensePosture::Observe.deescalate(), DefensePosture::Observe);
+    }
+
+    #[test]
+    fn tick_escalation_first_match_goes_to_warn() {
+        let mut ab = sample_antibody();
+        let prev = ab.tick_escalation(true, 5000);
+        assert_eq!(prev, Some(DefensePosture::Observe));
+        assert_eq!(ab.escalation, DefensePosture::WarnRoute);
+    }
+
+    #[test]
+    fn tick_escalation_ignores_rejection_fast_tracks() {
+        let mut ab = sample_antibody();
+        ab.escalation = DefensePosture::WarnRoute;
+        // ignores_rejection is true on sample_antibody
+        let prev = ab.tick_escalation(true, 5000);
+        assert_eq!(prev, Some(DefensePosture::WarnRoute));
+        assert_eq!(ab.escalation, DefensePosture::SlowDegrade);
+    }
+
+    #[test]
+    fn tick_escalation_full_ladder() {
+        let mut ab = sample_antibody();
+        let mut t = 1000u64;
+
+        // P0 → P1
+        ab.tick_escalation(true, t);
+        assert_eq!(ab.escalation, DefensePosture::WarnRoute);
+
+        // P1 → P2 (ignores_rejection = true)
+        t += 60;
+        ab.tick_escalation(true, t);
+        assert_eq!(ab.escalation, DefensePosture::SlowDegrade);
+
+        // P2 → P3 (need ESCALATE_TO_SCATTER consecutive)
+        for _ in 0..ESCALATE_TO_SCATTER {
+            t += 60;
+            ab.tick_escalation(true, t);
+        }
+        assert_eq!(ab.escalation, DefensePosture::Scatter);
+
+        // P3 → P4 (need ESCALATE_TO_VANISH consecutive)
+        for _ in 0..ESCALATE_TO_VANISH {
+            t += 60;
+            ab.tick_escalation(true, t);
+        }
+        assert_eq!(ab.escalation, DefensePosture::Vanish);
+    }
+
+    #[test]
+    fn tick_forgive_deescalates() {
+        let mut ab = sample_antibody();
+        ab.escalation = DefensePosture::SlowDegrade;
+        ab.last_defection_epoch = 1000;
+
+        // Not enough silence
+        let prev = ab.tick_escalation(false, 1000 + ab.forgive_window_secs - 1);
+        assert!(prev.is_none());
+        assert_eq!(ab.escalation, DefensePosture::SlowDegrade);
+
+        // Enough silence → forgive one level
+        let prev = ab.tick_escalation(false, 1000 + ab.forgive_window_secs);
+        assert_eq!(prev, Some(DefensePosture::SlowDegrade));
+        assert_eq!(ab.escalation, DefensePosture::WarnRoute);
+        assert_eq!(ab.defection_count, 0);
+    }
+
+    #[test]
+    fn posture_ordering() {
+        assert!(DefensePosture::Observe < DefensePosture::WarnRoute);
+        assert!(DefensePosture::WarnRoute < DefensePosture::SlowDegrade);
+        assert!(DefensePosture::SlowDegrade < DefensePosture::Scatter);
+        assert!(DefensePosture::Scatter < DefensePosture::Vanish);
+    }
+
+    #[test]
+    fn trust_descriptor_monotonically_decreasing() {
+        let postures = [
+            DefensePosture::Observe,
+            DefensePosture::WarnRoute,
+            DefensePosture::SlowDegrade,
+            DefensePosture::Scatter,
+            DefensePosture::Vanish,
+        ];
+        for i in 0..postures.len() - 1 {
+            let a = postures[i].trust_descriptor();
+            let b = postures[i + 1].trust_descriptor();
+            assert!(
+                a.trust_level > b.trust_level,
+                "{:?} trust ({}) should exceed {:?} trust ({})",
+                postures[i], a.trust_level, postures[i + 1], b.trust_level,
+            );
+        }
+    }
+
+    #[test]
+    fn trust_descriptor_beardog_mapping() {
+        // Observe → still trusted, active contributor
+        let d = DefensePosture::Observe.trust_descriptor();
+        assert_eq!(d.membership_hint, "ActiveContributor");
+        assert!(d.trust_level >= 0.6);
+        assert!(d.restoration_available);
+
+        // WarnRoute → cautious, first signal
+        let d = DefensePosture::WarnRoute.trust_descriptor();
+        assert_eq!(d.membership_hint, "CautiousInteraction");
+        assert!(d.trust_level >= 0.3 && d.trust_level < 0.6);
+        assert!(d.restoration_available);
+
+        // Scatter → ecosystem protection
+        let d = DefensePosture::Scatter.trust_descriptor();
+        assert_eq!(d.membership_hint, "EcosystemProtection");
+        assert!(d.trust_level < 0.2);
+        assert!(d.restoration_available);
+
+        // Vanish → full protection, no restoration
+        let d = DefensePosture::Vanish.trust_descriptor();
+        assert_eq!(d.membership_hint, "EcosystemProtection");
+        assert_eq!(d.trust_level, 0.0);
+        assert!(!d.restoration_available);
     }
 }
