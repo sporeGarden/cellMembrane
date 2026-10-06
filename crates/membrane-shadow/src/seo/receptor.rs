@@ -292,7 +292,9 @@ impl ReceptorReport {
             VisitorClass::SearchBot => page.search_bot_hits += 1,
             VisitorClass::SocialBot => page.social_bot_hits += 1,
             VisitorClass::AiBot => page.ai_bot_hits += 1,
-            VisitorClass::ScraperBot => page.scraper_bot_hits += 1,
+            VisitorClass::ScraperBot | VisitorClass::StealthFleet => {
+                page.scraper_bot_hits += 1;
+            }
             VisitorClass::MonitorBot | VisitorClass::GenericBot | VisitorClass::Unknown => {
                 page.other_bot_hits += 1;
             }
