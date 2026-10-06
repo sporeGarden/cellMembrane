@@ -294,6 +294,10 @@ pub struct DeceptionSignals {
     /// population is using a bare HTTP library, not a browser.
     #[serde(default)]
     pub header_poverty: bool,
+    /// >80% of Chrome-UA population uses a version 5+ behind current
+    /// stable. Real Chrome auto-updates — hardcoded UA string.
+    #[serde(default)]
+    pub stale_chrome: bool,
 }
 
 /// UA distribution signature across a fleet population.
@@ -515,6 +519,9 @@ fn deception_overlap(a: &DeceptionSignals, b: &DeceptionSignals) -> u8 {
     if a.header_poverty && b.header_poverty {
         overlap += 1;
     }
+    if a.stale_chrome && b.stale_chrome {
+        overlap += 1;
+    }
     overlap
 }
 
@@ -630,6 +637,7 @@ pub fn behavioral_hash(obs: &FleetObservation) -> String {
     obs.deception.encoding_uniform.hash(&mut hasher);
     obs.deception.chrome_impersonation.hash(&mut hasher);
     obs.deception.header_poverty.hash(&mut hasher);
+    obs.deception.stale_chrome.hash(&mut hasher);
 
     format!("{:016x}", hasher.finish())
 }
@@ -644,6 +652,7 @@ pub fn extract_invariants(obs: &FleetObservation) -> BehavioralInvariants {
     if obs.deception.encoding_uniform { deception_flags.push("encoding_uniform".to_string()); }
     if obs.deception.chrome_impersonation { deception_flags.push("chrome_impersonation".to_string()); }
     if obs.deception.header_poverty { deception_flags.push("header_poverty".to_string()); }
+    if obs.deception.stale_chrome { deception_flags.push("stale_chrome".to_string()); }
 
     BehavioralInvariants {
         deep_content_dominant: obs.path_pattern.commit_url_pct > 0.5,
@@ -730,6 +739,7 @@ mod tests {
                 encoding_uniform: true,
                 chrome_impersonation: true,
                 header_poverty: true,
+                stale_chrome: true,
             },
             confidence: 0.9,
             first_seen_epoch: 1000,
@@ -768,6 +778,7 @@ mod tests {
                 encoding_uniform: false,
                 chrome_impersonation: true,
                 header_poverty: true,
+                stale_chrome: true,
             },
             depth_distribution: [170, 8, 2, 0],
             rejected_ips: 160,
@@ -809,6 +820,7 @@ mod tests {
                 encoding_uniform: false,
                 chrome_impersonation: false,
                 header_poverty: false,
+                stale_chrome: false,
             },
             depth_distribution: [10, 12, 6, 2],
             rejected_ips: 0,
