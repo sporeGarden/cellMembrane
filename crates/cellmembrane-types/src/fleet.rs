@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 /// of silence.
 ///
 /// The ordering is significant: `PartialOrd`/`Ord` derive means
-/// `Observe < WarnRoute < SlowDegrade < Scatter < Vanish`.
+/// `Observe < WarnRoute < SlowDegrade < Scatter < Vanish < Disperse`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DefensePosture {
@@ -51,10 +51,15 @@ pub enum DefensePosture {
     /// P4: Connection reset / abort. The membrane vanishes.
     /// Real humans still see everything — only antibody-matched shapes disappear.
     Vanish,
+    /// P5: Active confusion — skunk spray. Maximally-wrong responses that
+    /// waste attacker compute and poison any downstream processing.
+    /// Wrong MIME types, garbled structure, fake auth flows, random redirects.
+    /// Friendly systems (WireGuard, authenticated) bypass via recognition.
+    Disperse,
 }
 
 impl DefensePosture {
-    /// Escalate one level (capped at Vanish).
+    /// Escalate one level (capped at Disperse).
     #[must_use]
     pub const fn escalate(self) -> Self {
         match self {
@@ -62,7 +67,8 @@ impl DefensePosture {
             Self::WarnRoute => Self::SlowDegrade,
             Self::SlowDegrade => Self::Scatter,
             Self::Scatter => Self::Vanish,
-            Self::Vanish => Self::Vanish,
+            Self::Vanish => Self::Disperse,
+            Self::Disperse => Self::Disperse,
         }
     }
 
@@ -75,10 +81,11 @@ impl DefensePosture {
             Self::SlowDegrade => Self::WarnRoute,
             Self::Scatter => Self::SlowDegrade,
             Self::Vanish => Self::Scatter,
+            Self::Disperse => Self::Vanish,
         }
     }
 
-    /// Numeric level (0-4) for threshold comparisons.
+    /// Numeric level (0-5) for threshold comparisons.
     #[must_use]
     pub const fn level(self) -> u8 {
         match self {
@@ -87,6 +94,7 @@ impl DefensePosture {
             Self::SlowDegrade => 2,
             Self::Scatter => 3,
             Self::Vanish => 4,
+            Self::Disperse => 5,
         }
     }
 }
@@ -163,6 +171,12 @@ impl DefensePosture {
                 symbiosis_hint: "Protective",
                 restoration_available: false,
             },
+            Self::Disperse => TrustDescriptor {
+                trust_level: 0.0,
+                membership_hint: "EcosystemProtection",
+                symbiosis_hint: "ActiveDefense",
+                restoration_available: false,
+            },
         }
     }
 }
@@ -175,6 +189,7 @@ impl std::fmt::Display for DefensePosture {
             Self::SlowDegrade => write!(f, "slow_degrade"),
             Self::Scatter => write!(f, "scatter"),
             Self::Vanish => write!(f, "vanish"),
+            Self::Disperse => write!(f, "disperse"),
         }
     }
 }
@@ -188,6 +203,10 @@ pub const ESCALATE_TO_SLOW: u32 = 1;    // P1→P2: came back after 403
 pub const ESCALATE_TO_SCATTER: u32 = 3; // P2→P3: persists despite tarpit
 /// Consecutive defection windows to escalate from P3 to P4.
 pub const ESCALATE_TO_VANISH: u32 = 6;  // P3→P4: persists despite scatter
+/// Cumulative defection count to escalate from P4 to P5 (skunk spray).
+/// With ignores_rejection=true, reaching Vanish takes ~11 defections,
+/// so 20 means ~9 more windows of persistence at Vanish before Disperse.
+pub const ESCALATE_TO_DISPERSE: u32 = 20; // P4→P5: persists despite vanish
 
 // ── Fleet Antibody ──────────────────────────────────────────────────
 
@@ -391,7 +410,14 @@ impl FleetAntibody {
                         DefensePosture::Scatter
                     }
                 }
-                DefensePosture::Vanish => DefensePosture::Vanish,
+                DefensePosture::Vanish => {
+                    if self.defection_count >= ESCALATE_TO_DISPERSE {
+                        DefensePosture::Disperse
+                    } else {
+                        DefensePosture::Vanish
+                    }
+                }
+                DefensePosture::Disperse => DefensePosture::Disperse,
             };
 
             self.escalation = new;
@@ -788,11 +814,13 @@ mod tests {
         assert_eq!(DefensePosture::WarnRoute.escalate(), DefensePosture::SlowDegrade);
         assert_eq!(DefensePosture::SlowDegrade.escalate(), DefensePosture::Scatter);
         assert_eq!(DefensePosture::Scatter.escalate(), DefensePosture::Vanish);
-        assert_eq!(DefensePosture::Vanish.escalate(), DefensePosture::Vanish);
+        assert_eq!(DefensePosture::Vanish.escalate(), DefensePosture::Disperse);
+        assert_eq!(DefensePosture::Disperse.escalate(), DefensePosture::Disperse);
     }
 
     #[test]
     fn posture_deescalation_ladder() {
+        assert_eq!(DefensePosture::Disperse.deescalate(), DefensePosture::Vanish);
         assert_eq!(DefensePosture::Vanish.deescalate(), DefensePosture::Scatter);
         assert_eq!(DefensePosture::Scatter.deescalate(), DefensePosture::SlowDegrade);
         assert_eq!(DefensePosture::SlowDegrade.deescalate(), DefensePosture::WarnRoute);
@@ -845,6 +873,14 @@ mod tests {
             ab.tick_escalation(true, t);
         }
         assert_eq!(ab.escalation, DefensePosture::Vanish);
+
+        // P4 → P5 (need ESCALATE_TO_DISPERSE cumulative defections)
+        while ab.escalation != DefensePosture::Disperse {
+            t += 60;
+            ab.tick_escalation(true, t);
+        }
+        assert_eq!(ab.escalation, DefensePosture::Disperse);
+        assert!(ab.defection_count >= ESCALATE_TO_DISPERSE);
     }
 
     #[test]
@@ -871,6 +907,7 @@ mod tests {
         assert!(DefensePosture::WarnRoute < DefensePosture::SlowDegrade);
         assert!(DefensePosture::SlowDegrade < DefensePosture::Scatter);
         assert!(DefensePosture::Scatter < DefensePosture::Vanish);
+        assert!(DefensePosture::Vanish < DefensePosture::Disperse);
     }
 
     #[test]
@@ -881,16 +918,21 @@ mod tests {
             DefensePosture::SlowDegrade,
             DefensePosture::Scatter,
             DefensePosture::Vanish,
+            DefensePosture::Disperse,
         ];
         for i in 0..postures.len() - 1 {
             let a = postures[i].trust_descriptor();
             let b = postures[i + 1].trust_descriptor();
             assert!(
-                a.trust_level > b.trust_level,
-                "{:?} trust ({}) should exceed {:?} trust ({})",
+                a.trust_level >= b.trust_level,
+                "{:?} trust ({}) should be >= {:?} trust ({})",
                 postures[i], a.trust_level, postures[i + 1], b.trust_level,
             );
         }
+        // First and last should be strictly different
+        let first = postures[0].trust_descriptor();
+        let last = postures[postures.len() - 1].trust_descriptor();
+        assert!(first.trust_level > last.trust_level);
     }
 
     #[test]
@@ -916,6 +958,13 @@ mod tests {
         // Vanish → full protection, no restoration
         let d = DefensePosture::Vanish.trust_descriptor();
         assert_eq!(d.membership_hint, "EcosystemProtection");
+        assert_eq!(d.trust_level, 0.0);
+        assert!(!d.restoration_available);
+
+        // Disperse → active defense, no restoration
+        let d = DefensePosture::Disperse.trust_descriptor();
+        assert_eq!(d.membership_hint, "EcosystemProtection");
+        assert_eq!(d.symbiosis_hint, "ActiveDefense");
         assert_eq!(d.trust_level, 0.0);
         assert!(!d.restoration_available);
     }
