@@ -261,6 +261,20 @@ fn default_forgive_window() -> u64 {
 /// A commensal identifies itself honestly. A pathogen hides.
 /// These signals are the basis for antibody generation — if none
 /// are true, the system is commensal and should be guided, not blocked.
+///
+/// ## Header Poverty Signal (Wave 165f)
+///
+/// Real Chrome 145+ sends 11+ headers per request (Sec-Ch-Ua, Sec-Fetch-*,
+/// Priority, Accept-Language, etc.). The fleet sends only 3 (Accept,
+/// Accept-Encoding, User-Agent). `header_poverty = true` when >80% of
+/// a Chrome-UA population is missing mandatory browser headers.
+///
+/// ## Chrome Impersonation Signal
+///
+/// `chrome_impersonation = true` when the population claims Chrome UA
+/// but is missing Sec-Fetch-Mode and/or Sec-Ch-Ua — headers that Chrome
+/// has sent since versions 76 and 89 respectively. This is the definitive
+/// proof that the HTTP client is not Chrome.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct DeceptionSignals {
@@ -272,6 +286,14 @@ pub struct DeceptionSignals {
     pub ignores_rejection: bool,
     /// Entire population has near-identical Accept-Encoding/Language.
     pub encoding_uniform: bool,
+    /// Population with Chrome UAs missing mandatory Sec-Fetch-Mode / Sec-Ch-Ua
+    /// headers — definitive proof of HTTP client impersonating Chrome.
+    #[serde(default)]
+    pub chrome_impersonation: bool,
+    /// >80% of requests have fewer than 6 distinct header types — the
+    /// population is using a bare HTTP library, not a browser.
+    #[serde(default)]
+    pub header_poverty: bool,
 }
 
 /// UA distribution signature across a fleet population.
@@ -487,6 +509,12 @@ fn deception_overlap(a: &DeceptionSignals, b: &DeceptionSignals) -> u8 {
     if a.encoding_uniform && b.encoding_uniform {
         overlap += 1;
     }
+    if a.chrome_impersonation && b.chrome_impersonation {
+        overlap += 1;
+    }
+    if a.header_poverty && b.header_poverty {
+        overlap += 1;
+    }
     overlap
 }
 
@@ -600,6 +628,8 @@ pub fn behavioral_hash(obs: &FleetObservation) -> String {
     obs.deception.rotates_ips.hash(&mut hasher);
     obs.deception.ignores_rejection.hash(&mut hasher);
     obs.deception.encoding_uniform.hash(&mut hasher);
+    obs.deception.chrome_impersonation.hash(&mut hasher);
+    obs.deception.header_poverty.hash(&mut hasher);
 
     format!("{:016x}", hasher.finish())
 }
@@ -612,6 +642,8 @@ pub fn extract_invariants(obs: &FleetObservation) -> BehavioralInvariants {
     if obs.deception.rotates_ips { deception_flags.push("rotates_ips".to_string()); }
     if obs.deception.ignores_rejection { deception_flags.push("ignores_rejection".to_string()); }
     if obs.deception.encoding_uniform { deception_flags.push("encoding_uniform".to_string()); }
+    if obs.deception.chrome_impersonation { deception_flags.push("chrome_impersonation".to_string()); }
+    if obs.deception.header_poverty { deception_flags.push("header_poverty".to_string()); }
 
     BehavioralInvariants {
         deep_content_dominant: obs.path_pattern.commit_url_pct > 0.5,
@@ -696,6 +728,8 @@ mod tests {
                 rotates_ips: true,
                 ignores_rejection: true,
                 encoding_uniform: true,
+                chrome_impersonation: true,
+                header_poverty: true,
             },
             confidence: 0.9,
             first_seen_epoch: 1000,
@@ -732,6 +766,8 @@ mod tests {
                 rotates_ips: true,
                 ignores_rejection: true,
                 encoding_uniform: false,
+                chrome_impersonation: true,
+                header_poverty: true,
             },
             depth_distribution: [170, 8, 2, 0],
             rejected_ips: 160,
@@ -771,6 +807,8 @@ mod tests {
                 rotates_ips: false,
                 ignores_rejection: false,
                 encoding_uniform: false,
+                chrome_impersonation: false,
+                header_poverty: false,
             },
             depth_distribution: [10, 12, 6, 2],
             rejected_ips: 0,
@@ -806,6 +844,9 @@ mod tests {
         assert_eq!(parsed.escalation, DefensePosture::Observe);
         assert_eq!(parsed.defection_count, 0);
         assert_eq!(parsed.forgive_window_secs, DEFAULT_FORGIVE_WINDOW_SECS);
+        // New deception fields default to false for old data
+        assert!(!parsed.deception.chrome_impersonation);
+        assert!(!parsed.deception.header_poverty);
     }
 
     #[test]
