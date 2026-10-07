@@ -118,6 +118,34 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
         evidence_dir: None,
         artifact_command: None,
     },
+    PublishSite {
+        repo_name: "signal",
+        host: "signal.primals.eco",
+        worktree: "/opt/ecoPrimals/signal/site",
+        public_dir: "/opt/ecoPrimals/signal/site/public",
+        build_subdir: None,
+        seo: SiteConfig {
+            host: "signal.primals.eco",
+            sitemap: "https://signal.primals.eco/sitemap.xml",
+            indexnow_key: "e90c296af5c34deeabf37676d310337b",
+        },
+        evidence_dir: None,
+        artifact_command: None,
+    },
+    PublishSite {
+        repo_name: "tuebor",
+        host: "tuebor.primals.eco",
+        worktree: "/opt/ecoPrimals/tuebor/site",
+        public_dir: "/opt/ecoPrimals/tuebor/site/public",
+        build_subdir: None,
+        seo: SiteConfig {
+            host: "tuebor.primals.eco",
+            sitemap: "https://tuebor.primals.eco/sitemap.xml",
+            indexnow_key: "f30f6e41e4354a6db678aa4790c57288",
+        },
+        evidence_dir: None,
+        artifact_command: None,
+    },
 ];
 
 /// Look up a publish site by repo name (case-insensitive).
