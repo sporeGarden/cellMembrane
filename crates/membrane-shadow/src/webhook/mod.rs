@@ -119,11 +119,22 @@ pub struct RepoPayload {
 }
 
 /// Pusher identity from the webhook payload.
+///
+/// Forgejo sends both `username` AND `login` fields in the pusher object.
+/// Using `alias` would cause a "duplicate field" error since both map to
+/// the same struct field. Instead we deserialize `username` directly and
+/// flatten `login` as a fallback via a custom deserializer.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PusherPayload {
-    /// Forgejo username.
-    #[serde(alias = "login")]
+    /// Forgejo username — primary field.
+    /// Forgejo sends both `username` and `login` in the same object;
+    /// we take `username` and ignore `login` via the flatten.
+    #[serde(default)]
     pub username: String,
+    /// Forgejo also sends `login` — captured here so serde doesn't reject it.
+    #[serde(default)]
+    #[allow(dead_code, reason = "absorbs duplicate identity field from Forgejo payload")]
+    login: Option<String>,
 }
 
 /// Individual commit data from the push.

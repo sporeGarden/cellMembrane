@@ -297,6 +297,7 @@ fn sample_push_event(repo: &str, branch: &str, default: &str) -> PushEvent {
         },
         pusher: PusherPayload {
             username: "operator".into(),
+            login: None,
         },
         commits: vec![],
     }
@@ -391,4 +392,47 @@ fn constant_time_eq_basic() {
     assert!(constant_time_eq(b"hello", b"hello"));
     assert!(!constant_time_eq(b"hello", b"world"));
     assert!(!constant_time_eq(b"short", b"longer"));
+}
+
+#[test]
+fn pusher_payload_forgejo_both_username_and_login() {
+    // Forgejo sends both `username` and `login` in the pusher object.
+    // This previously caused serde "duplicate field" errors.
+    let json = r#"{"username":"operator","login":"operator"}"#;
+    let pusher: PusherPayload = serde_json::from_str(json).expect("should deserialize");
+    assert_eq!(pusher.username, "operator");
+}
+
+#[test]
+fn pusher_payload_github_username_only() {
+    let json = r#"{"username":"octocat"}"#;
+    let pusher: PusherPayload = serde_json::from_str(json).expect("should deserialize");
+    assert_eq!(pusher.username, "octocat");
+}
+
+#[test]
+fn push_event_forgejo_full_payload() {
+    // Realistic Forgejo push event with both username and login in pusher
+    let json = r#"{
+        "ref": "refs/heads/main",
+        "before": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "after": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "repository": {
+            "name": "wateringHole",
+            "full_name": "ecoPrimals/wateringHole",
+            "ssh_url": "ssh://git@git.primals.eco:2222/ecoPrimals/wateringHole.git",
+            "default_branch": "main"
+        },
+        "pusher": {
+            "id": 1,
+            "login": "ecoPrimal",
+            "username": "ecoPrimal",
+            "full_name": "",
+            "email": "noreply@primals.eco"
+        },
+        "commits": []
+    }"#;
+    let event: PushEvent = serde_json::from_str(json).expect("should deserialize full Forgejo payload");
+    assert_eq!(event.pusher.username, "ecoPrimal");
+    assert_eq!(event.repository.name, "wateringHole");
 }
