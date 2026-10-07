@@ -298,6 +298,22 @@ pub struct DeceptionSignals {
     /// stable. Real Chrome auto-updates — hardcoded UA string.
     #[serde(default)]
     pub stale_chrome: bool,
+    /// Entire population uses ≤2 distinct Accept header values (e.g.
+    /// universal `*/*`). Real browsers vary Accept per resource type.
+    #[serde(default)]
+    pub accept_monoculture: bool,
+    /// >80% of requests lack a Connection header. Real Chrome always
+    /// sends `Connection: keep-alive`. Absence = bare HTTP client.
+    #[serde(default)]
+    pub connection_absent: bool,
+    /// >10% of requests target `/blame/` paths — author attribution
+    /// intelligence gathering. Normal browsing has <1% blame access.
+    #[serde(default)]
+    pub blame_ratio: bool,
+    /// Requests include `?page=N` with N > 50 — systematic commit
+    /// history enumeration. No human paginates through 50+ pages.
+    #[serde(default)]
+    pub pagination_walk: bool,
 }
 
 /// UA distribution signature across a fleet population.
@@ -522,6 +538,18 @@ fn deception_overlap(a: &DeceptionSignals, b: &DeceptionSignals) -> u8 {
     if a.stale_chrome && b.stale_chrome {
         overlap += 1;
     }
+    if a.accept_monoculture && b.accept_monoculture {
+        overlap += 1;
+    }
+    if a.connection_absent && b.connection_absent {
+        overlap += 1;
+    }
+    if a.blame_ratio && b.blame_ratio {
+        overlap += 1;
+    }
+    if a.pagination_walk && b.pagination_walk {
+        overlap += 1;
+    }
     overlap
 }
 
@@ -638,6 +666,10 @@ pub fn behavioral_hash(obs: &FleetObservation) -> String {
     obs.deception.chrome_impersonation.hash(&mut hasher);
     obs.deception.header_poverty.hash(&mut hasher);
     obs.deception.stale_chrome.hash(&mut hasher);
+    obs.deception.accept_monoculture.hash(&mut hasher);
+    obs.deception.connection_absent.hash(&mut hasher);
+    obs.deception.blame_ratio.hash(&mut hasher);
+    obs.deception.pagination_walk.hash(&mut hasher);
 
     format!("{:016x}", hasher.finish())
 }
@@ -653,6 +685,10 @@ pub fn extract_invariants(obs: &FleetObservation) -> BehavioralInvariants {
     if obs.deception.chrome_impersonation { deception_flags.push("chrome_impersonation".to_string()); }
     if obs.deception.header_poverty { deception_flags.push("header_poverty".to_string()); }
     if obs.deception.stale_chrome { deception_flags.push("stale_chrome".to_string()); }
+    if obs.deception.accept_monoculture { deception_flags.push("accept_monoculture".to_string()); }
+    if obs.deception.connection_absent { deception_flags.push("connection_absent".to_string()); }
+    if obs.deception.blame_ratio { deception_flags.push("blame_ratio".to_string()); }
+    if obs.deception.pagination_walk { deception_flags.push("pagination_walk".to_string()); }
 
     BehavioralInvariants {
         deep_content_dominant: obs.path_pattern.commit_url_pct > 0.5,
@@ -739,7 +775,11 @@ mod tests {
                 encoding_uniform: true,
                 chrome_impersonation: true,
                 header_poverty: true,
-                stale_chrome: true,
+                stale_chrome: false,
+                accept_monoculture: false,
+                connection_absent: false,
+                blame_ratio: false,
+                pagination_walk: false,
             },
             confidence: 0.9,
             first_seen_epoch: 1000,
@@ -778,7 +818,11 @@ mod tests {
                 encoding_uniform: false,
                 chrome_impersonation: true,
                 header_poverty: true,
-                stale_chrome: true,
+                stale_chrome: false,
+                accept_monoculture: false,
+                connection_absent: false,
+                blame_ratio: false,
+                pagination_walk: false,
             },
             depth_distribution: [170, 8, 2, 0],
             rejected_ips: 160,
@@ -821,6 +865,10 @@ mod tests {
                 chrome_impersonation: false,
                 header_poverty: false,
                 stale_chrome: false,
+                accept_monoculture: false,
+                connection_absent: false,
+                blame_ratio: false,
+                pagination_walk: false,
             },
             depth_distribution: [10, 12, 6, 2],
             rejected_ips: 0,
