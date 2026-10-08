@@ -123,7 +123,7 @@ pub(crate) fn is_trio_available() -> bool {
 // ── Evidence Braid Pipeline ─────────────────────────────────────────
 
 /// Parsed manifest entry from `evidence-manifest.toml`.
-pub(super) struct ManifestEntry {
+pub(crate) struct ManifestEntry {
     path: String,
     blake3: String,
     size: u64,

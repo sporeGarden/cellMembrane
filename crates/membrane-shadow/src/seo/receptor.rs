@@ -58,6 +58,7 @@ pub struct CaddyLogEntry {
     /// HTTP response status code.
     pub status: u16,
     /// Response body size in bytes.
+    #[allow(dead_code)] // deserialized from Caddy JSON, used for future bandwidth metrics
     #[serde(default)]
     pub size: u64,
     /// Request duration in seconds.
@@ -72,6 +73,7 @@ pub struct CaddyLogEntry {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CaddyRequest {
     /// Client IP (will be hashed, never stored raw).
+    #[allow(dead_code)] // deserialized from Caddy JSON, hashed elsewhere
     #[serde(default, alias = "remote_ip")]
     pub remote_ip: String,
     /// Requested hostname.
@@ -81,6 +83,7 @@ pub struct CaddyRequest {
     #[serde(default)]
     pub uri: String,
     /// HTTP method (GET, POST, etc.).
+    #[allow(dead_code)] // deserialized from Caddy JSON, needed for request classification
     #[serde(default)]
     pub method: String,
     /// Request headers (for User-Agent extraction).
@@ -418,6 +421,7 @@ impl ReceptorReport {
     ///
     /// These are candidates for higher IndexNow priority — if bots haven't
     /// found them, they need explicit notification.
+    #[allow(dead_code)] // public API, wired when IndexNow priority scoring lands
     pub fn cold_pages(&self, host: &str) -> Vec<String> {
         self.hosts.get(host).map_or_else(Vec::new, |signal| {
             signal
