@@ -158,9 +158,14 @@ fn generate_systemd_units(gate_name: &str) -> (String, String, String) {
     let (spine_upper, relay_upper) = (spine.to_uppercase(), relay.to_uppercase());
     let federation_port = cellmembrane_types::service::DEFAULT_FEDERATION_PORT;
     let vps_peer = crate::manifest::resolve_federation_peer();
+    // Gravitational mesh: each node is its own nucleus.
+    // Prefer NODE_ID (self-identity), fall back to HUB_ID for compat.
     let hub_id = cellmembrane_types::service::env_or(
-        cellmembrane_types::service::ENV_MESH_HUB_ID,
-        cellmembrane_types::service::DEFAULT_MESH_HUB_ID,
+        cellmembrane_types::service::ENV_MESH_NODE_ID,
+        &cellmembrane_types::service::env_or(
+            cellmembrane_types::service::ENV_MESH_HUB_ID,
+            cellmembrane_types::service::DEFAULT_MESH_HUB_ID,
+        ),
     );
     let install_base = cellmembrane_types::service::env_or(
         cellmembrane_types::service::ENV_INSTALL_BASE,

@@ -397,13 +397,27 @@ pub const RUSTDESK_HBBR_PORT: u16 = 21117;
 pub const DEFAULT_VPS_MESH_PEER: &str = "157.230.3.183:7700";
 
 /// Default mesh hub node identifier for peer addressing.
+///
+/// DEPRECATED(Wave 167): The mesh is gravitational, not hub-spoke.
+/// Every node is its own nucleus. Use `ENV_MESH_NODE_ID` instead.
 pub const DEFAULT_MESH_HUB_ID: &str = "hub";
 
 /// Environment variable override for the VPS mesh peer address (host only).
 pub const ENV_VPS_MESH_PEER: &str = "MEMBRANE_VPS_PEER";
 
 /// Environment variable override for the mesh hub node identifier.
+///
+/// DEPRECATED(Wave 167): Use `ENV_MESH_NODE_ID`. Each node is its own
+/// gravitational center — the mesh is "none, one, or many" hubs.
 pub const ENV_MESH_HUB_ID: &str = "MEMBRANE_MESH_HUB_ID";
+
+/// Environment variable for this node's mesh identity.
+///
+/// Every node in the mesh is its own nucleus. This identifies the
+/// node to peers for gossip, cross-protection, and gravitational
+/// distance computation. The old `MEMBRANE_MESH_HUB_ID` assumed a
+/// single hub; this replaces it with a self-identity model.
+pub const ENV_MESH_NODE_ID: &str = "MEMBRANE_MESH_NODE_ID";
 
 /// Environment variable for additional mesh peers (comma-separated `host:port`).
 ///
