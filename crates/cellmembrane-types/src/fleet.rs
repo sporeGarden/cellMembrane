@@ -275,7 +275,7 @@ fn default_forgive_window() -> u64 {
 /// but is missing Sec-Fetch-Mode and/or Sec-Ch-Ua — headers that Chrome
 /// has sent since versions 76 and 89 respectively. This is the definitive
 /// proof that the HTTP client is not Chrome.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct DeceptionSignals {
     /// Uses human-mimicking UA strings (no bot identifier in UA).
@@ -773,13 +773,7 @@ mod tests {
                 rotates_ips: true,
                 ignores_rejection: true,
                 encoding_uniform: true,
-                chrome_impersonation: true,
-                header_poverty: true,
-                stale_chrome: false,
-                accept_monoculture: false,
-                connection_absent: false,
-                blame_ratio: false,
-                pagination_walk: false,
+                ..Default::default()
             },
             confidence: 0.9,
             first_seen_epoch: 1000,
@@ -816,13 +810,7 @@ mod tests {
                 rotates_ips: true,
                 ignores_rejection: true,
                 encoding_uniform: false,
-                chrome_impersonation: true,
-                header_poverty: true,
-                stale_chrome: false,
-                accept_monoculture: false,
-                connection_absent: false,
-                blame_ratio: false,
-                pagination_walk: false,
+                ..Default::default()
             },
             depth_distribution: [170, 8, 2, 0],
             rejected_ips: 160,
@@ -862,13 +850,7 @@ mod tests {
                 rotates_ips: false,
                 ignores_rejection: false,
                 encoding_uniform: false,
-                chrome_impersonation: false,
-                header_poverty: false,
-                stale_chrome: false,
-                accept_monoculture: false,
-                connection_absent: false,
-                blame_ratio: false,
-                pagination_walk: false,
+                ..Default::default()
             },
             depth_distribution: [10, 12, 6, 2],
             rejected_ips: 0,
