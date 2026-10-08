@@ -146,6 +146,20 @@ pub const PUBLISH_SITES: &[PublishSite] = &[
         evidence_dir: None,
         artifact_command: None,
     },
+    PublishSite {
+        repo_name: "hud",
+        host: "hud.primals.eco",
+        worktree: "/opt/ecoPrimals/hud/site",
+        public_dir: "/opt/ecoPrimals/hud/site/public",
+        build_subdir: None,
+        seo: SiteConfig {
+            host: "hud.primals.eco",
+            sitemap: "https://hud.primals.eco/sitemap.xml",
+            indexnow_key: "",
+        },
+        evidence_dir: None,
+        artifact_command: None,
+    },
 ];
 
 /// Look up a publish site by repo name (case-insensitive).
