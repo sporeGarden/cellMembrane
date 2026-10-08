@@ -56,6 +56,10 @@ pub struct CascadeOpts<'a> {
     pub restart_updated: bool,
     /// If true, push local depot to golgi after successful harvest+refresh.
     pub depot_push: bool,
+    /// Maximum concurrent repo sync operations. Prevents IO thundering herd
+    /// on single-vCPU nodes (golgiBody load-32 incident, Wave 165i).
+    /// Default: 2. Set to 1 for strict serialization.
+    pub max_concurrent: usize,
 }
 
 /// Execute cascade with typed options.
@@ -86,15 +90,22 @@ pub async fn cascade_with_opts(opts: &CascadeOpts<'_>) -> Result<crate::ShadowOu
 
     let root: Arc<Path> = root.into();
 
+    // Semaphore limits concurrent repo syncs to prevent IO thundering herd
+    // on single-vCPU nodes (golgiBody load-32 incident, Wave 165i).
+    let concurrency = opts.max_concurrent.max(1);
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+
     let mut join_set = tokio::task::JoinSet::new();
 
     for name in repo_names {
         let root = Arc::clone(&root);
         let manifest = Arc::clone(&shared_manifest);
+        let sem = Arc::clone(&semaphore);
         let mode = opts.mode;
         let clone_missing = opts.clone_missing;
 
         join_set.spawn(async move {
+            let _permit = sem.acquire().await.expect("semaphore closed");
             let result = if let Some(entry) = manifest.repos.get(&name) {
                 process_repo(
                     &root,
@@ -331,11 +342,13 @@ mod tests {
             post_sync: PostSyncPhase::None,
             restart_updated: false,
             depot_push: false,
+            max_concurrent: 2,
         };
         assert_eq!(opts.gate, "eastGate");
         assert_eq!(opts.post_sync, PostSyncPhase::None);
         assert!(opts.publish_freshness);
         assert!(!opts.restart_updated);
+        assert_eq!(opts.max_concurrent, 2);
     }
 
     #[test]

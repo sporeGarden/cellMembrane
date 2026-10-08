@@ -131,6 +131,13 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
     let restart_updated = args.contains(&"--with-restart");
     let depot_push = args.contains(&"--with-push");
 
+    let max_concurrent = args
+        .iter()
+        .position(|a| *a == "--max-concurrent")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(2);
+
     let mut outcome = temporal::cascade_with_opts(&temporal::CascadeOpts {
         gate: &gate_name,
         source,
@@ -140,6 +147,7 @@ async fn dispatch_cascade(_config: &ShadowConfig, args: &[&str]) -> crate::Resul
         post_sync,
         restart_updated,
         depot_push,
+        max_concurrent,
     })
     .await?;
 
